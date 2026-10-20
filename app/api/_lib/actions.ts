@@ -136,7 +136,11 @@ const create: Action = async (ctx, body) => {
   if (body.arenaId === 'around-me') {
     const c = body.center as { lat?: unknown; lng?: unknown } | undefined
     if (typeof c?.lat !== 'number' || typeof c?.lng !== 'number') throw new ActionError(400, 'Need your location for an Around me game')
-    arena = arenaAroundPoint({ lat: c.lat, lng: c.lng })
+    const radiusM = body.radiusM === undefined ? 200 : Number(body.radiusM)
+    if (!Number.isFinite(radiusM) || radiusM < 100 || radiusM > 500) {
+      throw new ActionError(400, 'Play area must be 100–500 m across from the centre')
+    }
+    arena = arenaAroundPoint({ lat: c.lat, lng: c.lng }, radiusM)
   } else {
     const found = ARENAS[str(body.arenaId)]
     if (!found) throw new ActionError(400, 'Unknown arena')

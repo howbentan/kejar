@@ -282,3 +282,23 @@ describe('fresh locations sent with scans', () => {
     expect(await run('jailbreak', { code: g.code, token: g.hafiz.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true })
   })
 })
+
+describe('choosing the play area', () => {
+  it('builds the circle at the chosen centre and size', async () => {
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, radiusM: 300 })
+    const g = (await store.gameByCode(code))!
+    const { distanceM } = await import('../../shared/geo.js')
+    expect(distanceM(CENTER, g.arena.boundary[0])).toBeCloseTo(300, 0)
+  })
+
+  it('defaults to 200 m', async () => {
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER })
+    const { distanceM } = await import('../../shared/geo.js')
+    expect(distanceM(CENTER, (await store.gameByCode(code))!.arena.boundary[0])).toBeCloseTo(200, 0)
+  })
+
+  it('rejects a play area smaller than 100 m or larger than 500 m', async () => {
+    await rejects(run('create', { arenaId: 'around-me', center: CENTER, radiusM: 50 }), 400, 'Play area')
+    await rejects(run('create', { arenaId: 'around-me', center: CENTER, radiusM: 900 }), 400, 'Play area')
+  })
+})
