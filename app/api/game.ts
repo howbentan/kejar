@@ -12,10 +12,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (typeof name !== 'string' || !Object.hasOwn(actions, name)) return res.status(400).json({ error: 'Unknown action' })
   try {
     const webpush = configuredWebPush()
+    // One clock for the whole request: game rules and stored timestamps must agree.
+    const now = Date.now()
     const result = await actions[name](
       {
-        store: new SupabaseStore(serverDb()),
-        now: Date.now(),
+        store: new SupabaseStore(serverDb(), () => now),
+        now,
         rng: Math.random,
         push: async (sub, payload) => {
           await webpush.sendNotification(sub as PushSubscription, payload, { TTL: 60, urgency: 'high' })

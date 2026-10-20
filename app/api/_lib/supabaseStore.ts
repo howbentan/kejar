@@ -13,9 +13,16 @@ function check<T>(res: { data: T; error: { message: string } | null }): T {
 /** Production store. Uses the secret key; the game tables deny the anon role entirely. */
 export class SupabaseStore implements GameStore {
   private db: SupabaseClient
+  private clock: () => number
 
-  constructor(db: SupabaseClient) {
+  /** `clock` must be the same clock the game rules use (the request's `now`), not the database's. */
+  constructor(db: SupabaseClient, clock: () => number) {
     this.db = db
+    this.clock = clock
+  }
+
+  private nowIso() {
+    return new Date(this.clock()).toISOString()
   }
 
   async createGame(g: Omit<GameRow, 'id'>): Promise<Game> {
@@ -45,7 +52,7 @@ export class SupabaseStore implements GameStore {
     const rows = check(
       await this.db
         .from('players')
-        .update({ jailed: true, caught_at: new Date().toISOString(), caught_by: by })
+        .update({ jailed: true, caught_at: this.nowIso(), caught_by: by })
         .eq('id', id)
         .eq('jailed', false)
         .select('id'),
@@ -53,7 +60,7 @@ export class SupabaseStore implements GameStore {
     return (rows ?? []).length > 0
   }
   async addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>) {
-    check(await this.db.from('locations').insert({ game_id: gameId, player_id: playerId, ...p }))
+    check(await this.db.from('locations').insert({ game_id: gameId, player_id: playerId, ...p, at: this.nowIso() }))
   }
   async latestPositions(gameId: string, atIsos: string[]) {
     const out: Record<string, Position[]> = {}
@@ -91,7 +98,7 @@ export class SupabaseStore implements GameStore {
     const rows = check(
       await this.db
         .from('games')
-        .update({ ended_at: new Date().toISOString(), winner })
+        .update({ ended_at: this.nowIso(), winner })
         .eq('id', gameId)
         .is('ended_at', null)
         .select('id'),
@@ -99,7 +106,7 @@ export class SupabaseStore implements GameStore {
     return (rows ?? []).length > 0
   }
   async addEvent(e: Omit<GameEvent, 'id' | 'at'>) {
-    check(await this.db.from('events').insert(e))
+    check(await this.db.from('events').insert({ ...e, at: this.nowIso() }))
   }
   async events(gameId: string): Promise<GameEvent[]> {
     return check(await this.db.from('events').select('*').eq('game_id', gameId).order('at')) as GameEvent[]
