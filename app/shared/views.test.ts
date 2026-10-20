@@ -108,3 +108,18 @@ describe('timers and counts', () => {
     expect(v.counts).toEqual({ runnersFree: 2, runnersJailed: 1, chasers: 1 })
   })
 })
+
+describe('end of game and jail details', () => {
+  it('shares the roster once the game has ended so results can show names', () => {
+    const v = view(aina, { game: game({ ended_at: new Date(NOW).toISOString() }) })
+    expect(v.roster.map((r) => r.name)).toContain('Ben')
+  })
+  it('hides the roster from players mid-game', () => {
+    expect(view(aina).roster).toEqual([])
+  })
+  it('tells a jailed runner who caught them', () => {
+    const jailed = { ...aina, jailed: true, caught_by: 'c1' }
+    expect(view(jailed, { players: [chaser, jailed, hafiz, wei, siti] }).caughtBy).toBe('Ben')
+    expect(view(aina).caughtBy).toBeNull()
+  })
+})

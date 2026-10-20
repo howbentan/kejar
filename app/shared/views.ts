@@ -38,6 +38,8 @@ export interface View {
   nextRevealAt: number | null
   nextAlertAt: number | null
   chaserNearby: boolean
+  /** Name of the chaser who caught me, while I'm jailed. */
+  caughtBy: string | null
   feed: { at: string; text: string }[]
   counts: { runnersFree: number; runnersJailed: number; chasers: number }
   /** Everyone in the game: shown in the lobby and to marshals; empty for players mid-game. */
@@ -201,7 +203,7 @@ export function viewFor(i: ViewInput): View {
     .slice(0, FEED_MAX)
 
   const runners = i.players.filter((p) => p.role === 'runner')
-  const showRoster = phase === 'lobby' || role === 'marshal'
+  const showRoster = phase === 'lobby' || phase === 'ended' || role === 'marshal'
 
   return {
     phase,
@@ -214,6 +216,7 @@ export function viewFor(i: ViewInput): View {
     nextRevealAt: upcoming?.revealAt ?? null,
     nextAlertAt: upcoming?.alertAt ?? null,
     chaserNearby,
+    caughtBy: i.me.jailed && i.me.caught_by ? (byId.get(i.me.caught_by)?.name ?? null) : null,
     feed,
     counts: {
       runnersFree: runners.filter((p) => !p.jailed).length,
