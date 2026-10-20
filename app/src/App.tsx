@@ -1,8 +1,10 @@
 import { routeFor } from './routes'
 import { Screen } from './game/ui'
+import GameScreen from './screens/GameScreen'
 import Home from './screens/Home'
 import HostLobby from './screens/HostLobby'
 import HostNew from './screens/HostNew'
+import Join from './screens/Join'
 import PrintTags from './screens/PrintTags'
 import SpikeAdmin from './spike/SpikeAdmin'
 import SpikeJoin from './spike/SpikeJoin'
@@ -17,6 +19,10 @@ export default function App() {
       return <HostNew />
     case 'host-lobby':
       return <HostLobby code={code!} />
+    case 'join':
+      return <Join code={code!} />
+    case 'game':
+      return <GameScreen code={code!} />
     case 'print-tags':
       return <PrintTags />
     case 'spike-join':

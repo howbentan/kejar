@@ -10,7 +10,10 @@ const ALWAYS_EVERY_MS = 5_000
 const WHEN_OPEN_EVERY_MS = 15_000
 
 /** Polls the game every 3 s while the page is visible and sends this phone's location per `sendLocation`. */
-export function useGameState(code: string, opts: { sendLocation: LocationMode }) {
+export function useGameState(
+  code: string,
+  opts: { sendLocation: LocationMode | ((view: View | null) => LocationMode) },
+) {
   const [view, setView] = useState<View | null>(null)
   const [error, setError] = useState<string | null>(null)
   const lastSent = useRef(0)
@@ -39,9 +42,11 @@ export function useGameState(code: string, opts: { sendLocation: LocationMode })
     }
   }, [refresh])
 
+  const mode = typeof opts.sendLocation === 'function' ? opts.sendLocation(view) : opts.sendLocation
+
   useEffect(() => {
-    if (opts.sendLocation === 'never' || !session.token || !('geolocation' in navigator)) return
-    const minGap = opts.sendLocation === 'always' ? ALWAYS_EVERY_MS : WHEN_OPEN_EVERY_MS
+    if (mode === 'never' || !session.token || !('geolocation' in navigator)) return
+    const minGap = mode === 'always' ? ALWAYS_EVERY_MS : WHEN_OPEN_EVERY_MS
     const send = (p: GeolocationPosition) => {
       if (document.visibilityState !== 'visible' || Date.now() - lastSent.current < minGap) return
       lastSent.current = Date.now()
@@ -58,7 +63,7 @@ export function useGameState(code: string, opts: { sendLocation: LocationMode })
       maximumAge: 5_000,
     })
     return () => navigator.geolocation.clearWatch(watch)
-  }, [code, opts.sendLocation, session.token])
+  }, [code, mode, session.token])
 
   return { view, error, refresh }
 }
