@@ -1,4 +1,4 @@
-import type { View } from '../../shared/views.js'
+import { count, type View } from '../../shared/views.js'
 import { ALERT_LEAD_MS } from '../../shared/clock.js'
 import GameMap from '../game/Map'
 import PingRipple from '../game/PingRipple'
@@ -37,7 +37,7 @@ export default function RunnerChase({ code, view }: { code: string; view: View }
     <Screen eyebrow={`Runner · ${view.me.tag_id ? `#${String(view.me.tag_id).padStart(2, '0')}` : view.me.name}`}>
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
         <GameClock view={view} />
-        <span className="muted">{view.counts.runnersFree} runners free</span>
+        <span className="muted">{count(view.counts.runnersFree, 'runner')} free</span>
       </div>
       <PingRipple role={view.me.role} lastRevealAt={view.lastRevealAt} now={now} />
 

@@ -60,6 +60,9 @@ export interface ViewInput {
   results: Results | null
 }
 
+/** '1 runner', '3 runners'. */
+export const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
 const tagLabel = (p: Player) => (p.tag_id === null ? p.name : `#${String(p.tag_id).padStart(2, '0')}`)
 
 function latestAtOrBefore(list: Position[] | undefined, t: number): Position | undefined {
@@ -154,11 +157,11 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
     case 'chase':
       return 'Chasers released'
     case 'ping':
-      return `Ping — ${Number(e.data.seen ?? 0)} runners seen`
+      return `Ping — ${count(Number(e.data.seen ?? 0), 'runner')} seen`
     case 'caught':
       return target && actor ? `${tagLabel(target)} caught by ${actor.name}` : 'A runner was caught'
     case 'jailbreak':
-      return `${actor?.name ?? 'A runner'} broke ${Number(e.data.freed ?? 0)} runners out of jail`
+      return `${actor?.name ?? 'A runner'} broke ${count(Number(e.data.freed ?? 0), 'runner')} out of jail`
     case 'ended':
       return 'Game over'
   }

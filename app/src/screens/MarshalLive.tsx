@@ -1,4 +1,4 @@
-import type { View } from '../../shared/views.js'
+import { count, type View } from '../../shared/views.js'
 import GameMap from '../game/Map'
 import PingRipple from '../game/PingRipple'
 import { useServerNow } from '../game/time'
@@ -13,7 +13,7 @@ export default function MarshalLive({ view }: { view: View }) {
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
         <GameClock view={view} />
         <span className="muted">
-          {view.counts.runnersFree} free · {view.counts.runnersJailed} in jail · {view.counts.chasers} chasers
+          {view.counts.runnersFree} free · {view.counts.runnersJailed} in jail · {count(view.counts.chasers, 'chaser')}
         </span>
       </div>
       <PingRipple role="marshal" lastRevealAt={view.lastRevealAt} now={now} />

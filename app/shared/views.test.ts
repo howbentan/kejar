@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { game, MIN, ping, player, pos, T0 } from './fixtures.js'
+import { event, game, MIN, ping, player, pos, T0 } from './fixtures.js'
 import { distanceM } from './geo.js'
 import type { Player, Position } from './types.js'
 import { viewFor } from './views.js'
@@ -131,5 +131,20 @@ describe('ping moment', () => {
   })
   it('is null before the first ping', () => {
     expect(view(aina, { pings: [] }).lastRevealAt).toBeNull()
+  })
+})
+
+describe('feed wording', () => {
+  const feedOf = (events: Parameters<typeof viewFor>[0]['events']) => view(siti, { events }).feed.map((f) => f.text)
+  it('uses the singular for one runner', () => {
+    expect(
+      feedOf([
+        event('ping', T0 + 10 * MIN, { data: { seen: 1 } }),
+        event('jailbreak', T0 + 11 * MIN, { actor_id: 'r3', data: { freed: 1 } }),
+      ]),
+    ).toEqual(['Wei broke 1 runner out of jail', 'Ping — 1 runner seen'])
+  })
+  it('uses the plural otherwise', () => {
+    expect(feedOf([event('ping', T0 + 10 * MIN, { data: { seen: 0 } })])).toEqual(['Ping — 0 runners seen'])
   })
 })

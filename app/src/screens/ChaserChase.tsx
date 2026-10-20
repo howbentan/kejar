@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import type { CatchJudgement } from '../../shared/catch.js'
 import { tagIdFromQr } from '../../shared/ids.js'
-import type { View } from '../../shared/views.js'
+import { count, type View } from '../../shared/views.js'
 import { call } from '../game/api'
 import { currentCoords } from '../game/here'
 import GameMap from '../game/Map'
@@ -55,7 +55,7 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
     <Screen eyebrow="Chaser">
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
         <GameClock view={view} />
-        <span className="muted">{view.counts.runnersFree} runners free</span>
+        <span className="muted">{count(view.counts.runnersFree, 'runner')} free</span>
       </div>
       <PingRipple role="chaser" lastRevealAt={view.lastRevealAt} now={now} />
       <div style={{ display: 'flex', gap: 8 }}>
