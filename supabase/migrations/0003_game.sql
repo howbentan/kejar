@@ -84,3 +84,4 @@ as $$
 $$;
 
 revoke execute on function latest_positions(uuid, timestamptz) from public, anon, authenticated;
+grant execute on function latest_positions(uuid, timestamptz) to service_role;
