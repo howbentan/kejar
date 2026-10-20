@@ -1,14 +1,13 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { ARENAS } from '../../shared/arenas.js'
-import { DEFAULT_SETTINGS, type Settings } from '../../shared/types.js'
+import { DEFAULT_SETTINGS, type LatLng, type Settings } from '../../shared/types.js'
+import AreaPicker from '../game/AreaPicker'
 import { call } from '../game/api'
 import { saveSession } from '../game/session'
 import { ErrorText, Pills, Screen } from '../game/ui'
+import { platformOf } from '../spike/device'
 
-const getPosition = () =>
-  new Promise<GeolocationPosition>((resolve, reject) =>
-    navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15_000 }),
-  )
+const SIZES = ['150', '200', '300'] as const
 
 function NumberField(props: { label: string; value: number; min: number; max: number; onChange: (n: number) => void }) {
   return (
@@ -29,6 +28,11 @@ function NumberField(props: { label: string; value: number; min: number; max: nu
 
 export default function HostNew() {
   const [arenaId, setArenaId] = useState<string>('around-me')
+  const [center, setCenter] = useState<LatLng | null>(null)
+  const [size, setSize] = useState<(typeof SIZES)[number]>('200')
+  const onPick = useCallback((c: LatLng) => setCenter(c), [])
+  // Laptops guess their location from Wi-Fi; phones have GPS.
+  const onLaptop = platformOf(navigator.userAgent) === 'other'
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -38,14 +42,13 @@ export default function HostNew() {
     setBusy(true)
     setError('')
     try {
-      let center: { lat: number; lng: number } | undefined
-      if (arenaId === 'around-me') {
-        const p = await getPosition().catch(() => {
-          throw new Error('Allow location so the play area can be centred on you.')
-        })
-        center = { lat: p.coords.latitude, lng: p.coords.longitude }
-      }
-      const { code, hostKey } = await call<{ code: string; hostKey: string }>('create', { arenaId, center, settings })
+      const picked = arenaId === 'around-me'
+      if (picked && !center) throw new Error('Move the map to choose your play area first.')
+      const { code, hostKey } = await call<{ code: string; hostKey: string }>('create', {
+        arenaId,
+        settings,
+        ...(picked ? { center, radiusM: Number(size) } : {}),
+      })
       saveSession(localStorage, code, { hostKey })
       window.location.assign(`/host/${code}`)
     } catch (e) {
@@ -58,13 +61,39 @@ export default function HostNew() {
     <Screen eyebrow="kejar. · organise">
       <h1 style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.04em' }}>New game</h1>
 
+      {onLaptop && (
+        <div className="card">
+          <p style={{ fontWeight: 600 }}>Tip: create the game on your phone</p>
+          <p className="muted" style={{ marginTop: 4 }}>
+            Laptops guess their location from Wi-Fi, so the map may start in the wrong place. Phones use GPS.
+          </p>
+        </div>
+      )}
+
       <p className="eyebrow">Play area</p>
-      {[['around-me', 'Around me (200 m circle)'], ...Object.values(ARENAS).map((a) => [a.id, a.name])].map(([id, name]) => (
-        <label key={id} className="card" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <input type="radio" name="arena" checked={arenaId === id} onChange={() => setArenaId(id)} />
-          {name}
-        </label>
-      ))}
+      <Pills<string>
+        label="Play area"
+        value={arenaId}
+        options={[
+          { value: 'around-me', text: 'Pick on map' },
+          ...Object.values(ARENAS).map((a) => ({ value: a.id, text: a.name })),
+        ]}
+        onChange={setArenaId}
+      />
+      {arenaId === 'around-me' && (
+        <>
+          <AreaPicker radiusM={Number(size)} onChange={onPick} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Play area size</span>
+            <Pills<(typeof SIZES)[number]>
+              label="Play area size"
+              value={size}
+              options={SIZES.map((s) => ({ value: s, text: `${s} m` }))}
+              onChange={setSize}
+            />
+          </div>
+        </>
+      )}
 
       <p className="eyebrow">Settings</p>
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
