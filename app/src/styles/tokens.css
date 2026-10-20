@@ -80,3 +80,12 @@ select.input {
   background-repeat: no-repeat; background-position: right 12px center;
 }
 select.input option { background: #141614; color: var(--white); }
+
+/* "Centre on me" map button */
+.map-me {
+  position: absolute; left: 10px; bottom: 10px; z-index: 2; appearance: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px;
+  background: rgba(10, 10, 11, 0.82); color: var(--white); border: 1px solid var(--hair2, rgba(255,255,255,0.18));
+  font: 600 12px var(--font); backdrop-filter: blur(8px);
+}
+.map-me span { color: var(--volt); font-size: 14px; line-height: 1; }

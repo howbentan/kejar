@@ -131,5 +131,24 @@ export default function GameMap({ arena, dots, height = 320 }: { arena: Arena; d
     ;(map.current.getSource('points') as GeoJSONSource | undefined)?.setData(points)
   }, [dots])
 
-  return <div ref={el} style={{ height, borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hair)' }} />
+  /** Jump to my dot, or to this phone's own location when I don't have one (e.g. the organiser). */
+  function centreOnMe() {
+    const fly = (lng: number, lat: number) => map.current?.flyTo({ center: [lng, lat], zoom: 17, duration: 800 })
+    const me = latest.current.find((d) => d.kind === 'me')
+    if (me) return fly(me.lng, me.lat)
+    navigator.geolocation?.getCurrentPosition(
+      (p) => fly(p.coords.longitude, p.coords.latitude),
+      () => undefined,
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 10_000 },
+    )
+  }
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div ref={el} style={{ height, borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hair)' }} />
+      <button type="button" className="map-me" onClick={centreOnMe} aria-label="Centre on me">
+        <span aria-hidden="true">◎</span> Me
+      </button>
+    </div>
+  )
 }
