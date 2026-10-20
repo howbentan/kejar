@@ -1,6 +1,7 @@
 import type { View } from '../../shared/views.js'
 import { ALERT_LEAD_MS } from '../../shared/clock.js'
 import GameMap from '../game/Map'
+import PingRipple from '../game/PingRipple'
 import { clock, useServerNow } from '../game/time'
 import { Screen } from '../game/ui'
 import { BreakOut } from './Jail'
@@ -38,6 +39,7 @@ export default function RunnerChase({ code, view }: { code: string; view: View }
         <GameClock view={view} />
         <span className="muted">{view.counts.runnersFree} runners free</span>
       </div>
+      <PingRipple role={view.me.role} lastRevealAt={view.lastRevealAt} now={now} />
 
       {checkInNow ? (
         <div style={{ background: 'var(--volt)', color: 'var(--black)', borderRadius: 20, padding: 18, textAlign: 'center' }}>

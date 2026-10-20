@@ -25,6 +25,7 @@ export function testView(over: Partial<View> = {}): View {
     dots: [],
     nextRevealAt: null,
     nextAlertAt: null,
+    lastRevealAt: null,
     chaserNearby: false,
     caughtBy: null,
     feed: [],

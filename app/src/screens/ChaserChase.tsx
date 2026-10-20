@@ -5,6 +5,7 @@ import type { View } from '../../shared/views.js'
 import { call } from '../game/api'
 import { currentCoords } from '../game/here'
 import GameMap from '../game/Map'
+import PingRipple from '../game/PingRipple'
 import Scanner from '../game/Scanner'
 import { loadSession } from '../game/session'
 import { clock, useServerNow } from '../game/time'
@@ -56,6 +57,7 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
         <GameClock view={view} />
         <span className="muted">{view.counts.runnersFree} runners free</span>
       </div>
+      <PingRipple role="chaser" lastRevealAt={view.lastRevealAt} now={now} />
       <div style={{ display: 'flex', gap: 8 }}>
         <div className="card" style={{ flex: 1 }}>
           <p className="eyebrow">Last ping</p>

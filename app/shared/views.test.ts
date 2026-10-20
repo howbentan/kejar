@@ -123,3 +123,13 @@ describe('end of game and jail details', () => {
     expect(view(aina).caughtBy).toBeNull()
   })
 })
+
+describe('ping moment', () => {
+  it('tells every player when the last ping went out', () => {
+    expect(view(aina).lastRevealAt).toBe(T0 + 15 * MIN)
+    expect(view(chaser).lastRevealAt).toBe(T0 + 15 * MIN)
+  })
+  it('is null before the first ping', () => {
+    expect(view(aina, { pings: [] }).lastRevealAt).toBeNull()
+  })
+})

@@ -37,6 +37,8 @@ export interface View {
   dots: MapDot[]
   nextRevealAt: number | null
   nextAlertAt: number | null
+  /** When the most recent ping revealed runners to chasers (drives the "you've been pinged" moment). */
+  lastRevealAt: number | null
   chaserNearby: boolean
   /** Name of the chaser who caught me, while I'm jailed. */
   caughtBy: string | null
@@ -187,6 +189,7 @@ export function viewFor(i: ViewInput): View {
     chaserNearby = r.nearby
   }
 
+  const lastReveal = i.pings.filter((p) => p.revealed && p.seq > 0).sort((a, b) => b.seq - a.seq)[0]
   const upcoming = phase === 'hiding' || phase === 'chasing' ? pingTimes(i.game).find((t) => t.revealAt > i.now) : undefined
 
   // Newest first; events recorded in the same millisecond keep their recorded order (later first).
@@ -215,6 +218,7 @@ export function viewFor(i: ViewInput): View {
     dots,
     nextRevealAt: upcoming?.revealAt ?? null,
     nextAlertAt: upcoming?.alertAt ?? null,
+    lastRevealAt: lastReveal ? Date.parse(lastReveal.reveal_at) : null,
     chaserNearby,
     caughtBy: i.me.jailed && i.me.caught_by ? (byId.get(i.me.caught_by)?.name ?? null) : null,
     feed,

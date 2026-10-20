@@ -42,3 +42,24 @@ body {
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--hair); }
 th { font: 500 10px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+
+/* "You've been pinged" ripple */
+.ping-ripple {
+  display: flex; align-items: center; gap: 16px; padding: 16px 18px; border-radius: 22px;
+  background: radial-gradient(120% 140% at 10% 50%, rgba(198, 255, 61, 0.22), rgba(198, 255, 61, 0.04) 70%);
+  border: 1px solid rgba(198, 255, 61, 0.45);
+  animation: ping-in 0.6s var(--spring) both;
+}
+.ping-rings { position: relative; width: 52px; height: 52px; flex-shrink: 0; }
+.ping-rings i { position: absolute; inset: 19px; border-radius: 50%; background: var(--volt); box-shadow: 0 0 14px var(--volt); }
+.ping-rings span {
+  position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--volt);
+  animation: ping-ring 1.8s var(--spring) infinite; opacity: 0;
+}
+.ping-rings span:nth-child(2) { animation-delay: 0.45s; }
+.ping-rings span:nth-child(3) { animation-delay: 0.9s; }
+.ping-title { font-weight: 700; font-size: 17px; letter-spacing: -0.02em; color: var(--volt); }
+.ping-sub { font-size: 13px; color: var(--dim); margin-top: 2px; }
+@keyframes ping-ring { 0% { transform: scale(0.35); opacity: 0.95; } 100% { transform: scale(1.6); opacity: 0; } }
+@keyframes ping-in { from { transform: translateY(-8px) scale(0.98); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .ping-rings span, .ping-ripple { animation: none; } }
