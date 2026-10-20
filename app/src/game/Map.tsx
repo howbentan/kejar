@@ -47,9 +47,14 @@ export default function GameMap({ arena, dots, height = 320 }: { arena: Arena; d
   const ready = useRef(false)
   const latest = useRef(dots)
   latest.current = dots
+  // Polls return a fresh arena object every 3 s; rebuild the map only when its content changes.
+  const arenaKey = JSON.stringify(arena)
+  const arenaRef = useRef(arena)
+  arenaRef.current = arena
 
   useEffect(() => {
     if (!el.current) return
+    const arena = arenaRef.current
     const m = new MapLibreMap({
       container: el.current,
       style: kejarMapStyle,
@@ -117,7 +122,7 @@ export default function GameMap({ arena, dots, height = 320 }: { arena: Arena; d
       m.remove()
       map.current = null
     }
-  }, [arena])
+  }, [arenaKey])
 
   useEffect(() => {
     if (!ready.current || !map.current) return
