@@ -1,11 +1,15 @@
 import type { Feature as GeoFeature, FeatureCollection, Geometry } from 'geojson'
-import { Map as MapLibreMap, type GeoJSONSource } from 'maplibre-gl'
+import { Map as MapLibreMap, setWorkerUrl, type GeoJSONSource } from 'maplibre-gl'
+import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useEffect, useRef } from 'react'
 import { circlePolygon } from '../../shared/geo.js'
 import type { Arena } from '../../shared/types.js'
 import { FUZZ_RADIUS_M, type MapDot } from '../../shared/views.js'
 import { kejarMapStyle } from './mapStyle'
+
+// MapLibre v6 draws in a worker that bundlers must point at explicitly, or no map renders.
+setWorkerUrl(mapWorkerUrl)
 
 const VOLT = '#C6FF3D'
 const WHITE = '#F5F5F3'
