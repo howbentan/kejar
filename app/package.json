@@ -13,6 +13,9 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.118.0",
+    "maplibre-gl": "^6.15.0",
+    "qr-scanner": "^1.4.2",
+    "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "web-push": "^3.6.7"
@@ -21,6 +24,7 @@
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^24.19.2",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/web-push": "^3.6.4",

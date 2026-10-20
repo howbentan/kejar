@@ -11,6 +11,20 @@ self.addEventListener('push', (event) => {
   } catch {
     data = {}
   }
+  if (data.type === 'checkin' && data.code) {
+    event.waitUntil(
+      self.registration.showNotification('kejar.', {
+        body: 'Ping in 30s — check in!',
+        tag: 'kejar-ping',
+        renotify: true,
+        requireInteraction: true,
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        data: { url: `/g/${data.code}` },
+      }),
+    )
+    return
+  }
   const { pingId, deviceId } = data
   const ack = pingId && deviceId
     ? fetch('/api/ack', {
@@ -33,8 +47,8 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
-  const pingId = event.notification.data && event.notification.data.pingId
-  const url = pingId ? `/spike?ping=${encodeURIComponent(pingId)}` : '/spike'
+  const data = event.notification.data || {}
+  const url = data.url || (data.pingId ? `/spike?ping=${encodeURIComponent(data.pingId)}` : '/spike')
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     const client = windows.find((c) => 'focus' in c)

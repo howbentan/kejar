@@ -69,3 +69,31 @@ describe('service worker notification tap', () => {
     expect(self.clients.openWindow).toHaveBeenCalledWith('/spike?ping=p1')
   })
 })
+
+describe('service worker game check-in alerts', () => {
+  async function push(listeners: Record<string, Listener>, data: unknown) {
+    const pending: Promise<unknown>[] = []
+    listeners.push({ data: { json: () => data }, waitUntil: (p: Promise<unknown>) => pending.push(p) })
+    await Promise.all(pending)
+  }
+
+  it('shows the check-in alert for a game ping', async () => {
+    const { self, listeners } = loadWorker([])
+    await push(listeners, { type: 'checkin', code: 'ABC234', seq: 2 })
+    expect(self.registration.showNotification).toHaveBeenCalledWith(
+      'kejar.',
+      expect.objectContaining({ body: 'Ping in 30s — check in!', tag: 'kejar-ping', data: { url: '/g/ABC234' } }),
+    )
+  })
+
+  it('opens the game when a check-in alert is tapped', async () => {
+    const { self, listeners } = loadWorker([])
+    const pending: Promise<unknown>[] = []
+    listeners.notificationclick({
+      notification: { close: vi.fn(), data: { url: '/g/ABC234' } },
+      waitUntil: (p: Promise<unknown>) => pending.push(p),
+    })
+    await Promise.all(pending)
+    expect(self.clients.openWindow).toHaveBeenCalledWith('/g/ABC234')
+  })
+})
