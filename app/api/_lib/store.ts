@@ -15,8 +15,11 @@ export interface GameStore {
   /** Marks a runner caught only if they are not already jailed; true for the first caller. */
   catchRunner(id: string, by: string): Promise<boolean>
   addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>): Promise<void>
-  /** Ascending by time, keyed by player id. */
-  positions(gameId: string, sinceIso: string): Promise<Record<string, Position[]>>
+  /**
+   * Each player's latest position at or before each of the given times (deduplicated, ascending).
+   * Bounded by players × times, so it stays small however long the game runs.
+   */
+  latestPositions(gameId: string, atIsos: string[]): Promise<Record<string, Position[]>>
   addPings(pings: Ping[]): Promise<void>
   pings(gameId: string): Promise<Ping[]>
   /** Sets the flag only if it was false; true for the first caller. */
@@ -93,6 +96,24 @@ export class MemoryStore implements GameStore {
   async addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>) {
     this.locs.push({ ...p, at: this.nowIso(), game_id: gameId, player_id: playerId })
   }
+  async latestPositions(gameId: string, atIsos: string[]) {
+    const out: Record<string, Position[]> = {}
+    for (const t of atIsos) {
+      const best = new Map<string, Position & { game_id: string; player_id: string }>()
+      for (const l of this.locs) {
+        if (l.game_id !== gameId || l.at > t) continue
+        const cur = best.get(l.player_id)
+        if (!cur || l.at >= cur.at) best.set(l.player_id, l)
+      }
+      for (const [id, l] of best) {
+        const list = (out[id] ??= [])
+        if (!list.some((p) => p.at === l.at)) list.push({ lat: l.lat, lng: l.lng, accuracy_m: l.accuracy_m, at: l.at })
+      }
+    }
+    for (const list of Object.values(out)) list.sort((a, b) => a.at.localeCompare(b.at))
+    return out
+  }
+  /** Bulk read for tests only — the game must never depend on reading every row. */
   async positions(gameId: string, sinceIso: string) {
     const out: Record<string, Position[]> = {}
     for (const l of this.locs) {

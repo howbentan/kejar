@@ -55,17 +55,18 @@ export class SupabaseStore implements GameStore {
   async addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>) {
     check(await this.db.from('locations').insert({ game_id: gameId, player_id: playerId, ...p }))
   }
-  async positions(gameId: string, sinceIso: string) {
-    const rows = check(
-      await this.db
-        .from('locations')
-        .select('player_id, lat, lng, accuracy_m, at')
-        .eq('game_id', gameId)
-        .gte('at', sinceIso)
-        .order('at'),
-    ) as (Position & { player_id: string })[]
+  async latestPositions(gameId: string, atIsos: string[]) {
     const out: Record<string, Position[]> = {}
-    for (const { player_id, ...p } of rows) (out[player_id] ??= []).push(p)
+    for (const at of [...new Set(atIsos)]) {
+      const rows = check(await this.db.rpc('latest_positions', { p_game: gameId, p_at: at })) as
+        | (Position & { player_id: string })[]
+        | null
+      for (const { player_id, ...p } of rows ?? []) {
+        const list = (out[player_id] ??= [])
+        if (!list.some((x) => x.at === p.at)) list.push(p)
+      }
+    }
+    for (const list of Object.values(out)) list.sort((a, b) => a.at.localeCompare(b.at))
     return out
   }
   async addPings(pings: Ping[]) {

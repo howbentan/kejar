@@ -65,6 +65,14 @@ function settingsFrom(input: unknown): Settings {
   return s
 }
 
+/** The moments a view looks at: now, the spectator delay, and the last revealed ping. */
+function viewTimes(game: Game, pings: { seq: number; revealed: boolean; reveal_at: string }[], now: number): string[] {
+  const times = [iso(now), iso(now - game.settings.spectatorDelayMin * 60_000)]
+  const last = pings.filter((p) => p.revealed && p.seq > 0).sort((a, b) => b.seq - a.seq)[0]
+  if (last) times.push(last.reveal_at)
+  return times
+}
+
 const latest = (list: Position[] | undefined) => (list && list.length ? list[list.length - 1] : null)
 
 /** Brings the game up to date: chase start, alerts, reveals and the end. Safe to call from many pages at once. */
@@ -100,9 +108,9 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
   for (const seq of work.reveal) {
     if (!(await store.claimPing(game.id, seq, 'revealed'))) continue
     const revealAt = times.get(seq)?.revealAt ?? now
-    const positions = await store.positions(game.id, game.started_at!)
+    const positions = await store.latestPositions(game.id, [iso(revealAt)])
     const free = (await store.players(game.id)).filter((p) => p.role === 'runner' && !p.jailed)
-    const seen = free.filter((p) => (positions[p.id] ?? []).some((x) => Date.parse(x.at) <= revealAt)).length
+    const seen = free.filter((p) => (positions[p.id] ?? []).length > 0).length
     await store.addEvent({ game_id: game.id, type: 'ping', actor_id: null, target_id: null, data: { seq, seen } })
   }
 
@@ -258,13 +266,14 @@ const state: Action = async (ctx, body) => {
   const players = await ctx.store.players(game.id)
   if (me.id !== 'host') me = players.find((p) => p.id === me.id) ?? me
   const events = await ctx.store.events(game.id)
+  const pings = await ctx.store.pings(game.id)
   const ended = phaseAt(game, ctx.now).phase === 'ended'
   return viewFor({
     game,
     me,
     players,
-    positions: await ctx.store.positions(game.id, game.started_at ?? iso(0)),
-    pings: await ctx.store.pings(game.id),
+    positions: await ctx.store.latestPositions(game.id, viewTimes(game, pings, ctx.now)),
+    pings,
     events,
     now: ctx.now,
     results: ended ? computeResults(game, players, events) : null,
@@ -291,7 +300,7 @@ const catchAction: Action = async (ctx, body) => {
   const players = await ctx.store.players(game.id)
   const tagId = tagIdFromQr(str(body.tagQr))
   const runner = players.find((p) => p.role === 'runner' && p.tag_id === tagId)
-  const positions = await ctx.store.positions(game.id, game.started_at ?? iso(0))
+  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeCatch({
     phase: phaseAt(fresh, ctx.now).phase,
     chaser: me,
@@ -321,7 +330,7 @@ const jailbreak: Action = async (ctx, body) => {
   if (str(body.qr).trim() !== JAIL_QR) throw new ActionError(400, "That's not the jail code")
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
-  const positions = await ctx.store.positions(game.id, game.started_at ?? iso(0))
+  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeJailbreak({
     phase: phaseAt(fresh, ctx.now).phase,
     runner: me,

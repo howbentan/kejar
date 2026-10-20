@@ -226,3 +226,32 @@ describe('catching and jail', () => {
     expect(v.results?.winner).toBe('runners')
   })
 })
+
+describe('long games', () => {
+  /** Mimics Supabase's default 1,000-row response cap on any bulk position read. */
+  class CappedStore extends MemoryStore {
+    async positions(gameId: string, sinceIso: string) {
+      const all = await super.positions(gameId, sinceIso)
+      let budget = 1000
+      const out: typeof all = {}
+      for (const [id, list] of Object.entries(all)) {
+        out[id] = list.slice(0, Math.max(0, budget))
+        budget -= out[id].length
+      }
+      return out
+    }
+  }
+
+  it('marshals still see the latest position after thousands of location updates', async () => {
+    store = new CappedStore(() => now)
+    const g = await readyGame()
+    await run('start', { code: g.code, hostKey: g.hostKey })
+    for (let i = 0; i < 1200; i++) {
+      now = T0 + 6 * MIN + i * 1000
+      await run('location', { code: g.code, token: g.ben.token, ...at(i) })
+    }
+    const v = await run<View>('state', { code: g.code, hostKey: g.hostKey })
+    const ben = v.dots.find((d) => d.id === g.ben.playerId)!
+    expect(ben.lat).toBeCloseTo(CENTER.lat + 1199 / 111_195, 6)
+  })
+})
