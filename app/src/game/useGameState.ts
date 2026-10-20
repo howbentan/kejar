@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
 import { loadSession } from './session'
+import { clockOffset, type ClockSample } from './time'
 
 export type LocationMode = 'always' | 'when-open' | 'never'
 
@@ -17,13 +18,19 @@ export function useGameState(
   const [view, setView] = useState<View | null>(null)
   const [error, setError] = useState<string | null>(null)
   const lastSent = useRef(0)
+  const samples = useRef<ClockSample[]>([])
   const session = loadSession(localStorage, code)
   const auth = session.token ? { token: session.token } : { hostKey: session.hostKey }
 
   const refresh = useCallback(async () => {
     if (document.visibilityState !== 'visible') return
     try {
-      setView(await call<View>('state', { code, ...auth }))
+      const sentAt = Date.now()
+      const v = await call<View>('state', { code, ...auth })
+      const receivedAt = Date.now()
+      samples.current = [...samples.current, { serverNow: v.now, sentAt, receivedAt }].slice(-10)
+      // Re-express "now" on this phone's clock, corrected for network delay, so every device's timers agree.
+      setView({ ...v, now: receivedAt + clockOffset(samples.current) })
       setError(null)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
