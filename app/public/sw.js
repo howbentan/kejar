@@ -37,12 +37,17 @@ self.addEventListener('notificationclick', (event) => {
   const url = pingId ? `/spike?ping=${encodeURIComponent(pingId)}` : '/spike'
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
-    for (const client of windows) {
-      if ('focus' in client) {
+    const client = windows.find((c) => 'focus' in c)
+    if (client) {
+      try {
+        // Focus first: browsers only allow focus/openWindow shortly after the tap.
+        await client.focus()
         await client.navigate(url)
-        return client.focus()
+        return
+      } catch {
+        // navigate() rejects for tabs this worker doesn't control; open a fresh one.
       }
     }
-    return self.clients.openWindow(url)
+    await self.clients.openWindow(url)
   })())
 })
