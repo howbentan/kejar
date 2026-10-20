@@ -1,6 +1,7 @@
 import { routeFor } from './routes'
 import SpikeAdmin from './spike/SpikeAdmin'
 import SpikeJoin from './spike/SpikeJoin'
+import SpikeReport from './spike/SpikeReport'
 
 function Home() {
   return (
@@ -31,7 +32,7 @@ export default function App() {
     case 'spike-admin':
       return <SpikeAdmin />
     case 'spike-report':
-      return <Placeholder title="Ping test · report" />
+      return <SpikeReport />
     default:
       return <Placeholder title="Not found" />
   }
