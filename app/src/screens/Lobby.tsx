@@ -34,7 +34,10 @@ function AlertsCard({ code, view, onDone }: { code: string; view: View; onDone: 
     <div className="card">
       <p style={{ fontWeight: 600 }}>Turn on check-in alerts</p>
       {support === 'needs-install' && (
-        <p className="muted">On iPhone: Share → Add to Home Screen, then open kejar. from the icon.</p>
+        <p className="muted">
+          You joined in Safari, so alerts can&apos;t reach this iPhone. Open this page at each check-in (the countdown shows
+          when).
+        </p>
       )}
       {support === 'denied' && <p className="muted">Notifications are blocked. Allow them in your phone settings.</p>}
       {support === 'unsupported' && <p className="muted">This browser can’t get alerts — keep the page open at check-ins.</p>}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { call } from '../game/api'
+import { currentPushEnv, pushSupport } from '../spike/push'
 import { loadSession, saveSession } from '../game/session'
 import { ErrorText, Screen } from '../game/ui'
 
@@ -9,6 +10,8 @@ export default function Join({ code }: { code: string }) {
   const [waiver, setWaiver] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // iPhone alerts only work from the Home Screen app, which has its own storage — join there, not in Safari.
+  const iphoneNotInstalled = pushSupport(currentPushEnv()) === 'needs-install'
 
   // Already joined on this phone? Go straight back into the game.
   useEffect(() => {
@@ -35,6 +38,19 @@ export default function Join({ code }: { code: string }) {
         <br />
         run?
       </h1>
+      {iphoneNotInstalled && (
+        <div className="card">
+          <p style={{ fontWeight: 600 }}>On iPhone, add to Home Screen first</p>
+          <ol className="muted" style={{ marginTop: 8, paddingLeft: 18 }}>
+            <li>Tap Share in Safari, then Add to Home Screen.</li>
+            <li>Open kejar. from the new icon.</li>
+            <li>{`Join there with code ${code} — that's how you get check-in alerts.`}</li>
+          </ol>
+          <p className="muted" style={{ marginTop: 8 }}>
+            Joining here in Safari works, but you won&apos;t get alerts.
+          </p>
+        </div>
+      )}
       <label className="eyebrow" htmlFor="name">
         Your name
       </label>
