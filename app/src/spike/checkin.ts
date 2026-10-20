@@ -9,14 +9,23 @@ export interface CheckinDb {
   from(table: string): { insert(row: Record<string, unknown>): PromiseLike<{ error: DbError }> }
 }
 
-const GEO_ERRORS: Record<number, 'denied' | 'unavailable' | 'timeout'> = { 1: 'denied', 2: 'unavailable', 3: 'timeout' }
+const PROMPT_GRACE_MS = 2000
+
+const GEO_ERRORS:Record<number, 'denied' | 'unavailable' | 'timeout'> = { 1: 'denied', 2: 'unavailable', 3: 'timeout' }
 
 export function readPosition(geo: Geolocation | undefined, timeoutMs = 10000): Promise<PositionResult> {
   if (!geo) return Promise.resolve({ error: 'unsupported' })
   return new Promise((resolve) => {
+    // The browser's own timeout only starts after permission is granted, so an
+    // unanswered location prompt would hang forever without this outer guard.
+    const guard = setTimeout(() => resolve({ error: 'timeout' }), timeoutMs + PROMPT_GRACE_MS)
+    const done = (result: PositionResult) => {
+      clearTimeout(guard)
+      resolve(result)
+    }
     geo.getCurrentPosition(
-      (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy_m: p.coords.accuracy }),
-      (e) => resolve({ error: GEO_ERRORS[e.code] ?? 'unavailable' }),
+      (p) => done({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy_m: p.coords.accuracy }),
+      (e) => done({ error: GEO_ERRORS[e.code] ?? 'unavailable' }),
       { enableHighAccuracy: true, maximumAge: 0, timeout: timeoutMs },
     )
   })

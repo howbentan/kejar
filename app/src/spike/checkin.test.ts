@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { readPosition, submitCheckin, type CheckinDb } from './checkin'
 
 const geo = (impl: (ok: (p: unknown) => void, err: (e: unknown) => void) => void) =>
@@ -31,6 +31,17 @@ describe('readPosition', () => {
   it('maps timeout', async () => {
     expect(await readPosition(geo((_ok, err) => err({ code: 3 })))).toEqual({ error: 'timeout' })
   })
+  it('times out even if the location prompt is never answered', async () => {
+    vi.useFakeTimers()
+    try {
+      const pending = readPosition(geo(() => {}), 10_000)
+      await vi.advanceTimersByTimeAsync(12_000)
+      expect(await pending).toEqual({ error: 'timeout' })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('reports unsupported without geolocation', async () => {
     expect(await readPosition(undefined)).toEqual({ error: 'unsupported' })
   })
