@@ -1,0 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap');
+
+:root {
+  --volt: #C6FF3D;
+  --black: #0A0A0B;
+  --white: #F5F5F3;
+  --dim: rgba(245, 245, 243, 0.55);
+  --hair: rgba(255, 255, 255, 0.09);
+  --font: 'Geist', system-ui, sans-serif;
+  --mono: 'Geist Mono', ui-monospace, monospace;
+  --spring: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--black);
+  color: var(--white);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+}
+
+.screen { max-width: 480px; margin: 0 auto; padding: 32px 20px 48px; display: flex; flex-direction: column; gap: 16px; }
+.wordmark { font-size: 64px; font-weight: 800; letter-spacing: -0.06em; line-height: 0.9; }
+.eyebrow { font: 500 10px var(--mono); letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); }
+.muted { color: var(--dim); font-size: 14px; line-height: 1.5; font-weight: 300; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.card { border: 1px solid var(--hair); border-radius: 20px; padding: 14px 16px; background: rgba(255, 255, 255, 0.03); }
+.btn {
+  appearance: none; border: 0; border-radius: 999px; padding: 14px 22px;
+  background: var(--volt); color: var(--black); font: 700 15px var(--font);
+  cursor: pointer; transition: transform 0.4s var(--spring);
+}
+.btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.5; }
+.btn-ghost { background: transparent; color: var(--white); border: 1px solid var(--hair); }
+.input {
+  width: 100%; border: 1px solid var(--hair); border-radius: 14px; padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.04); color: var(--white); font: 500 15px var(--font);
+}
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--hair); }
+th { font: 500 10px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
