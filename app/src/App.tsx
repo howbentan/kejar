@@ -1,32 +1,24 @@
 import { routeFor } from './routes'
+import { Screen } from './game/ui'
+import Home from './screens/Home'
+import HostLobby from './screens/HostLobby'
+import HostNew from './screens/HostNew'
+import PrintTags from './screens/PrintTags'
 import SpikeAdmin from './spike/SpikeAdmin'
 import SpikeJoin from './spike/SpikeJoin'
 import SpikeReport from './spike/SpikeReport'
 
-function Home() {
-  return (
-    <main className="screen">
-      <h1 className="wordmark">
-        <span>kejar</span>
-        <span style={{ color: 'var(--volt)' }}>.</span>
-      </h1>
-      <p className="muted">Real-life chase, refereed by your phone.</p>
-    </main>
-  )
-}
-
-function Placeholder({ title }: { title: string }) {
-  return (
-    <main className="screen">
-      <p className="eyebrow">{title}</p>
-    </main>
-  )
-}
-
 export default function App() {
-  switch (routeFor(window.location.pathname)) {
+  const { route, code } = routeFor(window.location.pathname)
+  switch (route) {
     case 'home':
       return <Home />
+    case 'host-new':
+      return <HostNew />
+    case 'host-lobby':
+      return <HostLobby code={code!} />
+    case 'print-tags':
+      return <PrintTags />
     case 'spike-join':
       return <SpikeJoin />
     case 'spike-admin':
@@ -34,6 +26,6 @@ export default function App() {
     case 'spike-report':
       return <SpikeReport />
     default:
-      return <Placeholder title="Not found" />
+      return <Screen eyebrow="Not found">{null}</Screen>
   }
 }

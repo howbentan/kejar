@@ -2,15 +2,24 @@ import { describe, expect, it } from 'vitest'
 import { routeFor } from './routes'
 
 describe('routeFor', () => {
-  it('maps known paths to routes', () => {
-    expect(routeFor('/')).toBe('home')
-    expect(routeFor('/spike')).toBe('spike-join')
-    expect(routeFor('/spike/')).toBe('spike-join')
-    expect(routeFor('/spike/admin')).toBe('spike-admin')
-    expect(routeFor('/spike/report')).toBe('spike-report')
+  it('maps the spike pages', () => {
+    expect(routeFor('/spike')).toEqual({ route: 'spike-join' })
+    expect(routeFor('/spike/')).toEqual({ route: 'spike-join' })
+    expect(routeFor('/spike/admin')).toEqual({ route: 'spike-admin' })
+    expect(routeFor('/spike/report')).toEqual({ route: 'spike-report' })
+  })
+
+  it('maps the game pages with their codes', () => {
+    expect(routeFor('/')).toEqual({ route: 'home' })
+    expect(routeFor('/host/new')).toEqual({ route: 'host-new' })
+    expect(routeFor('/host/ABC234')).toEqual({ route: 'host-lobby', code: 'ABC234' })
+    expect(routeFor('/g/abc234')).toEqual({ route: 'game', code: 'ABC234' })
+    expect(routeFor('/join/ABC234/')).toEqual({ route: 'join', code: 'ABC234' })
+    expect(routeFor('/print/tags')).toEqual({ route: 'print-tags' })
   })
 
   it('returns not-found for unknown paths', () => {
-    expect(routeFor('/nope')).toBe('not-found')
+    expect(routeFor('/nope')).toEqual({ route: 'not-found' })
+    expect(routeFor('/g/')).toEqual({ route: 'not-found' })
   })
 })
