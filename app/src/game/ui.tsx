@@ -28,3 +28,31 @@ export function ErrorText({ children }: { children: ReactNode }) {
 }
 
 export const tagText = (tag: number | null) => (tag === null ? 'No tag yet' : `#${String(tag).padStart(2, '0')}`)
+
+/** A row of pill buttons for picking one option (accessible as a radio group). */
+export function Pills<T extends string>(props: {
+  label: string
+  options: { value: T; text: string }[]
+  value: T | null
+  disabled?: boolean
+  onChange: (value: T) => void
+}) {
+  return (
+    <div className="pills" role="radiogroup" aria-label={props.label}>
+      {props.options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          role="radio"
+          aria-checked={props.value === o.value}
+          aria-label={`${props.label}: ${o.text}`}
+          className={props.value === o.value ? 'pill pill-on' : 'pill'}
+          disabled={props.disabled}
+          onClick={() => props.value !== o.value && props.onChange(o.value)}
+        >
+          {o.text}
+        </button>
+      ))}
+    </div>
+  )
+}

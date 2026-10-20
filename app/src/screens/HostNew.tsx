@@ -3,7 +3,7 @@ import { ARENAS } from '../../shared/arenas.js'
 import { DEFAULT_SETTINGS, type Settings } from '../../shared/types.js'
 import { call } from '../game/api'
 import { saveSession } from '../game/session'
-import { ErrorText, Screen } from '../game/ui'
+import { ErrorText, Pills, Screen } from '../game/ui'
 
 const getPosition = () =>
   new Promise<GeolocationPosition>((resolve, reject) =>
@@ -70,19 +70,19 @@ export default function HostNew() {
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <NumberField label="Game length (min)" value={settings.lengthMin} min={15} max={90} onChange={(n) => set({ lengthMin: n })} />
         <NumberField label="Hide time (min)" value={settings.hideMin} min={1} max={15} onChange={(n) => set({ hideMin: n })} />
-        <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>Ping every</span>
-          <select
-            className="input"
-            style={{ width: 110 }}
-            value={settings.pingMin}
-            onChange={(e) => set({ pingMin: Number(e.target.value) as Settings['pingMin'] })}
-          >
-            <option value={2}>2 min</option>
-            <option value={3}>3 min</option>
-            <option value={5}>5 min</option>
-          </select>
-        </label>
+          <Pills<'2' | '3' | '5'>
+            label="Ping every"
+            value={String(settings.pingMin) as '2' | '3' | '5'}
+            options={[
+              { value: '2', text: '2 min' },
+              { value: '3', text: '3 min' },
+              { value: '5', text: '5 min' },
+            ]}
+            onChange={(v) => set({ pingMin: Number(v) as Settings['pingMin'] })}
+          />
+        </div>
         <NumberField
           label="Spectator delay (min)"
           value={settings.spectatorDelayMin}
@@ -90,18 +90,18 @@ export default function HostNew() {
           max={5}
           onChange={(n) => set({ spectatorDelayMin: n })}
         />
-        <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>Check-ins</span>
-          <select
-            className="input"
-            style={{ width: 160 }}
+          <Pills<Settings['checkinMode']>
+            label="Check-ins"
             value={settings.checkinMode}
-            onChange={(e) => set({ checkinMode: e.target.value as Settings['checkinMode'] })}
-          >
-            <option value="push">Push alerts</option>
-            <option value="schedule">Fixed schedule</option>
-          </select>
-        </label>
+            options={[
+              { value: 'push', text: 'Push alerts' },
+              { value: 'schedule', text: 'Fixed schedule' },
+            ]}
+            onChange={(v) => set({ checkinMode: v })}
+          />
+        </div>
       </div>
 
       <ErrorText>{error}</ErrorText>

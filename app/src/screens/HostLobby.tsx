@@ -3,7 +3,7 @@ import type { Role } from '../../shared/types.js'
 import { call } from '../game/api'
 import { qrDataUrl } from '../game/qr'
 import { loadSession } from '../game/session'
-import { ErrorText, Screen, tagText } from '../game/ui'
+import { ErrorText, Pills, Screen, tagText } from '../game/ui'
 import { useGameState } from '../game/useGameState'
 
 export default function HostLobby({ code }: { code: string }) {
@@ -70,21 +70,18 @@ export default function HostLobby({ code }: { code: string }) {
             <tr key={p.id}>
               <td>{p.name}</td>
               <td className="mono">{p.role === 'runner' ? tagText(p.tag_id) : ''}</td>
-              <td>
-                <select
-                  className="input"
-                  style={{ padding: '6px 8px' }}
-                  value={p.role ?? ''}
+              <td style={{ textAlign: 'right' }}>
+                <Pills<Role>
+                  label={p.name}
+                  value={p.role}
                   disabled={busy}
-                  onChange={(e) => act('setRoles', { roles: { [p.id]: e.target.value as Role } })}
-                >
-                  <option value="" disabled>
-                    Role…
-                  </option>
-                  <option value="runner">Runner</option>
-                  <option value="chaser">Chaser</option>
-                  <option value="marshal">Marshal</option>
-                </select>
+                  options={[
+                    { value: 'runner', text: 'Runner' },
+                    { value: 'chaser', text: 'Chaser' },
+                    { value: 'marshal', text: 'Marshal' },
+                  ]}
+                  onChange={(role) => act('setRoles', { roles: { [p.id]: role } })}
+                />
               </td>
             </tr>
           ))}
