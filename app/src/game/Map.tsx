@@ -1,15 +1,11 @@
 import type { Feature as GeoFeature, FeatureCollection, Geometry } from 'geojson'
-import { Map as MapLibreMap, setWorkerUrl, type GeoJSONSource } from 'maplibre-gl'
-import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
+import maplibregl, { type GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useEffect, useRef } from 'react'
 import { circlePolygon } from '../../shared/geo.js'
 import type { Arena } from '../../shared/types.js'
 import { FUZZ_RADIUS_M, type MapDot } from '../../shared/views.js'
 import { kejarMapStyle } from './mapStyle'
-
-// MapLibre v6 draws in a worker that bundlers must point at explicitly, or no map renders.
-setWorkerUrl(mapWorkerUrl)
 
 const VOLT = '#C6FF3D'
 const WHITE = '#F5F5F3'
@@ -47,7 +43,7 @@ function dotFeatures(dots: MapDot[]) {
 /** The game map: arena boundary, jail, and role dots (spec §9 colour + shape rules). */
 export default function GameMap({ arena, dots, height = 320 }: { arena: Arena; dots: MapDot[]; height?: number }) {
   const el = useRef<HTMLDivElement>(null)
-  const map = useRef<MapLibreMap | null>(null)
+  const map = useRef<maplibregl.Map | null>(null)
   const ready = useRef(false)
   const latest = useRef(dots)
   latest.current = dots
@@ -59,7 +55,7 @@ export default function GameMap({ arena, dots, height = 320 }: { arena: Arena; d
   useEffect(() => {
     if (!el.current) return
     const arena = arenaRef.current
-    const m = new MapLibreMap({
+    const m = new maplibregl.Map({
       container: el.current,
       style: kejarMapStyle,
       center: [arena.start.lng, arena.start.lat],
