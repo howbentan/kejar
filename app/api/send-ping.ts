@@ -17,7 +17,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // Insert the ping first so sent_at is the server time before any push goes out.
-    const { data: ping, error: pingError } = await db.from('spike_pings').insert({}).select('id').single()
+    const { data: ping, error: pingError } = await db
+      .from('spike_pings')
+      .insert({ target_ids: devices.map((d) => d.id) })
+      .select('id')
+      .single()
     if (pingError) throw pingError
 
     const result = await sendPingToDevices(ping.id, devices as Device[], async (subscription, payload) => {

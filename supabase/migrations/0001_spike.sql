@@ -13,7 +13,9 @@ create table spike_devices (
 create table spike_pings (
   id uuid primary key default gen_random_uuid(),
   sent_at timestamptz not null default now(),
-  sent_count int not null default 0
+  sent_count int not null default 0,
+  -- Devices the ping was sent to; the per-device denominator in the report.
+  target_ids uuid[] not null default '{}'
 );
 
 create table spike_acks (

@@ -13,6 +13,8 @@ export interface Ping {
   id: string
   sent_at: string
   sent_count: number
+  /** Devices this ping was sent to (all active devices at send time). */
+  target_ids: string[]
 }
 
 export interface Ack {

@@ -37,8 +37,7 @@ function median(values: number[]): number | null {
 export function summarise(devices: Device[], pings: Ping[], acks: Ack[], checkins: Checkin[]): DeviceStats[] {
   const pingSent = new Map(pings.map((p) => [p.id, Date.parse(p.sent_at)]))
   return devices.map((d) => {
-    const registered = Date.parse(d.created_at)
-    const counted = new Set(pings.filter((p) => Date.parse(p.sent_at) >= registered).map((p) => p.id))
+    const counted = new Set(pings.filter((p) => p.target_ids.includes(d.id)).map((p) => p.id))
     const delays = acks
       .filter((a) => a.device_id === d.id && counted.has(a.ping_id))
       .map((a) => Date.parse(a.received_at) - (pingSent.get(a.ping_id) ?? 0))
@@ -58,8 +57,10 @@ export function summarise(devices: Device[], pings: Ping[], acks: Ack[], checkin
 }
 
 export function passesBar(stats: DeviceStats[]): BarResult {
-  const totalPings = stats.reduce((n, s) => n + s.pings, 0)
-  const onTime = stats.reduce((n, s) => n + s.arrivedWithin15s, 0)
+  // Only phones count toward the bar; desktop browsers used while setting up don't.
+  const phones = stats.filter((s) => s.platform !== 'other')
+  const totalPings = phones.reduce((n, s) => n + s.pings, 0)
+  const onTime = phones.reduce((n, s) => n + s.arrivedWithin15s, 0)
   const arrivalRate = totalPings === 0 ? 0 : onTime / totalPings
   const tested = stats.filter((s) => s.pings >= 1)
   const iosDevices = tested.filter((s) => s.platform === 'ios').length

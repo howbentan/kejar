@@ -9,8 +9,13 @@ function device(id: string, platform: Platform, createdAt = T0): Device {
   return { id, label: id, platform, subscription: { endpoint: 'https://x/' + id }, active: true, created_at: iso(createdAt) }
 }
 
-function pings(n: number): Ping[] {
-  return Array.from({ length: n }, (_, i) => ({ id: `p${i}`, sent_at: iso(T0 + 60_000 + i * 300_000), sent_count: 4 }))
+function pings(n: number, targets = ['i1', 'i2', 'a1', 'a2']): Ping[] {
+  return Array.from({ length: n }, (_, i) => ({
+    id: `p${i}`,
+    sent_at: iso(T0 + 60_000 + i * 300_000),
+    sent_count: targets.length,
+    target_ids: targets,
+  }))
 }
 
 /** Every device acks every ping after 2 s, except where `delayMs` overrides; `missing` skips acks. */
@@ -55,6 +60,16 @@ describe('passesBar', () => {
     expect(bar.reasons).toContain('Need at least 2 iPhones (have 1)')
   })
 
+  it('leaves desktop test devices out of the pass rate', () => {
+    const laptop = device('desk', 'other')
+    const all = [...four, laptop]
+    const ps = pings(10, all.map((d) => d.id))
+    const missing = new Set(ps.map((p) => `desk:${p.id}`))
+    const bar = passesBar(summarise(all, ps, acks(all, ps, { missing }), noCheckins))
+    expect(bar.arrivalRate).toBe(1)
+    expect(bar.pass).toBe(true)
+  })
+
   it('fails with no pings at all instead of dividing by zero', () => {
     const bar = passesBar(summarise(four, [], [], noCheckins))
     expect(bar.pass).toBe(false)
@@ -64,12 +79,18 @@ describe('passesBar', () => {
 })
 
 describe('summarise', () => {
-  it('does not count pings sent before a device registered', () => {
-    const late = device('late', 'android', T0 + 60_000 + 5 * 300_000)
-    const ps = pings(10)
+  it('only counts pings that were actually sent to the device', () => {
+    const late = device('late', 'android')
+    const ps = [...pings(5, ['i1']), ...pings(5, ['i1', 'late']).map((p, i) => ({ ...p, id: `q${i}` }))]
     const [stats] = summarise([late], ps, acks([late], ps.slice(5)), noCheckins)
     expect(stats.pings).toBe(5)
     expect(stats.arrived).toBe(5)
+  })
+
+  it('does not count later pings against a device that expired and was dropped', () => {
+    const ps = [...pings(3), ...pings(7, ['i1', 'i2', 'a2']).map((p, i) => ({ ...p, id: `q${i}` }))]
+    const a1 = summarise(four, ps, acks(four, ps), noCheckins).find((s) => s.deviceId === 'a1')!
+    expect(a1.pings).toBe(3)
   })
 
   it('gives a null median for a device with no acks', () => {
