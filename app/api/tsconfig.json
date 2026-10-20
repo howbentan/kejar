@@ -10,6 +10,6 @@
     "noEmit": true,
     "esModuleInterop": true
   },
-  "include": ["./**/*.ts", "../src/spike/types.ts"],
-  "exclude": ["./**/*.test.ts"]
+  "include": ["./**/*.ts", "../src/spike/types.ts", "../shared/**/*.ts"],
+  "exclude": ["./**/*.test.ts", "../shared/**/*.test.ts"]
 }
