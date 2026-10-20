@@ -73,6 +73,13 @@ function viewTimes(game: Game, pings: { seq: number; revealed: boolean; reveal_a
   return times
 }
 
+/** Records coordinates sent along with a scan, so judging uses where the phone is right now. */
+async function recordScanLocation(ctx: Ctx, game: Game, me: Player, body: Body) {
+  const { lat, lng, accuracy_m } = body as { lat?: unknown; lng?: unknown; accuracy_m?: unknown }
+  if (typeof lat !== 'number' || typeof lng !== 'number' || Math.abs(lat) > 90 || Math.abs(lng) > 180) return
+  await ctx.store.addPosition(game.id, me.id, { lat, lng, accuracy_m: typeof accuracy_m === 'number' ? accuracy_m : 0 })
+}
+
 const latest = (list: Position[] | undefined) => (list && list.length ? list[list.length - 1] : null)
 
 /** Brings the game up to date: chase start, alerts, reveals and the end. Safe to call from many pages at once. */
@@ -295,6 +302,7 @@ const location: Action = async (ctx, body) => {
 const catchAction: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
+  await recordScanLocation(ctx, game, me, body)
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
   const players = await ctx.store.players(game.id)
@@ -328,6 +336,7 @@ const jailbreak: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
   if (str(body.qr).trim() !== JAIL_QR) throw new ActionError(400, "That's not the jail code")
+  await recordScanLocation(ctx, game, me, body)
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
@@ -337,6 +346,7 @@ const jailbreak: Action = async (ctx, body) => {
     players: await ctx.store.players(game.id),
     runnerPos: latest(positions[me.id]),
     jail: game.arena.jail,
+    now: ctx.now,
   })
   if (!verdict.ok) return verdict
   await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true } })))

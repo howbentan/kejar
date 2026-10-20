@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import type { BreakJudgement } from '../../shared/catch.js'
 import type { View } from '../../shared/views.js'
 import { call } from '../game/api'
+import { currentCoords } from '../game/here'
 import GameMap from '../game/Map'
 import Scanner from '../game/Scanner'
 import { loadSession } from '../game/session'
@@ -26,7 +27,8 @@ export function BreakOut({ code, view }: { code: string; view: View }) {
       setScanning(false)
       setError('')
       try {
-        const r = await call<BreakJudgement>('jailbreak', { code, token: loadSession(localStorage, code).token, qr })
+        const here = await currentCoords()
+        const r = await call<BreakJudgement>('jailbreak', { code, token: loadSession(localStorage, code).token, qr, ...here })
         setResult(r.ok ? `Freed ${r.freedIds.length} runner${r.freedIds.length === 1 ? '' : 's'} ✓` : BREAK_REJECTIONS[r.reason])
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e))

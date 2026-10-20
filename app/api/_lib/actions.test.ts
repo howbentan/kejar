@@ -255,3 +255,30 @@ describe('long games', () => {
     expect(ben.lat).toBeCloseTo(CENTER.lat + 1199 / 111_195, 6)
   })
 })
+
+describe('fresh locations sent with scans', () => {
+  it("records the chaser's current coordinates sent with a catch", async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, hostKey: g.hostKey })
+    now = T0 + 7 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    now = T0 + 9 * MIN // the chaser's streamed fix is missing; the scan carries a fresh one
+    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7), ...at(0) })).toMatchObject({ ok: true })
+  })
+
+  it('rejects a jailbreak from an old position near the jail', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, hostKey: g.hostKey })
+    now = T0 + 7 * MIN
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })
+    now = T0 + 12 * MIN
+    expect(await run('jailbreak', { code: g.code, token: g.hafiz.token, qr: JAIL_QR })).toEqual({
+      ok: false,
+      reason: 'too-far-from-jail',
+    })
+    expect(await run('jailbreak', { code: g.code, token: g.hafiz.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true })
+  })
+})
