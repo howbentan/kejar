@@ -187,6 +187,7 @@ export function viewFor(i: ViewInput): View {
 
   const upcoming = phase === 'hiding' || phase === 'chasing' ? pingTimes(i.game).find((t) => t.revealAt > i.now) : undefined
 
+  // Newest first; events recorded in the same millisecond keep their recorded order (later first).
   const feed = [
     ...i.events.flatMap((e) => {
       const text = feedText(e, byId)
@@ -194,7 +195,9 @@ export function viewFor(i: ViewInput): View {
     }),
     ...notes,
   ]
-    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+    .map((entry, order) => ({ entry, order }))
+    .sort((a, b) => Date.parse(b.entry.at) - Date.parse(a.entry.at) || b.order - a.order)
+    .map(({ entry }) => entry)
     .slice(0, FEED_MAX)
 
   const runners = i.players.filter((p) => p.role === 'runner')
