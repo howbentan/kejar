@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { readPosition, submitCheckin, type CheckinDb } from './checkin'
 import { getDeviceId, platformOf } from './device'
-import { currentPushEnv, pushSupport, subscribe } from './push'
+import { currentPushEnv, NotificationsDeniedError, pushSupport, subscribe } from './push'
 
 const LABEL_KEY = 'kejar.label'
 
@@ -45,7 +45,8 @@ function CheckinStatus({ pingId }: { pingId: string }) {
 
 export default function SpikeJoin() {
   const pingId = new URLSearchParams(window.location.search).get('ping')
-  const support = pushSupport(currentPushEnv())
+  const [refused, setRefused] = useState(false)
+  const support = refused ? 'denied' : pushSupport(currentPushEnv())
   const [label, setLabel] = useState(() => localStorage.getItem(LABEL_KEY) ?? '')
   const [working, setWorking] = useState(false)
   const [message, setMessage] = useState('')
@@ -65,7 +66,8 @@ export default function SpikeJoin() {
       localStorage.setItem(LABEL_KEY, label.trim())
       setMessage('Alerts are on. Lock your phone and wait for a ping.')
     } catch (e) {
-      setMessage(`Couldn't turn on alerts: ${e instanceof Error ? e.message : String(e)}`)
+      if (e instanceof NotificationsDeniedError) setRefused(true)
+      else setMessage(`Couldn't turn on alerts: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
       setWorking(false)
     }
