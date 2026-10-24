@@ -164,6 +164,10 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       return `${actor?.name ?? 'A runner'} broke ${count(Number(e.data.freed ?? 0), 'runner')} out of jail`
     case 'ended':
       return 'Game over'
+    case 'powerup':
+    case 'used':
+    case 'shielded':
+      return null
   }
 }
 

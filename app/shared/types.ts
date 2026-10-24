@@ -36,6 +36,8 @@ export interface Arena {
   boundary: LatLng[]
   jail: LatLng
   start: LatLng
+  /** Power-up stations; index i is station i + 1. */
+  stations?: LatLng[]
 }
 
 export interface Game {
@@ -71,7 +73,31 @@ export interface Ping {
   revealed: boolean
 }
 
-export type EventType = 'joined' | 'roles' | 'started' | 'chase' | 'ping' | 'caught' | 'jailbreak' | 'ended'
+export type EventType =
+  | 'joined'
+  | 'roles'
+  | 'started'
+  | 'chase'
+  | 'ping'
+  | 'caught'
+  | 'jailbreak'
+  | 'ended'
+  | 'powerup'
+  | 'used'
+  | 'shielded'
+
+export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus'
+
+export interface PowerUp {
+  id: string
+  game_id: string
+  player_id: string
+  kind: PowerUpKind
+  station: number
+  claimed_at: string
+  used_at: string | null
+  consumed_at: string | null
+}
 
 export interface GameEvent {
   id: string

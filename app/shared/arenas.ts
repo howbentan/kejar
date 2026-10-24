@@ -1,4 +1,5 @@
-import { circlePolygon } from './geo.js'
+import { circlePolygon, distanceM } from './geo.js'
+import { MAX_STATIONS } from './ids.js'
 import type { Arena, LatLng } from './types.js'
 
 /**
@@ -24,12 +25,15 @@ export const ARENAS: Record<string, Arena> = {
 }
 
 /** A circular arena around the organiser — handy for testing anywhere. */
-export function arenaAroundPoint(center: LatLng, radiusM = 200): Arena {
+export function arenaAroundPoint(center: LatLng, radiusM = 200, stations: LatLng[] = []): Arena {
+  if (stations.length > MAX_STATIONS) throw new Error(`At most ${MAX_STATIONS} stations`)
+  if (stations.some((s) => distanceM(center, s) > radiusM)) throw new Error('Stations must be inside the play area')
   return {
     id: 'around-me',
     name: 'Around the organiser',
     boundary: circlePolygon(center, radiusM),
     jail: { ...center },
     start: { ...center },
+    stations: stations.map((s) => ({ lat: s.lat, lng: s.lng })),
   }
 }

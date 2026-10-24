@@ -17,3 +17,16 @@ export function tagIdFromQr(text: string): number | null {
 }
 
 export const JAIL_QR = 'KEJAR:JAIL'
+
+export const MAX_STATIONS = 8
+
+export function stationQr(n: number): string {
+  return `KEJAR:STATION:${n}`
+}
+
+export function stationFromQr(text: string): number | null {
+  const m = /^KEJAR:STATION:(\d)$/.exec(text.trim())
+  if (!m) return null
+  const n = Number(m[1])
+  return n >= 1 && n <= MAX_STATIONS ? n : null
+}
