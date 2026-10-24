@@ -93,3 +93,13 @@ select.input option { background: #141614; color: var(--white); }
 /* Centre marker for the play-area picker */
 .picker-cross { position: absolute; left: 50%; top: 150px; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; border: 2px solid var(--volt); pointer-events: none; }
 .picker-cross::after { content: ''; position: absolute; inset: 4px; border-radius: 50%; background: var(--volt); }
+
+/* Power-up hand */
+.hand { display: flex; gap: 8px; overflow-x: auto; }
+.hand-card {
+  appearance: none; cursor: pointer; text-align: left; min-width: 130px; padding: 12px; border-radius: 16px;
+  background: rgba(198, 255, 61, 0.08); border: 1px solid rgba(198, 255, 61, 0.45); color: var(--white);
+  display: flex; flex-direction: column; gap: 4px; font: 500 12px var(--font);
+}
+.hand-card b { color: var(--volt); font-size: 15px; letter-spacing: -0.02em; }
+.hand-card span { color: var(--dim); }

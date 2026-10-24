@@ -2,6 +2,7 @@ import { count, type View } from '../../shared/views.js'
 import { ALERT_LEAD_MS } from '../../shared/clock.js'
 import GameMap from '../game/Map'
 import PingRipple from '../game/PingRipple'
+import PowerUpHand from '../game/PowerUpHand'
 import { clock, useServerNow } from '../game/time'
 import { Screen } from '../game/ui'
 import { BreakOut } from './Jail'
@@ -64,7 +65,8 @@ export default function RunnerChase({ code, view }: { code: string; view: View }
         </div>
       )}
 
-      <GameMap arena={view.arena} dots={view.dots} height={260} />
+      <GameMap arena={view.arena} dots={view.dots} stations={view.stations} height={260} />
+      <PowerUpHand code={code} view={view} />
       <BreakOut code={code} view={view} />
       <Feed view={view} />
     </Screen>

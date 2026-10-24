@@ -17,7 +17,7 @@ export default function MarshalLive({ view }: { view: View }) {
         </span>
       </div>
       <PingRipple role="marshal" lastRevealAt={view.lastRevealAt} now={now} />
-      <GameMap arena={view.arena} dots={view.dots} height={340} />
+      <GameMap arena={view.arena} dots={view.dots} stations={view.stations} height={340} />
       <Feed view={view} />
       {view.roster.length > 0 && (
         <table>

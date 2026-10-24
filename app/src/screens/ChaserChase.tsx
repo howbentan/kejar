@@ -6,6 +6,7 @@ import { call } from '../game/api'
 import { currentCoords } from '../game/here'
 import GameMap from '../game/Map'
 import PingRipple from '../game/PingRipple'
+import PowerUpHand from '../game/PowerUpHand'
 import Scanner from '../game/Scanner'
 import { loadSession } from '../game/session'
 import { clock, useServerNow } from '../game/time'
@@ -19,6 +20,7 @@ const REJECTIONS: Record<string, string> = {
   'not-chasing': 'You can only catch during the chase',
   'not-a-chaser': 'Only chasers can catch',
   'no-location': 'Turn on location to catch',
+  shielded: 'Shielded! Hand the tag back — they get a 10 s head start',
 }
 
 export function catchMessage(text: string, r: CatchJudgement): string {
@@ -72,7 +74,7 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
           </p>
         </div>
       </div>
-      <GameMap arena={view.arena} dots={view.dots} height={300} />
+      <GameMap arena={view.arena} dots={view.dots} stations={view.stations} height={300} />
       {result && (
         <p role="status" style={{ fontWeight: 600 }}>
           {result}
@@ -86,6 +88,7 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
           Scan ripped tag
         </button>
       )}
+      <PowerUpHand code={code} view={view} />
       <Feed view={view} />
     </Screen>
   )

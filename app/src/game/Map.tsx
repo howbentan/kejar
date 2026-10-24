@@ -41,12 +41,36 @@ function dotFeatures(dots: MapDot[]) {
 }
 
 /** The game map: arena boundary, jail, and role dots (spec §9 colour + shape rules). */
-export default function GameMap({ arena, dots, height = 320 }: { arena: Arena; dots: MapDot[]; height?: number }) {
+type StationMark = { n: number; lat: number; lng: number }
+
+function stationFeatures(stations: StationMark[]): FeatureCollection {
+  return collection(
+    stations.map((s) => ({
+      type: 'Feature',
+      properties: { n: String(s.n) },
+      geometry: { type: 'Point', coordinates: [s.lng, s.lat] },
+    })),
+  )
+}
+
+export default function GameMap({
+  arena,
+  dots,
+  stations = [],
+  height = 320,
+}: {
+  arena: Arena
+  dots: MapDot[]
+  stations?: StationMark[]
+  height?: number
+}) {
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
   const ready = useRef(false)
   const latest = useRef(dots)
   latest.current = dots
+  const latestStations = useRef(stations)
+  latestStations.current = stations
   // Polls return a fresh arena object every 3 s; rebuild the map only when its content changes.
   const arenaKey = JSON.stringify(arena)
   const arenaRef = useRef(arena)
@@ -78,6 +102,20 @@ export default function GameMap({ arena, dots, height = 320 }: { arena: Arena; d
         type: 'circle',
         source: 'jail',
         paint: { 'circle-radius': 9, 'circle-color': BLACK, 'circle-stroke-color': WHITE, 'circle-stroke-width': 1.5 },
+      })
+      m.addSource('stations', { type: 'geojson', data: stationFeatures(latestStations.current) })
+      m.addLayer({
+        id: 'stations',
+        type: 'circle',
+        source: 'stations',
+        paint: { 'circle-radius': 9, 'circle-color': BLACK, 'circle-stroke-color': VOLT, 'circle-stroke-width': 2 },
+      })
+      m.addLayer({
+        id: 'station-numbers',
+        type: 'symbol',
+        source: 'stations',
+        layout: { 'text-field': ['get', 'n'], 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
+        paint: { 'text-color': VOLT },
       })
       const { fuzzy, points } = dotFeatures(latest.current)
       m.addSource('fuzzy', { type: 'geojson', data: fuzzy })
@@ -123,6 +161,12 @@ export default function GameMap({ arena, dots, height = 320 }: { arena: Arena; d
       map.current = null
     }
   }, [arenaKey])
+
+  const stationKey = JSON.stringify(stations)
+  useEffect(() => {
+    if (!ready.current || !map.current) return
+    ;(map.current.getSource('stations') as GeoJSONSource | undefined)?.setData(stationFeatures(latestStations.current))
+  }, [stationKey])
 
   useEffect(() => {
     if (!ready.current || !map.current) return

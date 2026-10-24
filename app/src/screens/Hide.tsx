@@ -31,7 +31,7 @@ export default function Hide({ view }: { view: View }) {
       <p className="mono" style={{ fontSize: 72, fontWeight: 500, letterSpacing: '-0.06em', textAlign: 'center' }}>
         {left}
       </p>
-      <GameMap arena={view.arena} dots={view.dots} height={260} />
+      <GameMap arena={view.arena} dots={view.dots} stations={view.stations} height={260} />
       <p className="muted">Put your phone on silent — a buzz can give you away. Pocket it once you&apos;re hidden.</p>
     </Screen>
   )
