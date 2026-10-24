@@ -25,7 +25,7 @@ export function pointInPolygon(p: LatLng, poly: LatLng[]): boolean {
 }
 
 /** The point `distM` metres from `from` along `bearingRad` (0 = north). */
-function offset(from: LatLng, distM: number, bearingRad: number): LatLng {
+export function offset(from: LatLng, distM: number, bearingRad: number): LatLng {
   const d = distM / EARTH_RADIUS_M
   const lat1 = rad(from.lat)
   const lng1 = rad(from.lng)
@@ -40,7 +40,7 @@ export function circlePolygon(center: LatLng, radiusM: number, sides = 24): LatL
 }
 
 /** FNV-1a 32-bit. */
-function hash(seed: string): number {
+export function hash(seed: string): number {
   let h = 0x811c9dc5
   for (let i = 0; i < seed.length; i++) {
     h ^= seed.charCodeAt(i)
