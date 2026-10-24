@@ -7,14 +7,27 @@ vi.mock('../game/api', () => ({ call, ApiError: class extends Error {} }))
 vi.mock('../game/AreaPicker', async () => {
   const { useEffect } = await import('react')
   return {
-    default: ({ onChange }: { onChange: (c: { lat: number; lng: number }) => void }) => {
+    default: ({
+      onChange,
+      onStationsChange,
+    }: {
+      onChange: (c: { lat: number; lng: number }) => void
+      onStationsChange: (s: { lat: number; lng: number }[]) => void
+    }) => {
       useEffect(() => onChange({ lat: 3.5, lng: 101.5 }), [onChange])
-      return <div>area picker</div>
+      return (
+        <button type="button" onClick={() => onStationsChange([A, B])}>
+          drop two stations
+        </button>
+      )
     },
   }
 })
 
 import HostNew from './HostNew'
+
+const A = { lat: 3.5001, lng: 101.5 }
+const B = { lat: 3.5, lng: 101.5001 }
 
 const setUa = (ua: string) => Object.defineProperty(navigator, 'userAgent', { configurable: true, get: () => ua })
 
@@ -49,5 +62,14 @@ describe('HostNew', () => {
     setUa('Mozilla/5.0 (Linux; Android 14)')
     render(<HostNew />)
     expect(screen.queryByText(/create the game on your phone/i)).toBeNull()
+  })
+
+  it('sends the stations dropped on the map', async () => {
+    setUa('Mozilla/5.0 (Linux; Android 14)')
+    render(<HostNew />)
+    fireEvent.click(screen.getByRole('button', { name: 'drop two stations' }))
+    expect(screen.getByText('Stations: 2')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /create game/i }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ stations: [A, B] })))
   })
 })

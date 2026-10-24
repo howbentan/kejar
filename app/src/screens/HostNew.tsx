@@ -29,6 +29,7 @@ function NumberField(props: { label: string; value: number; min: number; max: nu
 export default function HostNew() {
   const [arenaId, setArenaId] = useState<string>('around-me')
   const [center, setCenter] = useState<LatLng | null>(null)
+  const [stations, setStations] = useState<LatLng[]>([])
   const [size, setSize] = useState<(typeof SIZES)[number]>('200')
   const onPick = useCallback((c: LatLng) => setCenter(c), [])
   // Laptops guess their location from Wi-Fi; phones have GPS.
@@ -47,7 +48,7 @@ export default function HostNew() {
       const { code, hostKey } = await call<{ code: string; hostKey: string }>('create', {
         arenaId,
         settings,
-        ...(picked ? { center, radiusM: Number(size) } : {}),
+        ...(picked ? { center, radiusM: Number(size), stations } : {}),
       })
       saveSession(localStorage, code, { hostKey })
       window.location.assign(`/host/${code}`)
@@ -82,7 +83,8 @@ export default function HostNew() {
       />
       {arenaId === 'around-me' && (
         <>
-          <AreaPicker radiusM={Number(size)} onChange={onPick} />
+          <AreaPicker radiusM={Number(size)} stations={stations} onChange={onPick} onStationsChange={setStations} />
+          <p className="muted">{`Stations: ${stations.length}`}</p>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>Play area size</span>
             <Pills<(typeof SIZES)[number]>

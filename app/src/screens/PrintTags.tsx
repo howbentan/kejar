@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
-import { JAIL_QR, tagQr } from '../../shared/ids.js'
+import { JAIL_QR, MAX_STATIONS, stationQr, tagQr } from '../../shared/ids.js'
 import { qrDataUrl } from '../game/qr'
 
 const TAGS = Array.from({ length: 30 }, (_, i) => i + 1)
+const STATIONS = Array.from({ length: MAX_STATIONS }, (_, i) => i + 1)
 
 /** Printable sheet: 30 runner tags plus the jail code. Black on white, no lime text (spec §9). */
 export default function PrintTags() {
   const [codes, setCodes] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    void Promise.all([...TAGS.map((n) => tagQr(n)), JAIL_QR].map(async (t) => [t, await qrDataUrl(t)] as const)).then(
+    void Promise.all([...TAGS.map((n) => tagQr(n)), ...STATIONS.map((n) => stationQr(n)), JAIL_QR].map(async (t) => [t, await qrDataUrl(t)] as const)).then(
       (pairs) => setCodes(Object.fromEntries(pairs)),
     )
   }, [])
@@ -27,6 +28,18 @@ export default function PrintTags() {
             {codes[tagQr(n)] && <img src={codes[tagQr(n)]} alt={`Tag ${n}`} style={{ width: '40mm', height: '40mm' }} />}
             <div style={{ fontWeight: 800, fontSize: 22, fontFamily: 'var(--mono)' }}>#{String(n).padStart(2, '0')}</div>
             <div style={{ fontWeight: 800, letterSpacing: '-0.05em' }}>kejar.</div>
+          </div>
+        ))}
+      </div>
+      <p style={{ marginTop: 24, fontWeight: 700 }}>Power-up stations: tape each at the matching numbered spot on the map.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginTop: 8 }}>
+        {STATIONS.map((n) => (
+          <div key={n} className="tag" style={{ border: '2px solid #0A0A0B', padding: 10, textAlign: 'center' }}>
+            {codes[stationQr(n)] && (
+              <img src={codes[stationQr(n)]} alt={`Station ${n}`} style={{ width: '55mm', height: '55mm' }} />
+            )}
+            <div style={{ fontWeight: 800, fontSize: 22 }}>{`STATION ${n}`}</div>
+            <div style={{ fontSize: 12 }}>Scan to get a power-up</div>
           </div>
         ))}
       </div>
