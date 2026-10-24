@@ -29,7 +29,7 @@ A web app for organised, real-world chase games (runners vs chasers, with marsha
   - Only a runner fix ≤20 s old can reject a catch as too far.
   - The chaser needs a location from the last 60 s.
 - Runners keep phones pocketed and check in at pings; chasers and marshals keep the page open.
-- Stays a **web app** for the MVP. Native or Capacitor (background location) is reconsidered once there are regular players. Bluetooth catching was rejected: distance is unreliable, it goes through walls, and iOS restricts it.
+- **Kejar stays a web app** (owner's decision, 2026-10-24). No native app, no Capacitor wrapper, no Bluetooth catching: Bluetooth distance is unreliable, it goes through walls, and iOS restricts it.
 - MapLibre **v5** (v6's separate worker broke production builds).
 
 ## Open discussion (undecided)
