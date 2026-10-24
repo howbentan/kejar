@@ -32,7 +32,22 @@ export interface GameStore {
   addPowerUp(p: NewPowerUp): Promise<PowerUp>
   powerUps(gameId: string): Promise<PowerUp[]>
   updatePowerUp(id: string, patch: Partial<PowerUp>): Promise<void>
+  /**
+   * Atomically claims a station: refuses if this player already claimed it, or anyone claimed it
+   * less than `lockMs` ago. Otherwise stores the power-up (claimed_at = store clock).
+   */
+  claimStation(p: NewPowerUp, lockMs: number): Promise<StationClaim>
+  /** Marks a power-up used only if it wasn't already; true for the first caller. */
+  markUsed(id: string): Promise<boolean>
+  /** Consumes a shield only if it wasn't already; true for the first caller. */
+  consumeShield(id: string): Promise<boolean>
+  /** Adds a bonus (Flare) ping with the next free bonus number; safe when two happen at once. */
+  addBonusPing(gameId: string, alertAt: string, revealAt: string): Promise<number>
 }
+
+export type StationClaim =
+  | { ok: true; powerUp: PowerUp }
+  | { ok: false; reason: 'already-claimed' | 'locked'; lockedForMs?: number }
 
 export type NewPowerUp = Omit<PowerUp, 'id' | 'claimed_at' | 'used_at' | 'consumed_at'>
 
@@ -130,6 +145,12 @@ export class MemoryStore implements GameStore {
     return out
   }
   async addPings(pings: Ping[]) {
+    // Mirror the database's primary key on (game_id, seq).
+    for (const p of pings) {
+      if (this.pingRows.some((x) => x.game_id === p.game_id && x.seq === p.seq)) {
+        throw Object.assign(new Error('duplicate key value violates unique constraint "pings_pkey"'), { code: '23505' })
+      }
+    }
     this.pingRows.push(...pings.map((p) => ({ ...p })))
   }
   async pings(gameId: string) {
@@ -165,5 +186,33 @@ export class MemoryStore implements GameStore {
   async updatePowerUp(id: string, patch: Partial<PowerUp>) {
     const u = this.powerUpRows.find((x) => x.id === id)
     if (u) Object.assign(u, patch)
+  }
+  // The methods below check and write with no await in between, so they're atomic here.
+  async claimStation(p: NewPowerUp, lockMs: number): Promise<StationClaim> {
+    const here = this.powerUpRows.filter((u) => u.game_id === p.game_id && u.station === p.station)
+    if (here.some((u) => u.player_id === p.player_id)) return { ok: false, reason: 'already-claimed' }
+    const last = Math.max(...here.map((u) => Date.parse(u.claimed_at)), -Infinity)
+    const lockedForMs = last + lockMs - this.clock()
+    if (lockedForMs > 0) return { ok: false, reason: 'locked', lockedForMs }
+    const row: PowerUp = { ...p, id: this.id('u'), claimed_at: this.nowIso(), used_at: null, consumed_at: null }
+    this.powerUpRows.push(row)
+    return { ok: true, powerUp: { ...row } }
+  }
+  async markUsed(id: string) {
+    const u = this.powerUpRows.find((x) => x.id === id)
+    if (!u || u.used_at) return false
+    u.used_at = this.nowIso()
+    return true
+  }
+  async consumeShield(id: string) {
+    const u = this.powerUpRows.find((x) => x.id === id)
+    if (!u || u.consumed_at) return false
+    u.consumed_at = this.nowIso()
+    return true
+  }
+  async addBonusPing(gameId: string, alertAt: string, revealAt: string) {
+    const seq = 1000 + this.pingRows.filter((p) => p.game_id === gameId && p.seq >= 1000).length
+    this.pingRows.push({ game_id: gameId, seq, alert_at: alertAt, reveal_at: revealAt, alerted: false, revealed: false })
+    return seq
   }
 }

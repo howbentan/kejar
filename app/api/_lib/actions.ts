@@ -2,7 +2,7 @@ import { arenaAroundPoint, ARENAS } from '../../shared/arenas.js'
 import { judgeCatch, judgeJailbreak } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
 import { JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
-import { activeShield, judgeClaim, pickPowerUp } from '../../shared/powerups.js'
+import { activeShield, judgeClaim, pickPowerUp, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { computeResults } from '../../shared/results.js'
 import { shuffleRoles, validateTeams } from '../../shared/teams.js'
 import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type Role, type Settings } from '../../shared/types.js'
@@ -69,7 +69,10 @@ function settingsFrom(input: unknown): Settings {
 /** The moments a view looks at: now, the spectator delay, and the last revealed ping. */
 function viewTimes(game: Game, pings: { seq: number; revealed: boolean; reveal_at: string }[], now: number): string[] {
   const times = [iso(now), iso(now - game.settings.spectatorDelayMin * 60_000)]
-  const last = pings.filter((p) => p.revealed && p.seq > 0).sort((a, b) => b.seq - a.seq)[0]
+  // Latest reveal by time: bonus (Flare) pings have high numbers but can come before scheduled ones.
+  const last = pings
+    .filter((p) => p.revealed && p.seq > 0)
+    .sort((a, b) => Date.parse(b.reveal_at) - Date.parse(a.reveal_at))[0]
   if (last) times.push(last.reveal_at)
   return times
 }
@@ -340,8 +343,8 @@ const catchAction: Action = async (ctx, body) => {
   if (!verdict.ok) return verdict
   // A switched-on Shield absorbs one otherwise-valid catch.
   const shield = activeShield(await ctx.store.powerUps(game.id), verdict.runnerId, ctx.now)
-  if (shield) {
-    await ctx.store.updatePowerUp(shield.id, { consumed_at: iso(ctx.now) })
+  // consumeShield is atomic, so two chasers scanning at once can't both be blocked by one shield.
+  if (shield && (await ctx.store.consumeShield(shield.id))) {
     await ctx.store.addEvent({ game_id: game.id, type: 'shielded', actor_id: me.id, target_id: verdict.runnerId, data: {} })
     return { ok: false, reason: 'shielded' }
   }
@@ -414,7 +417,12 @@ const claim: Action = async (ctx, body) => {
   })
   if (!verdict.ok) return verdict
   const kind = pickPowerUp(me.role === 'chaser' ? 'chaser' : 'runner', ctx.rng)
-  await ctx.store.addPowerUp({ game_id: game.id, player_id: me.id, kind, station: station! })
+  // Re-checked atomically by the store, so double-taps and simultaneous scans can't both win.
+  const claimed = await ctx.store.claimStation(
+    { game_id: game.id, player_id: me.id, kind, station: station! },
+    STATION_LOCK_MS,
+  )
+  if (!claimed.ok) return claimed
   await ctx.store.addEvent({ game_id: game.id, type: 'powerup', actor_id: me.id, target_id: null, data: {} })
   return { ok: true, kind }
 }
@@ -434,19 +442,15 @@ const usePowerup: Action = async (ctx, body) => {
   // A Flare's reveal must land before the whistle.
   if (u.kind === 'flare' && (endsAt ?? 0) - ctx.now < ALERT_LEAD_MS) return { ok: false, reason: 'too-late' }
 
-  await ctx.store.updatePowerUp(u.id, { used_at: iso(ctx.now) })
+  // markUsed is atomic: a double-tap uses the power-up once.
+  if (!(await ctx.store.markUsed(u.id))) return { ok: false, reason: 'already-used' }
   if (u.kind === 'flare') {
-    const bonus = (await ctx.store.pings(game.id)).filter((x) => x.seq >= BONUS_SEQ_BASE).length
-    await ctx.store.addPings([
-      {
-        game_id: game.id,
-        seq: BONUS_SEQ_BASE + bonus,
-        alert_at: iso(ctx.now),
-        reveal_at: iso(ctx.now + ALERT_LEAD_MS),
-        alerted: false,
-        revealed: false,
-      },
-    ])
+    try {
+      await ctx.store.addBonusPing(game.id, iso(ctx.now), iso(ctx.now + ALERT_LEAD_MS))
+    } catch (e) {
+      await ctx.store.updatePowerUp(u.id, { used_at: null }) // give the Flare back
+      throw e
+    }
   }
   await ctx.store.addEvent({ game_id: game.id, type: 'used', actor_id: me.id, target_id: null, data: { kind: u.kind } })
   return { ok: true, kind: u.kind }

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Game, GameEvent, Ping, Player, Position, PowerUp } from '../../shared/types.js'
-import type { GameRow, GameStore, NewPowerUp, PlayerRow } from './store.js'
+import type { GameRow, GameStore, NewPowerUp, PlayerRow, StationClaim } from './store.js'
 
 const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, push'
 const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner'
@@ -119,5 +119,47 @@ export class SupabaseStore implements GameStore {
   }
   async updatePowerUp(id: string, patch: Partial<PowerUp>) {
     check(await this.db.from('powerups').update(patch).eq('id', id))
+  }
+  async claimStation(p: NewPowerUp, lockMs: number): Promise<StationClaim> {
+    // The database function locks the station, re-checks, and inserts in one transaction.
+    const r = check(
+      await this.db.rpc('claim_station', {
+        p_game: p.game_id,
+        p_player: p.player_id,
+        p_station: p.station,
+        p_kind: p.kind,
+        p_at: this.nowIso(),
+        p_lock_ms: lockMs,
+      }),
+    ) as { result: string; locked_for_ms: number | null; powerup: PowerUp | null }[]
+    const row = r[0]
+    if (row?.result === 'ok' && row.powerup) return { ok: true, powerUp: row.powerup }
+    if (row?.result === 'locked') return { ok: false, reason: 'locked', lockedForMs: row.locked_for_ms ?? 0 }
+    return { ok: false, reason: 'already-claimed' }
+  }
+  async markUsed(id: string) {
+    const rows = check(
+      await this.db.from('powerups').update({ used_at: this.nowIso() }).eq('id', id).is('used_at', null).select('id'),
+    )
+    return (rows ?? []).length > 0
+  }
+  async consumeShield(id: string) {
+    const rows = check(
+      await this.db.from('powerups').update({ consumed_at: this.nowIso() }).eq('id', id).is('consumed_at', null).select('id'),
+    )
+    return (rows ?? []).length > 0
+  }
+  async addBonusPing(gameId: string, alertAt: string, revealAt: string) {
+    // Two Flares at once may pick the same number; the primary key refuses one, so try the next.
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { count } = await this.db.from('pings').select('seq', { count: 'exact', head: true }).eq('game_id', gameId).gte('seq', 1000)
+      const seq = 1000 + (count ?? 0) + attempt
+      const { error } = await this.db
+        .from('pings')
+        .insert({ game_id: gameId, seq, alert_at: alertAt, reveal_at: revealAt, alerted: false, revealed: false })
+      if (!error) return seq
+      if (error.code !== '23505') throw new Error(error.message)
+    }
+    throw new Error('Could not schedule the Flare — try again')
   }
 }

@@ -407,3 +407,98 @@ describe('power-up stations', () => {
     expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toMatchObject({ ok: true })
   })
 })
+
+describe('review fixes', () => {
+  const S1 = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const atS1 = { lat: S1.lat, lng: S1.lng, accuracy_m: 8 }
+  async function chasingWithStation() {
+    const g = await readyGame({}, { stations: [S1] })
+    await run('start', { code: g.code, hostKey: g.hostKey })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, hostKey: g.hostKey })
+    return { ...g, gameId: (await store.gameByCode(g.code))!.id }
+  }
+  const give = (gameId: string, playerId: string, kind: PowerUpKind) =>
+    store.addPowerUp({ game_id: gameId, player_id: playerId, kind, station: 1 })
+
+  it('after a Flare, later pings still show runners where they checked in', async () => {
+    const g = await chasingWithStation()
+    const flare = await give(g.gameId, g.ben.playerId, 'flare')
+    await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: flare.id })
+    now += 30_000
+    await run('location', { code: g.code, token: g.aina.token, ...at(50) })
+    await run('state', { code: g.code, token: g.ben.token }) // flare reveal
+    now = T0 + 10 * MIN - 5_000
+    await run('location', { code: g.code, token: g.aina.token, ...at(150) }) // checks in for the scheduled ping
+    now = T0 + 10 * MIN + 1_000
+    await run('state', { code: g.code, token: g.ben.token }) // scheduled reveal
+    now = T0 + 10 * MIN + 20_000
+    await run('location', { code: g.code, token: g.aina.token, ...at(250) }) // runs on after the ping
+    const v = await run<View>('state', { code: g.code, token: g.ben.token })
+    const dot = v.dots.find((d) => d.id === g.aina.playerId)!
+    expect(dot.missed).toBeUndefined()
+    expect(Math.abs((dot.lat - CENTER.lat) * 111_195 - 150)).toBeLessThan(20)
+  })
+
+  it('a double-tapped power-up is used only once', async () => {
+    const g = await chasingWithStation()
+    const decoy = await give(g.gameId, g.aina.playerId, 'decoy')
+    const results = await Promise.all([
+      run('usePowerup', { code: g.code, token: g.aina.token, powerupId: decoy.id }),
+      run('usePowerup', { code: g.code, token: g.aina.token, powerupId: decoy.id }),
+    ])
+    expect(results.filter((r) => r.ok)).toHaveLength(1)
+    const events = await store.events(g.gameId)
+    expect(events.filter((e) => e.type === 'used')).toHaveLength(1)
+  })
+
+  it('two Flares at the same moment both work', async () => {
+    const g = await chasingWithStation()
+    const lee = await run('join', { code: g.code, name: 'Lee', accepted: true }).catch(() => null)
+    expect(lee).toBeNull() // game already started; use two flares from one chaser instead
+    const [f1, f2] = [await give(g.gameId, g.ben.playerId, 'flare'), await give(g.gameId, g.ben.playerId, 'flare')]
+    const results = await Promise.all([
+      run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f1.id }),
+      run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f2.id }),
+    ])
+    expect(results).toEqual([
+      { ok: true, kind: 'flare' },
+      { ok: true, kind: 'flare' },
+    ])
+    expect((await store.pings(g.gameId)).filter((p) => p.seq >= BONUS_SEQ_BASE)).toHaveLength(2)
+  })
+
+  it('two players scanning one station at the same moment: only one gets a power-up', async () => {
+    const g = await chasingWithStation()
+    const results = await Promise.all([
+      run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 }),
+      run('claim', { code: g.code, token: g.hafiz.token, qr: stationQr(1), ...atS1 }),
+    ])
+    expect(results.filter((r) => r.ok)).toHaveLength(1)
+    expect(results.find((r) => !r.ok)).toMatchObject({ reason: 'locked' })
+    expect(await store.powerUps(g.gameId)).toHaveLength(1)
+  })
+
+  it('a double-tapped claim gives only one power-up', async () => {
+    const g = await chasingWithStation()
+    const results = await Promise.all([
+      run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 }),
+      run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 }),
+    ])
+    expect(results.filter((r) => r.ok)).toHaveLength(1)
+    expect(await store.powerUps(g.gameId)).toHaveLength(1)
+  })
+
+  it('one Shield blocks only one of two simultaneous catches', async () => {
+    const g = await chasingWithStation()
+    const shield = await give(g.gameId, g.aina.playerId, 'shield')
+    await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: shield.id })
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    const results = await Promise.all([
+      run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) }),
+      run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) }),
+    ])
+    expect(results.map((r) => (r.ok ? 'caught' : r.reason)).sort()).toEqual(['caught', 'shielded'])
+  })
+})
