@@ -25,7 +25,9 @@ export function Feed({ view }: { view: View }) {
 }
 
 export function GameClock({ view }: { view: View }) {
-  const now = useServerNow(view.now)
+  const ticking = useServerNow(view.now)
+  // While paused the server holds the time left still, so don't tick between polls.
+  const now = view.paused ? view.now : ticking
   return <span className="mono">{clock((view.endsAt ?? now) - now)}</span>
 }
 

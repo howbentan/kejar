@@ -117,3 +117,10 @@ select.input option { background: #141614; color: var(--white); }
 .safety-sos { letter-spacing: 0.12em; }
 .safety-sheet { display: flex; flex-direction: column; gap: 10px; background: #111312; }
 .safety-status { font-weight: 600; color: var(--volt); text-align: center; }
+
+/* Marshal alert list. */
+.alert-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.alert-row { display: flex; gap: 10px; align-items: center; border: 1px solid var(--hair); border-radius: 16px; padding: 10px 12px; }
+.alert-sos { border-color: var(--volt); box-shadow: 0 0 0 1px var(--volt) inset; }
+.alert-handled { opacity: 0.45; }
+.alert-btn { padding: 8px 12px; font-size: 13px; }

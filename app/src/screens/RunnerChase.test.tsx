@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../game/api', () => ({ call: vi.fn(), ApiError: class extends Error {} }))
@@ -26,5 +26,17 @@ describe('RunnerChase', () => {
   it('does not warn when no chaser is near', () => {
     render(<RunnerChase code="ABC234" view={testView()} />)
     expect(screen.queryByText('Chaser within 100 m')).toBeNull()
+  })
+
+  it('the game clock stands still while paused', () => {
+    vi.useFakeTimers()
+    try {
+      render(<RunnerChase code="ABC234" view={testView({ paused: true, endsAt: 100_000 + 90_000 })} />)
+      expect(screen.getByText('1:30')).toBeInTheDocument()
+      act(() => vi.advanceTimersByTime(5_000))
+      expect(screen.getByText('1:30')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

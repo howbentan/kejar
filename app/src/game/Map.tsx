@@ -53,15 +53,26 @@ function stationFeatures(stations: StationMark[]): FeatureCollection {
   )
 }
 
+type Pin = { id: string; lat: number; lng: number }
+
+function pinFeatures(pins: Pin[]): FeatureCollection {
+  return collection(
+    pins.map((p) => ({ type: 'Feature', properties: { id: p.id }, geometry: { type: 'Point', coordinates: [p.lng, p.lat] } })),
+  )
+}
+
 export default function GameMap({
   arena,
   dots,
   stations = [],
+  pins = [],
   height = 320,
 }: {
   arena: Arena
   dots: MapDot[]
   stations?: StationMark[]
+  /** Safety alerts with a location (marshals only), drawn above everyone. */
+  pins?: Pin[]
   height?: number
 }) {
   const el = useRef<HTMLDivElement>(null)
@@ -71,6 +82,8 @@ export default function GameMap({
   latest.current = dots
   const latestStations = useRef(stations)
   latestStations.current = stations
+  const latestPins = useRef(pins)
+  latestPins.current = pins
   // Polls return a fresh arena object every 3 s; rebuild the map only when its content changes.
   const arenaKey = JSON.stringify(arena)
   const arenaRef = useRef(arena)
@@ -153,6 +166,13 @@ export default function GameMap({
         layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 11 },
         paint: { 'text-color': WHITE },
       })
+      m.addSource('pins', { type: 'geojson', data: pinFeatures(latestPins.current) })
+      m.addLayer({
+        id: 'pins',
+        type: 'circle',
+        source: 'pins',
+        paint: { 'circle-radius': 10, 'circle-color': VOLT, 'circle-stroke-color': WHITE, 'circle-stroke-width': 3 },
+      })
       ready.current = true
     })
     return () => {
@@ -167,6 +187,12 @@ export default function GameMap({
     if (!ready.current || !map.current) return
     ;(map.current.getSource('stations') as GeoJSONSource | undefined)?.setData(stationFeatures(latestStations.current))
   }, [stationKey])
+
+  const pinKey = JSON.stringify(pins)
+  useEffect(() => {
+    if (!ready.current || !map.current) return
+    ;(map.current.getSource('pins') as GeoJSONSource | undefined)?.setData(pinFeatures(latestPins.current))
+  }, [pinKey])
 
   useEffect(() => {
     if (!ready.current || !map.current) return
