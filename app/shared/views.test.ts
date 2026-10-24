@@ -235,3 +235,33 @@ describe('power-up effects', () => {
     ])
   })
 })
+
+describe('power-up secrecy', () => {
+  const used = (playerId: string, kind: PowerUp['kind'], usedAt: number): PowerUp => ({
+    id: `${playerId}-${kind}`,
+    game_id: 'g1',
+    player_id: playerId,
+    kind,
+    station: 1,
+    claimed_at: new Date(usedAt - MIN).toISOString(),
+    used_at: new Date(usedAt).toISOString(),
+    consumed_at: null,
+  })
+
+  it('a cloaked runner looks exactly like a runner who never checked in', () => {
+    const v = view(chaser, { powerUps: [used('r1', 'cloak', T0 + 14 * MIN)] })
+    expect(v.dots.find((d) => d.id === 'r1')).toBeUndefined()
+    expect(v.feed.map((f) => f.text)).toContain('#07 never checked in')
+  })
+
+  it('a decoyed runner inside a Focus is shown exactly at the decoy spot, like the others', () => {
+    const ps = { ...positions, c1: [pos(A.lat + 0.0005, A.lng, T0 + 14.8 * MIN)] }
+    const dot = view(chaser, {
+      positions: ps,
+      powerUps: [used('r1', 'decoy', T0 + 14 * MIN), used('c1', 'focus', T0 + 14 * MIN)],
+    }).dots.find((d) => d.id === 'r1')!
+    expect(dot.exact).toBe(true)
+    expect(dot.fuzzy).toBeUndefined()
+    expect(distanceM(dot, A)).toBeGreaterThanOrEqual(119)
+  })
+})

@@ -126,7 +126,17 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     const revealAt = times.get(seq)?.revealAt ?? now
     const positions = await store.latestPositions(game.id, [iso(revealAt)])
     const free = (await store.players(game.id)).filter((p) => p.role === 'runner' && !p.jailed)
-    const seen = free.filter((p) => (positions[p.id] ?? []).length > 0).length
+    // Cloaked runners don't count as seen, so the feed can't give them away.
+    const prevRevealAt = Math.max(
+      chaseStartOf(game) ?? 0,
+      ...pingRows.filter((r) => r.revealed && r.seq > 0 && Date.parse(r.reveal_at) < revealAt).map((r) => Date.parse(r.reveal_at)),
+    )
+    const cloaked = new Set(
+      (await store.powerUps(game.id))
+        .filter((u) => u.kind === 'cloak' && u.used_at && Date.parse(u.used_at) > prevRevealAt && Date.parse(u.used_at) <= revealAt)
+        .map((u) => u.player_id),
+    )
+    const seen = free.filter((p) => !cloaked.has(p.id) && (positions[p.id] ?? []).length > 0).length
     await store.addEvent({ game_id: game.id, type: 'ping', actor_id: null, target_id: null, data: { seq, seen } })
   }
 

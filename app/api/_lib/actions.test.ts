@@ -502,3 +502,19 @@ describe('review fixes', () => {
     expect(results.map((r) => (r.ok ? 'caught' : r.reason)).sort()).toEqual(['caught', 'shielded'])
   })
 })
+
+describe('cloak secrecy at the ping', () => {
+  it('the ping count leaves out a cloaked runner', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, hostKey: g.hostKey })
+    const gameId = (await store.gameByCode(g.code))!.id
+    now = T0 + 7 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(40) })
+    const cloak = await store.addPowerUp({ game_id: gameId, player_id: g.aina.playerId, kind: 'cloak', station: 1 })
+    await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: cloak.id })
+    now = T0 + 10 * MIN
+    const v = await run<View>('state', { code: g.code, token: g.ben.token })
+    expect(v.feed.map((f) => f.text)).toContain('Ping — 1 runner seen')
+  })
+})

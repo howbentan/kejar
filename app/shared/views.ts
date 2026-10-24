@@ -142,17 +142,21 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
     .filter((p): p is Position => !!p)
 
   for (const p of i.players) {
-    if (p.role !== 'runner' || p.jailed || cloaked.has(p.id)) continue
+    if (p.role !== 'runner' || p.jailed) continue
     const at = latestAtOrBefore(i.positions[p.id], revealAt)
-    if (!at) {
+    // A cloaked runner must look exactly like one who never checked in.
+    if (!at || cloaked.has(p.id)) {
       notes.push({ at: last.reveal_at, text: `${tagLabel(p)} never checked in` })
       continue
     }
     const seed = `${p.id}:${last.seq}`
+    const focused = focusers.some((f) => distanceM(f, at) <= FOCUS_M)
     let dot: MapDot
     if (decoyed.has(p.id)) {
-      dot = { ...dotFor(p, at, 'runner'), ...decoySpot(at, i.game.arena.boundary, seed), fuzzy: true }
-    } else if (focusers.some((f) => distanceM(f, at) <= FOCUS_M)) {
+      // Drawn the same way as everyone else in range, so a Focus can't expose a Decoy.
+      const spot = decoySpot(at, i.game.arena.boundary, seed)
+      dot = focused ? { ...dotFor(p, at, 'runner'), ...spot, exact: true } : { ...dotFor(p, at, 'runner'), ...spot, fuzzy: true }
+    } else if (focused) {
       dot = { ...dotFor(p, at, 'runner'), exact: true }
     } else {
       dot = { ...dotFor(p, at, 'runner'), ...fuzz(at, FUZZ_RADIUS_M, seed), fuzzy: true }
