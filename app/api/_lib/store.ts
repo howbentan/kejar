@@ -9,7 +9,9 @@ export interface GameStore {
   gameByCode(code: string): Promise<GameRow | null>
   updateGame(id: string, patch: Partial<Game>): Promise<void>
   addPlayer(p: Omit<PlayerRow, 'id'>): Promise<Player>
+  /** Includes removed players, so their page can tell them they were removed. */
   playerByToken(gameId: string, tokenHash: string): Promise<Player | null>
+  /** Everyone still in the game (removed players are left out). */
   players(gameId: string): Promise<Player[]>
   updatePlayers(patches: { id: string; patch: Partial<Player> }[]): Promise<void>
   /** Marks a runner caught only if they are not already jailed; true for the first caller. */
@@ -26,7 +28,7 @@ export interface GameStore {
   claimPing(gameId: string, seq: number, field: 'alerted' | 'revealed'): Promise<boolean>
   /** Ends the game only if it has not ended; true for the first caller. */
   claimEnd(gameId: string, winner: 'runners' | 'chasers'): Promise<boolean>
-  addEvent(e: Omit<GameEvent, 'id' | 'at'>): Promise<void>
+  addEvent(e: Omit<GameEvent, 'id' | 'at'>): Promise<GameEvent>
   events(gameId: string): Promise<GameEvent[]>
   /** claimed_at = the store's clock. */
   addPowerUp(p: NewPowerUp): Promise<PowerUp>
@@ -43,6 +45,29 @@ export interface GameStore {
   consumeShield(id: string): Promise<boolean>
   /** Adds a bonus (Flare) ping with the next free bonus number; safe when two happen at once. */
   addBonusPing(gameId: string, alertAt: string, revealAt: string): Promise<number>
+  /** Pauses a started, unfinished, unpaused game (paused_at = store clock); true for the first caller. */
+  pauseGame(gameId: string): Promise<boolean>
+  /**
+   * Atomically ends the pause: records it, clears paused_at, and moves every unrevealed ping later
+   * by its length. Returns that length in ms, or null if the game wasn't paused.
+   */
+  resumeGame(gameId: string): Promise<number | null>
+  /** Writes the flag only if it differs; true if it changed. */
+  setFlag(playerId: string, field: 'outside' | 'left_start', value: boolean): Promise<boolean>
+  /** Sets removed_at only if it was unset; true for the first caller. */
+  removePlayer(id: string): Promise<boolean>
+  /** Kept apart from game data (spec §6); at = store clock. The app never reads these back. */
+  addSafetyRecord(r: SafetyRecord): Promise<void>
+}
+
+export interface SafetyRecord {
+  game_id: string
+  type: 'sos' | 'report' | 'removed'
+  player_id: string | null
+  target_id: string | null
+  lat: number | null
+  lng: number | null
+  data: Record<string, unknown>
 }
 
 export type StationClaim =
@@ -61,6 +86,7 @@ export class MemoryStore implements GameStore {
   private pingRows: Ping[] = []
   private eventRows: GameEvent[] = []
   private powerUpRows: PowerUp[] = []
+  safetyRows: (SafetyRecord & { at: string })[] = []
 
   constructor(clock: () => number) {
     this.clock = clock
@@ -101,7 +127,7 @@ export class MemoryStore implements GameStore {
     return p ? this.strip(p, 'token_hash') : null
   }
   async players(gameId: string) {
-    return this.playerRows.filter((x) => x.game_id === gameId).map((p) => this.strip(p, 'token_hash'))
+    return this.playerRows.filter((x) => x.game_id === gameId && !x.removed_at).map((p) => this.strip(p, 'token_hash'))
   }
   async updatePlayers(patches: { id: string; patch: Partial<Player> }[]) {
     for (const { id, patch } of patches) {
@@ -170,7 +196,9 @@ export class MemoryStore implements GameStore {
     return true
   }
   async addEvent(e: Omit<GameEvent, 'id' | 'at'>) {
-    this.eventRows.push({ ...e, id: this.id('e'), at: this.nowIso() })
+    const row = { ...e, id: this.id('e'), at: this.nowIso() }
+    this.eventRows.push(row)
+    return { ...row }
   }
   async events(gameId: string) {
     return this.eventRows.filter((e) => e.game_id === gameId).map((e) => ({ ...e }))
@@ -214,5 +242,40 @@ export class MemoryStore implements GameStore {
     const seq = 1000 + this.pingRows.filter((p) => p.game_id === gameId && p.seq >= 1000).length
     this.pingRows.push({ game_id: gameId, seq, alert_at: alertAt, reveal_at: revealAt, alerted: false, revealed: false })
     return seq
+  }
+  async pauseGame(gameId: string) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g || !g.started_at || g.ended_at || g.paused_at) return false
+    g.paused_at = this.nowIso()
+    return true
+  }
+  async resumeGame(gameId: string) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g?.paused_at) return null
+    const d = this.clock() - Date.parse(g.paused_at)
+    g.pauses = [...g.pauses, { from: g.paused_at, to: this.nowIso() }]
+    g.paused_at = null
+    const shift = (t: string) => new Date(Date.parse(t) + d).toISOString()
+    for (const p of this.pingRows) {
+      if (p.game_id !== gameId || p.revealed) continue
+      p.alert_at = shift(p.alert_at)
+      p.reveal_at = shift(p.reveal_at)
+    }
+    return d
+  }
+  async setFlag(playerId: string, field: 'outside' | 'left_start', value: boolean) {
+    const p = this.playerRows.find((x) => x.id === playerId)
+    if (!p || p[field] === value) return false
+    p[field] = value
+    return true
+  }
+  async removePlayer(id: string) {
+    const p = this.playerRows.find((x) => x.id === id)
+    if (!p || p.removed_at) return false
+    p.removed_at = this.nowIso()
+    return true
+  }
+  async addSafetyRecord(r: SafetyRecord) {
+    this.safetyRows.push({ ...r, at: this.nowIso() })
   }
 }

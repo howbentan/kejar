@@ -5,7 +5,12 @@ import { SupabaseStore } from './supabaseStore.js'
 
 function fakeDb() {
   const inserts: { table: string; row: Record<string, unknown> }[] = []
+  const rpcs: { fn: string; args: Record<string, unknown> }[] = []
   const db = {
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      rpcs.push({ fn, args })
+      return { data: 90000, error: null }
+    },
     from: (table: string) => ({
       insert: async (row: Record<string, unknown>) => {
         inserts.push({ table, row })
@@ -13,7 +18,7 @@ function fakeDb() {
       },
     }),
   } as unknown as SupabaseClient
-  return { db, inserts }
+  return { db, inserts, rpcs }
 }
 
 describe('SupabaseStore', () => {
@@ -25,5 +30,12 @@ describe('SupabaseStore', () => {
       table: 'locations',
       row: { game_id: 'g1', player_id: 'p1', lat: 3, lng: 101, accuracy_m: 8, at: '2026-10-25T09:07:00.000Z' },
     })
+  })
+
+  it('resumes through the resume_game function, stamped with the game clock', async () => {
+    const { db, rpcs } = fakeDb()
+    const now = Date.parse('2026-10-25T09:07:00.000Z')
+    expect(await new SupabaseStore(db, () => now).resumeGame('g1')).toBe(90000)
+    expect(rpcs).toEqual([{ fn: 'resume_game', args: { p_game: 'g1', p_at: '2026-10-25T09:07:00.000Z' } }])
   })
 })

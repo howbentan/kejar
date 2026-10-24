@@ -177,7 +177,7 @@ const create: Action = async (ctx, body) => {
   let code = newGameCode(ctx.rng)
   while (await ctx.store.gameByCode(code)) code = newGameCode(ctx.rng)
   const hostKey = newToken()
-  await ctx.store.createGame({ code, arena, settings, started_at: null, ended_at: null, winner: null, host_key_hash: hashToken(hostKey) })
+  await ctx.store.createGame({ code, arena, settings, started_at: null, ended_at: null, winner: null, paused_at: null, pauses: [], host_key_hash: hashToken(hostKey) })
   return { code, hostKey }
 }
 
@@ -203,6 +203,9 @@ const join: Action = async (ctx, body) => {
     jailed: false,
     freed_once: false,
     push: null,
+    removed_at: null,
+    outside: false,
+    left_start: false,
     token_hash: hashToken(token),
   })
   await ctx.store.addEvent({ game_id: game.id, type: 'joined', actor_id: p.id, target_id: null, data: {} })
@@ -297,6 +300,9 @@ const state: Action = async (ctx, body) => {
       jailed: false,
       freed_once: false,
       push: null,
+      removed_at: null,
+      outside: false,
+      left_start: false,
     }
   }
   await advance(ctx, game)

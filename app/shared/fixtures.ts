@@ -25,6 +25,8 @@ export function game(over: Partial<Game> = {}): Game {
     started_at: iso(T0),
     ended_at: null,
     winner: null,
+    paused_at: null,
+    pauses: [],
     ...over,
   }
 }
@@ -42,6 +44,9 @@ export function player(id: string, role: Role | null, over: Partial<Player> = {}
     jailed: false,
     freed_once: false,
     push: null,
+    removed_at: null,
+    outside: false,
+    left_start: false,
     ...over,
   }
 }

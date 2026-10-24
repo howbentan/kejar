@@ -1,9 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Game, GameEvent, Ping, Player, Position, PowerUp } from '../../shared/types.js'
-import type { GameRow, GameStore, NewPowerUp, PlayerRow, StationClaim } from './store.js'
+import type { GameRow, GameStore, NewPowerUp, PlayerRow, SafetyRecord, StationClaim } from './store.js'
 
-const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, push'
-const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner'
+const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, push, removed_at, outside, left_start'
+const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -43,7 +43,9 @@ export class SupabaseStore implements GameStore {
     ) as Player | null
   }
   async players(gameId: string): Promise<Player[]> {
-    return check(await this.db.from('players').select(PLAYER_COLUMNS).eq('game_id', gameId).order('accepted_at')) as Player[]
+    return check(
+      await this.db.from('players').select(PLAYER_COLUMNS).eq('game_id', gameId).is('removed_at', null).order('accepted_at'),
+    ) as Player[]
   }
   async updatePlayers(patches: { id: string; patch: Partial<Player> }[]) {
     for (const { id, patch } of patches) check(await this.db.from('players').update(patch).eq('id', id))
@@ -105,8 +107,8 @@ export class SupabaseStore implements GameStore {
     )
     return (rows ?? []).length > 0
   }
-  async addEvent(e: Omit<GameEvent, 'id' | 'at'>) {
-    check(await this.db.from('events').insert({ ...e, at: this.nowIso() }))
+  async addEvent(e: Omit<GameEvent, 'id' | 'at'>): Promise<GameEvent> {
+    return check(await this.db.from('events').insert({ ...e, at: this.nowIso() }).select('*').single()) as GameEvent
   }
   async events(gameId: string): Promise<GameEvent[]> {
     return check(await this.db.from('events').select('*').eq('game_id', gameId).order('at')) as GameEvent[]
@@ -161,5 +163,37 @@ export class SupabaseStore implements GameStore {
       if (error.code !== '23505') throw new Error(error.message)
     }
     throw new Error('Could not schedule the Flare — try again')
+  }
+  async pauseGame(gameId: string) {
+    const rows = check(
+      await this.db
+        .from('games')
+        .update({ paused_at: this.nowIso() })
+        .eq('id', gameId)
+        .not('started_at', 'is', null)
+        .is('ended_at', null)
+        .is('paused_at', null)
+        .select('id'),
+    )
+    return (rows ?? []).length > 0
+  }
+  async resumeGame(gameId: string) {
+    // The database function closes the pause and shifts the pings in one transaction.
+    return check(await this.db.rpc('resume_game', { p_game: gameId, p_at: this.nowIso() })) as number | null
+  }
+  async setFlag(playerId: string, field: 'outside' | 'left_start', value: boolean) {
+    const rows = check(
+      await this.db.from('players').update({ [field]: value }).eq('id', playerId).eq(field, !value).select('id'),
+    )
+    return (rows ?? []).length > 0
+  }
+  async removePlayer(id: string) {
+    const rows = check(
+      await this.db.from('players').update({ removed_at: this.nowIso() }).eq('id', id).is('removed_at', null).select('id'),
+    )
+    return (rows ?? []).length > 0
+  }
+  async addSafetyRecord(r: SafetyRecord) {
+    check(await this.db.from('safety_records').insert({ ...r, at: this.nowIso() }))
   }
 }

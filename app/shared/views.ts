@@ -216,6 +216,8 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       return null
     case 'shielded':
       return target ? `${tagLabel(target)} was shielded!` : 'A runner was shielded!'
+    default:
+      return null
   }
 }
 

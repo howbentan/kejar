@@ -48,6 +48,10 @@ export interface Game {
   started_at: string | null
   ended_at: string | null
   winner: 'runners' | 'chasers' | null
+  /** Set while a marshal has the game paused. */
+  paused_at: string | null
+  /** Finished pauses, oldest first. */
+  pauses: { from: string; to: string }[]
 }
 
 export interface Player {
@@ -62,6 +66,11 @@ export interface Player {
   jailed: boolean
   freed_once: boolean
   push: PushSubscriptionJSON | null
+  /** Set when a marshal removed this player from the game. */
+  removed_at: string | null
+  /** Alert flags: currently outside the play area; left the start point early. */
+  outside: boolean
+  left_start: boolean
 }
 
 export interface Ping {
@@ -85,6 +94,15 @@ export type EventType =
   | 'powerup'
   | 'used'
   | 'shielded'
+  | 'sos'
+  | 'report'
+  | 'outside'
+  | 'missed'
+  | 'left-start'
+  | 'handled'
+  | 'paused'
+  | 'resumed'
+  | 'removed'
 
 export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus'
 
