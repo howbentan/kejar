@@ -6,7 +6,7 @@ import { Screen, tagText } from '../game/ui'
 import { Feed, GameClock } from './RunnerChase'
 
 /** Everyone live. SOS, reports, pause and alerts arrive in Plan 3. */
-export default function MarshalLive({ view }: { view: View }) {
+export default function MarshalLive({ view }: { code: string; view: View; refresh: () => void }) {
   const now = useServerNow(view.now)
   return (
     <Screen eyebrow={view.phase === 'hiding' ? 'Marshal · hide phase' : 'Marshal · live'}>

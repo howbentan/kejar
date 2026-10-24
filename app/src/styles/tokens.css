@@ -103,3 +103,17 @@ select.input option { background: #141614; color: var(--white); }
 }
 .hand-card b { color: var(--volt); font-size: 15px; letter-spacing: -0.02em; }
 .hand-card span { color: var(--dim); }
+
+/* SOS and Report: fixed to the bottom of runner and chaser screens. */
+.screen:has(+ .safety-bar) { padding-bottom: 96px; }
+.safety-bar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--black) 70%, rgba(10, 10, 11, 0));
+}
+.safety-buttons { display: flex; gap: 8px; }
+.safety-buttons .btn { flex: 1; padding: 12px 16px; }
+.safety-sos { letter-spacing: 0.12em; }
+.safety-sheet { display: flex; flex-direction: column; gap: 10px; background: #111312; }
+.safety-status { font-weight: 600; color: var(--volt); text-align: center; }

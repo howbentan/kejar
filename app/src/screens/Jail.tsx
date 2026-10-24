@@ -14,6 +14,7 @@ const BREAK_REJECTIONS: Record<string, string> = {
   'nobody-to-free': 'Nobody to free',
   'not-a-free-runner': 'Only free runners can break people out',
   'not-chasing': 'Jailbreaks only work during the chase',
+  paused: 'Game is paused',
 }
 
 /** "Break them out" for free runners: scan the jail code to free everyone jailed (once each). */

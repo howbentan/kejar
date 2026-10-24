@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, type ReactNode } from 'react'
+import SafetyBar from '../game/SafetyBar'
 import { loadSession } from '../game/session'
 import { ErrorText, Screen } from '../game/ui'
 import { useGameState, type LocationMode } from '../game/useGameState'
@@ -7,12 +8,14 @@ import Hide from './Hide'
 import Jail from './Jail'
 import Lobby from './Lobby'
 import MarshalLive from './MarshalLive'
+import Paused from './Paused'
+import Removed from './Removed'
 import Results from './Results'
 import RunnerChase from './RunnerChase'
 import type { View } from '../../shared/views.js'
 
 function locationMode(view: View | null): LocationMode {
-  if (!view || view.phase === 'lobby' || view.phase === 'ended' || view.me.id === 'host') return 'never'
+  if (!view || view.phase === 'lobby' || view.phase === 'ended' || view.me.id === 'host' || view.me.removed_at) return 'never'
   if (view.me.role === 'chaser' || view.me.role === 'marshal') return 'always'
   return view.me.jailed ? 'never' : 'when-open'
 }
@@ -38,11 +41,22 @@ export default function GameScreen({ code }: { code: string }) {
       </Screen>
     )
   }
+  if (current.me.removed_at) return <Removed />
   if (current.phase === 'ended') return <Results view={current} isHost={!!session.hostKey} />
   if (current.phase === 'lobby') return <Lobby code={code} view={current} refresh={refresh} />
-  if (current.me.role === 'marshal') return <MarshalLive view={current} />
-  if (current.phase === 'hiding') return <Hide view={current} />
-  if (current.me.role === 'runner' && current.me.jailed) return <Jail code={code} view={current} />
-  if (current.me.role === 'chaser') return <ChaserChase code={code} view={current} refresh={refresh} />
-  return <RunnerChase code={code} view={current} />
+  if (current.me.role === 'marshal') return <MarshalLive code={code} view={current} refresh={refresh} />
+
+  // Runners and chasers: their screen, with SOS and Report always within reach.
+  let screen: ReactNode
+  if (current.paused) screen = <Paused view={current} />
+  else if (current.phase === 'hiding') screen = <Hide view={current} />
+  else if (current.me.role === 'runner' && current.me.jailed) screen = <Jail code={code} view={current} />
+  else if (current.me.role === 'chaser') screen = <ChaserChase code={code} view={current} refresh={refresh} />
+  else screen = <RunnerChase code={code} view={current} />
+  return (
+    <>
+      {screen}
+      <SafetyBar code={code} view={current} />
+    </>
+  )
 }

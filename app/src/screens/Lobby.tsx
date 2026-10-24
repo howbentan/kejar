@@ -16,7 +16,8 @@ const ROLE_COPY = {
 function AlertsCard({ code, view, onDone }: { code: string; view: View; onDone: () => void }) {
   const support = pushSupport(currentPushEnv())
   const [message, setMessage] = useState('')
-  if (view.settings.checkinMode !== 'push' || view.me.push) return null
+  // Runners need alerts for push check-ins; marshals need them for SOS and reports in any mode.
+  if ((view.settings.checkinMode !== 'push' && view.me.role !== 'marshal') || view.me.push) return null
   async function turnOn() {
     try {
       const subscription = await subscribe(import.meta.env.VITE_VAPID_PUBLIC_KEY)

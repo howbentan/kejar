@@ -27,6 +27,7 @@ const CLAIM_REJECTIONS: Record<string, string> = {
   'unknown-station': "That's not a station code",
   'not-chasing': 'Stations open when the chase starts',
   'cannot-claim': "You can't claim power-ups right now",
+  paused: 'Game is paused',
 }
 
 const USE_REJECTIONS: Record<string, string> = {
@@ -35,6 +36,7 @@ const USE_REJECTIONS: Record<string, string> = {
   'not-chasing': 'Power-ups work during the chase',
   'cannot-use': "You can't use power-ups in jail",
   'not-yours': "That isn't yours",
+  paused: 'Game is paused',
 }
 
 export function claimMessage(r: ClaimResult): string {

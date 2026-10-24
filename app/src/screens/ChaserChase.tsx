@@ -21,6 +21,7 @@ const REJECTIONS: Record<string, string> = {
   'not-a-chaser': 'Only chasers can catch',
   'no-location': 'Turn on location to catch',
   shielded: 'Shielded! Hand the tag back — they get a 10 s head start',
+  paused: 'Game is paused',
 }
 
 export function catchMessage(text: string, r: CatchJudgement): string {
