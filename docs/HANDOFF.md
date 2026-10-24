@@ -25,7 +25,13 @@ A web app for organised, real-world chase games (runners vs chasers, with marsha
   - The host taps the map to drop up to 8 stations, and their QR cards print with the tags.
   - Players scan a station within 30 m during the chase. Runners get Decoy, Shield or Cloak; chasers get Flare or Focus.
   - Each player can claim a station once, a station locks for 60 s after a claim, and a hand holds 3.
-- **Plans 3, 4 and 6: not started.** Marshal safety tools; arena setup; polish (replay, share card, 24 h deletion).
+- **Plan 3 (marshal and safety tools): done and live.** Migration `0005_safety.sql` has been run in Supabase.
+  - Runners and chasers have SOS and Report buttons. Marshals and the organiser get an alert list with a Handled button, and lime pins on the map.
+  - Automatic alerts: left the play area (>20 m out), missed 2 check-ins, chaser left the start early, and catches to check.
+  - Pause and resume for everyone (clocks freeze), and removing a player.
+  - The organiser and marshals can turn on SOS alerts for their phone.
+  - SOS, reports and removals are also written to `safety_records`, which is never read by the app.
+- **Plans 4 and 6: not started.** Arena setup, including no-go and walk-only zone alerts; polish (replay, share card, 24 h deletion, 12-month safety-record deletion).
 
 ## Decisions made since the design doc (not yet in the spec)
 - Brand: **kejar.**; colours **Volt #C6FF3D, black, white** only; fonts Geist and Geist Mono.
@@ -43,7 +49,7 @@ A web app for organised, real-world chase games (runners vs chasers, with marsha
 - A "Last call" exact ping 1 minute before the end.
 - Endgame visuals.
 
-Also floated: surprise missions, a bounty on the longest survivor. Suggested next build: marshal tools (Plan 3) or the endgame ideas above; the owner hasn't chosen.
+Also floated: surprise missions, a bounty on the longest survivor. Suggested next build: arena setup (Plan 4) or the endgame ideas above; the owner hasn't chosen.
 
 ## Setting up a new machine
 1. Install Node 20+ and Git, then clone: `git clone https://github.com/howbentan/kejar.git`
