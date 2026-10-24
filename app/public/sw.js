@@ -1,4 +1,4 @@
-// Kejar service worker: receives check-in alerts during the ping spike.
+// Kejar service worker: check-in alerts for runners, safety alerts for marshals (and the old ping spike).
 // Push payload: { "pingId": string, "deviceId": string }
 
 self.addEventListener('install', () => self.skipWaiting())
@@ -16,6 +16,21 @@ self.addEventListener('push', (event) => {
       self.registration.showNotification('kejar.', {
         body: 'Ping in 30s — check in!',
         tag: 'kejar-ping',
+        renotify: true,
+        requireInteraction: true,
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        data: { url: `/g/${data.code}` },
+      }),
+    )
+    return
+  }
+  if (data.type === 'alert' && data.code) {
+    // Marshal alerts: SOS and reports.
+    event.waitUntil(
+      self.registration.showNotification('kejar. marshal', {
+        body: String(data.text || 'New safety alert'),
+        tag: 'kejar-alert',
         renotify: true,
         requireInteraction: true,
         icon: '/icon-192.png',

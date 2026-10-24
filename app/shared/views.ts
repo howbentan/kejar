@@ -1,3 +1,4 @@
+import { alertsFrom, type Alert } from './alerts.js'
 import { chaseStartOf, MINUTE_MS, nextReveal, phaseAt } from './clock.js'
 import { distanceM, fuzz } from './geo.js'
 import { activeShield, decoySpot } from './powerups.js'
@@ -38,6 +39,10 @@ export interface View {
   now: number
   /** A marshal has paused the game: every countdown is frozen. */
   paused: boolean
+  /** Safety alerts: for marshals and the organiser only. */
+  alerts: Alert[]
+  /** Everyone I could report. */
+  reportable: { id: string; name: string }[]
   me: Player
   arena: Arena
   settings: Settings
@@ -222,6 +227,8 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       return 'Game paused by a marshal'
     case 'resumed':
       return 'Game resumed'
+    case 'removed':
+      return `${String(e.data.name ?? 'A player')} left the game`
     default:
       return null
   }
@@ -276,6 +283,8 @@ export function viewFor(i: ViewInput): View {
     endsAt,
     now: i.now,
     paused: !!i.game.paused_at,
+    alerts: role === 'marshal' ? alertsFrom(i.events) : [],
+    reportable: i.players.filter((p) => p.id !== i.me.id).map((p) => ({ id: p.id, name: p.name })),
     me: i.me,
     arena: i.game.arena,
     settings: i.game.settings,

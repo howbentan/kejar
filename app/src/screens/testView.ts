@@ -8,6 +8,8 @@ export function testView(over: Partial<View> = {}): View {
     endsAt: 1_000_000,
     now: 100_000,
     paused: false,
+    alerts: [],
+    reportable: [],
     me: {
       id: 'r1',
       game_id: 'g1',

@@ -1,3 +1,4 @@
+import { alertsFrom, NOTE_MAX, REASON_LABEL, SOS_REPEAT_MS, who, type ReportReason } from '../../shared/alerts.js'
 import { arenaAroundPoint, ARENAS } from '../../shared/arenas.js'
 import { judgeCatch, judgeJailbreak } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
@@ -45,10 +46,45 @@ function requireHost(game: GameRow, body: Body) {
   if (!body.hostKey || hashToken(str(body.hostKey)) !== game.host_key_hash) throw new ActionError(403, 'Organiser only')
 }
 
-async function requirePlayer(ctx: Ctx, game: Game, body: Body): Promise<Player> {
+/** The calling player. Removed players are refused unless `allowRemoved` (their page still polls state). */
+async function requirePlayer(ctx: Ctx, game: Game, body: Body, allowRemoved = false): Promise<Player> {
   const p = body.token ? await ctx.store.playerByToken(game.id, hashToken(str(body.token))) : null
   if (!p) throw new ActionError(401, 'Not in this game')
+  if (p.removed_at && !allowRemoved) throw new ActionError(403, 'You were removed from this game')
   return p
+}
+
+function requireRunning(game: Game, now: number) {
+  const phase = phaseAt(game, now).phase
+  if (phase !== 'hiding' && phase !== 'chasing') throw new ActionError(409, 'The game is not running')
+}
+
+/** Pushes to each player's subscription; forgets subscriptions the push service says are gone. */
+async function pushTo(ctx: Ctx, players: Player[], payload: unknown) {
+  const body = JSON.stringify(payload)
+  const expired: string[] = []
+  await Promise.allSettled(
+    players
+      .filter((p) => p.push)
+      .map((p) =>
+        ctx.push(p.push!, body).catch((e: { statusCode?: number }) => {
+          if (e?.statusCode === 404 || e?.statusCode === 410) expired.push(p.id)
+        }),
+      ),
+  )
+  if (expired.length) await ctx.store.updatePlayers(expired.map((id) => ({ id, patch: { push: null } })))
+}
+
+async function alertMarshals(ctx: Ctx, game: Game, text: string) {
+  const marshals = (await ctx.store.players(game.id)).filter((p) => p.role === 'marshal')
+  await pushTo(ctx, marshals, { type: 'alert', code: game.code, text })
+}
+
+/** Coordinates sent with a request, or null when missing or invalid. */
+function coordsOf(body: Body): LatLng | null {
+  const { lat, lng } = body as { lat?: unknown; lng?: unknown }
+  if (typeof lat !== 'number' || typeof lng !== 'number' || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null
+  return { lat, lng }
 }
 
 /** The organiser (null) or a player with the marshal role. */
@@ -119,17 +155,8 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     if (!(await store.claimPing(game.id, seq, 'alerted'))) continue
     // Skip stale alerts when catching up after a gap: only alert pings still in the future.
     if (game.settings.checkinMode !== 'push' || now >= (times.get(seq)?.revealAt ?? 0)) continue
-    const runners = (await store.players(game.id)).filter((p) => p.role === 'runner' && !p.jailed && p.push)
-    const payload = JSON.stringify({ type: 'checkin', code: game.code, seq })
-    const expired: string[] = []
-    await Promise.allSettled(
-      runners.map((r) =>
-        ctx.push(r.push!, payload).catch((e: { statusCode?: number }) => {
-          if (e?.statusCode === 404 || e?.statusCode === 410) expired.push(r.id)
-        }),
-      ),
-    )
-    if (expired.length) await store.updatePlayers(expired.map((id) => ({ id, patch: { push: null } })))
+    const runners = (await store.players(game.id)).filter((p) => p.role === 'runner' && !p.jailed)
+    await pushTo(ctx, runners, { type: 'checkin', code: game.code, seq })
   }
 
   for (const seq of work.reveal) {
@@ -296,7 +323,7 @@ const linkTag: Action = async (ctx, body) => {
 const state: Action = async (ctx, body) => {
   let game: Game = await loadGame(ctx, body)
   let me: Player
-  if (body.token) me = await requirePlayer(ctx, game, body)
+  if (body.token) me = await requirePlayer(ctx, game, body, true)
   else {
     requireHost(game as GameRow, body)
     me = {
@@ -487,6 +514,102 @@ const usePowerup: Action = async (ctx, body) => {
   return { ok: true, kind: u.kind }
 }
 
+const sos: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  requireRunning(game, ctx.now)
+  await recordScanLocation(ctx, game, me, body)
+  // A panicked double-tap raises one alert, not several.
+  const recent = (await ctx.store.events(game.id)).some(
+    (e) => e.type === 'sos' && e.actor_id === me.id && ctx.now - Date.parse(e.at) < SOS_REPEAT_MS,
+  )
+  if (recent) return { ok: true }
+  const where = coordsOf(body)
+  const data = { who: who(me), lat: where?.lat ?? null, lng: where?.lng ?? null }
+  await ctx.store.addEvent({ game_id: game.id, type: 'sos', actor_id: me.id, target_id: null, data })
+  await ctx.store.addSafetyRecord({
+    game_id: game.id,
+    type: 'sos',
+    player_id: me.id,
+    target_id: null,
+    lat: data.lat,
+    lng: data.lng,
+    data: { who: data.who },
+  })
+  await alertMarshals(ctx, game, `SOS from ${data.who}`)
+  return { ok: true }
+}
+
+const report: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  requireRunning(game, ctx.now)
+  const reason = str(body.reason) as ReportReason
+  if (!Object.hasOwn(REASON_LABEL, reason)) throw new ActionError(400, 'Pick a reason')
+  const note = str(body.note).trim()
+  if (note.length > NOTE_MAX) throw new ActionError(400, `Keep the note under ${NOTE_MAX} characters`)
+  const target = (await ctx.store.players(game.id)).find((p) => p.id === str(body.targetId))
+  if (!target || target.id === me.id) throw new ActionError(400, 'Pick another player in this game')
+  await recordScanLocation(ctx, game, me, body)
+  const where = coordsOf(body)
+  const data = { name: who(me), targetName: who(target), reason, note, lat: where?.lat ?? null, lng: where?.lng ?? null }
+  const e = await ctx.store.addEvent({ game_id: game.id, type: 'report', actor_id: me.id, target_id: target.id, data })
+  await ctx.store.addSafetyRecord({
+    game_id: game.id,
+    type: 'report',
+    player_id: me.id,
+    target_id: target.id,
+    lat: data.lat,
+    lng: data.lng,
+    data: { reason, note },
+  })
+  await alertMarshals(ctx, game, alertsFrom([e])[0].text)
+  return { ok: true }
+}
+
+const handleAlert: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const marshal = await requireMarshal(ctx, game, body)
+  await ctx.store.addEvent({
+    game_id: game.id,
+    type: 'handled',
+    actor_id: marshal?.id ?? null,
+    target_id: null,
+    data: { eventId: str(body.eventId) },
+  })
+  return { ok: true }
+}
+
+const removePlayer: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const marshal = await requireMarshal(ctx, game, body)
+  const target = (await ctx.store.players(game.id)).find((p) => p.id === str(body.playerId))
+  if (!target || !(await ctx.store.removePlayer(target.id))) return { ok: false }
+  await ctx.store.addEvent({
+    game_id: game.id,
+    type: 'removed',
+    actor_id: marshal?.id ?? null,
+    target_id: target.id,
+    data: { name: target.name },
+  })
+  await ctx.store.addSafetyRecord({
+    game_id: game.id,
+    type: 'removed',
+    player_id: marshal?.id ?? null,
+    target_id: target.id,
+    lat: null,
+    lng: null,
+    data: { name: target.name },
+  })
+  // The removed runner may have been the last one still free.
+  const phase = phaseAt(game, ctx.now).phase
+  if (phase === 'hiding' || phase === 'chasing') {
+    const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
+    if (runners.every((p) => p.jailed)) await finish(ctx, game)
+  }
+  return { ok: true }
+}
+
 const pause: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const marshal = await requireMarshal(ctx, game, body)
@@ -521,6 +644,10 @@ export const actions = {
   usePowerup,
   pause,
   resume,
+  sos,
+  report,
+  handleAlert,
+  removePlayer,
 } satisfies Record<string, Action>
 
 export type ActionName = keyof typeof actions
