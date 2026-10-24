@@ -194,6 +194,33 @@ Each station gives one power-up per player per game, randomly chosen for that pl
 - **Walk-only zones:** the app warns chasers moving fast inside them, since they're tracked continuously. Runners see walk-only zones on the map and the rule is part of the code of conduct. Marshals watch these zones.
 - **Event-level:** signed waiver; event insurance and park permit before any paid event (owner's responsibility, not the app's). Adults only for now.
 
+### 5.1 Safety tools: MVP details (Claude's calls, 2026-10-24)
+- **Who counts as a marshal:** the organiser (with the organiser link) and any player given the marshal role. Email sign-in for marshals waits until accounts exist.
+- **SOS:** any runner or chaser, jailed or not, during hiding, the chase or a pause.
+  - Sends the phone's current location.
+  - Pushes every marshal who allowed notifications.
+  - Shows at the top of the marshal's alert list, with a lime pin on their map.
+  - The player sees "Marshals alerted". A repeat within 30 s doesn't send a second alert.
+  - SOS never appears in the public feed.
+- **Report:** pick a player, a reason ("Unsafe play", "Catch dispute", "Something else") and an optional note of up to 140 characters. It carries the reporter's location, pushes marshals, and never appears in the public feed.
+- **Automatic alerts:**
+  - **Left the play area:** a runner or chaser more than 20 m outside the boundary. Alerted once until they come back inside, so GPS jitter at the edge doesn't spam.
+  - **Missed 2 check-ins in a row:** scheduled pings only (a Flare's 30 s notice doesn't count). Alerted once per streak.
+  - **Chaser left the start early:** during hiding, more than 50 m (plus up to 20 m of GPS error) from the start point. Alerted once per chaser.
+  - **Catch to check:** a catch made while the runner's position was unknown (§4.6).
+- Marshals mark an alert **Handled**; it greys out and moves below the open ones.
+- **Pause:** any marshal pauses or resumes for everyone.
+  - Every countdown freezes, and pings, hide time and game time all shift by the length of the pause.
+  - Players see a full-screen "Game paused" with SOS still available.
+  - Catches, jailbreaks, station claims and power-up use are refused while paused. Locations still send.
+  - A Shield's 10 minutes keep running during a pause.
+- **Remove player:** a marshal removes anyone, with a confirm step.
+  - The removed player sees "A marshal removed you from this game" and can do nothing else.
+  - They disappear from maps, counts, catching and results. The feed says "<name> left the game".
+  - If every remaining runner is in jail, the game ends.
+- **Safety records:** SOS, reports and removals are also written to a separate `safety_records` table the app never reads back. The 12-month deletion job comes with Plan 6.
+- No-go and walk-only zone alerts need zones drawn on the arena, so they arrive with arena setup (Plan 4).
+
 ## 6. Location, privacy and data
 
 - Location is shared **only while a game is running**. Sharing starts when the game starts and stops when it ends or the player is caught (jailed players don't need to be tracked).
