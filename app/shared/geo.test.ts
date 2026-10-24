@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { circlePolygon, distanceM, fuzz, pointInPolygon } from './geo.js'
+import { circlePolygon, distanceM, distanceOutsideM, fuzz, pointInPolygon } from './geo.js'
 
 const KL = { lat: 3.139, lng: 101.6869 }
 
@@ -39,5 +39,24 @@ describe('fuzz', () => {
     expect(distanceM(KL, f)).toBeLessThanOrEqual(15)
     expect(fuzz(KL, 15, 'p1:3')).toEqual(f)
     expect(fuzz(KL, 15, 'p1:4')).not.toEqual(f)
+  })
+})
+
+describe('distanceOutsideM', () => {
+  const square = [
+    { lat: 3.0, lng: 101.0 },
+    { lat: 3.0, lng: 101.01 },
+    { lat: 3.01, lng: 101.01 },
+    { lat: 3.01, lng: 101.0 },
+  ]
+  it('is 0 inside', () => {
+    expect(distanceOutsideM({ lat: 3.005, lng: 101.005 }, square)).toBe(0)
+  })
+  it('is about 30 m for a point 30 m past the edge', () => {
+    expect(distanceOutsideM({ lat: 3.01 + 30 / 111_195, lng: 101.005 }, square)).toBeCloseTo(30, -0.5)
+  })
+  it('measures to the corner when past it', () => {
+    const p = { lat: 3.01 + 30 / 111_195, lng: 101.01 + 40 / 111_000 }
+    expect(Math.abs(distanceOutsideM(p, square) - 50)).toBeLessThan(2)
   })
 })

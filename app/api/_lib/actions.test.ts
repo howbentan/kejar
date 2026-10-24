@@ -707,3 +707,72 @@ describe('removing a player', () => {
     expect(v.results?.winner).toBe('chasers')
   })
 })
+
+describe('automatic alerts', () => {
+  const kinds = async (code: string, hostKey: string) =>
+    (await run<View>('state', { code, hostKey })).alerts.map((a) => a.kind)
+  // around-me arenas are 200 m circles around CENTER; at(m) is m metres north of it.
+
+  it('boundary jitter alerts once per real exit', async () => {
+    const g = await safetyGame()
+    const go = async (m: number) => {
+      now += 5_000
+      await run('location', { code: g.code, token: g.aina.token, ...at(m) })
+    }
+    await go(100) // inside
+    await go(210) // 10 m outside: GPS noise
+    expect(await kinds(g.code, g.hostKey)).toEqual([])
+    await go(240) // clearly outside
+    await go(260)
+    expect((await run<View>('state', { code: g.code, hostKey: g.hostKey })).alerts.map((a) => a.text)).toEqual([
+      'Aina #07 left the play area',
+    ])
+    await go(150) // back inside
+    await go(240) // out again
+    expect(await kinds(g.code, g.hostKey)).toEqual(['outside', 'outside'])
+  })
+
+  it('a chaser walking off during hiding alerts once; the same during the chase does not', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, hostKey: g.hostKey })
+    now = T0 + 1 * MIN
+    await run('location', { code: g.code, token: g.ben.token, ...at(30) })
+    expect(await kinds(g.code, g.hostKey)).toEqual([])
+    await run('location', { code: g.code, token: g.ben.token, ...at(100) })
+    await run('location', { code: g.code, token: g.ben.token, ...at(120) })
+    const v = await run<View>('state', { code: g.code, hostKey: g.hostKey })
+    expect(v.alerts.map((a) => a.text)).toEqual(['Ben left the start early'])
+    now = T0 + 7 * MIN
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(0) })
+    await run('location', { code: g.code, token: g.ben.token, ...at(150) })
+    expect(await kinds(g.code, g.hostKey)).toEqual(['left-start'])
+  })
+
+  it('a runner who skips pings 1 and 2 raises one missed alert at ping 2', async () => {
+    const g = await safetyGame({ checkinMode: 'schedule' })
+    // Aina checks in for ping 1 (reveal at +10), Hafiz never does.
+    now = T0 + 9 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    now = T0 + 10 * MIN
+    expect(await kinds(g.code, g.hostKey)).toEqual([])
+    now = T0 + 15 * MIN
+    const v = await run<View>('state', { code: g.code, hostKey: g.hostKey })
+    expect(v.alerts.map((a) => a.text)).toEqual(['Hafiz #03 missed 2 check-ins'])
+    now = T0 + 20 * MIN
+    expect((await run<View>('state', { code: g.code, hostKey: g.hostKey })).alerts.map((a) => a.text).sort()).toEqual([
+      'Aina #07 missed 2 check-ins',
+      'Hafiz #03 missed 2 check-ins',
+    ])
+  })
+
+  it('a flagged catch shows as Check catch', async () => {
+    const g = await safetyGame()
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    now = T0 + 7 * MIN
+    // Hafiz has never sent a location: the catch counts but is flagged.
+    const r = await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })
+    expect(r).toMatchObject({ ok: true, flagged: true })
+    const v = await run<View>('state', { code: g.code, hostKey: g.hostKey })
+    expect(v.alerts.map((a) => a.text)).toEqual(['Check catch: #03 by Ben (position unknown)'])
+  })
+})

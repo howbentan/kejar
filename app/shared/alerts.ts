@@ -61,6 +61,18 @@ function toAlert(e: GameEvent): Omit<Alert, 'handled'> | null {
   }
 }
 
+/**
+ * Whether a runner has just missed their second check-in in a row, so marshals hear once per streak.
+ * `windows` is [chase start, reveal 1, …, reveal k] (scheduled pings only), ending at the reveal being
+ * processed; `lastAt` is the runner's latest position at that reveal. A check-in for ping j is a
+ * position after reveal j-1 (or the chase start) and no later than reveal j.
+ */
+export function missedTwoInARow(windows: number[], lastAt: number | null): boolean {
+  const k = windows.length - 1
+  const L = lastAt ?? -Infinity
+  return k >= 2 && L <= windows[k - 2] && (k === 2 || L > windows[k - 3])
+}
+
 /** Marshal alerts from the game's events: open ones newest first, then handled ones newest first. */
 export function alertsFrom(events: GameEvent[]): Alert[] {
   const handled = new Set(events.filter((e) => e.type === 'handled').map((e) => s(e.data.eventId)))

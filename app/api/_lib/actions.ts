@@ -1,4 +1,14 @@
-import { alertsFrom, NOTE_MAX, REASON_LABEL, SOS_REPEAT_MS, who, type ReportReason } from '../../shared/alerts.js'
+import {
+  alertsFrom,
+  missedTwoInARow,
+  NOTE_MAX,
+  OUTSIDE_MARGIN_M,
+  REASON_LABEL,
+  SOS_REPEAT_MS,
+  START_RADIUS_M,
+  who,
+  type ReportReason,
+} from '../../shared/alerts.js'
 import { arenaAroundPoint, ARENAS } from '../../shared/arenas.js'
 import { judgeCatch, judgeJailbreak } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
@@ -8,6 +18,7 @@ import { computeResults } from '../../shared/results.js'
 import { shuffleRoles, validateTeams } from '../../shared/teams.js'
 import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type Role, type Settings } from '../../shared/types.js'
 import { viewFor } from '../../shared/views.js'
+import { distanceM, distanceOutsideM } from '../../shared/geo.js'
 import { hashToken, newToken } from './secrets.js'
 import type { GameRow, GameStore } from './store.js'
 
@@ -33,6 +44,10 @@ type Body = Record<string, unknown>
 type Action = (ctx: Ctx, body: Body) => Promise<unknown>
 
 const tag2 = (n: number) => String(n).padStart(2, '0')
+const tagLabelOf = (players: Player[], id: string) => {
+  const p = players.find((x) => x.id === id)
+  return p?.tag_id ? `#${tag2(p.tag_id)}` : (p?.name ?? '')
+}
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 const iso = (ms: number) => new Date(ms).toISOString()
 
@@ -176,6 +191,16 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     )
     const seen = free.filter((p) => !cloaked.has(p.id) && (positions[p.id] ?? []).length > 0).length
     await store.addEvent({ game_id: game.id, type: 'ping', actor_id: null, target_id: null, data: { seq, seen } })
+    if (seq < BONUS_SEQ_BASE) {
+      // Flares give only 30 s notice, so only scheduled pings count towards a missed streak.
+      const windows = [chaseStartOf(game, now)!, ...pingTimes(game, now).filter((t) => t.seq <= seq).map((t) => t.revealAt)]
+      for (const p of free) {
+        const last = latest(positions[p.id])
+        if (missedTwoInARow(windows, last ? Date.parse(last.at) : null)) {
+          await store.addEvent({ game_id: game.id, type: 'missed', actor_id: p.id, target_id: null, data: { who: who(p) } })
+        }
+      }
+    }
   }
 
   if (work.end) await finish(ctx, game)
@@ -371,8 +396,31 @@ const location: Action = async (ctx, body) => {
   if (typeof lat !== 'number' || typeof lng !== 'number' || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
     throw new ActionError(400, 'Invalid location')
   }
-  await ctx.store.addPosition(game.id, me.id, { lat, lng, accuracy_m: typeof accuracy_m === 'number' ? accuracy_m : 0 })
+  const accuracy = typeof accuracy_m === 'number' ? accuracy_m : 0
+  await ctx.store.addPosition(game.id, me.id, { lat, lng, accuracy_m: accuracy })
+  await checkWhere(ctx, game, me, { lat, lng }, accuracy)
   return { ok: true }
+}
+
+/** Raises marshal alerts for leaving the play area, or a chaser leaving the start early (spec §5.1). */
+async function checkWhere(ctx: Ctx, game: Game, me: Player, here: LatLng, accuracy: number) {
+  const phase = phaseAt(game, ctx.now).phase
+  if ((phase !== 'hiding' && phase !== 'chasing') || me.jailed || (me.role !== 'runner' && me.role !== 'chaser')) return
+  const outsideBy = distanceOutsideM(here, game.arena.boundary)
+  // Alert only when clearly outside; re-arm only once back inside, so GPS jitter at the edge can't spam.
+  if (outsideBy > OUTSIDE_MARGIN_M) {
+    if (await ctx.store.setFlag(me.id, 'outside', true)) {
+      await ctx.store.addEvent({ game_id: game.id, type: 'outside', actor_id: me.id, target_id: null, data: { who: who(me) } })
+    }
+  } else if (outsideBy === 0 && me.outside) {
+    await ctx.store.setFlag(me.id, 'outside', false)
+  }
+  const slack = Math.min(Math.max(accuracy, 0), 20)
+  if (phase === 'hiding' && me.role === 'chaser' && !me.left_start && distanceM(here, game.arena.start) > START_RADIUS_M + slack) {
+    if (await ctx.store.setFlag(me.id, 'left_start', true)) {
+      await ctx.store.addEvent({ game_id: game.id, type: 'left-start', actor_id: me.id, target_id: null, data: { name: me.name } })
+    }
+  }
 }
 
 const catchAction: Action = async (ctx, body) => {
@@ -409,7 +457,7 @@ const catchAction: Action = async (ctx, body) => {
     type: 'caught',
     actor_id: me.id,
     target_id: verdict.runnerId,
-    data: { flagged: verdict.flagged },
+    data: { flagged: verdict.flagged, who: tagLabelOf(players, verdict.runnerId), chaser: me.name },
   })
   const after = await ctx.store.players(game.id)
   if (after.filter((p) => p.role === 'runner').every((p) => p.jailed)) await finish(ctx, fresh)

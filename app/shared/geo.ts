@@ -24,6 +24,25 @@ export function pointInPolygon(p: LatLng, poly: LatLng[]): boolean {
   return inside
 }
 
+/** 0 inside the polygon; otherwise metres to its nearest edge (flat projection, fine at park scale). */
+export function distanceOutsideM(p: LatLng, poly: LatLng[]): number {
+  if (poly.length < 3 || pointInPolygon(p, poly)) return 0
+  const k = Math.cos(rad(p.lat))
+  const xy = (q: LatLng) => ({ x: rad(q.lng - p.lng) * k * EARTH_RADIUS_M, y: rad(q.lat - p.lat) * EARTH_RADIUS_M })
+  let best = Infinity
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = xy(poly[j])
+    const b = xy(poly[i])
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const len2 = dx * dx + dy * dy
+    // Closest point on segment ab to the origin (where p sits).
+    const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, -(a.x * dx + a.y * dy) / len2))
+    best = Math.min(best, Math.hypot(a.x + t * dx, a.y + t * dy))
+  }
+  return best
+}
+
 /** The point `distM` metres from `from` along `bearingRad` (0 = north). */
 export function offset(from: LatLng, distM: number, bearingRad: number): LatLng {
   const d = distM / EARTH_RADIUS_M
