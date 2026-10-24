@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { event, game, MIN, ping, player, pos, T0 } from './fixtures.js'
 import { distanceM } from './geo.js'
-import type { Player, Position } from './types.js'
+import type { Player, Position, PowerUp } from './types.js'
+import { BONUS_SEQ_BASE } from './clock.js'
 import { viewFor } from './views.js'
 
 const g = game()
@@ -25,7 +26,7 @@ const positions: Record<string, Position[]> = {
 }
 
 const view = (me: Player, over: Partial<Parameters<typeof viewFor>[0]> = {}) =>
-  viewFor({ game: g, me, players, positions, pings, events: [], now: NOW, results: null, ...over })
+  viewFor({ game: g, me, players, positions, pings, events: [], now: NOW, results: null, powerUps: [], ...over })
 
 describe('chaser view', () => {
   it('chaser sees runners fuzzed at the last reveal, not live', () => {
@@ -146,5 +147,91 @@ describe('feed wording', () => {
   })
   it('uses the plural otherwise', () => {
     expect(feedOf([event('ping', T0 + 10 * MIN, { data: { seen: 0 } })])).toEqual(['Ping — 0 runners seen'])
+  })
+})
+
+describe('power-up effects', () => {
+  const used = (id: string, playerId: string, kind: PowerUp['kind'], usedAt: number): PowerUp => ({
+    id,
+    game_id: 'g1',
+    player_id: playerId,
+    kind,
+    station: 1,
+    claimed_at: new Date(usedAt - MIN).toISOString(),
+    used_at: new Date(usedAt).toISOString(),
+    consumed_at: null,
+  })
+
+  it('cloaked runner is missing from the next reveal only', () => {
+    const cloak = used('u1', 'r1', 'cloak', T0 + 14 * MIN)
+    expect(view(chaser, { powerUps: [cloak] }).dots.find((d) => d.id === 'r1')).toBeUndefined()
+    const later = [...pings, ping(3, T0 + 20 * MIN)]
+    const ps = { ...positions, r1: [...positions.r1, pos(B.lat, B.lng, T0 + 19 * MIN)] }
+    expect(
+      view(chaser, { powerUps: [cloak], pings: later, positions: ps, now: T0 + 21 * MIN }).dots.find((d) => d.id === 'r1'),
+    ).toBeDefined()
+  })
+
+  it('decoyed runner appears 120–180 m from their real spot at the next reveal', () => {
+    const dot = view(chaser, { powerUps: [used('u1', 'r1', 'decoy', T0 + 14 * MIN)] }).dots.find((d) => d.id === 'r1')!
+    const d = distanceM(dot, A)
+    expect(d).toBeGreaterThanOrEqual(119)
+    expect(d).toBeLessThanOrEqual(181)
+  })
+
+  it('focus shows nearby runners exactly at the next reveal', () => {
+    const ps = { ...positions, c1: [pos(A.lat + 0.0005, A.lng, T0 + 14.8 * MIN)] } // ~56 m from Aina
+    const dot = view(chaser, { positions: ps, powerUps: [used('u1', 'c1', 'focus', T0 + 14 * MIN)] }).dots.find(
+      (d) => d.id === 'r1',
+    )!
+    expect(dot).toMatchObject({ lat: A.lat, lng: A.lng, exact: true })
+    expect(dot.fuzzy).toBeUndefined()
+  })
+
+  it('a flare reveal between scheduled pings becomes the last reveal', () => {
+    const flare = ping(BONUS_SEQ_BASE, T0 + 16.5 * MIN)
+    const v = view(chaser, { pings: [...pings, flare], now: T0 + 17 * MIN })
+    expect(v.lastRevealAt).toBe(T0 + 16.5 * MIN)
+    const dot = v.dots.find((d) => d.id === 'r1')!
+    expect(distanceM(dot, B)).toBeLessThanOrEqual(15) // Aina's spot at 15.5 min, not the 15-min reveal
+  })
+
+  it('a scheduled reveal after a flare is the last reveal (ordered by time, not number)', () => {
+    const flare = ping(BONUS_SEQ_BASE, T0 + 16.5 * MIN)
+    const v = view(chaser, { pings: [...pings, flare, ping(3, T0 + 20 * MIN)], now: T0 + 21 * MIN })
+    expect(v.lastRevealAt).toBe(T0 + 20 * MIN)
+  })
+
+  it('hand lists my unused power-ups only, and shows an active shield', () => {
+    const mine = { ...used('u1', 'r1', 'decoy', T0), used_at: null }
+    const v = view(aina, {
+      powerUps: [mine, used('u2', 'r1', 'shield', T0 + 15 * MIN), { ...used('u3', 'c1', 'flare', T0), used_at: null }],
+    })
+    expect(v.hand.map((u) => u.id)).toEqual(['u1'])
+    expect(v.shieldActive).toBe(true)
+  })
+
+  it('lists the stations with their numbers', () => {
+    const S = { lat: 3.004, lng: 101.004 }
+    const v = view(aina, { game: game({ arena: { ...g.arena, stations: [S] } }) })
+    expect(v.stations).toEqual([{ n: 1, lat: S.lat, lng: S.lng }])
+  })
+
+  it('feed announces pickups and chaser power-ups but not runner ones', () => {
+    const feed = view(siti, {
+      events: [
+        event('powerup', T0 + 10 * MIN, { actor_id: 'r1' }),
+        event('used', T0 + 11 * MIN, { actor_id: 'c1', data: { kind: 'flare' } }),
+        event('used', T0 + 12 * MIN, { actor_id: 'c1', data: { kind: 'focus' } }),
+        event('used', T0 + 13 * MIN, { actor_id: 'r1', data: { kind: 'cloak' } }),
+        event('shielded', T0 + 14 * MIN, { target_id: 'r1' }),
+      ],
+    }).feed.map((f) => f.text)
+    expect(feed).toEqual([
+      '#07 was shielded!',
+      'A chaser used Focus',
+      'Flare! Ping in 30 s',
+      'Aina picked up a power-up',
+    ])
   })
 })

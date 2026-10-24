@@ -288,6 +288,7 @@ const state: Action = async (ctx, body) => {
     events,
     now: ctx.now,
     results: ended ? computeResults(game, players, events) : null,
+    powerUps: [],
   })
 }
 

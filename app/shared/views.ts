@@ -1,11 +1,14 @@
-import { chaseStartOf, MINUTE_MS, phaseAt, pingTimes } from './clock.js'
+import { chaseStartOf, MINUTE_MS, nextReveal, phaseAt } from './clock.js'
 import { distanceM, fuzz } from './geo.js'
-import type { Arena, Game, GameEvent, Phase, Ping, Player, Position, Results, Role, Settings } from './types.js'
+import { activeShield, decoySpot } from './powerups.js'
+import type { Arena, Game, GameEvent, Phase, Ping, Player, Position, PowerUp, Results, Role, Settings } from './types.js'
 
 /** Spec §4.5–4.6 constants. */
 export const FUZZ_RADIUS_M = 15
 export const NEARBY_M = 100
 export const FRESH_MS = 60_000
+/** Focus shows runners this close to the chaser exactly. */
+export const FOCUS_M = 150
 const FEED_MAX = 20
 
 export interface MapDot {
@@ -16,6 +19,8 @@ export interface MapDot {
   label?: string
   fuzzy?: boolean
   missed?: boolean
+  /** Shown at the true spot because of a chaser's Focus. */
+  exact?: true
   at: string
 }
 
@@ -46,6 +51,11 @@ export interface View {
   counts: { runnersFree: number; runnersJailed: number; chasers: number }
   /** Everyone in the game: shown in the lobby and to marshals; empty for players mid-game. */
   roster: RosterEntry[]
+  /** Power-up stations, numbered from 1. */
+  stations: { n: number; lat: number; lng: number }[]
+  /** My unused power-ups. */
+  hand: PowerUp[]
+  shieldActive: boolean
   results: Results | null
 }
 
@@ -58,6 +68,7 @@ export interface ViewInput {
   events: GameEvent[]
   now: number
   results: Results | null
+  powerUps: PowerUp[]
 }
 
 /** '1 runner', '3 runners'. */
@@ -94,6 +105,20 @@ function everyoneAt(i: ViewInput, t: number): MapDot[] {
   return dots
 }
 
+/** Revealed pings in time order (bonus Flare pings are numbered out of order). */
+function revealedPings(pings: Ping[]): Ping[] {
+  return pings.filter((p) => p.revealed && p.seq > 0).sort((a, b) => Date.parse(a.reveal_at) - Date.parse(b.reveal_at))
+}
+
+/** Power-ups of `kind` whose effect lands on this reveal: the first reveal at or after they were used. */
+function landingAt(i: ViewInput, kind: PowerUp['kind'], revealAt: number, prevRevealAt: number): PowerUp[] {
+  return i.powerUps.filter((u) => {
+    if (u.kind !== kind || !u.used_at) return false
+    const usedAt = Date.parse(u.used_at)
+    return usedAt <= revealAt && usedAt > prevRevealAt
+  })
+}
+
 function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: string }[] } {
   const dots: MapDot[] = []
   const notes: { at: string; text: string }[] = []
@@ -103,21 +128,35 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
       if (at) dots.push(dotFor(p, at, p.id === i.me.id ? 'me' : 'chaser'))
     }
   }
-  const revealed = i.pings.filter((p) => p.revealed && p.seq > 0).sort((a, b) => a.seq - b.seq)
+  const revealed = revealedPings(i.pings)
   const last = revealed[revealed.length - 1]
   if (!last) return { dots, notes }
   const revealAt = Date.parse(last.reveal_at)
   const prev = revealed[revealed.length - 2]
   const prevAt = prev ? Date.parse(prev.reveal_at) : (chaseStartOf(i.game) ?? revealAt)
+
+  const cloaked = new Set(landingAt(i, 'cloak', revealAt, prevAt).map((u) => u.player_id))
+  const decoyed = new Set(landingAt(i, 'decoy', revealAt, prevAt).map((u) => u.player_id))
+  const focusers = landingAt(i, 'focus', revealAt, prevAt)
+    .map((u) => latestAtOrBefore(i.positions[u.player_id], revealAt))
+    .filter((p): p is Position => !!p)
+
   for (const p of i.players) {
-    if (p.role !== 'runner' || p.jailed) continue
+    if (p.role !== 'runner' || p.jailed || cloaked.has(p.id)) continue
     const at = latestAtOrBefore(i.positions[p.id], revealAt)
     if (!at) {
       notes.push({ at: last.reveal_at, text: `${tagLabel(p)} never checked in` })
       continue
     }
-    const spot = fuzz(at, FUZZ_RADIUS_M, `${p.id}:${last.seq}`)
-    const dot: MapDot = { ...dotFor(p, at, 'runner'), ...spot, fuzzy: true }
+    const seed = `${p.id}:${last.seq}`
+    let dot: MapDot
+    if (decoyed.has(p.id)) {
+      dot = { ...dotFor(p, at, 'runner'), ...decoySpot(at, i.game.arena.boundary, seed), fuzzy: true }
+    } else if (focusers.some((f) => distanceM(f, at) <= FOCUS_M)) {
+      dot = { ...dotFor(p, at, 'runner'), exact: true }
+    } else {
+      dot = { ...dotFor(p, at, 'runner'), ...fuzz(at, FUZZ_RADIUS_M, seed), fuzzy: true }
+    }
     if (Date.parse(at.at) < prevAt) dot.missed = true
     dots.push(dot)
   }
@@ -165,9 +204,14 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
     case 'ended':
       return 'Game over'
     case 'powerup':
+      return actor ? `${actor.name} picked up a power-up` : null
     case 'used':
-    case 'shielded':
+      // Runner power-ups stay secret; chasers' ones are announced.
+      if (e.data.kind === 'flare') return 'Flare! Ping in 30 s'
+      if (e.data.kind === 'focus') return 'A chaser used Focus'
       return null
+    case 'shielded':
+      return target ? `${tagLabel(target)} was shielded!` : 'A runner was shielded!'
   }
 }
 
@@ -196,8 +240,8 @@ export function viewFor(i: ViewInput): View {
     chaserNearby = r.nearby
   }
 
-  const lastReveal = i.pings.filter((p) => p.revealed && p.seq > 0).sort((a, b) => b.seq - a.seq)[0]
-  const upcoming = phase === 'hiding' || phase === 'chasing' ? pingTimes(i.game).find((t) => t.revealAt > i.now) : undefined
+  const lastReveal = revealedPings(i.pings).at(-1)
+  const upcoming = phase === 'hiding' || phase === 'chasing' ? nextReveal(i.game, i.pings, i.now) : null
 
   // Newest first; events recorded in the same millisecond keep their recorded order (later first).
   const feed = [
@@ -237,6 +281,9 @@ export function viewFor(i: ViewInput): View {
     roster: showRoster
       ? i.players.map((p) => ({ id: p.id, name: p.name, role: p.role, tag_id: p.tag_id, jailed: p.jailed }))
       : [],
+    stations: (i.game.arena.stations ?? []).map((s, k) => ({ n: k + 1, lat: s.lat, lng: s.lng })),
+    hand: i.powerUps.filter((u) => u.player_id === i.me.id && u.used_at === null),
+    shieldActive: activeShield(i.powerUps, i.me.id, i.now) !== null,
     results: i.results,
   }
 }
