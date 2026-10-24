@@ -133,7 +133,7 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
   if (!last) return { dots, notes }
   const revealAt = Date.parse(last.reveal_at)
   const prev = revealed[revealed.length - 2]
-  const prevAt = prev ? Date.parse(prev.reveal_at) : (chaseStartOf(i.game) ?? revealAt)
+  const prevAt = prev ? Date.parse(prev.reveal_at) : (chaseStartOf(i.game, i.now) ?? revealAt)
 
   const cloaked = new Set(landingAt(i, 'cloak', revealAt, prevAt).map((u) => u.player_id))
   const decoyed = new Set(landingAt(i, 'decoy', revealAt, prevAt).map((u) => u.player_id))

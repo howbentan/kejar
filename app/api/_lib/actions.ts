@@ -100,7 +100,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
   const work = dueWork(game, pingRows, now)
   // Scheduled pings come from the clock; bonus (Flare) pings carry their own times.
   const times = new Map<number, { revealAt: number }>([
-    ...pingTimes(game).map((t) => [t.seq, t] as const),
+    ...pingTimes(game, now).map((t) => [t.seq, t] as const),
     ...pingRows.filter((r) => r.seq >= BONUS_SEQ_BASE).map((r) => [r.seq, { revealAt: Date.parse(r.reveal_at) }] as const),
   ])
 
@@ -128,7 +128,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     const free = (await store.players(game.id)).filter((p) => p.role === 'runner' && !p.jailed)
     // Cloaked runners don't count as seen, so the feed can't give them away.
     const prevRevealAt = Math.max(
-      chaseStartOf(game) ?? 0,
+      chaseStartOf(game, now) ?? 0,
       ...pingRows.filter((r) => r.revealed && r.seq > 0 && Date.parse(r.reveal_at) < revealAt).map((r) => Date.parse(r.reveal_at)),
     )
     const cloaked = new Set(
