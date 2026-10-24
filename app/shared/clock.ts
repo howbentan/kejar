@@ -36,6 +36,9 @@ export function pingTimes(game: Game): { seq: number; alertAt: number; revealAt:
   return out
 }
 
+/** Ping rows at or above this seq are bonus pings (Flare), not part of the schedule. */
+export const BONUS_SEQ_BASE = 1000
+
 export interface DueWork {
   alert: number[]
   reveal: number[]
@@ -51,6 +54,22 @@ export function dueWork(game: Game, pings: Ping[], now: number): DueWork {
     if (now >= t.alertAt && !row?.alerted) work.alert.push(t.seq)
     if (now >= t.revealAt && !row?.revealed) work.reveal.push(t.seq)
   }
+  // Bonus pings (Flare) carry their own times and sit outside the schedule.
+  for (const b of pings.filter((p) => p.seq >= BONUS_SEQ_BASE)) {
+    if (now >= Date.parse(b.alert_at) && !b.alerted) work.alert.push(b.seq)
+    if (now >= Date.parse(b.reveal_at) && !b.revealed) work.reveal.push(b.seq)
+  }
   work.end = phaseAt(game, now).phase === 'ended'
   return work
+}
+
+/** The next ping still to be revealed: scheduled or bonus, whichever comes first. */
+export function nextReveal(game: Game, pings: Ping[], now: number): { alertAt: number; revealAt: number } | null {
+  const scheduled = pingTimes(game)
+    .filter((t) => t.revealAt > now)
+    .map((t) => ({ alertAt: t.alertAt, revealAt: t.revealAt }))
+  const bonus = pings
+    .filter((p) => p.seq >= BONUS_SEQ_BASE && !p.revealed && Date.parse(p.reveal_at) > now)
+    .map((p) => ({ alertAt: Date.parse(p.alert_at), revealAt: Date.parse(p.reveal_at) }))
+  return [...scheduled, ...bonus].sort((a, b) => a.revealAt - b.revealAt)[0] ?? null
 }

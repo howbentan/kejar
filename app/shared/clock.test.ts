@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dueWork, phaseAt, pingTimes } from './clock.js'
+import { BONUS_SEQ_BASE, dueWork, nextReveal, phaseAt, pingTimes } from './clock.js'
 import { game, iso, MIN, ping, T0 } from './fixtures.js'
 
 const g = game() // hide 5, length 45, ping 5
@@ -52,5 +52,35 @@ describe('dueWork', () => {
       reveal: [],
       end: false,
     })
+  })
+})
+
+describe('bonus pings (Flare)', () => {
+  const flare = ping(BONUS_SEQ_BASE, T0 + 12 * MIN, { alerted: false, revealed: false })
+
+  it('a bonus ping is alerted at its alert time and revealed at its reveal time', () => {
+    const done = [ping(1, T0 + 10 * MIN)]
+    expect(dueWork(g, [...done, flare], T0 + 12 * MIN - 30_000)).toEqual({ alert: [BONUS_SEQ_BASE], reveal: [], end: false })
+    expect(dueWork(g, [...done, { ...flare, alerted: true }], T0 + 12 * MIN)).toEqual({
+      alert: [],
+      reveal: [BONUS_SEQ_BASE],
+      end: false,
+    })
+  })
+
+  it('bonus pings do not shift the schedule', () => {
+    expect(pingTimes(g).map((p) => p.revealAt)[1]).toBe(T0 + 15 * MIN)
+  })
+
+  it('nextReveal picks a bonus ping that comes before the next scheduled one', () => {
+    expect(nextReveal(g, [flare], T0 + 11 * MIN)).toEqual({ alertAt: T0 + 12 * MIN - 30_000, revealAt: T0 + 12 * MIN })
+    expect(nextReveal(g, [{ ...flare, revealed: true }], T0 + 12.5 * MIN)).toEqual({
+      alertAt: T0 + 15 * MIN - 30_000,
+      revealAt: T0 + 15 * MIN,
+    })
+  })
+
+  it('nextReveal is null once there are no more pings', () => {
+    expect(nextReveal(g, [], T0 + 49 * MIN)).toBeNull()
   })
 })
