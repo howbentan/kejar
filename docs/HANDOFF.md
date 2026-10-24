@@ -21,7 +21,11 @@ A web app for organised, real-world chase games (runners vs chasers, with marsha
   - Tag-rip catches (QR scan)
   - Jail and jailbreak, results
   - Marshal live view, ping ripple, synced timers, map with place names and a "Me" button
-- **Plans 3–6: not started.** Marshal safety tools; arena setup; power-up stations; polish (replay, share card, 24 h deletion).
+- **Plan 5 (power-up stations): done and live.** Migration `0004_powerups.sql` has been run in Supabase.
+  - The host taps the map to drop up to 8 stations, and their QR cards print with the tags.
+  - Players scan a station within 30 m during the chase. Runners get Decoy, Shield or Cloak; chasers get Flare or Focus.
+  - Each player can claim a station once, a station locks for 60 s after a claim, and a hand holds 3.
+- **Plans 3, 4 and 6: not started.** Marshal safety tools; arena setup; polish (replay, share card, 24 h deletion).
 
 ## Decisions made since the design doc (not yet in the spec)
 - Brand: **kejar.**; colours **Volt #C6FF3D, black, white** only; fonts Geist and Geist Mono.
@@ -39,7 +43,7 @@ A web app for organised, real-world chase games (runners vs chasers, with marsha
 - A "Last call" exact ping 1 minute before the end.
 - Endgame visuals.
 
-Also floated: surprise missions, a bounty on the longest survivor. Suggested next build: power-up stations (Plan 5) or marshal tools (Plan 3); the owner hasn't chosen.
+Also floated: surprise missions, a bounty on the longest survivor. Suggested next build: marshal tools (Plan 3) or the endgame ideas above; the owner hasn't chosen.
 
 ## Setting up a new machine
 1. Install Node 20+ and Git, then clone: `git clone https://github.com/howbentan/kejar.git`
