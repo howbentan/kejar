@@ -7,6 +7,7 @@ export function testView(over: Partial<View> = {}): View {
     phase: 'chasing',
     endsAt: 1_000_000,
     now: 100_000,
+    paused: false,
     me: {
       id: 'r1',
       game_id: 'g1',

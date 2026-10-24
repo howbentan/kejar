@@ -36,6 +36,8 @@ export interface View {
   phase: Phase
   endsAt: number | null
   now: number
+  /** A marshal has paused the game: every countdown is frozen. */
+  paused: boolean
   me: Player
   arena: Arena
   settings: Settings
@@ -216,6 +218,10 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       return null
     case 'shielded':
       return target ? `${tagLabel(target)} was shielded!` : 'A runner was shielded!'
+    case 'paused':
+      return 'Game paused by a marshal'
+    case 'resumed':
+      return 'Game resumed'
     default:
       return null
   }
@@ -269,6 +275,7 @@ export function viewFor(i: ViewInput): View {
     phase,
     endsAt,
     now: i.now,
+    paused: !!i.game.paused_at,
     me: i.me,
     arena: i.game.arena,
     settings: i.game.settings,

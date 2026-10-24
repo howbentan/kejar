@@ -518,3 +518,73 @@ describe('cloak secrecy at the ping', () => {
     expect(v.feed.map((f) => f.text)).toContain('Ping — 1 runner seen')
   })
 })
+
+/** readyGame plus Siti as a subscribed marshal, started, 2 minutes into the chase. */
+async function safetyGame(settings: object = {}) {
+  const g = await readyGame(settings)
+  const siti = await run('join', { code: g.code, name: 'Siti', accepted: true })
+  await run('subscribe', { code: g.code, token: siti.token, subscription: { endpoint: 'https://push/Siti' } })
+  await run('setRoles', { code: g.code, hostKey: g.hostKey, roles: { [siti.playerId]: 'marshal' } })
+  await run('start', { code: g.code, hostKey: g.hostKey })
+  now = T0 + 7 * MIN
+  pushes = []
+  const gameId = (await store.gameByCode(g.code))!.id
+  return { ...g, siti, gameId }
+}
+
+describe('pause and resume', () => {
+  it('organiser and marshal can pause; a runner gets 403 Marshals only', async () => {
+    const g = await safetyGame()
+    await rejects(run('pause', { code: g.code, token: g.aina.token }), 403, 'Marshals only')
+    expect(await run('pause', { code: g.code, token: g.siti.token })).toEqual({ ok: true })
+    expect(await run('resume', { code: g.code, hostKey: g.hostKey })).toEqual({ ok: true })
+  })
+
+  it('a second pause or resume changes nothing', async () => {
+    const g = await safetyGame()
+    await run('pause', { code: g.code, hostKey: g.hostKey })
+    expect(await run('pause', { code: g.code, token: g.siti.token })).toEqual({ ok: false })
+    now += 60_000
+    await run('resume', { code: g.code, hostKey: g.hostKey })
+    expect(await run('resume', { code: g.code, token: g.siti.token })).toEqual({ ok: false })
+    const events = await store.events(g.gameId)
+    expect(events.filter((e) => e.type === 'paused')).toHaveLength(1)
+    expect(events.filter((e) => e.type === 'resumed')).toHaveLength(1)
+    expect((await store.gameByCode(g.code))!.pauses).toHaveLength(1)
+  })
+
+  it('while paused, catch / jailbreak / claim / usePowerup answer paused', async () => {
+    const g = await safetyGame()
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    await run('pause', { code: g.code, hostKey: g.hostKey })
+    const paused = { ok: false, reason: 'paused' }
+    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toEqual(paused)
+    expect(await run('jailbreak', { code: g.code, token: g.hafiz.token, qr: JAIL_QR })).toEqual(paused)
+    expect(await run('claim', { code: g.code, token: g.hafiz.token, qr: stationQr(1) })).toEqual(paused)
+    expect(await run('usePowerup', { code: g.code, token: g.hafiz.token, powerupId: 'u1' })).toEqual(paused)
+  })
+
+  it('a 2-minute pause makes the game end 2 minutes later', async () => {
+    const g = await safetyGame()
+    const before = await run<View>('state', { code: g.code, hostKey: g.hostKey })
+    await run('pause', { code: g.code, hostKey: g.hostKey })
+    now += 2 * MIN
+    const during = await run<View>('state', { code: g.code, token: g.aina.token })
+    expect(during.paused).toBe(true)
+    expect(during.endsAt! - during.now).toBe(before.endsAt! - before.now)
+    await run('resume', { code: g.code, hostKey: g.hostKey })
+    const after = await run<View>('state', { code: g.code, hostKey: g.hostKey })
+    expect(after.paused).toBe(false)
+    expect(after.endsAt).toBe(before.endsAt! + 2 * MIN)
+  })
+
+  it('pause in the lobby or after the end is refused 409', async () => {
+    const g = await readyGame()
+    await rejects(run('pause', { code: g.code, hostKey: g.hostKey }), 409)
+    await run('start', { code: g.code, hostKey: g.hostKey })
+    now = T0 + 51 * MIN
+    await run('state', { code: g.code, hostKey: g.hostKey })
+    await rejects(run('pause', { code: g.code, hostKey: g.hostKey }), 409)
+  })
+})

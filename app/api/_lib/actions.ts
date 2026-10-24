@@ -51,6 +51,17 @@ async function requirePlayer(ctx: Ctx, game: Game, body: Body): Promise<Player> 
   return p
 }
 
+/** The organiser (null) or a player with the marshal role. */
+async function requireMarshal(ctx: Ctx, game: GameRow, body: Body): Promise<Player | null> {
+  if (body.hostKey) {
+    requireHost(game, body)
+    return null
+  }
+  const p = await requirePlayer(ctx, game, body)
+  if (p.role !== 'marshal') throw new ActionError(403, 'Marshals only')
+  return p
+}
+
 function requireLobby(game: Game, now: number) {
   if (phaseAt(game, now).phase !== 'lobby') throw new ActionError(409, 'Game already started')
 }
@@ -343,6 +354,7 @@ const catchAction: Action = async (ctx, body) => {
   await recordScanLocation(ctx, game, me, body)
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
+  if (fresh.paused_at) return { ok: false, reason: 'paused' }
   const players = await ctx.store.players(game.id)
   const tagId = tagIdFromQr(str(body.tagQr))
   const runner = players.find((p) => p.role === 'runner' && p.tag_id === tagId)
@@ -384,6 +396,7 @@ const jailbreak: Action = async (ctx, body) => {
   await recordScanLocation(ctx, game, me, body)
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
+  if (fresh.paused_at) return { ok: false, reason: 'paused' }
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeJailbreak({
     phase: phaseAt(fresh, ctx.now).phase,
@@ -420,6 +433,7 @@ const claim: Action = async (ctx, body) => {
   await recordScanLocation(ctx, game, me, body)
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
+  if (fresh.paused_at) return { ok: false, reason: 'paused' }
   const station = stationFromQr(str(body.qr))
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeClaim({
@@ -448,6 +462,7 @@ const usePowerup: Action = async (ctx, body) => {
   const me = await requirePlayer(ctx, game, body)
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
+  if (fresh.paused_at) return { ok: false, reason: 'paused' }
   const { phase, endsAt } = phaseAt(fresh, ctx.now)
   const all = await ctx.store.powerUps(game.id)
   const u = all.find((x) => x.id === str(body.powerupId))
@@ -472,6 +487,25 @@ const usePowerup: Action = async (ctx, body) => {
   return { ok: true, kind: u.kind }
 }
 
+const pause: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const marshal = await requireMarshal(ctx, game, body)
+  await advance(ctx, game)
+  const phase = phaseAt((await loadGame(ctx, body)) as Game, ctx.now).phase
+  if (phase !== 'hiding' && phase !== 'chasing') throw new ActionError(409, 'The game is not running')
+  if (!(await ctx.store.pauseGame(game.id))) return { ok: false }
+  await ctx.store.addEvent({ game_id: game.id, type: 'paused', actor_id: marshal?.id ?? null, target_id: null, data: {} })
+  return { ok: true }
+}
+
+const resume: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const marshal = await requireMarshal(ctx, game, body)
+  if ((await ctx.store.resumeGame(game.id)) === null) return { ok: false }
+  await ctx.store.addEvent({ game_id: game.id, type: 'resumed', actor_id: marshal?.id ?? null, target_id: null, data: {} })
+  return { ok: true }
+}
+
 export const actions = {
   create,
   join,
@@ -485,6 +519,8 @@ export const actions = {
   subscribe,
   claim,
   usePowerup,
+  pause,
+  resume,
 } satisfies Record<string, Action>
 
 export type ActionName = keyof typeof actions

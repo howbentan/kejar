@@ -145,6 +145,12 @@ describe('feed wording', () => {
       ]),
     ).toEqual(['Wei broke 1 runner out of jail', 'Ping — 1 runner seen'])
   })
+  it('announces pauses and resumes', () => {
+    expect(feedOf([event('paused', T0 + 10 * MIN), event('resumed', T0 + 11 * MIN)])).toEqual([
+      'Game resumed',
+      'Game paused by a marshal',
+    ])
+  })
   it('uses the plural otherwise', () => {
     expect(feedOf([event('ping', T0 + 10 * MIN, { data: { seen: 0 } })])).toEqual(['Ping — 0 runners seen'])
   })
