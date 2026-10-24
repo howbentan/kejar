@@ -592,7 +592,7 @@ describe('pause and resume', () => {
 describe('SOS and reports', () => {
   it('SOS pushes every subscribed marshal and writes a safety record', async () => {
     const g = await safetyGame()
-    expect(await run('sos', { code: g.code, token: g.aina.token, ...at(30) })).toEqual({ ok: true })
+    expect(await run('sos', { code: g.code, token: g.aina.token, ...at(30) })).toEqual({ ok: true, notified: 1 })
     expect(pushes).toEqual([{ endpoint: 'https://push/Siti', payload: { type: 'alert', code: g.code, text: 'SOS from Aina #07' } }])
     expect(store.safetyRows).toEqual([
       expect.objectContaining({ type: 'sos', player_id: g.aina.playerId, lat: at(30).lat, lng: at(30).lng }),
@@ -618,7 +618,7 @@ describe('SOS and reports', () => {
     await rejects(run('sos', { code: lobby.code, token: lobby.aina.token }), 409)
     const g = await safetyGame()
     await run('pause', { code: g.code, hostKey: g.hostKey })
-    expect(await run('sos', { code: g.code, token: g.ben.token })).toEqual({ ok: true })
+    expect(await run('sos', { code: g.code, token: g.ben.token })).toMatchObject({ ok: true })
   })
 
   it('report validates reason, note length and target', async () => {
@@ -628,7 +628,7 @@ describe('SOS and reports', () => {
     await rejects(run('report', { ...base, note: 'x'.repeat(141) }), 400)
     await rejects(run('report', { ...base, targetId: g.hafiz.playerId }), 400)
     await rejects(run('report', { ...base, targetId: 'nobody' }), 400)
-    expect(await run('report', { ...base, note: '  pushed me  ', ...at(10) })).toEqual({ ok: true })
+    expect(await run('report', { ...base, note: '  pushed me  ', ...at(10) })).toEqual({ ok: true, notified: 1 })
     expect(pushes[0].payload).toEqual({ type: 'alert', code: g.code, text: 'Hafiz #03 reported Ben: Unsafe play — pushed me' })
     expect(store.safetyRows[0]).toMatchObject({ type: 'report', player_id: g.hafiz.playerId, target_id: g.ben.playerId })
   })
@@ -774,5 +774,53 @@ describe('automatic alerts', () => {
     expect(r).toMatchObject({ ok: true, flagged: true })
     const v = await run<View>('state', { code: g.code, hostKey: g.hostKey })
     expect(v.alerts.map((a) => a.text)).toEqual(['Check catch: #03 by Ben (position unknown)'])
+  })
+})
+
+describe('review fixes: safety', () => {
+  it('a removed player polling state gets no positions, alerts, feed or players', async () => {
+    const g = await safetyGame()
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    await run('location', { code: g.code, token: g.siti.token, ...at(5) })
+    await run('sos', { code: g.code, token: g.hafiz.token, ...at(40) })
+    now = T0 + 11 * MIN
+    for (const who of [g.ben, g.aina, g.siti]) {
+      await run('removePlayer', { code: g.code, hostKey: g.hostKey, playerId: who.playerId })
+      const v = await run<View>('state', { code: g.code, token: who.token })
+      expect(v.me.removed_at).toBeTruthy()
+      expect(v.dots).toEqual([])
+      expect(v.alerts).toEqual([])
+      expect(v.feed).toEqual([])
+      expect(v.roster).toEqual([])
+      expect(v.reportable).toEqual([])
+      expect(v.stations).toEqual([])
+    }
+  })
+
+  it('the organiser can turn on alerts and gets SOS pushes', async () => {
+    const g = await safetyGame()
+    await run('subscribe', { code: g.code, hostKey: g.hostKey, subscription: { endpoint: 'https://push/organiser' } })
+    const r = await run('sos', { code: g.code, token: g.aina.token })
+    expect(r).toEqual({ ok: true, notified: 2 })
+    expect(pushes.map((p) => p.endpoint).sort()).toEqual(['https://push/Siti', 'https://push/organiser'])
+    expect((await run<View>('state', { code: g.code, hostKey: g.hostKey })).me.push).toEqual({ endpoint: 'https://push/organiser' })
+  })
+
+  it('SOS says when no marshal could be reached', async () => {
+    const g = await safetyGame()
+    await store.updatePlayers([{ id: g.siti.playerId, patch: { push: null } }])
+    expect(await run('sos', { code: g.code, token: g.aina.token })).toEqual({ ok: true, notified: 0 })
+  })
+
+  it('safety records keep the game code and names, so they make sense after the game is wiped', async () => {
+    const g = await safetyGame()
+    await run('sos', { code: g.code, token: g.aina.token })
+    await run('report', { code: g.code, token: g.hafiz.token, targetId: g.ben.playerId, reason: 'unsafe' })
+    await run('removePlayer', { code: g.code, token: g.siti.token, playerId: g.ben.playerId })
+    const [sos, report, removed] = store.safetyRows
+    expect(sos.data).toMatchObject({ game_code: g.code, name: 'Aina #07' })
+    expect(report.data).toMatchObject({ game_code: g.code, name: 'Hafiz #03', target_name: 'Ben', reason: 'unsafe' })
+    expect(removed.data).toMatchObject({ game_code: g.code, by: 'Siti', target_name: 'Ben' })
   })
 })

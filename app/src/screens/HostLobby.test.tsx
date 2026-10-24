@@ -15,6 +15,14 @@ vi.mock('../game/api', async () => {
   return { call, ApiError }
 })
 
+// jsdom has no matchMedia; the alerts button is covered by MarshalTools tests.
+vi.mock('../spike/push', () => ({
+  subscribe: vi.fn(),
+  pushSupport: () => 'unsupported',
+  currentPushEnv: () => ({}),
+  NotificationsDeniedError: class extends Error {},
+}))
+
 import { ApiError } from '../game/api'
 import HostLobby from './HostLobby'
 

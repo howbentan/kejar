@@ -235,6 +235,15 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
 }
 
 export function viewFor(i: ViewInput): View {
+  const v = fullView(i)
+  // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
+  if (i.me.removed_at) {
+    return { ...v, dots: [], feed: [], alerts: [], roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null }
+  }
+  return v
+}
+
+function fullView(i: ViewInput): View {
   const { phase, endsAt } = phaseAt(i.game, i.now)
   const byId = new Map(i.players.map((p) => [p.id, p]))
   const role = i.me.role

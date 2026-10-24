@@ -6,6 +6,10 @@ import { credentials } from './auth'
 import { currentCoords } from './here'
 import { ErrorText, Pills } from './ui'
 
+/** An SOS can't wait long for GPS: send what we have after 1.5 s (spec §5: "immediately"). */
+const SOS_FIX_MS = 1_500
+const NOBODY = 'SOS saved, but no marshal has alerts on. Find a marshal or call for help.'
+
 const REASONS = (Object.keys(REASON_LABEL) as ReportReason[]).map((value) => ({ value, text: REASON_LABEL[value] }))
 
 /** SOS and Report, fixed to the bottom of every runner and chaser screen (spec §5). */
@@ -22,8 +26,9 @@ export default function SafetyBar({ code, view }: { code: string; view: View }) 
     setBusy(true)
     setError('')
     try {
-      await call(action, { code, ...credentials(code), ...extra, ...(await currentCoords()) })
-      setMessage(done)
+      const here = await currentCoords(action === 'sos' ? SOS_FIX_MS : undefined)
+      const r = await call<{ ok: boolean; notified?: number }>(action, { code, ...credentials(code), ...extra, ...here })
+      setMessage(action === 'sos' && r?.notified === 0 ? NOBODY : done)
       setOpen(null)
       setTarget('')
       setNote('')

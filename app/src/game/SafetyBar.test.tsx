@@ -75,4 +75,20 @@ describe('SafetyBar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Report' }))
     expect(screen.getByRole('button', { name: 'Send report' })).toBeDisabled()
   })
+
+  it('SOS waits at most 1.5 s for a location fix', async () => {
+    render(<SafetyBar code="ABC234" view={view} />)
+    fireEvent.click(screen.getByRole('button', { name: 'SOS' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send SOS' }))
+    await waitFor(() => expect(call).toHaveBeenCalled())
+    expect(coords).toHaveBeenCalledWith(1_500)
+  })
+
+  it('tells the player when no marshal could be reached', async () => {
+    call.mockResolvedValue({ ok: true, notified: 0 })
+    render(<SafetyBar code="ABC234" view={view} />)
+    fireEvent.click(screen.getByRole('button', { name: 'SOS' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send SOS' }))
+    expect(await screen.findByText('SOS saved, but no marshal has alerts on. Find a marshal or call for help.')).toBeInTheDocument()
+  })
 })

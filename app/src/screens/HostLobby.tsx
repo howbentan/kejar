@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Role } from '../../shared/types.js'
 import { call } from '../game/api'
+import { AlertsOnPhone } from '../game/MarshalTools'
 import { qrDataUrl } from '../game/qr'
 import { loadSession } from '../game/session'
 import { ErrorText, Pills, Screen, tagText } from '../game/ui'
@@ -48,6 +49,7 @@ export default function HostLobby({ code }: { code: string }) {
       <h1 className="mono" style={{ fontSize: 44, letterSpacing: '0.12em' }}>
         {code}
       </h1>
+      {view && <AlertsOnPhone code={code} view={view} refresh={refresh} />}
       <div className="card" style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
         {qr && <img src={qr} alt="Join QR code" width={120} height={120} style={{ borderRadius: 10 }} />}
         <div>

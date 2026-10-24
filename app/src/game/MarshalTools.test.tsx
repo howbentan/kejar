@@ -5,6 +5,13 @@ import { testView } from '../screens/testView'
 
 const call = vi.hoisted(() => vi.fn())
 vi.mock('./api', () => ({ call, ApiError: class extends Error {} }))
+const subscribe = vi.hoisted(() => vi.fn())
+vi.mock('../spike/push', () => ({
+  subscribe,
+  pushSupport: () => 'ok',
+  currentPushEnv: () => ({}),
+  NotificationsDeniedError: class extends Error {},
+}))
 
 import MarshalTools from './MarshalTools'
 
@@ -82,5 +89,17 @@ describe('MarshalTools', () => {
     expect(vibrate).not.toHaveBeenCalled()
     rerender(<MarshalTools code="ABC234" view={testView({ alerts: [alert('e1', 'sos', 'SOS from Aina')] })} refresh={refresh} />)
     expect(vibrate).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers SOS alerts on this phone until they are on', async () => {
+    subscribe.mockResolvedValue({ endpoint: 'https://push/x' })
+    const { rerender } = render(<MarshalTools code="ABC234" view={testView()} refresh={refresh} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Get SOS alerts on this phone' }))
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith('subscribe', { code: 'ABC234', hostKey: 'h1', subscription: { endpoint: 'https://push/x' } }),
+    )
+    const base = testView()
+    rerender(<MarshalTools code="ABC234" view={testView({ me: { ...base.me, push: { endpoint: 'https://push/x' } } })} refresh={refresh} />)
+    expect(screen.queryByRole('button', { name: 'Get SOS alerts on this phone' })).toBeNull()
   })
 })

@@ -45,3 +45,15 @@ describe('computeResults', () => {
     expect(r.jailbreakHero).toBeNull()
   })
 })
+
+describe('removed players', () => {
+  it('leaves removed players out of the awards', () => {
+    const ev = [
+      event('caught', T0 + 10 * MIN, { actor_id: 'gone', target_id: 'r1' }),
+      event('caught', T0 + 11 * MIN, { actor_id: 'gone', target_id: 'r2' }),
+      event('caught', T0 + 12 * MIN, { actor_id: 'c1', target_id: 'r3' }),
+    ]
+    const players = [player('c1', 'chaser'), player('r1', 'runner', { jailed: true }), player('r2', 'runner', { jailed: true }), player('r3', 'runner', { jailed: true })]
+    expect(computeResults(game(), players, ev).mostCatches).toEqual({ id: 'c1', count: 1 })
+  })
+})

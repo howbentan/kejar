@@ -31,7 +31,7 @@ export class SupabaseStore implements GameStore {
   async gameByCode(code: string): Promise<GameRow | null> {
     return check(await this.db.from('games').select('*').eq('code', code).maybeSingle()) as GameRow | null
   }
-  async updateGame(id: string, patch: Partial<Game>) {
+  async updateGame(id: string, patch: Partial<GameRow>) {
     check(await this.db.from('games').update(patch).eq('id', id))
   }
   async addPlayer(p: Omit<PlayerRow, 'id'>): Promise<Player> {

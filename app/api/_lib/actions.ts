@@ -74,25 +74,39 @@ function requireRunning(game: Game, now: number) {
   if (phase !== 'hiding' && phase !== 'chasing') throw new ActionError(409, 'The game is not running')
 }
 
-/** Pushes to each player's subscription; forgets subscriptions the push service says are gone. */
-async function pushTo(ctx: Ctx, players: Player[], payload: unknown) {
+/** Pushes to each player's subscription; forgets subscriptions the push service says are gone. Returns how many went out. */
+async function pushTo(ctx: Ctx, players: Player[], payload: unknown): Promise<number> {
   const body = JSON.stringify(payload)
   const expired: string[] = []
-  await Promise.allSettled(
+  const sent = await Promise.allSettled(
     players
       .filter((p) => p.push)
       .map((p) =>
         ctx.push(p.push!, body).catch((e: { statusCode?: number }) => {
           if (e?.statusCode === 404 || e?.statusCode === 410) expired.push(p.id)
+          throw e
         }),
       ),
   )
   if (expired.length) await ctx.store.updatePlayers(expired.map((id) => ({ id, patch: { push: null } })))
+  return sent.filter((r) => r.status === 'fulfilled').length
 }
 
-async function alertMarshals(ctx: Ctx, game: Game, text: string) {
+/** Pushes an alert to every marshal and the organiser; returns how many phones it reached. */
+async function alertMarshals(ctx: Ctx, game: GameRow, text: string): Promise<number> {
+  const payload = { type: 'alert', code: game.code, text }
   const marshals = (await ctx.store.players(game.id)).filter((p) => p.role === 'marshal')
-  await pushTo(ctx, marshals, { type: 'alert', code: game.code, text })
+  let reached = await pushTo(ctx, marshals, payload)
+  if (game.host_push) {
+    try {
+      await ctx.push(game.host_push, JSON.stringify(payload))
+      reached++
+    } catch (e) {
+      const status = (e as { statusCode?: number })?.statusCode
+      if (status === 404 || status === 410) await ctx.store.updateGame(game.id, { host_push: null })
+    }
+  }
+  return reached
 }
 
 /** Coordinates sent with a request, or null when missing or invalid. */
@@ -362,7 +376,7 @@ const state: Action = async (ctx, body) => {
       caught_by: null,
       jailed: false,
       freed_once: false,
-      push: null,
+      push: (game as GameRow).host_push ?? null,
       removed_at: null,
       outside: false,
       left_start: false,
@@ -495,8 +509,15 @@ const jailbreak: Action = async (ctx, body) => {
 
 const subscribe: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
-  const me = await requirePlayer(ctx, game, body)
   const sub = body.subscription as PushSubscriptionJSON | undefined
+  if (!body.token) {
+    // The organiser: their phone gets SOS and report alerts.
+    requireHost(game, body)
+    if (!sub || typeof sub.endpoint !== 'string') throw new ActionError(400, 'Invalid push subscription')
+    await ctx.store.updateGame(game.id, { host_push: sub })
+    return { ok: true }
+  }
+  const me = await requirePlayer(ctx, game, body)
   if (!sub || typeof sub.endpoint !== 'string') throw new ActionError(400, 'Invalid push subscription')
   await ctx.store.updatePlayers([{ id: me.id, patch: { push: sub } }])
   return { ok: true }
@@ -571,7 +592,7 @@ const sos: Action = async (ctx, body) => {
   const recent = (await ctx.store.events(game.id)).some(
     (e) => e.type === 'sos' && e.actor_id === me.id && ctx.now - Date.parse(e.at) < SOS_REPEAT_MS,
   )
-  if (recent) return { ok: true }
+  if (recent) return { ok: true, repeat: true }
   const where = coordsOf(body)
   const data = { who: who(me), lat: where?.lat ?? null, lng: where?.lng ?? null }
   await ctx.store.addEvent({ game_id: game.id, type: 'sos', actor_id: me.id, target_id: null, data })
@@ -582,10 +603,9 @@ const sos: Action = async (ctx, body) => {
     target_id: null,
     lat: data.lat,
     lng: data.lng,
-    data: { who: data.who },
+    data: { game_code: game.code, name: data.who },
   })
-  await alertMarshals(ctx, game, `SOS from ${data.who}`)
-  return { ok: true }
+  return { ok: true, notified: await alertMarshals(ctx, game, `SOS from ${data.who}`) }
 }
 
 const report: Action = async (ctx, body) => {
@@ -609,10 +629,9 @@ const report: Action = async (ctx, body) => {
     target_id: target.id,
     lat: data.lat,
     lng: data.lng,
-    data: { reason, note },
+    data: { game_code: game.code, name: data.name, target_name: data.targetName, reason, note },
   })
-  await alertMarshals(ctx, game, alertsFrom([e])[0].text)
-  return { ok: true }
+  return { ok: true, notified: await alertMarshals(ctx, game, alertsFrom([e])[0].text) }
 }
 
 const handleAlert: Action = async (ctx, body) => {
@@ -647,7 +666,7 @@ const removePlayer: Action = async (ctx, body) => {
     target_id: target.id,
     lat: null,
     lng: null,
-    data: { name: target.name },
+    data: { game_code: game.code, by: marshal?.name ?? 'Organiser', target_name: target.name },
   })
   // The removed runner may have been the last one still free.
   const phase = phaseAt(game, ctx.now).phase

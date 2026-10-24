@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Alert } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
+import { currentPushEnv, NotificationsDeniedError, pushSupport, subscribe } from '../spike/push'
 import { call } from './api'
 import { credentials } from './auth'
 import { ErrorText, tagText } from './ui'
@@ -17,6 +18,35 @@ const KIND_LABEL: Record<Alert['kind'], string> = {
 const ago = (at: string, now: number) => {
   const min = Math.max(0, Math.floor((now - Date.parse(at)) / 60_000))
   return min === 0 ? 'now' : `${min} min ago`
+}
+
+/** Lets a marshal or the organiser get SOS and report alerts on this phone, until they're on. */
+export function AlertsOnPhone({ code, view, refresh }: { code: string; view: View; refresh: () => void }) {
+  const [message, setMessage] = useState('')
+  if (view.me.push || pushSupport(currentPushEnv()) !== 'ok') return null
+  async function turnOn() {
+    setMessage('')
+    try {
+      const subscription = await subscribe(import.meta.env.VITE_VAPID_PUBLIC_KEY)
+      await call('subscribe', { code, ...credentials(code), subscription })
+      refresh()
+    } catch (e) {
+      setMessage(
+        e instanceof NotificationsDeniedError
+          ? 'Notifications are blocked. Allow them in your phone settings, then reload.'
+          : `Couldn't turn on alerts: ${e instanceof Error ? e.message : String(e)}`,
+      )
+    }
+  }
+  return (
+    <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <p className="muted">Players' SOS and reports buzz this phone, even when the page is closed.</p>
+      <button type="button" className="btn" onClick={turnOn}>
+        Get SOS alerts on this phone
+      </button>
+      <ErrorText>{message}</ErrorText>
+    </div>
+  )
 }
 
 /** Pause and resume, the alert list, and removing players (spec §5.1). */
@@ -52,6 +82,7 @@ export default function MarshalTools({ code, view, refresh }: { code: string; vi
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <AlertsOnPhone code={code} view={view} refresh={refresh} />
       <button
         type="button"
         className={view.paused ? 'btn' : 'btn btn-ghost'}

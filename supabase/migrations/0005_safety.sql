@@ -3,7 +3,9 @@
 
 alter table games
   add column paused_at timestamptz,
-  add column pauses jsonb not null default '[]';
+  add column pauses jsonb not null default '[]',
+  -- The organiser has no player row, so their phone's push subscription for SOS alerts lives here.
+  add column host_push jsonb;
 
 alter table players
   add column removed_at timestamptz,

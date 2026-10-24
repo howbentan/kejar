@@ -1,13 +1,13 @@
 import type { Game, GameEvent, Ping, Player, Position, PowerUp } from '../../shared/types.js'
 
-export type GameRow = Game & { host_key_hash: string }
+export type GameRow = Game & { host_key_hash: string; host_push?: PushSubscriptionJSON | null }
 export type PlayerRow = Player & { token_hash: string }
 
 /** Everything the game actions need from the database. */
 export interface GameStore {
   createGame(g: Omit<GameRow, 'id'>): Promise<Game>
   gameByCode(code: string): Promise<GameRow | null>
-  updateGame(id: string, patch: Partial<Game>): Promise<void>
+  updateGame(id: string, patch: Partial<GameRow>): Promise<void>
   addPlayer(p: Omit<PlayerRow, 'id'>): Promise<Player>
   /** Includes removed players, so their page can tell them they were removed. */
   playerByToken(gameId: string, tokenHash: string): Promise<Player | null>
@@ -113,7 +113,7 @@ export class MemoryStore implements GameStore {
     const g = this.games.find((x) => x.code === code)
     return g ? { ...g } : null
   }
-  async updateGame(id: string, patch: Partial<Game>) {
+  async updateGame(id: string, patch: Partial<GameRow>) {
     const g = this.games.find((x) => x.id === id)
     if (g) Object.assign(g, patch)
   }
