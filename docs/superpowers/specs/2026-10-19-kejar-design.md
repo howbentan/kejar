@@ -150,6 +150,27 @@ The MVP set (borrowed from CatchCity, trimmed to what works with a physical tag)
 
 Each station gives one power-up per player per game, randomly chosen for that player's role, with a cooldown before anyone else can claim from the same station **(Claude's call on all numbers)**.
 
+#### 4.8.1 MVP details (added 2026-10-24, before arena setup exists)
+- **Placing stations (owner's decision):** when creating a game with *Pick on map*, the organiser **taps the map to drop 0–8 stations** inside the play-area circle. Tapping a station removes it. They are numbered 1, 2, 3… in the order placed.
+- **Printed codes:** the print sheet adds **Station 1–8** codes (`KEJAR:STATION:<n>`), reused across games. Before each game, someone tapes station *n* at the spot marked *n* on the map.
+- **On the map:** everyone sees stations as lime-outlined squares with their number, during the hide and chase phases.
+- **Claiming** **(Claude's calls)**:
+  - Only during the chase.
+  - The scan carries the phone's current location, which must be ≤30 s old and within 30 m of the station (plus up to 20 m of GPS error).
+  - **Once per player per station per game.**
+  - After any claim, the station is locked for everyone else for **60 s**.
+  - Jailed runners and marshals can't claim.
+- **Inventory** **(Claude's calls)**:
+  - A claimed power-up goes into the player's hand (max **3**). It's used whenever they tap it.
+  - Unused ones expire when the game ends.
+- **Effects, made concrete for the check-in model** **(Claude's calls)**:
+  - **Decoy:** the runner's next revealed position is moved 120–180 m in a random direction, kept inside the play area where possible. Chasers can't tell.
+  - **Shield:** once activated, the next catch scan of that runner is rejected with "Shielded!". The chaser hands the tag back and the runner gets a 10 s head start (honour rule, announced on both screens). Lasts until used or 10 minutes.
+  - **Cloak:** the runner is left out of the next reveal entirely.
+  - **Flare:** a surprise extra ping. A check-in alert goes to all free runners now, and runners are revealed 30 s later. It doesn't shift the regular schedule.
+  - **Focus** *(simplified)*: at the next reveal, runners within 150 m of the chaser (at the moment of reveal) are shown **exactly**, with no fuzzy circle.
+- **Feed:** claims and uses are announced without revealing positions, e.g. "Aina picked up a power-up", "Flare! Ping in 30 s".
+
 ### 4.9 Ending and results
 - The game ends when **time runs out** (runners win if any are still free) or when **every runner is caught** (chasers win).
 - The results screen shows:
