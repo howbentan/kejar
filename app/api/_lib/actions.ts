@@ -1,10 +1,11 @@
 import { arenaAroundPoint, ARENAS } from '../../shared/arenas.js'
 import { judgeCatch, judgeJailbreak } from '../../shared/catch.js'
-import { chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
-import { JAIL_QR, newGameCode, tagIdFromQr } from '../../shared/ids.js'
+import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
+import { JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
+import { activeShield, judgeClaim, pickPowerUp } from '../../shared/powerups.js'
 import { computeResults } from '../../shared/results.js'
 import { shuffleRoles, validateTeams } from '../../shared/teams.js'
-import { DEFAULT_SETTINGS, type Arena, type Game, type Player, type Position, type Role, type Settings } from '../../shared/types.js'
+import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type Role, type Settings } from '../../shared/types.js'
 import { viewFor } from '../../shared/views.js'
 import { hashToken, newToken } from './secrets.js'
 import type { GameRow, GameStore } from './store.js'
@@ -92,8 +93,13 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     await store.addEvent({ game_id: game.id, type: 'chase', actor_id: null, target_id: null, data: {} })
   }
 
-  const work = dueWork(game, await store.pings(game.id), now)
-  const times = new Map(pingTimes(game).map((t) => [t.seq, t]))
+  const pingRows = await store.pings(game.id)
+  const work = dueWork(game, pingRows, now)
+  // Scheduled pings come from the clock; bonus (Flare) pings carry their own times.
+  const times = new Map<number, { revealAt: number }>([
+    ...pingTimes(game).map((t) => [t.seq, t] as const),
+    ...pingRows.filter((r) => r.seq >= BONUS_SEQ_BASE).map((r) => [r.seq, { revealAt: Date.parse(r.reveal_at) }] as const),
+  ])
 
   for (const seq of work.alert) {
     if (!(await store.claimPing(game.id, seq, 'alerted'))) continue
@@ -140,7 +146,15 @@ const create: Action = async (ctx, body) => {
     if (!Number.isFinite(radiusM) || radiusM < 100 || radiusM > 500) {
       throw new ActionError(400, 'Play area must be 100–500 m across from the centre')
     }
-    arena = arenaAroundPoint({ lat: c.lat, lng: c.lng }, radiusM)
+    const stations = Array.isArray(body.stations) ? (body.stations as LatLng[]) : []
+    if (stations.some((st) => typeof st?.lat !== 'number' || typeof st?.lng !== 'number')) {
+      throw new ActionError(400, 'Invalid station position')
+    }
+    try {
+      arena = arenaAroundPoint({ lat: c.lat, lng: c.lng }, radiusM, stations)
+    } catch (e) {
+      throw new ActionError(400, e instanceof Error ? e.message : String(e))
+    }
   } else {
     const found = ARENAS[str(body.arenaId)]
     if (!found) throw new ActionError(400, 'Unknown arena')
@@ -288,7 +302,7 @@ const state: Action = async (ctx, body) => {
     events,
     now: ctx.now,
     results: ended ? computeResults(game, players, events) : null,
-    powerUps: [],
+    powerUps: await ctx.store.powerUps(game.id),
   })
 }
 
@@ -324,6 +338,13 @@ const catchAction: Action = async (ctx, body) => {
     now: ctx.now,
   })
   if (!verdict.ok) return verdict
+  // A switched-on Shield absorbs one otherwise-valid catch.
+  const shield = activeShield(await ctx.store.powerUps(game.id), verdict.runnerId, ctx.now)
+  if (shield) {
+    await ctx.store.updatePowerUp(shield.id, { consumed_at: iso(ctx.now) })
+    await ctx.store.addEvent({ game_id: game.id, type: 'shielded', actor_id: me.id, target_id: verdict.runnerId, data: {} })
+    return { ok: false, reason: 'shielded' }
+  }
   if (!(await ctx.store.catchRunner(verdict.runnerId, me.id))) return { ok: false, reason: 'already-caught' }
   await ctx.store.addEvent({
     game_id: game.id,
@@ -374,6 +395,63 @@ const subscribe: Action = async (ctx, body) => {
   return { ok: true }
 }
 
+const claim: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  await recordScanLocation(ctx, game, me, body)
+  await advance(ctx, game)
+  const fresh = (await loadGame(ctx, body)) as Game
+  const station = stationFromQr(str(body.qr))
+  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
+  const verdict = judgeClaim({
+    phase: phaseAt(fresh, ctx.now).phase,
+    me,
+    station,
+    arena: game.arena,
+    myPos: latest(positions[me.id]),
+    powerUps: await ctx.store.powerUps(game.id),
+    now: ctx.now,
+  })
+  if (!verdict.ok) return verdict
+  const kind = pickPowerUp(me.role === 'chaser' ? 'chaser' : 'runner', ctx.rng)
+  await ctx.store.addPowerUp({ game_id: game.id, player_id: me.id, kind, station: station! })
+  await ctx.store.addEvent({ game_id: game.id, type: 'powerup', actor_id: me.id, target_id: null, data: {} })
+  return { ok: true, kind }
+}
+
+const usePowerup: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  await advance(ctx, game)
+  const fresh = (await loadGame(ctx, body)) as Game
+  const { phase, endsAt } = phaseAt(fresh, ctx.now)
+  const all = await ctx.store.powerUps(game.id)
+  const u = all.find((x) => x.id === str(body.powerupId))
+  if (!u || u.player_id !== me.id) return { ok: false, reason: 'not-yours' }
+  if (u.used_at) return { ok: false, reason: 'already-used' }
+  if (phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
+  if (me.jailed) return { ok: false, reason: 'cannot-use' }
+  // A Flare's reveal must land before the whistle.
+  if (u.kind === 'flare' && (endsAt ?? 0) - ctx.now < ALERT_LEAD_MS) return { ok: false, reason: 'too-late' }
+
+  await ctx.store.updatePowerUp(u.id, { used_at: iso(ctx.now) })
+  if (u.kind === 'flare') {
+    const bonus = (await ctx.store.pings(game.id)).filter((x) => x.seq >= BONUS_SEQ_BASE).length
+    await ctx.store.addPings([
+      {
+        game_id: game.id,
+        seq: BONUS_SEQ_BASE + bonus,
+        alert_at: iso(ctx.now),
+        reveal_at: iso(ctx.now + ALERT_LEAD_MS),
+        alerted: false,
+        revealed: false,
+      },
+    ])
+  }
+  await ctx.store.addEvent({ game_id: game.id, type: 'used', actor_id: me.id, target_id: null, data: { kind: u.kind } })
+  return { ok: true, kind: u.kind }
+}
+
 export const actions = {
   create,
   join,
@@ -385,6 +463,8 @@ export const actions = {
   catch: catchAction,
   jailbreak,
   subscribe,
+  claim,
+  usePowerup,
 } satisfies Record<string, Action>
 
 export type ActionName = keyof typeof actions

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Game, GameEvent, Ping, Player, Position } from '../../shared/types.js'
-import type { GameRow, GameStore, PlayerRow } from './store.js'
+import type { Game, GameEvent, Ping, Player, Position, PowerUp } from '../../shared/types.js'
+import type { GameRow, GameStore, NewPowerUp, PlayerRow } from './store.js'
 
 const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, push'
 const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner'
@@ -110,5 +110,14 @@ export class SupabaseStore implements GameStore {
   }
   async events(gameId: string): Promise<GameEvent[]> {
     return check(await this.db.from('events').select('*').eq('game_id', gameId).order('at')) as GameEvent[]
+  }
+  async addPowerUp(p: NewPowerUp): Promise<PowerUp> {
+    return check(await this.db.from('powerups').insert({ ...p, claimed_at: this.nowIso() }).select('*').single()) as PowerUp
+  }
+  async powerUps(gameId: string): Promise<PowerUp[]> {
+    return check(await this.db.from('powerups').select('*').eq('game_id', gameId).order('claimed_at')) as PowerUp[]
+  }
+  async updatePowerUp(id: string, patch: Partial<PowerUp>) {
+    check(await this.db.from('powerups').update(patch).eq('id', id))
   }
 }

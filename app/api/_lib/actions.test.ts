@@ -1,9 +1,10 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest'
 import { MIN, T0 } from '../../shared/fixtures.js'
-import { JAIL_QR, tagQr } from '../../shared/ids.js'
+import { BONUS_SEQ_BASE } from '../../shared/clock.js'
+import { JAIL_QR, stationQr, tagQr } from '../../shared/ids.js'
 import { seeded } from '../../shared/testing.js'
-import type { Role } from '../../shared/types.js'
+import type { PowerUpKind, Role } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
 import { ActionError, actions, type ActionName } from './actions.js'
 import { MemoryStore } from './store.js'
@@ -43,8 +44,8 @@ beforeEach(() => {
 })
 
 /** Creates a game with Ben (chaser), Aina #07 and Hafiz #03 (runners), all subscribed to push. */
-async function readyGame(settings: object = {}) {
-  const { code, hostKey } = await run('create', { arenaId: 'around-me', center: CENTER, settings })
+async function readyGame(settings: object = {}, extra: object = {}) {
+  const { code, hostKey } = await run('create', { arenaId: 'around-me', center: CENTER, settings, ...extra })
   const join = async (name: string) => {
     const r = await run('join', { code, name, accepted: true })
     await run('subscribe', { code, token: r.token, subscription: { endpoint: `https://push/${name}` } })
@@ -300,5 +301,109 @@ describe('choosing the play area', () => {
   it('rejects a play area smaller than 100 m or larger than 500 m', async () => {
     await rejects(run('create', { arenaId: 'around-me', center: CENTER, radiusM: 50 }), 400, 'Play area')
     await rejects(run('create', { arenaId: 'around-me', center: CENTER, radiusM: 900 }), 400, 'Play area')
+  })
+})
+
+describe('power-up stations', () => {
+  const S1 = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const atS1 = { lat: S1.lat, lng: S1.lng, accuracy_m: 8 }
+
+  async function chasingWithStation() {
+    const g = await readyGame({}, { stations: [S1] })
+    await run('start', { code: g.code, hostKey: g.hostKey })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, hostKey: g.hostKey })
+    const game = (await store.gameByCode(g.code))!
+    return { ...g, gameId: game.id }
+  }
+
+  async function give(gameId: string, playerId: string, kind: PowerUpKind) {
+    return store.addPowerUp({ game_id: gameId, player_id: playerId, kind, station: 1 })
+  }
+
+  it('create keeps the stations placed on the map', async () => {
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, stations: [S1] })
+    expect((await store.gameByCode(code))!.arena.stations).toEqual([S1])
+  })
+
+  it('create rejects a station outside the play area (400)', async () => {
+    const far = { lat: CENTER.lat + 400 / 111_195, lng: CENTER.lng }
+    await rejects(run('create', { arenaId: 'around-me', center: CENTER, stations: [far] }), 400, 'inside the play area')
+  })
+
+  it('claim at a station gives the player a power-up for their role and logs a pickup', async () => {
+    const g = await chasingWithStation()
+    const r = await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    expect(r.ok).toBe(true)
+    expect(['decoy', 'shield', 'cloak']).toContain(r.kind)
+    const v = await run<View>('state', { code: g.code, token: g.aina.token })
+    expect(v.hand).toHaveLength(1)
+    expect(v.feed[0].text).toBe('Aina picked up a power-up')
+  })
+
+  it('claim from far away is rejected and gives nothing', async () => {
+    const g = await chasingWithStation()
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...at(0) })).toEqual({
+      ok: false,
+      reason: 'too-far',
+    })
+  })
+
+  it('usePowerup rejects a used, foreign or jailed use', async () => {
+    const g = await chasingWithStation()
+    const decoy = await give(g.gameId, g.aina.playerId, 'decoy')
+    expect(await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: decoy.id })).toEqual({ ok: true, kind: 'decoy' })
+    expect(await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: decoy.id })).toEqual({
+      ok: false,
+      reason: 'already-used',
+    })
+    const cloak = await give(g.gameId, g.aina.playerId, 'cloak')
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: cloak.id })).toEqual({
+      ok: false,
+      reason: 'not-yours',
+    })
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })
+    expect(await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: cloak.id })).toEqual({
+      ok: false,
+      reason: 'cannot-use',
+    })
+  })
+
+  it('flare adds a bonus ping that pushes now and reveals in 30 s', async () => {
+    const g = await chasingWithStation()
+    const flare = await give(g.gameId, g.ben.playerId, 'flare')
+    pushes = []
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: flare.id })).toEqual({ ok: true, kind: 'flare' })
+    await run('state', { code: g.code, token: g.ben.token })
+    expect(pushes.map((p) => p.payload)).toContainEqual({ type: 'checkin', code: g.code, seq: BONUS_SEQ_BASE })
+    now += 30_000
+    const v = await run<View>('state', { code: g.code, token: g.ben.token })
+    expect(v.lastRevealAt).toBe(now)
+    expect(v.feed.map((f) => f.text)).toContain('Flare! Ping in 30 s')
+  })
+
+  it('flare with under 30 s left is too-late and not spent', async () => {
+    const g = await chasingWithStation()
+    const flare = await give(g.gameId, g.ben.playerId, 'flare')
+    now = T0 + 50 * MIN - 20_000
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: flare.id })).toEqual({
+      ok: false,
+      reason: 'too-late',
+    })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === flare.id)!.used_at).toBeNull()
+  })
+
+  it('an active shield blocks the next catch once, then the runner can be caught', async () => {
+    const g = await chasingWithStation()
+    const shield = await give(g.gameId, g.aina.playerId, 'shield')
+    await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: shield.id })
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toEqual({ ok: false, reason: 'shielded' })
+    const v = await run<View>('state', { code: g.code, token: g.ben.token })
+    expect(v.feed[0].text).toBe('#07 was shielded!')
+    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toMatchObject({ ok: true })
   })
 })

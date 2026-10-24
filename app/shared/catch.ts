@@ -17,7 +17,7 @@ const slack = (p: Position) => Math.min(Math.max(p.accuracy_m, 0), MAX_ACCURACY_
 
 export type CatchJudgement =
   | { ok: true; flagged: boolean; runnerId: string }
-  | { ok: false; reason: 'not-chasing' | 'not-a-chaser' | 'unknown-tag' | 'already-caught' | 'too-far' | 'no-location' }
+  | { ok: false; reason: 'not-chasing' | 'not-a-chaser' | 'unknown-tag' | 'already-caught' | 'too-far' | 'no-location' | 'shielded' }
 
 export function judgeCatch(i: {
   phase: Phase

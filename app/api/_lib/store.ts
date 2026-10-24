@@ -1,4 +1,4 @@
-import type { Game, GameEvent, Ping, Player, Position } from '../../shared/types.js'
+import type { Game, GameEvent, Ping, Player, Position, PowerUp } from '../../shared/types.js'
 
 export type GameRow = Game & { host_key_hash: string }
 export type PlayerRow = Player & { token_hash: string }
@@ -28,7 +28,13 @@ export interface GameStore {
   claimEnd(gameId: string, winner: 'runners' | 'chasers'): Promise<boolean>
   addEvent(e: Omit<GameEvent, 'id' | 'at'>): Promise<void>
   events(gameId: string): Promise<GameEvent[]>
+  /** claimed_at = the store's clock. */
+  addPowerUp(p: NewPowerUp): Promise<PowerUp>
+  powerUps(gameId: string): Promise<PowerUp[]>
+  updatePowerUp(id: string, patch: Partial<PowerUp>): Promise<void>
 }
+
+export type NewPowerUp = Omit<PowerUp, 'id' | 'claimed_at' | 'used_at' | 'consumed_at'>
 
 /** In-memory store for tests. */
 export class MemoryStore implements GameStore {
@@ -39,6 +45,7 @@ export class MemoryStore implements GameStore {
   private locs: (Position & { game_id: string; player_id: string })[] = []
   private pingRows: Ping[] = []
   private eventRows: GameEvent[] = []
+  private powerUpRows: PowerUp[] = []
 
   constructor(clock: () => number) {
     this.clock = clock
@@ -146,5 +153,17 @@ export class MemoryStore implements GameStore {
   }
   async events(gameId: string) {
     return this.eventRows.filter((e) => e.game_id === gameId).map((e) => ({ ...e }))
+  }
+  async addPowerUp(p: NewPowerUp) {
+    const row: PowerUp = { ...p, id: this.id('u'), claimed_at: this.nowIso(), used_at: null, consumed_at: null }
+    this.powerUpRows.push(row)
+    return { ...row }
+  }
+  async powerUps(gameId: string) {
+    return this.powerUpRows.filter((u) => u.game_id === gameId).map((u) => ({ ...u }))
+  }
+  async updatePowerUp(id: string, patch: Partial<PowerUp>) {
+    const u = this.powerUpRows.find((x) => x.id === id)
+    if (u) Object.assign(u, patch)
   }
 }
