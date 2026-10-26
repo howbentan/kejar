@@ -38,9 +38,11 @@ async function rejects(p: Promise<unknown>, status: number, message?: string) {
   if (message) expect(err.message).toContain(message)
 }
 
+let organiserSeq = 0
+
 async function createOrganiser() {
   const org = await store.createOrganisation({ name: 'kejar.', created_at: new Date(now).toISOString() })
-  const organiserToken = 'test-organiser-token'
+  const organiserToken = `test-organiser-token-${++organiserSeq}`
   await store.createOrganiser({
     organisation_id: org.id,
     name: 'Owner',
@@ -133,6 +135,13 @@ describe('organiser controls', () => {
     const g = await readyGame()
     await rejects(run('setRoles', { code: g.code, organiserToken: 'wrong', shuffle: true }), 403)
     await rejects(run('start', { code: g.code, organiserToken: g.aina.token }), 403)
+  })
+
+  it("another organiser's valid session cannot setRoles or start this game (403)", async () => {
+    const gameA = await readyGame()
+    const gameB = await readyGame()
+    await rejects(run('setRoles', { code: gameA.code, organiserToken: gameB.organiserToken, shuffle: true }), 403, 'Organiser only')
+    await rejects(run('start', { code: gameA.code, organiserToken: gameB.organiserToken }), 403, 'Organiser only')
   })
 
   it('shuffle assigns everyone a role and reports problems', async () => {
