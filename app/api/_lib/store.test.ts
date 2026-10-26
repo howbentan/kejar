@@ -22,7 +22,7 @@ async function startedGame() {
     winner: null,
     paused_at: null,
     pauses: [],
-    host_key_hash: 'h',
+    organiser_id: 'test-organiser',
   })
 }
 
@@ -103,5 +103,117 @@ describe('MemoryStore safety methods', () => {
     const e = await store.addEvent({ game_id: g.id, type: 'sos', actor_id: null, target_id: null, data: {} })
     expect(e).toMatchObject({ type: 'sos', at: iso(T0) })
     expect((await store.events(g.id))[0].id).toBe(e.id)
+  })
+})
+
+describe('organiser accounts', () => {
+  it('creates an organisation and an organiser in it', async () => {
+    const store = new MemoryStore(() => 1_000)
+    const org = await store.createOrganisation({ name: 'kejar.', created_at: new Date(1_000).toISOString() })
+    const organiser = await store.createOrganiser({
+      organisation_id: org.id,
+      name: 'Owner',
+      created_at: new Date(1_000).toISOString(),
+      session_token_hash: 'hash1',
+      session_created_at: new Date(1_000).toISOString(),
+    })
+    expect(await store.organiserBySessionTokenHash('hash1')).toMatchObject({ id: organiser.id, name: 'Owner' })
+    expect(await store.organiserBySessionTokenHash('nope')).toBeNull()
+  })
+
+  it('redeems an organiser invite once, creating a new organiser', async () => {
+    const store = new MemoryStore(() => 1_000)
+    const org = await store.createOrganisation({ name: 'kejar.', created_at: new Date(1_000).toISOString() })
+    await store.createOrganiserInvite({
+      organisation_id: org.id,
+      organiser_id: null,
+      name: 'Partner',
+      token_hash: 'tok1',
+      created_at: new Date(1_000).toISOString(),
+      expires_at: new Date(2_000).toISOString(),
+      redeemed_at: null,
+    })
+    const first = await store.redeemOrganiserInvite('tok1', 1_500, 'session1')
+    expect(first.ok).toBe(true)
+    const second = await store.redeemOrganiserInvite('tok1', 1_500, 'session2')
+    expect(second).toEqual({ ok: false, reason: 'redeemed' })
+  })
+
+  it('refuses an expired organiser invite', async () => {
+    const store = new MemoryStore(() => 1_000)
+    const org = await store.createOrganisation({ name: 'kejar.', created_at: new Date(1_000).toISOString() })
+    await store.createOrganiserInvite({
+      organisation_id: org.id,
+      organiser_id: null,
+      name: 'Partner',
+      token_hash: 'tok1',
+      created_at: new Date(1_000).toISOString(),
+      expires_at: new Date(2_000).toISOString(),
+      redeemed_at: null,
+    })
+    expect(await store.redeemOrganiserInvite('tok1', 2_500, 'session1')).toEqual({ ok: false, reason: 'expired' })
+  })
+
+  it('refuses an unknown invite token', async () => {
+    const store = new MemoryStore(() => 1_000)
+    expect(await store.redeemOrganiserInvite('nope', 1_000, 'session1')).toEqual({ ok: false, reason: 'invalid' })
+  })
+
+  it('a re-link invite (organiser_id set) overwrites that organiser\'s session instead of creating a new one', async () => {
+    const store = new MemoryStore(() => 1_000)
+    const org = await store.createOrganisation({ name: 'kejar.', created_at: new Date(1_000).toISOString() })
+    const organiser = await store.createOrganiser({
+      organisation_id: org.id,
+      name: 'Owner',
+      created_at: new Date(1_000).toISOString(),
+      session_token_hash: 'oldHash',
+      session_created_at: new Date(1_000).toISOString(),
+    })
+    await store.createOrganiserInvite({
+      organisation_id: org.id,
+      organiser_id: organiser.id,
+      name: 'Owner',
+      token_hash: 'relink1',
+      created_at: new Date(1_000).toISOString(),
+      expires_at: new Date(2_000).toISOString(),
+      redeemed_at: null,
+    })
+    const result = await store.redeemOrganiserInvite('relink1', 1_500, 'newHash')
+    expect(result).toEqual({ ok: true, organiserId: organiser.id })
+    expect(await store.organiserBySessionTokenHash('oldHash')).toBeNull()
+    expect(await store.organiserBySessionTokenHash('newHash')).toMatchObject({ id: organiser.id })
+  })
+
+  it('redeems a marshal invite once', async () => {
+    const store = new MemoryStore(() => 1_000)
+    const org = await store.createOrganisation({ name: 'kejar.', created_at: new Date(1_000).toISOString() })
+    const organiser = await store.createOrganiser({
+      organisation_id: org.id,
+      name: 'Owner',
+      created_at: new Date(1_000).toISOString(),
+      session_token_hash: 'h',
+      session_created_at: new Date(1_000).toISOString(),
+    })
+    const game = await store.createGame({
+      code: 'ABC234',
+      arena: { id: 'a', name: 'A', boundary: [], jail: { lat: 0, lng: 0 }, start: { lat: 0, lng: 0 } },
+      settings: { lengthMin: 45, hideMin: 5, pingMin: 5, spectatorDelayMin: 2, checkinMode: 'push' },
+      started_at: null,
+      ended_at: null,
+      winner: null,
+      paused_at: null,
+      pauses: [],
+      organiser_id: organiser.id,
+    })
+    await store.createMarshalInvite({
+      game_id: game.id,
+      token_hash: 'mtok1',
+      created_at: new Date(1_000).toISOString(),
+      expires_at: new Date(2_000).toISOString(),
+      redeemed_at: null,
+    })
+    const first = await store.redeemMarshalInvite('mtok1', 1_500)
+    expect(first).toEqual({ ok: true, gameId: game.id })
+    expect(await store.redeemMarshalInvite('mtok1', 1_500)).toEqual({ ok: false, reason: 'redeemed' })
   })
 })

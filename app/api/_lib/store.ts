@@ -1,7 +1,46 @@
 import type { Game, GameEvent, Ping, Player, Position, PowerUp } from '../../shared/types.js'
 
-export type GameRow = Game & { host_key_hash: string; host_push?: PushSubscriptionJSON | null }
+export type GameRow = Game & { organiser_id: string; host_push?: PushSubscriptionJSON | null }
 export type PlayerRow = Player & { token_hash: string }
+
+export interface Organisation {
+  id: string
+  name: string
+  created_at: string
+}
+
+export interface OrganiserRow {
+  id: string
+  organisation_id: string
+  name: string
+  created_at: string
+  session_token_hash: string
+  session_created_at: string
+}
+
+export interface OrganiserInviteRow {
+  id: string
+  organisation_id: string
+  /** Set = a re-link invite for this existing organiser. Null = invite for a brand new organiser. */
+  organiser_id: string | null
+  name: string
+  token_hash: string
+  created_at: string
+  expires_at: string
+  redeemed_at: string | null
+}
+
+export interface MarshalInviteRow {
+  id: string
+  game_id: string
+  token_hash: string
+  created_at: string
+  expires_at: string
+  redeemed_at: string | null
+}
+
+export type RedeemInviteResult = { ok: true; organiserId: string } | { ok: false; reason: 'invalid' | 'expired' | 'redeemed' }
+export type RedeemMarshalInviteResult = { ok: true; gameId: string } | { ok: false; reason: 'invalid' | 'expired' | 'redeemed' }
 
 /** Everything the game actions need from the database. */
 export interface GameStore {
@@ -58,6 +97,16 @@ export interface GameStore {
   removePlayer(id: string): Promise<boolean>
   /** Kept apart from game data (spec §6); at = store clock. The app never reads these back. */
   addSafetyRecord(r: SafetyRecord): Promise<void>
+  createOrganisation(o: Omit<Organisation, 'id'>): Promise<Organisation>
+  createOrganiser(o: Omit<OrganiserRow, 'id'>): Promise<OrganiserRow>
+  organiserBySessionTokenHash(hash: string): Promise<OrganiserRow | null>
+  organiserById(id: string): Promise<OrganiserRow | null>
+  createOrganiserInvite(inv: Omit<OrganiserInviteRow, 'id'>): Promise<OrganiserInviteRow>
+  /** Atomically claims the invite (unredeemed, unexpired at `now`), then creates or re-links the organiser. */
+  redeemOrganiserInvite(tokenHash: string, now: number, sessionTokenHash: string): Promise<RedeemInviteResult>
+  createMarshalInvite(inv: Omit<MarshalInviteRow, 'id'>): Promise<MarshalInviteRow>
+  /** Atomically claims the invite (unredeemed, unexpired at `now`). */
+  redeemMarshalInvite(tokenHash: string, now: number): Promise<RedeemMarshalInviteResult>
 }
 
 export interface SafetyRecord {
@@ -87,6 +136,10 @@ export class MemoryStore implements GameStore {
   private eventRows: GameEvent[] = []
   private powerUpRows: PowerUp[] = []
   safetyRows: (SafetyRecord & { at: string })[] = []
+  private organisationRows: Organisation[] = []
+  private organiserRows: OrganiserRow[] = []
+  private organiserInviteRows: OrganiserInviteRow[] = []
+  private marshalInviteRows: MarshalInviteRow[] = []
 
   constructor(clock: () => number) {
     this.clock = clock
@@ -107,7 +160,8 @@ export class MemoryStore implements GameStore {
   async createGame(g: Omit<GameRow, 'id'>) {
     const row = { ...g, id: this.id('g') }
     this.games.push(row)
-    return this.strip(row, 'host_key_hash')
+    const { organiser_id, ...rest } = row
+    return rest as Game
   }
   async gameByCode(code: string) {
     const g = this.games.find((x) => x.code === code)
@@ -277,5 +331,62 @@ export class MemoryStore implements GameStore {
   }
   async addSafetyRecord(r: SafetyRecord) {
     this.safetyRows.push({ ...r, at: this.nowIso() })
+  }
+  async createOrganisation(o: Omit<Organisation, 'id'>) {
+    const row = { ...o, id: this.id('org') }
+    this.organisationRows.push(row)
+    return { ...row }
+  }
+  async createOrganiser(o: Omit<OrganiserRow, 'id'>) {
+    const row = { ...o, id: this.id('r') }
+    this.organiserRows.push(row)
+    return { ...row }
+  }
+  async organiserBySessionTokenHash(hash: string) {
+    const r = this.organiserRows.find((x) => x.session_token_hash === hash)
+    return r ? { ...r } : null
+  }
+  async organiserById(id: string) {
+    const r = this.organiserRows.find((x) => x.id === id)
+    return r ? { ...r } : null
+  }
+  async createOrganiserInvite(inv: Omit<OrganiserInviteRow, 'id'>) {
+    const row = { ...inv, id: this.id('oi') }
+    this.organiserInviteRows.push(row)
+    return { ...row }
+  }
+  async redeemOrganiserInvite(tokenHash: string, now: number, sessionTokenHash: string): Promise<RedeemInviteResult> {
+    const inv = this.organiserInviteRows.find((x) => x.token_hash === tokenHash)
+    if (!inv) return { ok: false, reason: 'invalid' }
+    if (inv.redeemed_at) return { ok: false, reason: 'redeemed' }
+    if (now >= Date.parse(inv.expires_at)) return { ok: false, reason: 'expired' }
+    inv.redeemed_at = new Date(now).toISOString()
+    if (inv.organiser_id) {
+      const existing = this.organiserRows.find((x) => x.id === inv.organiser_id)!
+      existing.session_token_hash = sessionTokenHash
+      existing.session_created_at = new Date(now).toISOString()
+      return { ok: true, organiserId: existing.id }
+    }
+    const created = await this.createOrganiser({
+      organisation_id: inv.organisation_id,
+      name: inv.name,
+      created_at: new Date(now).toISOString(),
+      session_token_hash: sessionTokenHash,
+      session_created_at: new Date(now).toISOString(),
+    })
+    return { ok: true, organiserId: created.id }
+  }
+  async createMarshalInvite(inv: Omit<MarshalInviteRow, 'id'>) {
+    const row = { ...inv, id: this.id('mi') }
+    this.marshalInviteRows.push(row)
+    return { ...row }
+  }
+  async redeemMarshalInvite(tokenHash: string, now: number): Promise<RedeemMarshalInviteResult> {
+    const inv = this.marshalInviteRows.find((x) => x.token_hash === tokenHash)
+    if (!inv) return { ok: false, reason: 'invalid' }
+    if (inv.redeemed_at) return { ok: false, reason: 'redeemed' }
+    if (now >= Date.parse(inv.expires_at)) return { ok: false, reason: 'expired' }
+    inv.redeemed_at = new Date(now).toISOString()
+    return { ok: true, gameId: inv.game_id }
   }
 }
