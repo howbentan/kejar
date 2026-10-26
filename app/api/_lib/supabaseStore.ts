@@ -1,9 +1,22 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Game, GameEvent, Ping, Player, Position, PowerUp } from '../../shared/types.js'
-import type { GameRow, GameStore, NewPowerUp, PlayerRow, SafetyRecord, StationClaim } from './store.js'
+import type {
+  GameRow,
+  GameStore,
+  MarshalInviteRow,
+  NewPowerUp,
+  Organisation,
+  OrganiserInviteRow,
+  OrganiserRow,
+  PlayerRow,
+  RedeemInviteResult,
+  RedeemMarshalInviteResult,
+  SafetyRecord,
+  StationClaim,
+} from './store.js'
 
 const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, push, removed_at, outside, left_start'
-const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses'
+const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -195,5 +208,80 @@ export class SupabaseStore implements GameStore {
   }
   async addSafetyRecord(r: SafetyRecord) {
     check(await this.db.from('safety_records').insert({ ...r, at: this.nowIso() }))
+  }
+  async createOrganisation(o: Omit<Organisation, 'id'>): Promise<Organisation> {
+    return check(await this.db.from('organisations').insert(o).select('*').single()) as Organisation
+  }
+  async createOrganiser(o: Omit<OrganiserRow, 'id'>): Promise<OrganiserRow> {
+    return check(await this.db.from('organisers').insert(o).select('*').single()) as OrganiserRow
+  }
+  async organiserBySessionTokenHash(hash: string): Promise<OrganiserRow | null> {
+    return check(
+      await this.db.from('organisers').select('*').eq('session_token_hash', hash).maybeSingle(),
+    ) as OrganiserRow | null
+  }
+  async organiserById(id: string): Promise<OrganiserRow | null> {
+    return check(await this.db.from('organisers').select('*').eq('id', id).maybeSingle()) as OrganiserRow | null
+  }
+  async createOrganiserInvite(inv: Omit<OrganiserInviteRow, 'id'>): Promise<OrganiserInviteRow> {
+    return check(await this.db.from('organiser_invites').insert(inv).select('*').single()) as OrganiserInviteRow
+  }
+  async redeemOrganiserInvite(tokenHash: string, now: number, sessionTokenHash: string): Promise<RedeemInviteResult> {
+    const nowIso = new Date(now).toISOString()
+    const claimed = check(
+      await this.db
+        .from('organiser_invites')
+        .update({ redeemed_at: nowIso })
+        .eq('token_hash', tokenHash)
+        .is('redeemed_at', null)
+        .gt('expires_at', nowIso)
+        .select('*'),
+    ) as OrganiserInviteRow[]
+    const inv = claimed[0]
+    if (!inv) {
+      const exists = check(
+        await this.db.from('organiser_invites').select('redeemed_at, expires_at').eq('token_hash', tokenHash).maybeSingle(),
+      ) as { redeemed_at: string | null; expires_at: string } | null
+      if (!exists) return { ok: false, reason: 'invalid' }
+      return { ok: false, reason: exists.redeemed_at ? 'redeemed' : 'expired' }
+    }
+    if (inv.organiser_id) {
+      check(
+        await this.db
+          .from('organisers')
+          .update({ session_token_hash: sessionTokenHash, session_created_at: nowIso })
+          .eq('id', inv.organiser_id),
+      )
+      return { ok: true, organiserId: inv.organiser_id }
+    }
+    const created = await this.createOrganiser({
+      organisation_id: inv.organisation_id,
+      name: inv.name,
+      created_at: nowIso,
+      session_token_hash: sessionTokenHash,
+      session_created_at: nowIso,
+    })
+    return { ok: true, organiserId: created.id }
+  }
+  async createMarshalInvite(inv: Omit<MarshalInviteRow, 'id'>): Promise<MarshalInviteRow> {
+    return check(await this.db.from('marshal_invites').insert(inv).select('*').single()) as MarshalInviteRow
+  }
+  async redeemMarshalInvite(tokenHash: string, now: number): Promise<RedeemMarshalInviteResult> {
+    const nowIso = new Date(now).toISOString()
+    const claimed = check(
+      await this.db
+        .from('marshal_invites')
+        .update({ redeemed_at: nowIso })
+        .eq('token_hash', tokenHash)
+        .is('redeemed_at', null)
+        .gt('expires_at', nowIso)
+        .select('game_id, redeemed_at'),
+    ) as { game_id: string; redeemed_at: string }[]
+    if (claimed[0]) return { ok: true, gameId: claimed[0].game_id }
+    const exists = check(
+      await this.db.from('marshal_invites').select('redeemed_at, expires_at').eq('token_hash', tokenHash).maybeSingle(),
+    ) as { redeemed_at: string | null; expires_at: string } | null
+    if (!exists) return { ok: false, reason: 'invalid' }
+    return { ok: false, reason: exists.redeemed_at ? 'redeemed' : 'expired' }
   }
 }
