@@ -78,8 +78,8 @@ export default function HostLobby({ code }: { code: string }) {
                   value={p.role}
                   disabled={busy}
                   options={[
-                    { value: 'runner', text: 'Runner' },
-                    { value: 'chaser', text: 'Chaser' },
+                    { value: 'runner', text: 'Dikejar' },
+                    { value: 'chaser', text: 'Kejar' },
                     { value: 'marshal', text: 'Marshal' },
                   ]}
                   onChange={(role) => act('setRoles', { roles: { [p.id]: role } })}

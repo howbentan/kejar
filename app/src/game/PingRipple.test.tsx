@@ -15,7 +15,7 @@ describe('PingRipple', () => {
 
   it('tells a chaser the runners were revealed', () => {
     render(<PingRipple role="chaser" lastRevealAt={100_000} now={102_000} />)
-    expect(screen.getByText('Ping! Runners revealed')).toBeInTheDocument()
+    expect(screen.getByText('Ping! Dikejar revealed')).toBeInTheDocument()
   })
 
   it('stays hidden once the moment has passed', () => {

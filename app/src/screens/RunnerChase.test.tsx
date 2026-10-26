@@ -20,7 +20,7 @@ describe('RunnerChase', () => {
 
   it('shows the chaser warning when chaserNearby', () => {
     render(<RunnerChase code="ABC234" view={testView({ chaserNearby: true })} />)
-    expect(screen.getByText('Chaser within 100 m')).toBeInTheDocument()
+    expect(screen.getByText('Kejar within 100 m')).toBeInTheDocument()
   })
 
   it('does not warn when no chaser is near', () => {

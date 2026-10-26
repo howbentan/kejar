@@ -1,4 +1,4 @@
-import { count, type View } from '../../shared/views.js'
+import type { View } from '../../shared/views.js'
 import { ALERT_LEAD_MS } from '../../shared/clock.js'
 import GameMap from '../game/Map'
 import PingRipple from '../game/PingRipple'
@@ -37,10 +37,10 @@ export default function RunnerChase({ code, view }: { code: string; view: View }
   const checkInNow = toReveal !== null && toReveal <= ALERT_LEAD_MS
 
   return (
-    <Screen eyebrow={`Runner · ${view.me.tag_id ? `#${String(view.me.tag_id).padStart(2, '0')}` : view.me.name}`}>
+    <Screen eyebrow={`Dikejar · ${view.me.tag_id ? `#${String(view.me.tag_id).padStart(2, '0')}` : view.me.name}`}>
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
         <GameClock view={view} />
-        <span className="muted">{count(view.counts.runnersFree, 'runner')} free</span>
+        <span className="muted">{view.counts.runnersFree} Dikejar free</span>
       </div>
       <PingRipple role={view.me.role} lastRevealAt={view.lastRevealAt} now={now} />
 
@@ -63,7 +63,7 @@ export default function RunnerChase({ code, view }: { code: string; view: View }
       {view.chaserNearby && (
         <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--volt)', boxShadow: '0 0 8px var(--volt)' }} />
-          <span style={{ fontWeight: 600 }}>Chaser within 100 m</span>
+          <span style={{ fontWeight: 600 }}>Kejar within 100 m</span>
         </div>
       )}
 

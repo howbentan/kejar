@@ -13,7 +13,7 @@ export default function Hide({ view }: { view: View }) {
         <div style={{ textAlign: 'center', marginTop: 48 }}>
           <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.04em' }}>Stay put. Eyes closed.</h1>
           <p className="muted" style={{ marginTop: 8 }}>
-            Runners are hiding. You&apos;re released in
+            Dikejar are hiding. You&apos;re released in
           </p>
           <p className="mono" style={{ fontSize: 72, fontWeight: 500, letterSpacing: '-0.06em', color: 'var(--volt)' }}>
             {left}
@@ -26,7 +26,7 @@ export default function Hide({ view }: { view: View }) {
   return (
     <Screen eyebrow="Hide phase">
       <p className="eyebrow" style={{ textAlign: 'center' }}>
-        Chasers are released in
+        Kejar are released in
       </p>
       <p className="mono" style={{ fontSize: 72, fontWeight: 500, letterSpacing: '-0.06em', textAlign: 'center' }}>
         {left}

@@ -5,9 +5,9 @@ import type { Role } from '../../shared/types.js'
 const SHOW_MS = 8_000
 
 const COPY: Record<Role, { title: string; sub: string }> = {
-  runner: { title: "You've been pinged", sub: 'Chasers just saw where you were. Move!' },
-  chaser: { title: 'Ping! Runners revealed', sub: 'Check the map — circles show where they were.' },
-  marshal: { title: 'Ping sent', sub: 'Chasers can see runners’ last positions.' },
+  runner: { title: "You've been pinged", sub: 'Kejar just saw where you were. Move!' },
+  chaser: { title: 'Ping! Dikejar revealed', sub: 'Check the map — circles show where they were.' },
+  marshal: { title: 'Ping sent', sub: 'Kejar can see dikejar’s last positions.' },
 }
 
 /** Full-width ripple card shown for a few seconds after each ping, with a buzz. */

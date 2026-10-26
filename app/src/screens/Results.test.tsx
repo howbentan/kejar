@@ -25,7 +25,7 @@ describe('Results', () => {
       },
     })
     render(<Results view={view} isHost={false} />)
-    expect(screen.getByText('Runners escaped.')).toBeInTheDocument()
+    expect(screen.getByText('Dikejar escaped.')).toBeInTheDocument()
     expect(screen.getByText('Aina · 25:00')).toBeInTheDocument()
     expect(screen.getByText('Ben · 2')).toBeInTheDocument()
     expect(screen.getByText('Wei · 1 freed')).toBeInTheDocument()
@@ -38,7 +38,7 @@ describe('Results', () => {
       results: { winner: 'chasers', survivors: [], longestSurvivor: null, mostCatches: null, jailbreakHero: null },
     })
     render(<Results view={view} isHost={false} />)
-    expect(screen.getByText('Chasers win.')).toBeInTheDocument()
+    expect(screen.getByText('Kejar win.')).toBeInTheDocument()
     expect(screen.queryByText(/most catches/i)).toBeNull()
     expect(screen.queryByText(/jailbreak hero/i)).toBeNull()
   })

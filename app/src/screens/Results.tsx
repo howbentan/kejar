@@ -18,11 +18,11 @@ export default function Results({ view, isHost }: { view: View; isHost: boolean 
       <Wordmark size={28} />
       <p className="eyebrow">Game over</p>
       <h1 style={{ fontSize: 44, fontWeight: 700, letterSpacing: '-0.05em', lineHeight: 1 }}>
-        {r?.winner === 'chasers' ? 'Chasers win.' : 'Runners escaped.'}
+        {r?.winner === 'chasers' ? 'Kejar win.' : 'Dikejar escaped.'}
       </h1>
       {r && r.winner === 'runners' && (
         <p className="muted">
-          {r.survivors.length} runner{r.survivors.length === 1 ? '' : 's'} still free at the whistle.
+          {r.survivors.length} Dikejar still free at the whistle.
         </p>
       )}
       {awards.length > 0 && (

@@ -1,4 +1,4 @@
-import { count, type View } from '../../shared/views.js'
+import type { View } from '../../shared/views.js'
 import GameMap from '../game/Map'
 import MarshalTools from '../game/MarshalTools'
 import PingRipple from '../game/PingRipple'
@@ -18,7 +18,7 @@ export default function MarshalLive({ code, view, refresh }: { code: string; vie
           {view.paused && <span className="pill pill-on">PAUSED</span>}
         </span>
         <span className="muted">
-          {view.counts.runnersFree} free · {view.counts.runnersJailed} in jail · {count(view.counts.chasers, 'chaser')}
+          {view.counts.runnersFree} free · {view.counts.runnersJailed} in jail · {view.counts.chasers} Kejar
         </span>
       </div>
       <PingRipple role="marshal" lastRevealAt={view.lastRevealAt} now={now} />

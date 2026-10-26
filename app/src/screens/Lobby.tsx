@@ -8,8 +8,8 @@ import Scanner from '../game/Scanner'
 import { ErrorText, Screen, tagText } from '../game/ui'
 
 const ROLE_COPY = {
-  runner: 'You’re a Runner. Hide when the game starts.',
-  chaser: 'You’re a Chaser. Stay put while runners hide.',
+  runner: 'You’re a Dikejar. Hide when the game starts.',
+  chaser: 'You’re a Kejar. Stay put while dikejar hide.',
   marshal: 'You’re a Marshal. Keep everyone safe.',
 }
 

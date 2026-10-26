@@ -13,8 +13,8 @@ const INFO: Record<PowerUpKind, { name: string; effect: string; used: string }> 
   decoy: { name: 'Decoy', effect: 'Your next ping shows a fake spot', used: 'Decoy set for the next ping' },
   shield: { name: 'Shield', effect: 'Blocks the next catch (10 min)', used: 'Shield up for 10 min' },
   cloak: { name: 'Cloak', effect: 'You vanish from the next ping', used: 'Cloak on for the next ping' },
-  flare: { name: 'Flare', effect: 'Surprise ping in 30 s', used: 'Flare! Runners check in now' },
-  focus: { name: 'Focus', effect: 'Runners near you shown exactly', used: 'Focus on for the next ping' },
+  flare: { name: 'Flare', effect: 'Surprise ping in 30 s', used: 'Flare! Dikejar check in now' },
+  focus: { name: 'Focus', effect: 'Dikejar near you shown exactly', used: 'Focus on for the next ping' },
 }
 
 type ClaimResult = ({ ok: true; kind: PowerUpKind } | Exclude<ClaimJudgement, { ok: true }>)

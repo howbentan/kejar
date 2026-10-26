@@ -86,9 +86,9 @@ describe('HostLobby', () => {
 
   it('sets a role with the pill buttons, showing the current one as selected', async () => {
     render(<HostLobby code="ABC234" />)
-    const runner = await screen.findByRole('radio', { name: 'Aina: Runner' })
+    const runner = await screen.findByRole('radio', { name: 'Aina: Dikejar' })
     expect(runner).toBeChecked()
-    fireEvent.click(screen.getByRole('radio', { name: 'Aina: Chaser' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Aina: Kejar' }))
     await waitFor(() =>
       expect(call).toHaveBeenCalledWith('setRoles', { code: 'ABC234', hostKey: 'h1', roles: { p1: 'chaser' } }),
     )
