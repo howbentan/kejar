@@ -700,6 +700,65 @@ describe('SOS and reports', () => {
   })
 })
 
+describe('organiser invites', () => {
+  it('an organiser invites a peer, who redeems it and can then create a game', async () => {
+    const ownerToken = await createOrganiser()
+    const { inviteToken } = await run('createOrganiserInvite', { organiserToken: ownerToken, name: 'Partner' })
+    const redeemed = await run('redeemOrganiserInvite', { inviteToken })
+    expect(redeemed.name).toBe('Partner')
+    expect(redeemed.organiserToken).toHaveLength(43)
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, organiserToken: redeemed.organiserToken })
+    expect(code).toMatch(/^[A-HJKMNP-Z2-9]{6}$/)
+  })
+
+  it('refuses to redeem the same invite twice', async () => {
+    const ownerToken = await createOrganiser()
+    const { inviteToken } = await run('createOrganiserInvite', { organiserToken: ownerToken, name: 'Partner' })
+    await run('redeemOrganiserInvite', { inviteToken })
+    await rejects(run('redeemOrganiserInvite', { inviteToken }), 410, 'already been used')
+  })
+
+  it('refuses an invite past its 48-hour expiry', async () => {
+    const ownerToken = await createOrganiser()
+    const { inviteToken } = await run('createOrganiserInvite', { organiserToken: ownerToken, name: 'Partner' })
+    now += 48 * 60 * 60 * 1000
+    await rejects(run('redeemOrganiserInvite', { inviteToken }), 410, 'expired')
+  })
+
+  it('refuses createOrganiserInvite without a valid organiser session', async () => {
+    await rejects(run('createOrganiserInvite', { organiserToken: 'wrong', name: 'Partner' }), 403)
+  })
+
+  it('re-links an existing organiser to a new device instead of creating a second one', async () => {
+    const ownerToken = await createOrganiser()
+    const { inviteToken: firstInvite } = await run('createOrganiserInvite', { organiserToken: ownerToken, name: 'Partner' })
+    const partner = await run('redeemOrganiserInvite', { inviteToken: firstInvite })
+    // Partner's own phone dies; the owner (any organiser could do this — true peers) sends a re-link invite.
+    const { inviteToken: relinkInvite } = await run('createOrganiserInvite', {
+      organiserToken: ownerToken,
+      organiserId: partner.organiserId,
+      name: 'Partner',
+    })
+    const relinked = await run('redeemOrganiserInvite', { inviteToken: relinkInvite })
+    expect(relinked.organiserId).toBe(partner.organiserId)
+    // The old phone's session no longer works.
+    await rejects(run('createOrganiserInvite', { organiserToken: partner.organiserToken, name: 'Someone else' }), 403)
+    // The new phone's session does.
+    await run('createOrganiserInvite', { organiserToken: relinked.organiserToken, name: 'Someone else' })
+  })
+
+  it('refuses to re-link an organiser from a different organisation', async () => {
+    const ownerAToken = await createOrganiser()
+    const ownerBToken = await createOrganiser()
+    const { inviteToken } = await run('createOrganiserInvite', { organiserToken: ownerAToken, name: 'Partner A' })
+    const partnerA = await run('redeemOrganiserInvite', { inviteToken })
+    await rejects(
+      run('createOrganiserInvite', { organiserToken: ownerBToken, organiserId: partnerA.organiserId, name: 'x' }),
+      404,
+    )
+  })
+})
+
 describe('removing a player', () => {
   it('a removed runner is refused with 403 except state, which shows removed_at', async () => {
     const g = await safetyGame()

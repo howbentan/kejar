@@ -19,6 +19,7 @@ import { shuffleRoles, validateTeams } from '../../shared/teams.js'
 import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type Role, type Settings } from '../../shared/types.js'
 import { viewFor } from '../../shared/views.js'
 import { distanceM, distanceOutsideM } from '../../shared/geo.js'
+import { ORGANISER_INVITE_TTL_MS } from '../../shared/invites.js'
 import { hashToken, newToken } from './secrets.js'
 import type { GameRow, GameStore, OrganiserRow } from './store.js'
 
@@ -531,6 +532,48 @@ const subscribe: Action = async (ctx, body) => {
   return { ok: true }
 }
 
+const createOrganiserInvite: Action = async (ctx, body) => {
+  const organiser = await requireAnyOrganiser(ctx, body)
+  let targetOrganiserId: string | null = null
+  let name: string
+  if (body.organiserId) {
+    // A re-link invite: any organiser can send a peer a fresh sign-in link for their own account
+    // (true peers, per the design — not restricted to whoever happens to be "the owner").
+    const target = await ctx.store.organiserById(str(body.organiserId))
+    if (!target || target.organisation_id !== organiser.organisation_id) throw new ActionError(404, 'Unknown organiser')
+    targetOrganiserId = target.id
+    name = target.name
+  } else {
+    name = str(body.name).trim()
+    if (name.length < 1 || name.length > 40) throw new ActionError(400, 'Name must be 1–40 characters')
+  }
+  const inviteToken = newToken()
+  await ctx.store.createOrganiserInvite({
+    organisation_id: organiser.organisation_id,
+    organiser_id: targetOrganiserId,
+    name,
+    token_hash: hashToken(inviteToken),
+    created_at: iso(ctx.now),
+    expires_at: iso(ctx.now + ORGANISER_INVITE_TTL_MS),
+    redeemed_at: null,
+  })
+  return { inviteToken }
+}
+
+const redeemOrganiserInvite: Action = async (ctx, body) => {
+  const inviteToken = str(body.inviteToken)
+  if (!inviteToken) throw new ActionError(400, 'Missing invite token')
+  const organiserToken = newToken()
+  const result = await ctx.store.redeemOrganiserInvite(hashToken(inviteToken), ctx.now, hashToken(organiserToken))
+  if (!result.ok) {
+    if (result.reason === 'invalid') throw new ActionError(404, 'That invite link is not valid')
+    if (result.reason === 'redeemed') throw new ActionError(410, 'That invite link has already been used')
+    throw new ActionError(410, 'That invite link has expired')
+  }
+  const organiser = await ctx.store.organiserBySessionTokenHash(hashToken(organiserToken))
+  return { organiserToken, organiserId: organiser!.id, name: organiser!.name }
+}
+
 const claim: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
@@ -723,6 +766,8 @@ export const actions = {
   report,
   handleAlert,
   removePlayer,
+  createOrganiserInvite,
+  redeemOrganiserInvite,
 } satisfies Record<string, Action>
 
 export type ActionName = keyof typeof actions
