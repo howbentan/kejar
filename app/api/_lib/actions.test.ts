@@ -7,6 +7,7 @@ import { seeded } from '../../shared/testing.js'
 import type { PowerUpKind, Role } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
 import { ActionError, actions, type ActionName } from './actions.js'
+import { hashToken } from './secrets.js'
 import { MemoryStore } from './store.js'
 
 const CENTER = { lat: 3.0, lng: 101.0 }
@@ -37,6 +38,19 @@ async function rejects(p: Promise<unknown>, status: number, message?: string) {
   if (message) expect(err.message).toContain(message)
 }
 
+async function createOrganiser() {
+  const org = await store.createOrganisation({ name: 'kejar.', created_at: new Date(now).toISOString() })
+  const organiserToken = 'test-organiser-token'
+  await store.createOrganiser({
+    organisation_id: org.id,
+    name: 'Owner',
+    created_at: new Date(now).toISOString(),
+    session_token_hash: hashToken(organiserToken),
+    session_created_at: new Date(now).toISOString(),
+  })
+  return organiserToken
+}
+
 beforeEach(() => {
   now = T0
   store = new MemoryStore(() => now)
@@ -45,7 +59,8 @@ beforeEach(() => {
 
 /** Creates a game with Ben (chaser), Aina #07 and Hafiz #03 (runners), all subscribed to push. */
 async function readyGame(settings: object = {}, extra: object = {}) {
-  const { code, hostKey } = await run('create', { arenaId: 'around-me', center: CENTER, settings, ...extra })
+  const organiserToken = await createOrganiser()
+  const { code } = await run('create', { arenaId: 'around-me', center: CENTER, settings, organiserToken, ...extra })
   const join = async (name: string) => {
     const r = await run('join', { code, name, accepted: true })
     await run('subscribe', { code, token: r.token, subscription: { endpoint: `https://push/${name}` } })
@@ -55,31 +70,33 @@ async function readyGame(settings: object = {}, extra: object = {}) {
   const aina = await join('Aina')
   const hafiz = await join('Hafiz')
   const roles: Record<string, Role> = { [ben.playerId]: 'chaser', [aina.playerId]: 'runner', [hafiz.playerId]: 'runner' }
-  await run('setRoles', { code, hostKey, roles })
+  await run('setRoles', { code, organiserToken, roles })
   await run('linkTag', { code, token: aina.token, tagId: 7 })
   await run('linkTag', { code, token: hafiz.token, tagId: 3 })
-  return { code, hostKey, ben, aina, hafiz }
+  return { code, organiserToken, ben, aina, hafiz }
 }
 
 const at = (dLatM: number) => ({ lat: CENTER.lat + dLatM / 111_195, lng: CENTER.lng, accuracy_m: 8 })
 
 describe('joining', () => {
   it('create then join returns a token and player', async () => {
-    const { code, hostKey } = await run('create', { arenaId: 'around-me', center: CENTER })
+    const organiserToken = await createOrganiser()
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, organiserToken })
     expect(code).toMatch(/^[A-HJKMNP-Z2-9]{6}$/)
-    expect(hostKey).toHaveLength(43)
     const r = await run('join', { code, name: 'Aina', accepted: true })
     expect(r.token).toHaveLength(43)
     expect(r.playerId).toBeTruthy()
   })
 
   it('join without accepting the terms is rejected (400)', async () => {
-    const { code } = await run('create', { arenaId: 'around-me', center: CENTER })
+    const organiserToken = await createOrganiser()
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, organiserToken })
     await rejects(run('join', { code, name: 'Aina', accepted: false }), 400, 'Accept')
   })
 
   it('rejoin with stored token returns the same player', async () => {
-    const { code } = await run('create', { arenaId: 'around-me', center: CENTER })
+    const organiserToken = await createOrganiser()
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, organiserToken })
     const first = await run('join', { code, name: 'Aina', accepted: true })
     const again = await run('join', { code, name: 'Aina', accepted: true, token: first.token })
     expect(again).toEqual(first)
@@ -93,17 +110,18 @@ describe('joining', () => {
 
 describe('organiser controls', () => {
   it('start refuses lopsided teams with the validateTeams messages (409)', async () => {
-    const { code, hostKey } = await run('create', { arenaId: 'around-me', center: CENTER })
+    const organiserToken = await createOrganiser()
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, organiserToken })
     const a = await run('join', { code, name: 'Aina', accepted: true })
     const b = await run('join', { code, name: 'Hafiz', accepted: true })
-    await run('setRoles', { code, hostKey, roles: { [a.playerId]: 'runner', [b.playerId]: 'runner' } })
-    await rejects(run('start', { code, hostKey }), 409, 'Need at least 1 chaser')
+    await run('setRoles', { code, organiserToken, roles: { [a.playerId]: 'runner', [b.playerId]: 'runner' } })
+    await rejects(run('start', { code, organiserToken }), 409, 'Need at least 1 chaser')
   })
 
   it("start refuses when a runner has no tag (409 'Runner Aina has no tag')", async () => {
     const g = await readyGame()
     await store.updatePlayers([{ id: g.aina.playerId, patch: { tag_id: null } }])
-    await rejects(run('start', { code: g.code, hostKey: g.hostKey }), 409, 'Runner Aina has no tag')
+    await rejects(run('start', { code: g.code, organiserToken: g.organiserToken }), 409, 'Runner Aina has no tag')
   })
 
   it("linkTag refuses a tag already linked (409 'Tag 07 is already taken')", async () => {
@@ -113,13 +131,13 @@ describe('organiser controls', () => {
 
   it('non-host cannot setRoles or start (403)', async () => {
     const g = await readyGame()
-    await rejects(run('setRoles', { code: g.code, hostKey: 'wrong', shuffle: true }), 403)
-    await rejects(run('start', { code: g.code, hostKey: g.aina.token }), 403)
+    await rejects(run('setRoles', { code: g.code, organiserToken: 'wrong', shuffle: true }), 403)
+    await rejects(run('start', { code: g.code, organiserToken: g.aina.token }), 403)
   })
 
   it('shuffle assigns everyone a role and reports problems', async () => {
     const g = await readyGame()
-    const r = await run('setRoles', { code: g.code, hostKey: g.hostKey, shuffle: true })
+    const r = await run('setRoles', { code: g.code, organiserToken: g.organiserToken, shuffle: true })
     expect(Object.keys(r.roles)).toHaveLength(3)
     expect(r.problems).toEqual([])
   })
@@ -128,7 +146,7 @@ describe('organiser controls', () => {
 describe('pings and check-ins', () => {
   it('state at the first alert time pushes once to runners with subscriptions in push mode', async () => {
     const g = await readyGame()
-    await run('start', { code: g.code, hostKey: g.hostKey })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 10 * MIN - 30_000 // hide 5 + ping 5, minus 30 s
     await run('state', { code: g.code, token: g.ben.token })
     await run('state', { code: g.code, token: g.aina.token })
@@ -138,7 +156,7 @@ describe('pings and check-ins', () => {
 
   it('schedule mode never pushes', async () => {
     const g = await readyGame({ checkinMode: 'schedule' })
-    await run('start', { code: g.code, hostKey: g.hostKey })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 10 * MIN
     await run('state', { code: g.code, token: g.ben.token })
     expect(pushes).toEqual([])
@@ -146,7 +164,7 @@ describe('pings and check-ins', () => {
 
   it('state never returns runner positions to a chaser except fuzzed at reveal', async () => {
     const g = await readyGame()
-    await run('start', { code: g.code, hostKey: g.hostKey })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 6 * MIN
     await run('location', { code: g.code, token: g.aina.token, ...at(100) })
     let v = await run<View>('state', { code: g.code, token: g.ben.token })
@@ -162,7 +180,7 @@ describe('pings and check-ins', () => {
 describe('catching and jail', () => {
   async function chasing() {
     const g = await readyGame()
-    await run('start', { code: g.code, hostKey: g.hostKey })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 7 * MIN
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })
     await run('location', { code: g.code, token: g.aina.token, ...at(20) })
@@ -222,7 +240,7 @@ describe('catching and jail', () => {
   it('runners win when time runs out', async () => {
     const g = await chasing()
     now = T0 + 51 * MIN
-    const v = await run<View>('state', { code: g.code, hostKey: g.hostKey })
+    const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     expect(v.phase).toBe('ended')
     expect(v.results?.winner).toBe('runners')
   })
@@ -246,12 +264,12 @@ describe('long games', () => {
   it('marshals still see the latest position after thousands of location updates', async () => {
     store = new CappedStore(() => now)
     const g = await readyGame()
-    await run('start', { code: g.code, hostKey: g.hostKey })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
     for (let i = 0; i < 1200; i++) {
       now = T0 + 6 * MIN + i * 1000
       await run('location', { code: g.code, token: g.ben.token, ...at(i) })
     }
-    const v = await run<View>('state', { code: g.code, hostKey: g.hostKey })
+    const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     const ben = v.dots.find((d) => d.id === g.ben.playerId)!
     expect(ben.lat).toBeCloseTo(CENTER.lat + 1199 / 111_195, 6)
   })
@@ -260,7 +278,7 @@ describe('long games', () => {
 describe('fresh locations sent with scans', () => {
   it("records the chaser's current coordinates sent with a catch", async () => {
     const g = await readyGame()
-    await run('start', { code: g.code, hostKey: g.hostKey })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 7 * MIN
     await run('location', { code: g.code, token: g.aina.token, ...at(20) })
     now = T0 + 9 * MIN // the chaser's streamed fix is missing; the scan carries a fresh one
@@ -269,7 +287,7 @@ describe('fresh locations sent with scans', () => {
 
   it('rejects a jailbreak from an old position near the jail', async () => {
     const g = await readyGame()
-    await run('start', { code: g.code, hostKey: g.hostKey })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 7 * MIN
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })
     await run('location', { code: g.code, token: g.aina.token, ...at(20) })
@@ -286,21 +304,24 @@ describe('fresh locations sent with scans', () => {
 
 describe('choosing the play area', () => {
   it('builds the circle at the chosen centre and size', async () => {
-    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, radiusM: 300 })
+    const organiserToken = await createOrganiser()
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, radiusM: 300, organiserToken })
     const g = (await store.gameByCode(code))!
     const { distanceM } = await import('../../shared/geo.js')
     expect(distanceM(CENTER, g.arena.boundary[0])).toBeCloseTo(300, 0)
   })
 
   it('defaults to 200 m', async () => {
-    const { code } = await run('create', { arenaId: 'around-me', center: CENTER })
+    const organiserToken = await createOrganiser()
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, organiserToken })
     const { distanceM } = await import('../../shared/geo.js')
     expect(distanceM(CENTER, (await store.gameByCode(code))!.arena.boundary[0])).toBeCloseTo(200, 0)
   })
 
   it('rejects a play area smaller than 100 m or larger than 500 m', async () => {
-    await rejects(run('create', { arenaId: 'around-me', center: CENTER, radiusM: 50 }), 400, 'Play area')
-    await rejects(run('create', { arenaId: 'around-me', center: CENTER, radiusM: 900 }), 400, 'Play area')
+    const organiserToken = await createOrganiser()
+    await rejects(run('create', { arenaId: 'around-me', center: CENTER, radiusM: 50, organiserToken }), 400, 'Play area')
+    await rejects(run('create', { arenaId: 'around-me', center: CENTER, radiusM: 900, organiserToken }), 400, 'Play area')
   })
 })
 
@@ -310,9 +331,9 @@ describe('power-up stations', () => {
 
   async function chasingWithStation() {
     const g = await readyGame({}, { stations: [S1] })
-    await run('start', { code: g.code, hostKey: g.hostKey })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 7 * MIN
-    await run('state', { code: g.code, hostKey: g.hostKey })
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
     const game = (await store.gameByCode(g.code))!
     return { ...g, gameId: game.id }
   }
@@ -322,13 +343,15 @@ describe('power-up stations', () => {
   }
 
   it('create keeps the stations placed on the map', async () => {
-    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, stations: [S1] })
+    const organiserToken = await createOrganiser()
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, stations: [S1], organiserToken })
     expect((await store.gameByCode(code))!.arena.stations).toEqual([S1])
   })
 
   it('create rejects a station outside the play area (400)', async () => {
+    const organiserToken = await createOrganiser()
     const far = { lat: CENTER.lat + 400 / 111_195, lng: CENTER.lng }
-    await rejects(run('create', { arenaId: 'around-me', center: CENTER, stations: [far] }), 400, 'inside the play area')
+    await rejects(run('create', { arenaId: 'around-me', center: CENTER, stations: [far], organiserToken }), 400, 'inside the play area')
   })
 
   it('claim at a station gives the player a power-up for their role and logs a pickup', async () => {
@@ -413,9 +436,9 @@ describe('review fixes', () => {
   const atS1 = { lat: S1.lat, lng: S1.lng, accuracy_m: 8 }
   async function chasingWithStation() {
     const g = await readyGame({}, { stations: [S1] })
-    await run('start', { code: g.code, hostKey: g.hostKey })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 7 * MIN
-    await run('state', { code: g.code, hostKey: g.hostKey })
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
     return { ...g, gameId: (await store.gameByCode(g.code))!.id }
   }
   const give = (gameId: string, playerId: string, kind: PowerUpKind) =>
@@ -506,7 +529,7 @@ describe('review fixes', () => {
 describe('cloak secrecy at the ping', () => {
   it('the ping count leaves out a cloaked runner', async () => {
     const g = await readyGame()
-    await run('start', { code: g.code, hostKey: g.hostKey })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
     const gameId = (await store.gameByCode(g.code))!.id
     now = T0 + 7 * MIN
     await run('location', { code: g.code, token: g.aina.token, ...at(20) })
@@ -524,8 +547,8 @@ async function safetyGame(settings: object = {}) {
   const g = await readyGame(settings)
   const siti = await run('join', { code: g.code, name: 'Siti', accepted: true })
   await run('subscribe', { code: g.code, token: siti.token, subscription: { endpoint: 'https://push/Siti' } })
-  await run('setRoles', { code: g.code, hostKey: g.hostKey, roles: { [siti.playerId]: 'marshal' } })
-  await run('start', { code: g.code, hostKey: g.hostKey })
+  await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [siti.playerId]: 'marshal' } })
+  await run('start', { code: g.code, organiserToken: g.organiserToken })
   now = T0 + 7 * MIN
   pushes = []
   const gameId = (await store.gameByCode(g.code))!.id
@@ -537,15 +560,15 @@ describe('pause and resume', () => {
     const g = await safetyGame()
     await rejects(run('pause', { code: g.code, token: g.aina.token }), 403, 'Marshals only')
     expect(await run('pause', { code: g.code, token: g.siti.token })).toEqual({ ok: true })
-    expect(await run('resume', { code: g.code, hostKey: g.hostKey })).toEqual({ ok: true })
+    expect(await run('resume', { code: g.code, organiserToken: g.organiserToken })).toEqual({ ok: true })
   })
 
   it('a second pause or resume changes nothing', async () => {
     const g = await safetyGame()
-    await run('pause', { code: g.code, hostKey: g.hostKey })
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
     expect(await run('pause', { code: g.code, token: g.siti.token })).toEqual({ ok: false })
     now += 60_000
-    await run('resume', { code: g.code, hostKey: g.hostKey })
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
     expect(await run('resume', { code: g.code, token: g.siti.token })).toEqual({ ok: false })
     const events = await store.events(g.gameId)
     expect(events.filter((e) => e.type === 'paused')).toHaveLength(1)
@@ -557,7 +580,7 @@ describe('pause and resume', () => {
     const g = await safetyGame()
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })
     await run('location', { code: g.code, token: g.aina.token, ...at(20) })
-    await run('pause', { code: g.code, hostKey: g.hostKey })
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
     const paused = { ok: false, reason: 'paused' }
     expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toEqual(paused)
     expect(await run('jailbreak', { code: g.code, token: g.hafiz.token, qr: JAIL_QR })).toEqual(paused)
@@ -567,25 +590,25 @@ describe('pause and resume', () => {
 
   it('a 2-minute pause makes the game end 2 minutes later', async () => {
     const g = await safetyGame()
-    const before = await run<View>('state', { code: g.code, hostKey: g.hostKey })
-    await run('pause', { code: g.code, hostKey: g.hostKey })
+    const before = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
     now += 2 * MIN
     const during = await run<View>('state', { code: g.code, token: g.aina.token })
     expect(during.paused).toBe(true)
     expect(during.endsAt! - during.now).toBe(before.endsAt! - before.now)
-    await run('resume', { code: g.code, hostKey: g.hostKey })
-    const after = await run<View>('state', { code: g.code, hostKey: g.hostKey })
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    const after = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     expect(after.paused).toBe(false)
     expect(after.endsAt).toBe(before.endsAt! + 2 * MIN)
   })
 
   it('pause in the lobby or after the end is refused 409', async () => {
     const g = await readyGame()
-    await rejects(run('pause', { code: g.code, hostKey: g.hostKey }), 409)
-    await run('start', { code: g.code, hostKey: g.hostKey })
+    await rejects(run('pause', { code: g.code, organiserToken: g.organiserToken }), 409)
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 51 * MIN
-    await run('state', { code: g.code, hostKey: g.hostKey })
-    await rejects(run('pause', { code: g.code, hostKey: g.hostKey }), 409)
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    await rejects(run('pause', { code: g.code, organiserToken: g.organiserToken }), 409)
   })
 })
 
@@ -617,7 +640,7 @@ describe('SOS and reports', () => {
     const lobby = await readyGame()
     await rejects(run('sos', { code: lobby.code, token: lobby.aina.token }), 409)
     const g = await safetyGame()
-    await run('pause', { code: g.code, hostKey: g.hostKey })
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
     expect(await run('sos', { code: g.code, token: g.ben.token })).toMatchObject({ ok: true })
   })
 
@@ -636,7 +659,7 @@ describe('SOS and reports', () => {
   it('marshals see alerts; runners and chasers see none', async () => {
     const g = await safetyGame()
     await run('sos', { code: g.code, token: g.aina.token, ...at(30) })
-    const host = await run<View>('state', { code: g.code, hostKey: g.hostKey })
+    const host = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     const marshal = await run<View>('state', { code: g.code, token: g.siti.token })
     expect(host.alerts.map((a) => a.text)).toEqual(['SOS from Aina #07'])
     expect(marshal.alerts).toHaveLength(1)
@@ -661,17 +684,17 @@ describe('SOS and reports', () => {
   it('handleAlert marks it handled', async () => {
     const g = await safetyGame()
     await run('sos', { code: g.code, token: g.aina.token })
-    const [alert] = (await run<View>('state', { code: g.code, hostKey: g.hostKey })).alerts
+    const [alert] = (await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts
     await rejects(run('handleAlert', { code: g.code, token: g.ben.token, eventId: alert.id }), 403)
     expect(await run('handleAlert', { code: g.code, token: g.siti.token, eventId: alert.id })).toEqual({ ok: true })
-    expect((await run<View>('state', { code: g.code, hostKey: g.hostKey })).alerts[0].handled).toBe(true)
+    expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts[0].handled).toBe(true)
   })
 })
 
 describe('removing a player', () => {
   it('a removed runner is refused with 403 except state, which shows removed_at', async () => {
     const g = await safetyGame()
-    expect(await run('removePlayer', { code: g.code, hostKey: g.hostKey, playerId: g.aina.playerId })).toEqual({ ok: true })
+    expect(await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.aina.playerId })).toEqual({ ok: true })
     await rejects(run('location', { code: g.code, token: g.aina.token, ...at(0) }), 403, 'You were removed from this game')
     await rejects(run('sos', { code: g.code, token: g.aina.token }), 403)
     const v = await run<View>('state', { code: g.code, token: g.aina.token })
@@ -685,14 +708,14 @@ describe('removing a player', () => {
     const g = await safetyGame()
     await rejects(run('removePlayer', { code: g.code, token: g.ben.token, playerId: g.aina.playerId }), 403)
     await run('removePlayer', { code: g.code, token: g.siti.token, playerId: g.aina.playerId })
-    expect(await run('removePlayer', { code: g.code, hostKey: g.hostKey, playerId: g.aina.playerId })).toEqual({ ok: false })
+    expect(await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.aina.playerId })).toEqual({ ok: false })
   })
 
   it("a removed runner can't be caught", async () => {
     const g = await safetyGame()
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })
     await run('location', { code: g.code, token: g.aina.token, ...at(20) })
-    await run('removePlayer', { code: g.code, hostKey: g.hostKey, playerId: g.aina.playerId })
+    await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.aina.playerId })
     expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toEqual({ ok: false, reason: 'unknown-tag' })
   })
 
@@ -701,16 +724,16 @@ describe('removing a player', () => {
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })
     await run('location', { code: g.code, token: g.aina.token, ...at(20) })
     await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })
-    await run('removePlayer', { code: g.code, hostKey: g.hostKey, playerId: g.hafiz.playerId })
-    const v = await run<View>('state', { code: g.code, hostKey: g.hostKey })
+    await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.hafiz.playerId })
+    const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     expect(v.phase).toBe('ended')
     expect(v.results?.winner).toBe('chasers')
   })
 })
 
 describe('automatic alerts', () => {
-  const kinds = async (code: string, hostKey: string) =>
-    (await run<View>('state', { code, hostKey })).alerts.map((a) => a.kind)
+  const kinds = async (code: string, organiserToken: string) =>
+    (await run<View>('state', { code, organiserToken })).alerts.map((a) => a.kind)
   // around-me arenas are 200 m circles around CENTER; at(m) is m metres north of it.
 
   it('boundary jitter alerts once per real exit', async () => {
@@ -721,31 +744,31 @@ describe('automatic alerts', () => {
     }
     await go(100) // inside
     await go(210) // 10 m outside: GPS noise
-    expect(await kinds(g.code, g.hostKey)).toEqual([])
+    expect(await kinds(g.code, g.organiserToken)).toEqual([])
     await go(240) // clearly outside
     await go(260)
-    expect((await run<View>('state', { code: g.code, hostKey: g.hostKey })).alerts.map((a) => a.text)).toEqual([
+    expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts.map((a) => a.text)).toEqual([
       'Aina #07 left the play area',
     ])
     await go(150) // back inside
     await go(240) // out again
-    expect(await kinds(g.code, g.hostKey)).toEqual(['outside', 'outside'])
+    expect(await kinds(g.code, g.organiserToken)).toEqual(['outside', 'outside'])
   })
 
   it('a chaser walking off during hiding alerts once; the same during the chase does not', async () => {
     const g = await readyGame()
-    await run('start', { code: g.code, hostKey: g.hostKey })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 1 * MIN
     await run('location', { code: g.code, token: g.ben.token, ...at(30) })
-    expect(await kinds(g.code, g.hostKey)).toEqual([])
+    expect(await kinds(g.code, g.organiserToken)).toEqual([])
     await run('location', { code: g.code, token: g.ben.token, ...at(100) })
     await run('location', { code: g.code, token: g.ben.token, ...at(120) })
-    const v = await run<View>('state', { code: g.code, hostKey: g.hostKey })
+    const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     expect(v.alerts.map((a) => a.text)).toEqual(['Ben left the start early'])
     now = T0 + 7 * MIN
     await run('location', { code: g.code, token: g.hafiz.token, ...at(0) })
     await run('location', { code: g.code, token: g.ben.token, ...at(150) })
-    expect(await kinds(g.code, g.hostKey)).toEqual(['left-start'])
+    expect(await kinds(g.code, g.organiserToken)).toEqual(['left-start'])
   })
 
   it('a runner who skips pings 1 and 2 raises one missed alert at ping 2', async () => {
@@ -754,12 +777,12 @@ describe('automatic alerts', () => {
     now = T0 + 9 * MIN
     await run('location', { code: g.code, token: g.aina.token, ...at(10) })
     now = T0 + 10 * MIN
-    expect(await kinds(g.code, g.hostKey)).toEqual([])
+    expect(await kinds(g.code, g.organiserToken)).toEqual([])
     now = T0 + 15 * MIN
-    const v = await run<View>('state', { code: g.code, hostKey: g.hostKey })
+    const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     expect(v.alerts.map((a) => a.text)).toEqual(['Hafiz #03 missed 2 check-ins'])
     now = T0 + 20 * MIN
-    expect((await run<View>('state', { code: g.code, hostKey: g.hostKey })).alerts.map((a) => a.text).sort()).toEqual([
+    expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts.map((a) => a.text).sort()).toEqual([
       'Aina #07 missed 2 check-ins',
       'Hafiz #03 missed 2 check-ins',
     ])
@@ -772,7 +795,7 @@ describe('automatic alerts', () => {
     // Hafiz has never sent a location: the catch counts but is flagged.
     const r = await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })
     expect(r).toMatchObject({ ok: true, flagged: true })
-    const v = await run<View>('state', { code: g.code, hostKey: g.hostKey })
+    const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     expect(v.alerts.map((a) => a.text)).toEqual(['Check catch: #03 by Ben (position unknown)'])
   })
 })
@@ -786,7 +809,7 @@ describe('review fixes: safety', () => {
     await run('sos', { code: g.code, token: g.hafiz.token, ...at(40) })
     now = T0 + 11 * MIN
     for (const who of [g.ben, g.aina, g.siti]) {
-      await run('removePlayer', { code: g.code, hostKey: g.hostKey, playerId: who.playerId })
+      await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: who.playerId })
       const v = await run<View>('state', { code: g.code, token: who.token })
       expect(v.me.removed_at).toBeTruthy()
       expect(v.dots).toEqual([])
@@ -800,11 +823,11 @@ describe('review fixes: safety', () => {
 
   it('the organiser can turn on alerts and gets SOS pushes', async () => {
     const g = await safetyGame()
-    await run('subscribe', { code: g.code, hostKey: g.hostKey, subscription: { endpoint: 'https://push/organiser' } })
+    await run('subscribe', { code: g.code, organiserToken: g.organiserToken, subscription: { endpoint: 'https://push/organiser' } })
     const r = await run('sos', { code: g.code, token: g.aina.token })
     expect(r).toEqual({ ok: true, notified: 2 })
     expect(pushes.map((p) => p.endpoint).sort()).toEqual(['https://push/Siti', 'https://push/organiser'])
-    expect((await run<View>('state', { code: g.code, hostKey: g.hostKey })).me.push).toEqual({ endpoint: 'https://push/organiser' })
+    expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).me.push).toEqual({ endpoint: 'https://push/organiser' })
   })
 
   it('SOS says when no marshal could be reached', async () => {

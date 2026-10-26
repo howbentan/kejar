@@ -20,7 +20,7 @@ import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type
 import { viewFor } from '../../shared/views.js'
 import { distanceM, distanceOutsideM } from '../../shared/geo.js'
 import { hashToken, newToken } from './secrets.js'
-import type { GameRow, GameStore } from './store.js'
+import type { GameRow, GameStore, OrganiserRow } from './store.js'
 
 export class ActionError extends Error {
   status: number
@@ -57,8 +57,16 @@ async function loadGame(ctx: Ctx, body: Body): Promise<GameRow> {
   return game
 }
 
-function requireHost(game: GameRow, body: Body) {
-  if (!body.hostKey || hashToken(str(body.hostKey)) !== game.host_key_hash) throw new ActionError(403, 'Organiser only')
+async function requireAnyOrganiser(ctx: Ctx, body: Body): Promise<OrganiserRow> {
+  const o = body.organiserToken ? await ctx.store.organiserBySessionTokenHash(hashToken(str(body.organiserToken))) : null
+  if (!o) throw new ActionError(403, 'Sign in as an organiser first')
+  return o
+}
+
+async function requireOrganiser(ctx: Ctx, game: GameRow, body: Body): Promise<OrganiserRow> {
+  const o = await requireAnyOrganiser(ctx, body)
+  if (o.id !== game.organiser_id) throw new ActionError(403, 'Organiser only')
+  return o
 }
 
 /** The calling player. Removed players are refused unless `allowRemoved` (their page still polls state). */
@@ -118,8 +126,8 @@ function coordsOf(body: Body): LatLng | null {
 
 /** The organiser (null) or a player with the marshal role. */
 async function requireMarshal(ctx: Ctx, game: GameRow, body: Body): Promise<Player | null> {
-  if (body.hostKey) {
-    requireHost(game, body)
+  if (body.organiserToken) {
+    await requireOrganiser(ctx, game, body)
     return null
   }
   const p = await requirePlayer(ctx, game, body)
@@ -228,6 +236,7 @@ async function finish(ctx: Ctx, game: Game) {
 }
 
 const create: Action = async (ctx, body) => {
+  const organiser = await requireAnyOrganiser(ctx, body)
   let arena: Arena
   if (body.arenaId === 'around-me') {
     const c = body.center as { lat?: unknown; lng?: unknown } | undefined
@@ -253,9 +262,8 @@ const create: Action = async (ctx, body) => {
   const settings = settingsFrom(body.settings)
   let code = newGameCode(ctx.rng)
   while (await ctx.store.gameByCode(code)) code = newGameCode(ctx.rng)
-  const hostKey = newToken()
-  await ctx.store.createGame({ code, arena, settings, started_at: null, ended_at: null, winner: null, paused_at: null, pauses: [], host_key_hash: hashToken(hostKey) })
-  return { code, hostKey }
+  await ctx.store.createGame({ code, arena, settings, started_at: null, ended_at: null, winner: null, paused_at: null, pauses: [], organiser_id: organiser.id })
+  return { code }
 }
 
 const join: Action = async (ctx, body) => {
@@ -291,7 +299,7 @@ const join: Action = async (ctx, body) => {
 
 const setRoles: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
-  requireHost(game, body)
+  await requireOrganiser(ctx, game, body)
   requireLobby(game, ctx.now)
   const players = await ctx.store.players(game.id)
   const ids = players.map((p) => p.id)
@@ -317,7 +325,7 @@ const setRoles: Action = async (ctx, body) => {
 
 const start: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
-  requireHost(game, body)
+  await requireOrganiser(ctx, game, body)
   requireLobby(game, ctx.now)
   const players = await ctx.store.players(game.id)
   const roles = Object.fromEntries(players.filter((p) => p.role).map((p) => [p.id, p.role!]))
@@ -364,11 +372,11 @@ const state: Action = async (ctx, body) => {
   let me: Player
   if (body.token) me = await requirePlayer(ctx, game, body, true)
   else {
-    requireHost(game as GameRow, body)
+    const organiser = await requireOrganiser(ctx, game as GameRow, body)
     me = {
       id: 'host',
       game_id: game.id,
-      name: 'Organiser',
+      name: organiser.name,
       role: 'marshal',
       tag_id: null,
       accepted_at: iso(ctx.now),
@@ -512,7 +520,7 @@ const subscribe: Action = async (ctx, body) => {
   const sub = body.subscription as PushSubscriptionJSON | undefined
   if (!body.token) {
     // The organiser: their phone gets SOS and report alerts.
-    requireHost(game, body)
+    await requireOrganiser(ctx, game, body)
     if (!sub || typeof sub.endpoint !== 'string') throw new ActionError(400, 'Invalid push subscription')
     await ctx.store.updateGame(game.id, { host_push: sub })
     return { ok: true }
