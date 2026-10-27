@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest'
-import { joinWays, OSM_USER_AGENT, parkFeatures, searchParks, type FetchJson, type OsmCache } from './osm.js'
+import { joinWays, OSM_TIMEOUT_MS, OSM_USER_AGENT, parkFeatures, searchParks, type FetchJson, type OsmCache } from './osm.js'
 
 type Call = { url: string; init?: Parameters<FetchJson>[1] }
 let calls: Call[]
@@ -211,4 +211,13 @@ describe('review fixes', () => {
     expect(sent[2] - sent[1]).toBeGreaterThanOrEqual(1000)
   })
 })
+
+  it('the User-Agent names the app without its hosting domain, which Overpass refuses (406)', () => {
+    expect(OSM_USER_AGENT).toMatch(/^Kejar\/\d/)
+    expect(OSM_USER_AGENT).not.toMatch(/vercel\.app|https?:/)
+  })
+
+  it('waits long enough for a busy Overpass, which queues requests for 30 s or more', () => {
+    expect(OSM_TIMEOUT_MS).toBeGreaterThanOrEqual(60_000)
+  })
 })

@@ -34,8 +34,11 @@ interface Deps {
   sleep?: (ms: number) => Promise<void>
 }
 
-export const OSM_USER_AGENT = 'Kejar/1.0 (https://kejar-eosin.vercel.app)'
+/** Overpass refuses User-Agents that mention the hosting domain (406), so the app is named without it. */
+export const OSM_USER_AGENT = 'Kejar/1.0 (outdoor chase game; park setup)'
 export const OSM_CACHE_MS = 30 * 24 * 3600_000
+/** A busy Overpass queues requests (35 s seen live); Vercel allows 300 s, so wait up to a minute. */
+export const OSM_TIMEOUT_MS = 60_000
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search'
 const OVERPASS = 'https://overpass-api.de/api/interpreter'
 const NOMINATIM_GAP_MS = 1_000

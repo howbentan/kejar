@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type { PushSubscription } from 'web-push'
 import { ActionError, actions, type ActionName } from './_lib/actions.js'
+import { OSM_TIMEOUT_MS } from './_lib/osm.js'
 import { configuredWebPush, serverDb } from './_lib/server.js'
 import { SupabaseStore } from './_lib/supabaseStore.js'
 
@@ -24,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
         // OpenStreetMap lookups for park setup; a slow public service mustn't hang the request.
         fetchJson: async (url, init) => {
-          const r = await fetch(url, { ...init, signal: AbortSignal.timeout(25_000) })
+          const r = await fetch(url, { ...init, signal: AbortSignal.timeout(OSM_TIMEOUT_MS) })
           if (!r.ok) throw new Error(`${new URL(url).host} answered ${r.status}`)
           return r.json()
         },
