@@ -56,4 +56,11 @@ describe('SupabaseStore', () => {
       },
     ])
   })
+
+  it('arenaById treats an id that is not a uuid as not found, without asking the database', async () => {
+    const { db } = fakeDb()
+    const store = new SupabaseStore(db, () => 0)
+    expect(await store.arenaById('abc')).toBeNull()
+    expect(await store.arenaById('')).toBeNull()
+  })
 })

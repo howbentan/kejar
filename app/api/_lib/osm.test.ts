@@ -45,6 +45,7 @@ describe('searchParks', () => {
       format: 'jsonv2',
       polygon_geojson: '1',
       limit: '5',
+      polygon_threshold: '0.00001',
     })
     expect(calls[0].init?.headers?.['User-Agent']).toBe(OSM_USER_AGENT)
   })
@@ -156,4 +157,58 @@ describe('joinWays', () => {
     ])
     expect(rings).toEqual([[a, b, c, d]])
   })
+
+describe('review fixes', () => {
+  const outline = [
+    { lat: 3.15, lng: 101.71 },
+    { lat: 3.15, lng: 101.713 },
+    { lat: 3.153, lng: 101.713 },
+    { lat: 3.153, lng: 101.71 },
+  ]
+
+  it('a lake with thousands of points comes back simplified', async () => {
+    const n = 6000
+    const ring = Array.from({ length: n }, (_, k) => ({
+      lat: 3.1515 + 0.001 * Math.sin((2 * Math.PI * k) / n),
+      lon: 101.7115 + 0.001 * Math.cos((2 * Math.PI * k) / n),
+    }))
+    replies.push({ elements: [{ type: 'way', id: 1, tags: { natural: 'water' }, geometry: [...ring, ring[0]] }] })
+    const f = await parkFeatures(outline, deps())
+    expect(f.water).toHaveLength(1)
+    expect(f.water[0].length).toBeLessThanOrEqual(1000)
+    expect(f.water[0].length).toBeGreaterThan(100)
+  })
+
+  it('an unclosed water way is not treated as a lake', async () => {
+    const line = [
+      { lat: 3.151, lon: 101.711 },
+      { lat: 3.151, lon: 101.712 },
+      { lat: 3.152, lon: 101.712 },
+      { lat: 3.152, lon: 101.711 },
+    ]
+    replies.push({ elements: [{ type: 'way', id: 1, tags: { natural: 'water' }, geometry: line }] })
+    expect((await parkFeatures(outline, deps())).water).toEqual([])
+  })
+
+  it('searches arriving together still go out at least 1 s apart', async () => {
+    let t = 50_000
+    const sent: number[] = []
+    const timed = {
+      fetchJson: async () => {
+        sent.push(t)
+        return []
+      },
+      cache,
+      now: () => t,
+      sleep: async (ms: number) => {
+        await Promise.resolve()
+        t += ms
+      },
+    }
+    await Promise.all([searchParks('park one', timed), searchParks('park two', timed), searchParks('park three', timed)])
+    expect(sent).toHaveLength(3)
+    expect(sent[1] - sent[0]).toBeGreaterThanOrEqual(1000)
+    expect(sent[2] - sent[1]).toBeGreaterThanOrEqual(1000)
+  })
+})
 })

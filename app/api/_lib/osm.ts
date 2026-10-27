@@ -39,8 +39,12 @@ export const OSM_CACHE_MS = 30 * 24 * 3600_000
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search'
 const OVERPASS = 'https://overpass-api.de/api/interpreter'
 const NOMINATIM_GAP_MS = 1_000
+/** Lakes are traced at full detail; this many points is plenty for "is a runner in the water?". */
+const MAX_WATER_POINTS = 1_000
 
 let lastNominatimAt = -Infinity
+/** Searches in this process take turns, so ones arriving together still go out a second apart. */
+let nominatimTurn: Promise<void> = Promise.resolve()
 
 const toLatLng = ([lng, lat]: number[]): LatLng => ({ lat, lng })
 const openRing = (ring: LatLng[]) =>
@@ -62,11 +66,24 @@ export async function searchParks(query: string, deps: Deps): Promise<ParkHit[]>
   if (cached) return cached
 
   const now = deps.now ?? Date.now
-  const wait = lastNominatimAt + NOMINATIM_GAP_MS - now()
-  if (wait > 0) await (deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms))))(wait)
-  lastNominatimAt = now()
+  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
+  const turn = nominatimTurn.then(async () => {
+    const wait = lastNominatimAt + NOMINATIM_GAP_MS - now()
+    if (wait > 0) await sleep(wait)
+    lastNominatimAt = now()
+  })
+  nominatimTurn = turn.catch(() => undefined)
+  await turn
 
-  const params = new URLSearchParams({ q, countrycodes: 'my', format: 'jsonv2', polygon_geojson: '1', limit: '5' })
+  // polygon_threshold simplifies outlines on Nominatim's side (~1 m), keeping them small.
+  const params = new URLSearchParams({
+    q,
+    countrycodes: 'my',
+    format: 'jsonv2',
+    polygon_geojson: '1',
+    limit: '5',
+    polygon_threshold: '0.00001',
+  })
   const results = (await deps.fetchJson(`${NOMINATIM}?${params}`, { headers: { 'User-Agent': OSM_USER_AGENT } })) as NominatimResult[]
   const hits: ParkHit[] = []
   for (const r of results ?? []) {
@@ -119,6 +136,15 @@ interface OverpassElement {
 }
 
 const pts = (g: { lat: number; lon: number }[] = []) => g.map((p) => ({ lat: p.lat, lng: p.lon }))
+const isClosed = (g: { lat: number; lon: number }[] = []) =>
+  g.length >= 4 && g[0].lat === g.at(-1)!.lat && g[0].lon === g.at(-1)!.lon
+
+/** Keeps every nth point so a ring has at most `max` points. */
+function thin(ring: LatLng[], max = MAX_WATER_POINTS): LatLng[] {
+  if (ring.length <= max) return ring
+  const step = Math.ceil(ring.length / max)
+  return ring.filter((_, k) => k % step === 0)
+}
 
 /**
  * Lakes and toilets inside a park's outline. If Overpass fails, says so (waterChecked: false) rather
@@ -152,11 +178,14 @@ export async function parkFeatures(
   const toilets: LatLng[] = []
   for (const e of elements) {
     if (e.tags?.natural === 'water') {
+      // An unclosed way tagged as water is a piece of a bigger outline, not a lake of its own.
       const rings =
         e.type === 'way'
-          ? [openRing(pts(e.geometry))]
+          ? isClosed(e.geometry)
+            ? [openRing(pts(e.geometry))]
+            : []
           : joinWays((e.members ?? []).filter((m) => m.role === 'outer').map((m) => pts(m.geometry)))
-      water.push(...rings.filter((r) => r.length >= 3 && ringAreaHa(r) >= MIN_WATER_HA))
+      water.push(...rings.filter((r) => r.length >= 3 && ringAreaHa(r) >= MIN_WATER_HA).map((r) => thin(r)))
     } else if (e.tags?.amenity === 'toilets') {
       if (e.type === 'node' && e.lat !== undefined && e.lon !== undefined) toilets.push({ lat: e.lat, lng: e.lon })
       else if (e.geometry?.length) toilets.push({ lat: e.geometry[0].lat, lng: e.geometry[0].lon })

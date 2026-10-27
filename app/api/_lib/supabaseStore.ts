@@ -285,6 +285,8 @@ export class SupabaseStore implements GameStore {
     check(await this.db.from('arenas').update({ ...patch, updated_at: this.nowIso() }).eq('id', id))
   }
   async arenaById(id: string): Promise<SavedArenaRow | null> {
+    // Arena ids are uuids; anything else can't exist (and Postgres would reject it with a 500).
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return null
     return check(await this.db.from('arenas').select('*').eq('id', id).maybeSingle()) as SavedArenaRow | null
   }
   async arenasFor(organisationId: string): Promise<SavedArenaRow[]> {

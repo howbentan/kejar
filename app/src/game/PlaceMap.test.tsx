@@ -2,7 +2,7 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 type Click = { point: { x: number; y: number }; lngLat: { lat: number; lng: number } }
-const map = vi.hoisted(() => ({ handlers: {} as Record<string, (e: Click) => void> }))
+const map = vi.hoisted(() => ({ handlers: {} as Record<string, (e: Click) => void>, fits: [] as unknown[] }))
 vi.mock('maplibre-gl', () => ({
   default: {
     Map: class {
@@ -17,7 +17,9 @@ vi.mock('maplibre-gl', () => ({
       project([lng, lat]: [number, number]) {
         return { x: lng * 1000, y: lat * 1000 }
       }
-      fitBounds() {}
+      fitBounds(b: unknown) {
+        map.fits.push(b)
+      }
       jumpTo() {}
     },
   },
@@ -57,5 +59,24 @@ describe('PlaceMap', () => {
     map.handlers.click({ point: { x: 101_005, y: 3_005 }, lngLat: { lat: 3.000005, lng: 101.000005 } })
     expect(onTap).toHaveBeenCalledWith({ lat: 3.000005, lng: 101.000005 })
     expect(onStationRemove).not.toHaveBeenCalled()
+  })
+
+  it('frames a saved park from its boundary and does not jump to the phone', () => {
+    map.fits = []
+    const getCurrentPosition = vi.fn()
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: { getCurrentPosition } })
+    const boundary = [
+      { lat: 3.1, lng: 101.1 },
+      { lat: 3.1, lng: 101.2 },
+      { lat: 3.2, lng: 101.2 },
+    ]
+    render(<PlaceMap {...base} boundary={boundary} mode="stations" onTap={vi.fn()} onStationRemove={vi.fn()} />)
+    expect(map.fits).toEqual([
+      [
+        [101.1, 3.1],
+        [101.2, 3.2],
+      ],
+    ])
+    expect(getCurrentPosition).not.toHaveBeenCalled()
   })
 })

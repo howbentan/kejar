@@ -134,7 +134,7 @@ export default function PlaceMap(props: Props) {
       p.onTap({ lat: e.lngLat.lat, lng: e.lngLat.lng })
     })
     // With nothing to show yet, start where the organiser is.
-    if (!latest.current.outline && !latest.current.circle) {
+    if (!latest.current.outline && !latest.current.boundary && !latest.current.circle) {
       navigator.geolocation?.getCurrentPosition(
         (pos) => m.jumpTo({ center: [pos.coords.longitude, pos.coords.latitude] }),
         () => undefined,
@@ -155,8 +155,9 @@ export default function PlaceMap(props: Props) {
     for (const [id, d] of Object.entries(layersData(props))) (m.getSource(id) as GeoJSONSource | undefined)?.setData(d)
   })
 
-  // Frame the park (or the circle) whenever a different one is chosen.
-  const frame = props.outline ?? (props.circle ? circlePolygon(props.circle.center, props.circle.radiusM, 8) : null)
+  // Frame the park (or a saved play area, or the circle) whenever a different one is chosen.
+  const frame =
+    props.outline ?? props.boundary ?? (props.circle ? circlePolygon(props.circle.center, props.circle.radiusM, 8) : null)
   const frameKey = frame ? JSON.stringify(frame[0]) + frame.length : ''
   useEffect(() => {
     if (!frame || !map.current) return
