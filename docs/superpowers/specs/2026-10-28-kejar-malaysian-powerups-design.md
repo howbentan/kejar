@@ -24,7 +24,7 @@ The tone is **funny, not scary** (owner's decision).
 - **Fixed power-ups per station.** Stations keep giving a random power-up when claimed.
   - The owner chose this "option A" after comparing the options. Random means no camping at "the good station", no setup and fresh games at saved parks.
   - "Option B" (each station always holds the same power-up) and "option C" (shuffled once per game, shown on the map) are possible later upgrades if playtests show players want route planning.
-- **Honour-system dares the app can't enforce:** "AIS!" (freeze the nearest chaser 10 s, from the playground game *ais-air*) and "Jem teruk" (chasers held 30 s at the start). These could become marshal-refereed rules later.
+- **Honour-system dares the app can't enforce:** "AIS!" (freeze the nearest chaser 10 s, from the playground game *ais-air*) and "Jem teruk" (chasers held 30 s at the start). Rejected, not deferred (see §4).
 - **TNB potong api** (every chaser's map goes blank for a ping): too strong for now.
 - **Banjir kilat** (flash flood): kept as the name for the future endgame shrinking zone, not a power-up.
 - **Hantu art on the printed station QR cards.** Station cards stay generic ("Station 3") because a station's power-up is only decided when it's claimed. The characters appear in the app: the hand, the feed and pop-ups.
@@ -40,6 +40,9 @@ The tone is **funny, not scary** (owner's decision).
   - at most 3 unused power-ups in hand;
   - jailed runners and marshals can't claim.
 - **Making stealing feel unfair.** A steal that finds nothing to take must not use up the stealer's power-up.
+- **Power-ups that need a referee (owner's decision).** Every power-up's effect must be decided entirely by the app: no honour rules, no waiting periods players must count for themselves, no marshal judgement. Disputes in a physical chase get heated, and marshals should watch for safety, not settle arguments.
+  - This is why Durian loses Shield's old "10 s head start". That replaces the base spec's §4.8 table row and §4.8.1 Shield rule. In the code, the chaser's `shielded` message in `ChaserChase.tsx` (and its test) changes accordingly.
+  - Handing the tag back stays, because it happens after every scan anyway and needs no judgement.
 
 ## 5. How stations work (unchanged, restated for clarity)
 
@@ -58,7 +61,7 @@ The tone is **funny, not scary** (owner's decision).
 | New name | Was | Side | What it does | Messages |
 |---|---|---|---|---|
 | **Gostan** | Decoy | runner | Your next ping shows you 120–180 m from your real spot (inside the play area, not in a lake). | Kept secret. Only the user sees: `Gostan! Next ping tunjuk tempat lain.` |
-| **Durian** | Shield | runner | Blocks the next catch; lasts up to 10 min. | The chaser's catch screen says `Bau durian! Tak boleh dekat. Pulangkan tag, dia dapat 10 s.` The feed says `#07 kena durian!` |
+| **Durian** | Shield | runner | Blocks the next catch; lasts up to 10 min. The catch simply doesn't count: the chaser hands the tag back and play carries on at once. **No 10 s head start** (owner's decision, see §4). | The chaser's catch screen says `Bau durian! Tak boleh dekat. Pulangkan tag.` The feed says `#07 kena durian!` |
 | **Ponteng** | Cloak | runner | You're left off the next ping, and it looks like you never checked in. | Kept secret. The user sees `Ponteng ping!` |
 | **Mat Rempit** | Flare | chaser | Every free runner gets "check in now"; an extra ping comes 30 s later. The regular schedule doesn't move. | The feed says `VROOOM! Mat Rempit buat round. Ping dalam 30 s!` |
 | **Pak Guard** | Focus | chaser | At the next ping, runners within 150 m of you show exactly instead of fuzzy. | The feed says `Pak Guard tengah check CCTV…` |
