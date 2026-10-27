@@ -1,6 +1,5 @@
 export interface GameSession {
   token?: string
-  hostKey?: string
 }
 
 const key = (code: string) => `kejar.game.${code.toUpperCase()}`

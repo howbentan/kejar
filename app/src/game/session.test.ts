@@ -7,11 +7,10 @@ function memoryStorage(): Storage {
 }
 
 describe('game session storage', () => {
-  it('round-trips a player token and host key for a game code', () => {
+  it('round-trips a player token for a game code', () => {
     const storage = memoryStorage()
     saveSession(storage, 'ABC234', { token: 't1' })
-    saveSession(storage, 'ABC234', { hostKey: 'h1' })
-    expect(loadSession(storage, 'ABC234')).toEqual({ token: 't1', hostKey: 'h1' })
+    expect(loadSession(storage, 'ABC234')).toEqual({ token: 't1' })
   })
 
   it('keeps different games apart and ignores code case', () => {

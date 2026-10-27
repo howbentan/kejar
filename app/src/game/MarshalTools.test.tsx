@@ -35,7 +35,7 @@ beforeEach(() => {
   call.mockReset()
   call.mockResolvedValue({ ok: true })
   refresh = vi.fn()
-  localStorage.setItem('kejar.game.ABC234', JSON.stringify({ hostKey: 'h1' }))
+  localStorage.setItem('kejar.organiser', JSON.stringify({ organiserToken: 'h1', name: 'Owner' }))
 })
 afterEach(() => {
   cleanup()
@@ -46,20 +46,20 @@ describe('MarshalTools', () => {
   it('Pause calls pause with the organiser key and then refreshes', async () => {
     render(<MarshalTools code="ABC234" view={testView()} refresh={refresh} />)
     fireEvent.click(screen.getByRole('button', { name: 'Pause game' }))
-    await waitFor(() => expect(call).toHaveBeenCalledWith('pause', { code: 'ABC234', hostKey: 'h1' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('pause', { code: 'ABC234', organiserToken: 'h1' }))
     await waitFor(() => expect(refresh).toHaveBeenCalled())
   })
 
   it('shows Resume when paused', async () => {
     render(<MarshalTools code="ABC234" view={testView({ paused: true })} refresh={refresh} />)
     fireEvent.click(screen.getByRole('button', { name: 'Resume game' }))
-    await waitFor(() => expect(call).toHaveBeenCalledWith('resume', { code: 'ABC234', hostKey: 'h1' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('resume', { code: 'ABC234', organiserToken: 'h1' }))
   })
 
   it('Handled calls handleAlert with the event id', async () => {
     render(<MarshalTools code="ABC234" view={testView({ alerts: [alert('e1', 'sos', 'SOS from Aina #07')] })} refresh={refresh} />)
     fireEvent.click(screen.getByRole('button', { name: 'Handled' }))
-    await waitFor(() => expect(call).toHaveBeenCalledWith('handleAlert', { code: 'ABC234', hostKey: 'h1', eventId: 'e1' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('handleAlert', { code: 'ABC234', organiserToken: 'h1', eventId: 'e1' }))
   })
 
   it('Remove needs confirming before it calls removePlayer', async () => {
@@ -68,7 +68,7 @@ describe('MarshalTools', () => {
     expect(call).not.toHaveBeenCalled()
     expect(screen.getByText('Remove Aina from the game?')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Yes, remove' }))
-    await waitFor(() => expect(call).toHaveBeenCalledWith('removePlayer', { code: 'ABC234', hostKey: 'h1', playerId: 'r1' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('removePlayer', { code: 'ABC234', organiserToken: 'h1', playerId: 'r1' }))
   })
 
   it('open alerts come before handled ones, and handled ones have no button', () => {
@@ -96,7 +96,7 @@ describe('MarshalTools', () => {
     const { rerender } = render(<MarshalTools code="ABC234" view={testView()} refresh={refresh} />)
     fireEvent.click(screen.getByRole('button', { name: 'Get SOS alerts on this phone' }))
     await waitFor(() =>
-      expect(call).toHaveBeenCalledWith('subscribe', { code: 'ABC234', hostKey: 'h1', subscription: { endpoint: 'https://push/x' } }),
+      expect(call).toHaveBeenCalledWith('subscribe', { code: 'ABC234', organiserToken: 'h1', subscription: { endpoint: 'https://push/x' } }),
     )
     const base = testView()
     rerender(<MarshalTools code="ABC234" view={testView({ me: { ...base.me, push: { endpoint: 'https://push/x' } } })} refresh={refresh} />)
