@@ -83,4 +83,18 @@ describe('HostNew', () => {
     expect(screen.getByText(/need an invite link/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /create game/i })).toBeNull()
   })
+
+  it('invites a peer organiser and shows the link to share', async () => {
+    call.mockImplementation(async (action: string) => {
+      if (action === 'createOrganiserInvite') return { inviteToken: 'tok1' }
+      return { code: 'ABC234' }
+    })
+    render(<HostNew />)
+    fireEvent.change(screen.getByLabelText('New organiser\'s name'), { target: { value: 'Partner' } })
+    fireEvent.click(screen.getByRole('button', { name: /send invite/i }))
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith('createOrganiserInvite', { organiserToken: 'ot1', name: 'Partner' }),
+    )
+    expect(await screen.findByText(`${window.location.origin}/organiser/tok1`)).toBeInTheDocument()
+  })
 })

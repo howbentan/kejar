@@ -37,6 +37,9 @@ export default function HostNew() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [peerName, setPeerName] = useState('')
+  const [peerInviteUrl, setPeerInviteUrl] = useState('')
+  const [peerBusy, setPeerBusy] = useState(false)
   const set = (patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch }))
   const organiser = loadOrganiserSession(localStorage)
 
@@ -56,6 +59,22 @@ export default function HostNew() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setBusy(false)
+    }
+  }
+
+  async function invitePeer() {
+    setPeerBusy(true)
+    setError('')
+    try {
+      const { inviteToken } = await call<{ inviteToken: string }>('createOrganiserInvite', {
+        organiserToken: organiser!.organiserToken,
+        name: peerName.trim(),
+      })
+      setPeerInviteUrl(`${window.location.origin}/organiser/${inviteToken}`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setPeerBusy(false)
     }
   }
 
@@ -81,6 +100,22 @@ export default function HostNew() {
           </p>
         </div>
       )}
+
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <p style={{ fontWeight: 600 }}>Invite another organiser</p>
+        <label className="eyebrow" htmlFor="peerName">
+          New organiser&apos;s name
+        </label>
+        <input id="peerName" className="input" maxLength={40} value={peerName} onChange={(e) => setPeerName(e.target.value)} />
+        <button className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} disabled={!peerName.trim() || peerBusy} onClick={invitePeer}>
+          Send invite
+        </button>
+        {peerInviteUrl && (
+          <p className="muted" style={{ wordBreak: 'break-all' }}>
+            {peerInviteUrl}
+          </p>
+        )}
+      </div>
 
       <p className="eyebrow">Play area</p>
       <Pills<string>
