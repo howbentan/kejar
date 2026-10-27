@@ -22,4 +22,8 @@ describe('routeFor', () => {
     expect(routeFor('/nope')).toEqual({ route: 'not-found' })
     expect(routeFor('/g/')).toEqual({ route: 'not-found' })
   })
+
+  it('maps an organiser invite link, keeping the token case-sensitive', () => {
+    expect(routeFor('/organiser/AbC-123_xyz')).toEqual({ route: 'organiser-redeem', token: 'AbC-123_xyz' })
+  })
 })
