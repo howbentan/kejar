@@ -1,6 +1,6 @@
-# Kejar: Malaysian power-ups and the app's local voice
+# Kejar: Malaysian power-ups
 
-**Status:** Design agreed with the owner in chat on 2026-10-28, checked by a reviewer; open questions in §9. Not built yet.
+**Status:** Design agreed with the owner in chat on 2026-10-28, checked by a reviewer, and narrowed to power-ups only the same day; open questions in §9. Not built yet.
 **Builds on:**
 - `2026-10-19-kejar-design.md` §4.8 and §4.8.1: the power-up station rules this keeps.
 - `docs/superpowers/plans/2026-10-24-kejar-plan-5-power-ups.md`: how power-ups are built today.
@@ -11,14 +11,16 @@ Kejar's power-ups have generic game names: Decoy, Shield, Cloak, Flare, Focus. T
 
 The tone is **funny, not scary** (owner's decision).
 
+**Scope (owner's decision):** the Malaysian characters and slang apply to **the power-ups only**. Every other piece of wording in the app stays exactly as it is today.
+
 ## 2. Goals
 
 1. **Rename the five existing power-ups** to Malaysian characters and slang, keeping their rules.
 2. **Add three new power-ups:** Toyol and Ah Long (a mirrored "take away" pair) and Abang Grab (claim a station from anywhere).
-3. **Give the whole app a local voice:** Manglish and Malay lines for key moments (chase start, catches, jail, pings, claims).
 
 ## 3. Non-goals
 
+- **Malaysian lines anywhere outside the power-ups.** The chase start, catches, jail, jailbreaks, pings, claims, the hide phase, SOS and alerts, and the organiser and marshal screens keep their current wording (owner's decision). Lines floated in chat, like `Jom kejar!`, `KANTOI!`, `Lepak mamak dulu` and `Tapau`, are dropped.
 - **Fixed power-ups per station.** Stations keep giving a random power-up when claimed.
   - The owner chose this "option A" after comparing the options. Random means no camping at "the good station", no setup and fresh games at saved parks.
   - "Option B" (each station always holds the same power-up) and "option C" (shuffled once per game, shown on the map) are possible later upgrades if playtests show players want route planning.
@@ -84,31 +86,14 @@ On use, the player taps a station on the map (or picks it from a list). The app 
 Details:
 - **Refused, not used up,** if that station is locked or already claimed by this player. They see the usual station message ("recharging — 0:42" or "already used this station") and can pick another.
 - **The hand limit:** Abang Grab is used up when the grab succeeds, freeing its own slot, so a full hand (3) can still grab.
-- **Message:** `Abang Grab hantar dari Station 3! Dapat: Durian` to the user. The feed shows the normal pickup line.
+- **Message:** `Abang Grab hantar dari Station 3! Dapat: Durian` to the user. The feed shows the existing pickup line, unchanged.
 - **The sneaky tactic:** a grab locks the station for everyone for 60 s, so it can block someone walking there. That's intended.
 
-## 7. The local voice
+## 7. Power-up wording
 
-These lines replace their English equivalents. Some English stays where it's clearer (e.g. "check in").
-
-**Player naming:** player-facing copy already calls chasers **Kejar** and runners **Dikejar**. Keep that.
-
-**Where the voice applies (Claude's call):**
-- **Gameplay text gets the voice:** power-up names and messages, the feed, and the catch, jail, ping, hide and chase screens.
-- **Safety and setup text stays plain English:** SOS, reports, marshal alerts and push notifications, pause and resume, removal, and the organiser and marshal set-up screens. Slang must never make an emergency unclear.
-- **Every power-up card** keeps a short plain-English line saying what it does (e.g. "Blocks the next catch, up to 10 min") under its local name. Players who don't speak Malay can still play.
-
-| Moment | Who sees it | Line |
-|---|---|---|
-| Hide phase begins | everyone (feed) | `Mula! Dikejar, pergi sorok!` Keeps the "go hide" instruction. |
-| Chasers released | chasers | `Jom kejar!` |
-| Chasers released | runners, and the feed | `Kejar dah keluar. Cabut lari!` |
-| Claiming at a station | **the claimer only** | `Tapau: <power-up>!` (e.g. `Tapau: Durian!`) |
-| Someone claims (any station, or via Abang Grab) | the feed | `<name> tapau satu power-up`. Never names the power-up: runners' power-ups stay secret. |
-| A catch | the chaser, and the feed | `KANTOI! #07 kena tangkap.` |
-| In jail | the jailed runner | `Lepak mamak dulu…` |
-| Jailbreak | the feed | `#03 pecah jail. Semua bebas!` |
-| Ping | the feed | `Ping! 3 Dikejar nampak.` |
+- Each power-up's **name and its messages** are the ones in §6. Those are the only Malaysian lines this adds.
+- **Every power-up card** shows a short plain-English line under its local name saying what it does, e.g. `Blocks the next catch, up to 10 min` (**Claude's call**), so players who don't speak Malay can still play.
+- **All other wording stays as it is today,** including the feed's existing lines for pickups, pings and catches, and the existing "Kejar" (chasers) and "Dikejar" (runners) naming.
 
 ## 8. Constraints
 
@@ -129,4 +114,4 @@ These lines replace their English equivalents. Some English stays where it's cle
 
 - Exact screen layout for picking a station for Abang Grab (map tap or list), as long as it works by tapping on a phone.
 - How the "taken" state is stored (e.g. a `taken_at` / `taken_by` column), as long as it's atomic and taken power-ups no longer appear in anyone's hand.
-- Copy for refusal edge cases not listed above, in the same voice.
+- Copy for power-up refusal edge cases not listed above, in the same voice as §6.

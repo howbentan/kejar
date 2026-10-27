@@ -66,7 +66,7 @@ A web app for organised, real-world chase games (runners vs chasers, with marsha
 Also floated: surprise missions, a bounty on the longest survivor. **Malaysian power-ups (designed 2026-10-28, not built).** `docs/superpowers/specs/2026-10-28-kejar-malaysian-powerups-design.md`.
 - Funny, local renames: Gostan, Durian, Ponteng, Mat Rempit, Pak Guard.
 - New power-ups: Toyol and Ah Long ("take away"), and Abang Grab (claim a station remotely).
-- A Manglish voice for key moments.
+- Malaysian slang applies to the power-ups only; all other wording stays as it is.
 - Stations stay random-on-claim.
 
 Suggested next: a real playtest in a park, then the endgame ideas above (the shrinking zone can reuse the Plan 4b play-area code); the owner hasn't chosen.
