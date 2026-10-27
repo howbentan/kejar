@@ -994,6 +994,7 @@ describe('saved arenas', () => {
     const { arenas } = await run('listArenas', { organiserToken })
     expect(arenas).toHaveLength(1)
     expect(arenas[0]).toMatchObject({ id: arenaId, name: 'Test Park', waterChecked: true, problems: [] })
+    expect(arenas[0].draft).toMatchObject({ name: 'Test Park', osmRef: 'way/1', jail: pt(100, 100) })
     expect(Math.abs(arenas[0].areaHa - 15)).toBeLessThan(0.3)
     const { code } = await run('create', { organiserToken, savedArenaId: arenaId })
     const game = (await store.gameByCode(code))!

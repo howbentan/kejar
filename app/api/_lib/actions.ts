@@ -887,6 +887,8 @@ const listArenas: Action = async (ctx, body) => {
       areaHa: areaHaOf(r.arena),
       waterChecked: r.water_checked,
       arena: r.arena,
+      /** What the organiser chose, so the park can be edited. */
+      draft: r.draft,
       problems: pointProblems(r.arena),
     })),
   }

@@ -91,8 +91,6 @@ select.input option { background: #141614; color: var(--white); }
 .map-me span { color: var(--volt); font-size: 14px; line-height: 1; }
 
 /* Centre marker for the play-area picker */
-.picker-cross { position: absolute; left: 50%; top: 150px; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; border: 2px solid var(--volt); pointer-events: none; }
-.picker-cross::after { content: ''; position: absolute; inset: 4px; border-radius: 50%; background: var(--volt); }
 
 /* Power-up hand */
 .hand { display: flex; gap: 8px; overflow-x: auto; }
