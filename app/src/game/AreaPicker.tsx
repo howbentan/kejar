@@ -2,7 +2,7 @@ import type { Feature, FeatureCollection, Geometry } from 'geojson'
 import maplibregl, { type GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useEffect, useRef, useState } from 'react'
-import { ARENAS } from '../../shared/arenas.js'
+import { KL_FALLBACK } from '../../shared/arenaDraft.js'
 import { MAX_STATIONS } from '../../shared/ids.js'
 import { circlePolygon, distanceM } from '../../shared/geo.js'
 import type { LatLng } from '../../shared/types.js'
@@ -10,7 +10,7 @@ import { kejarMapStyle } from './mapStyle'
 
 const VOLT = '#C6FF3D'
 /** Where the picker opens if this device can't say where it is. */
-const FALLBACK = ARENAS.titiwangsa.start
+const FALLBACK = KL_FALLBACK
 
 /** How close (in screen pixels) a tap must be to an existing station to remove it. */
 const REMOVE_PX = 25

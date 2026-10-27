@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react'
-import { ARENAS } from '../../shared/arenas.js'
 import { DEFAULT_SETTINGS, type LatLng, type Settings } from '../../shared/types.js'
 import AreaPicker from '../game/AreaPicker'
 import { call } from '../game/api'
@@ -123,7 +122,6 @@ export default function HostNew() {
         value={arenaId}
         options={[
           { value: 'around-me', text: 'Pick on map' },
-          ...Object.values(ARENAS).map((a) => ({ value: a.id, text: a.name })),
         ]}
         onChange={setArenaId}
       />

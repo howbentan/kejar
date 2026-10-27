@@ -9,7 +9,7 @@ import {
   who,
   type ReportReason,
 } from '../../shared/alerts.js'
-import { arenaAroundPoint, ARENAS } from '../../shared/arenas.js'
+import { arenaAroundPoint } from '../../shared/arenas.js'
 import { judgeCatch, judgeJailbreak } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
 import { JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
@@ -256,9 +256,7 @@ const create: Action = async (ctx, body) => {
       throw new ActionError(400, e instanceof Error ? e.message : String(e))
     }
   } else {
-    const found = ARENAS[str(body.arenaId)]
-    if (!found) throw new ActionError(400, 'Unknown arena')
-    arena = found
+    throw new ActionError(400, 'Unknown arena')
   }
   const settings = settingsFrom(body.settings)
   let code = newGameCode(ctx.rng)

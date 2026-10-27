@@ -25,7 +25,7 @@ describe('arenaAroundPoint', () => {
   it('builds a circular arena with the jail at the centre', () => {
     const a = arenaAroundPoint({ lat: 3.1, lng: 101.6 })
     expect(a.id).toBe('around-me')
-    expect(a.boundary).toHaveLength(24)
+    expect(a.boundary).toHaveLength(48)
     expect(a.jail).toEqual({ lat: 3.1, lng: 101.6 })
   })
 })
