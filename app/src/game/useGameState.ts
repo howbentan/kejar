@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
+import { credentials } from './auth'
 import { loadSession } from './session'
 import { clockOffset, type ClockSample } from './time'
 
@@ -20,7 +21,7 @@ export function useGameState(
   const lastSent = useRef(0)
   const samples = useRef<ClockSample[]>([])
   const session = loadSession(localStorage, code)
-  const auth = session.token ? { token: session.token } : { hostKey: session.hostKey }
+  const auth = credentials(code)
 
   const refresh = useCallback(async () => {
     if (document.visibilityState !== 'visible') return
@@ -36,7 +37,7 @@ export function useGameState(
       setError(e instanceof Error ? e.message : String(e))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, auth.token, auth.hostKey])
+  }, [code, auth.token, auth.organiserToken])
 
   useEffect(() => {
     void refresh()
