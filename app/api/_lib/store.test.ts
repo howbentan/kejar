@@ -217,3 +217,41 @@ describe('organiser accounts', () => {
     expect(await store.redeemMarshalInvite('mtok1', 1_500, game.id)).toEqual({ ok: false, reason: 'redeemed' })
   })
 })
+
+describe('saved arenas', () => {
+  const arena = { id: 'x', name: 'Park', boundary: [], jail: { lat: 0, lng: 0 }, start: { lat: 0, lng: 0 } }
+  const draft = {
+    name: 'Park', source: 'circle' as const, osmRef: null, outline: null, circle: { center: { lat: 0, lng: 0 }, radiusM: 200 },
+    water: [], toilets: [], waterChecked: true, jail: null, start: null, stations: [],
+  }
+  const add = (org: string, name: string) => store.addArena({ organisation_id: org, name, draft, arena, water_checked: true })
+
+  it('arenas are listed per organisation, newest first', async () => {
+    await add('o1', 'KLCC')
+    now += MIN
+    const b = await add('o1', 'Titiwangsa')
+    await add('o2', 'Elsewhere')
+    expect((await store.arenasFor('o1')).map((a) => a.name)).toEqual(['Titiwangsa', 'KLCC'])
+    expect((await store.arenaById(b.id))!.organisation_id).toBe('o1')
+    await store.deleteArena(b.id)
+    expect(await store.arenaById(b.id)).toBeNull()
+  })
+
+  it('updateArena bumps updated_at', async () => {
+    const a = await add('o1', 'KLCC')
+    now += 5 * MIN
+    await store.updateArena(a.id, { name: 'KLCC Park', water_checked: false })
+    const after = (await store.arenaById(a.id))!
+    expect(after).toMatchObject({ name: 'KLCC Park', water_checked: false, created_at: iso(T0), updated_at: iso(T0 + 5 * MIN) })
+  })
+
+  it('osm cache returns nothing once older than maxAge', async () => {
+    await store.osmCachePut('k', { hits: 1 })
+    now += 10_000
+    expect(await store.osmCacheGet('k', 60_000)).toEqual({ hits: 1 })
+    now += 60_000
+    expect(await store.osmCacheGet('k', 60_000)).toBeNull()
+    await store.osmCachePut('k', { hits: 2 })
+    expect(await store.osmCacheGet('k', 60_000)).toEqual({ hits: 2 })
+  })
+})

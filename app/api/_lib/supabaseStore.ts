@@ -1,19 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Game, GameEvent, Ping, Player, Position, PowerUp } from '../../shared/types.js'
-import type {
-  GameRow,
-  GameStore,
-  MarshalInviteRow,
-  NewPowerUp,
-  Organisation,
-  OrganiserInviteRow,
-  OrganiserRow,
-  PlayerRow,
-  RedeemInviteResult,
-  RedeemMarshalInviteResult,
-  SafetyRecord,
-  StationClaim,
-} from './store.js'
+import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, StationClaim } from './store.js'
 
 const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, push, removed_at, outside, left_start'
 const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id'
@@ -289,5 +276,32 @@ export class SupabaseStore implements GameStore {
     ) as { redeemed_at: string | null; expires_at: string } | null
     if (!exists) return { ok: false, reason: 'invalid' }
     return { ok: false, reason: exists.redeemed_at ? 'redeemed' : 'expired' }
+  }
+  async addArena(r: NewSavedArena): Promise<SavedArenaRow> {
+    const at = this.nowIso()
+    return check(await this.db.from('arenas').insert({ ...r, created_at: at, updated_at: at }).select('*').single()) as SavedArenaRow
+  }
+  async updateArena(id: string, patch: Partial<Pick<SavedArenaRow, 'name' | 'draft' | 'arena' | 'water_checked'>>) {
+    check(await this.db.from('arenas').update({ ...patch, updated_at: this.nowIso() }).eq('id', id))
+  }
+  async arenaById(id: string): Promise<SavedArenaRow | null> {
+    return check(await this.db.from('arenas').select('*').eq('id', id).maybeSingle()) as SavedArenaRow | null
+  }
+  async arenasFor(organisationId: string): Promise<SavedArenaRow[]> {
+    return check(
+      await this.db.from('arenas').select('*').eq('organisation_id', organisationId).order('updated_at', { ascending: false }),
+    ) as SavedArenaRow[]
+  }
+  async deleteArena(id: string) {
+    check(await this.db.from('arenas').delete().eq('id', id))
+  }
+  async osmCacheGet(key: string, maxAgeMs: number): Promise<unknown | null> {
+    const row = check(await this.db.from('osm_cache').select('body, fetched_at').eq('key', key).maybeSingle()) as
+      | { body: unknown; fetched_at: string }
+      | null
+    return row && this.clock() - Date.parse(row.fetched_at) < maxAgeMs ? row.body : null
+  }
+  async osmCachePut(key: string, body: unknown) {
+    check(await this.db.from('osm_cache').upsert({ key, body, fetched_at: this.nowIso() }, { onConflict: 'key' }))
   }
 }

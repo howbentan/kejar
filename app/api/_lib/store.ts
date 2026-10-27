@@ -1,4 +1,5 @@
-import type { Game, GameEvent, Ping, Player, Position, PowerUp } from '../../shared/types.js'
+import type { ArenaDraft } from '../../shared/arenaDraft.js'
+import type { Arena, Game, GameEvent, Ping, Player, Position, PowerUp } from '../../shared/types.js'
 
 export type GameRow = Game & { organiser_id: string; host_push?: PushSubscriptionJSON | null }
 export type PlayerRow = Player & { token_hash: string }
@@ -107,7 +108,34 @@ export interface GameStore {
   createMarshalInvite(inv: Omit<MarshalInviteRow, 'id'>): Promise<MarshalInviteRow>
   /** Atomically claims the invite (unredeemed, unexpired at `now`, for this specific game). */
   redeemMarshalInvite(tokenHash: string, now: number, gameId: string): Promise<RedeemMarshalInviteResult>
+  /** created_at = updated_at = store clock. */
+  addArena(r: NewSavedArena): Promise<SavedArenaRow>
+  /** updated_at = store clock. */
+  updateArena(id: string, patch: Partial<Pick<SavedArenaRow, 'name' | 'draft' | 'arena' | 'water_checked'>>): Promise<void>
+  arenaById(id: string): Promise<SavedArenaRow | null>
+  /** Newest updated first. */
+  arenasFor(organisationId: string): Promise<SavedArenaRow[]>
+  deleteArena(id: string): Promise<void>
+  /** The cached body, or null if missing or older than maxAgeMs by the store clock. */
+  osmCacheGet(key: string, maxAgeMs: number): Promise<unknown | null>
+  /** fetched_at = store clock; replaces any earlier entry. */
+  osmCachePut(key: string, body: unknown): Promise<void>
 }
+
+/** A park set up once and reused (Plan 4b). Games copy `arena`; the saved row is never changed by a game. */
+export interface SavedArenaRow {
+  id: string
+  organisation_id: string
+  name: string
+  /** What the organiser chose, kept so the lakes can be re-checked and the area rebuilt. */
+  draft: ArenaDraft
+  arena: Arena
+  water_checked: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type NewSavedArena = Omit<SavedArenaRow, 'id' | 'created_at' | 'updated_at'>
 
 export interface SafetyRecord {
   game_id: string
@@ -140,6 +168,8 @@ export class MemoryStore implements GameStore {
   private organiserRows: OrganiserRow[] = []
   private organiserInviteRows: OrganiserInviteRow[] = []
   private marshalInviteRows: MarshalInviteRow[] = []
+  private arenaRows: SavedArenaRow[] = []
+  private osmCacheRows = new Map<string, { body: unknown; fetched_at: number }>()
 
   constructor(clock: () => number) {
     this.clock = clock
@@ -388,5 +418,34 @@ export class MemoryStore implements GameStore {
     if (now >= Date.parse(inv.expires_at)) return { ok: false, reason: 'expired' }
     inv.redeemed_at = new Date(now).toISOString()
     return { ok: true, gameId: inv.game_id }
+  }
+  async addArena(r: NewSavedArena) {
+    const row: SavedArenaRow = { ...r, id: this.id('ar'), created_at: this.nowIso(), updated_at: this.nowIso() }
+    this.arenaRows.push(row)
+    return structuredClone(row)
+  }
+  async updateArena(id: string, patch: Partial<Pick<SavedArenaRow, 'name' | 'draft' | 'arena' | 'water_checked'>>) {
+    const row = this.arenaRows.find((x) => x.id === id)
+    if (row) Object.assign(row, structuredClone(patch), { updated_at: this.nowIso() })
+  }
+  async arenaById(id: string) {
+    const row = this.arenaRows.find((x) => x.id === id)
+    return row ? structuredClone(row) : null
+  }
+  async arenasFor(organisationId: string) {
+    return this.arenaRows
+      .filter((x) => x.organisation_id === organisationId)
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      .map((x) => structuredClone(x))
+  }
+  async deleteArena(id: string) {
+    this.arenaRows = this.arenaRows.filter((x) => x.id !== id)
+  }
+  async osmCacheGet(key: string, maxAgeMs: number) {
+    const hit = this.osmCacheRows.get(key)
+    return hit && this.clock() - hit.fetched_at < maxAgeMs ? structuredClone(hit.body) : null
+  }
+  async osmCachePut(key: string, body: unknown) {
+    this.osmCacheRows.set(key, { body: structuredClone(body), fetched_at: this.clock() })
   }
 }

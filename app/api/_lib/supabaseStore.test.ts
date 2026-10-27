@@ -6,6 +6,7 @@ import { SupabaseStore } from './supabaseStore.js'
 function fakeDb() {
   const inserts: { table: string; row: Record<string, unknown> }[] = []
   const rpcs: { fn: string; args: Record<string, unknown> }[] = []
+  const upserts: { table: string; row: Record<string, unknown>; opts: unknown }[] = []
   const db = {
     rpc: async (fn: string, args: Record<string, unknown>) => {
       rpcs.push({ fn, args })
@@ -16,9 +17,13 @@ function fakeDb() {
         inserts.push({ table, row })
         return { data: null, error: null }
       },
+      upsert: async (row: Record<string, unknown>, opts: unknown) => {
+        upserts.push({ table, row, opts })
+        return { data: null, error: null }
+      },
     }),
   } as unknown as SupabaseClient
-  return { db, inserts, rpcs }
+  return { db, inserts, rpcs, upserts }
 }
 
 describe('SupabaseStore', () => {
@@ -37,5 +42,18 @@ describe('SupabaseStore', () => {
     const now = Date.parse('2026-10-25T09:07:00.000Z')
     expect(await new SupabaseStore(db, () => now).resumeGame('g1')).toBe(90000)
     expect(rpcs).toEqual([{ fn: 'resume_game', args: { p_game: 'g1', p_at: '2026-10-25T09:07:00.000Z' } }])
+  })
+
+  it('osmCachePut upserts on key with the store clock', async () => {
+    const { db, upserts } = fakeDb()
+    const now = Date.parse('2026-10-27T09:00:00.000Z')
+    await new SupabaseStore(db, () => now).osmCachePut('nominatim:klcc', [{ name: 'KLCC Park' }])
+    expect(upserts).toEqual([
+      {
+        table: 'osm_cache',
+        row: { key: 'nominatim:klcc', body: [{ name: 'KLCC Park' }], fetched_at: '2026-10-27T09:00:00.000Z' },
+        opts: { onConflict: 'key' },
+      },
+    ])
   })
 })
