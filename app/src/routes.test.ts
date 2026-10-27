@@ -26,4 +26,8 @@ describe('routeFor', () => {
   it('maps an organiser invite link, keeping the token case-sensitive', () => {
     expect(routeFor('/organiser/AbC-123_xyz')).toEqual({ route: 'organiser-redeem', token: 'AbC-123_xyz' })
   })
+
+  it('maps a marshal invite link, uppercasing the code but not the token', () => {
+    expect(routeFor('/m/abc234/XyZ-9_tok')).toEqual({ route: 'marshal-redeem', code: 'ABC234', token: 'XyZ-9_tok' })
+  })
 })

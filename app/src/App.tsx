@@ -5,6 +5,7 @@ import Home from './screens/Home'
 import HostLobby from './screens/HostLobby'
 import HostNew from './screens/HostNew'
 import Join from './screens/Join'
+import MarshalRedeem from './screens/MarshalRedeem'
 import OrganiserRedeem from './screens/OrganiserRedeem'
 import PrintTags from './screens/PrintTags'
 import SpikeAdmin from './spike/SpikeAdmin'
@@ -28,6 +29,8 @@ export default function App() {
       return <PrintTags />
     case 'organiser-redeem':
       return <OrganiserRedeem token={token!} />
+    case 'marshal-redeem':
+      return <MarshalRedeem code={code!} token={token!} />
     case 'spike-join':
       return <SpikeJoin />
     case 'spike-admin':

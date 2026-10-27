@@ -6,6 +6,7 @@ export type Route =
   | 'join'
   | 'print-tags'
   | 'organiser-redeem'
+  | 'marshal-redeem'
   | 'spike-join'
   | 'spike-admin'
   | 'spike-report'
@@ -27,6 +28,7 @@ const WITH_CODE: [RegExp, Route][] = [
 ]
 
 const ORGANISER_REDEEM = /^\/organiser\/([A-Za-z0-9_-]+)$/
+const MARSHAL_REDEEM = /^\/m\/([A-Za-z0-9]{6})\/([A-Za-z0-9_-]+)$/
 
 export function routeFor(pathname: string): { route: Route; code?: string; token?: string } {
   const path = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname
@@ -37,5 +39,7 @@ export function routeFor(pathname: string): { route: Route; code?: string; token
   }
   const o = ORGANISER_REDEEM.exec(path)
   if (o) return { route: 'organiser-redeem', token: o[1] }
+  const ma = MARSHAL_REDEEM.exec(path)
+  if (ma) return { route: 'marshal-redeem', code: ma[1].toUpperCase(), token: ma[2] }
   return { route: 'not-found' }
 }
