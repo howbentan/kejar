@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import SafetyBar from '../game/SafetyBar'
+import { loadOrganiserSession } from '../game/organiserSession'
 import { loadSession } from '../game/session'
 import { ErrorText, Screen } from '../game/ui'
 import { useGameState, type LocationMode } from '../game/useGameState'
@@ -22,7 +23,7 @@ function locationMode(view: View | null): LocationMode {
 
 export default function GameScreen({ code }: { code: string }) {
   const session = loadSession(localStorage, code)
-  const signedIn = !!(session.token || session.hostKey)
+  const signedIn = !!(session.token || loadOrganiserSession(localStorage))
   useEffect(() => {
     if (!signedIn) window.location.assign(`/join/${code}`)
   }, [signedIn, code])
@@ -42,7 +43,7 @@ export default function GameScreen({ code }: { code: string }) {
     )
   }
   if (current.me.removed_at) return <Removed />
-  if (current.phase === 'ended') return <Results view={current} isHost={!!session.hostKey} />
+  if (current.phase === 'ended') return <Results view={current} isHost={current.me.id === 'host'} />
   if (current.phase === 'lobby') return <Lobby code={code} view={current} refresh={refresh} />
   if (current.me.role === 'marshal') return <MarshalLive code={code} view={current} refresh={refresh} />
 
