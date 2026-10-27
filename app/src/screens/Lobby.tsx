@@ -5,6 +5,7 @@ import { currentPushEnv, NotificationsDeniedError, pushSupport, subscribe } from
 import { call } from '../game/api'
 import { loadSession } from '../game/session'
 import Scanner from '../game/Scanner'
+import SetupMap from '../game/SetupMap'
 import { ErrorText, Screen, tagText } from '../game/ui'
 
 const ROLE_COPY = {
@@ -77,6 +78,7 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
     <Screen eyebrow={`kejar. · game ${code}`}>
       <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.04em' }}>Hi {view.me.name}</h1>
       <p className="muted">{role ? ROLE_COPY[role] : 'Waiting for the organiser to give you a role…'}</p>
+      {role === 'marshal' && <SetupMap view={view} />}
 
       {role === 'runner' && (
         <div className="card">

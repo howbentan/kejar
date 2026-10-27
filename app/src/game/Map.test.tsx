@@ -86,4 +86,22 @@ describe('GameMap', () => {
     rerender(<GameMap arena={arena} dots={[]} pins={[]} />)
     expect(created.data.pins).toMatchObject({ features: [] })
   })
+
+  it('lakes, toilets and the start are drawn on their own layers', () => {
+    created.layers = []
+    created.data = {}
+    const lake = [
+      { lat: 3.001, lng: 101.001 },
+      { lat: 3.001, lng: 101.002 },
+      { lat: 3.002, lng: 101.002 },
+    ]
+    const withLake = { ...arena, holes: [lake], toilets: [{ lat: 3.003, lng: 101.003 }], start: { lat: 3.004, lng: 101.004 } }
+    render(<GameMap arena={withLake} dots={[]} />)
+    created.load!()
+    const ids = created.layers.map((l) => l.id)
+    expect(ids).toEqual(expect.arrayContaining(['holes', 'toilets', 'start', 'start-label']))
+    expect(created.data.holes).toMatchObject({ features: [{ geometry: { type: 'LineString' } }] })
+    expect(created.data.toilets).toMatchObject({ features: [{ geometry: { coordinates: [101.003, 3.003] } }] })
+    expect(created.data.start).toMatchObject({ features: [{ geometry: { coordinates: [101.004, 3.004] } }] })
+  })
 })

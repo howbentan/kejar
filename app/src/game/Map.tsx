@@ -116,6 +116,49 @@ export default function GameMap({
         source: 'jail',
         paint: { 'circle-radius': 9, 'circle-color': BLACK, 'circle-stroke-color': WHITE, 'circle-stroke-width': 1.5 },
       })
+      // Lakes cut out of the park: outside the play area, so drawn like the boundary but dashed.
+      m.addSource('holes', {
+        type: 'geojson',
+        data: collection(
+          (arena.holes ?? []).map((h) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: ring(h) } })),
+        ),
+      })
+      m.addLayer({
+        id: 'holes',
+        type: 'line',
+        source: 'holes',
+        paint: { 'line-color': WHITE, 'line-width': 1.2, 'line-opacity': 0.6, 'line-dasharray': [2, 2] },
+      })
+      m.addSource('toilets', {
+        type: 'geojson',
+        data: collection(
+          (arena.toilets ?? []).map((t) => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [t.lng, t.lat] } })),
+        ),
+      })
+      m.addLayer({
+        id: 'toilets',
+        type: 'symbol',
+        source: 'toilets',
+        layout: { 'text-field': 'WC', 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
+        paint: { 'text-color': WHITE },
+      })
+      m.addSource('start', {
+        type: 'geojson',
+        data: collection([{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [arena.start.lng, arena.start.lat] } }]),
+      })
+      m.addLayer({
+        id: 'start',
+        type: 'circle',
+        source: 'start',
+        paint: { 'circle-radius': 9, 'circle-color': BLACK, 'circle-stroke-color': WHITE, 'circle-stroke-width': 1.5 },
+      })
+      m.addLayer({
+        id: 'start-label',
+        type: 'symbol',
+        source: 'start',
+        layout: { 'text-field': 'S', 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
+        paint: { 'text-color': WHITE },
+      })
       m.addSource('stations', { type: 'geojson', data: stationFeatures(latestStations.current) })
       m.addLayer({
         id: 'stations',

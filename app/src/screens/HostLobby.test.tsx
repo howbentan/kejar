@@ -23,6 +23,8 @@ vi.mock('../spike/push', () => ({
   NotificationsDeniedError: class extends Error {},
 }))
 
+vi.mock('../game/Map', () => ({ default: () => null }))
+
 import { ApiError } from '../game/api'
 import HostLobby from './HostLobby'
 
@@ -44,6 +46,7 @@ const lobbyView = {
     { id: 'p2', name: 'Hafiz', role: 'runner', tag_id: null, jailed: false },
   ],
   results: null,
+  stations: [{ n: 1, lat: 0.001, lng: 0.001 }],
 } as unknown as View
 
 beforeEach(() => {
@@ -93,5 +96,11 @@ describe('HostLobby', () => {
       expect(call).toHaveBeenCalledWith('setRoles', { code: 'ABC234', organiserToken: 'h1', roles: { p1: 'marshal' } }),
     )
     expect(screen.queryByRole('radio', { name: /Dikejar|Kejar/ })).toBeNull()
+  })
+
+  it('the organiser sees the setup map', async () => {
+    render(<HostLobby code="ABC234" />)
+    expect(await screen.findByText('Setup: where things go')).toBeInTheDocument()
+    expect(screen.getByText('Station 1')).toBeInTheDocument()
   })
 })
