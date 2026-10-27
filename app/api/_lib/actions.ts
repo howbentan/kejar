@@ -9,6 +9,7 @@ import {
   who,
   type ReportReason,
 } from '../../shared/alerts.js'
+import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
 import { judgeCatch, judgeJailbreak } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
@@ -18,10 +19,12 @@ import { computeResults } from '../../shared/results.js'
 import { shuffleRoles, validateTeams } from '../../shared/teams.js'
 import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type Role, type Settings } from '../../shared/types.js'
 import { viewFor } from '../../shared/views.js'
-import { distanceM, distanceOutsideM } from '../../shared/geo.js'
+import { distanceM } from '../../shared/geo.js'
+import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
 import { MARSHAL_INVITE_TTL_MS, ORGANISER_INVITE_TTL_MS } from '../../shared/invites.js'
+import { OSM_CACHE_MS, parkFeatures as lookupParkFeatures, searchParks as lookupParks, type FetchJson } from './osm.js'
 import { hashToken, newToken } from './secrets.js'
-import type { GameRow, GameStore, OrganiserRow } from './store.js'
+import type { GameRow, GameStore, OrganiserRow, SavedArenaRow } from './store.js'
 
 export class ActionError extends Error {
   status: number
@@ -39,6 +42,8 @@ export interface Ctx {
   now: number
   push: PushFn
   rng: () => number
+  /** For the OpenStreetMap lookups (Plan 4b). */
+  fetchJson?: FetchJson
 }
 
 type Body = Record<string, unknown>
@@ -239,7 +244,20 @@ async function finish(ctx: Ctx, game: Game) {
 const create: Action = async (ctx, body) => {
   const organiser = await requireAnyOrganiser(ctx, body)
   let arena: Arena
-  if (body.arenaId === 'around-me') {
+  if (body.draft !== undefined) {
+    arena = buildArena(asDraft(body.draft), 'one-off')
+  } else if (body.savedArenaId !== undefined) {
+    const saved = await requireArena(ctx, organiser, body.savedArenaId)
+    const o = (typeof body.overrides === 'object' && body.overrides ? body.overrides : {}) as Record<string, unknown>
+    const draft = asDraft({
+      ...saved.draft,
+      ...(o.jail !== undefined ? { jail: o.jail } : {}),
+      ...(o.start !== undefined ? { start: o.start } : {}),
+      ...(o.stations !== undefined ? { stations: o.stations } : {}),
+    })
+    // A copy for this game only: the saved arena is never changed by a game.
+    arena = buildArena(draft, saved.id)
+  } else if (body.arenaId === 'around-me') {
     const c = body.center as { lat?: unknown; lng?: unknown } | undefined
     if (typeof c?.lat !== 'number' || typeof c?.lng !== 'number') throw new ActionError(400, 'Need your location for an Around me game')
     const radiusM = body.radiusM === undefined ? 200 : Number(body.radiusM)
@@ -427,7 +445,8 @@ const location: Action = async (ctx, body) => {
 async function checkWhere(ctx: Ctx, game: Game, me: Player, here: LatLng, accuracy: number) {
   const phase = phaseAt(game, ctx.now).phase
   if ((phase !== 'hiding' && phase !== 'chasing') || me.jailed || (me.role !== 'runner' && me.role !== 'chaser')) return
-  const outsideBy = distanceOutsideM(here, game.arena.boundary)
+  // Lakes cut out of the park count as outside too (Plan 4b).
+  const outsideBy = distanceOutsidePlayArea(here, game.arena)
   // Alert only when clearly outside; re-arm only once back inside, so GPS jitter at the edge can't spam.
   if (outsideBy > OUTSIDE_MARGIN_M) {
     if (await ctx.store.setFlag(me.id, 'outside', true)) {
@@ -775,6 +794,130 @@ const removePlayer: Action = async (ctx, body) => {
   return { ok: true }
 }
 
+// ---- Saved arenas and park setup (Plan 4b) ----
+
+const isLatLng = (v: unknown): v is LatLng =>
+  typeof v === 'object' && v !== null && Number.isFinite((v as LatLng).lat) && Number.isFinite((v as LatLng).lng)
+const isRing = (v: unknown): v is LatLng[] => Array.isArray(v) && v.length >= 3 && v.length <= 5_000 && v.every(isLatLng)
+
+/** Checks the shape of a draft sent by the browser; the rules themselves are in arenaFromDraft. */
+function asDraft(v: unknown): ArenaDraft {
+  const d = (typeof v === 'object' && v ? v : {}) as Record<string, unknown>
+  const circle = d.circle as { center?: unknown; radiusM?: unknown } | null | undefined
+  const ok =
+    typeof d.name === 'string' &&
+    (d.source === 'osm' || d.source === 'circle') &&
+    (d.osmRef === null || typeof d.osmRef === 'string') &&
+    (d.outline === null || isRing(d.outline)) &&
+    (circle === null || (typeof circle === 'object' && isLatLng(circle.center) && typeof circle.radiusM === 'number')) &&
+    Array.isArray(d.water) && d.water.every(isRing) &&
+    Array.isArray(d.toilets) && d.toilets.every(isLatLng) &&
+    typeof d.waterChecked === 'boolean' &&
+    (d.jail === null || isLatLng(d.jail)) &&
+    (d.start === null || isLatLng(d.start)) &&
+    Array.isArray(d.stations) && d.stations.every(isLatLng)
+  if (!ok) throw new ActionError(400, 'Invalid play area')
+  return d as unknown as ArenaDraft
+}
+
+function buildArena(draft: ArenaDraft, id: string): Arena {
+  try {
+    return arenaFromDraft(draft, id)
+  } catch (e) {
+    throw new ActionError(400, e instanceof Error ? e.message : String(e))
+  }
+}
+
+async function requireArena(ctx: Ctx, organiser: OrganiserRow, id: unknown): Promise<SavedArenaRow> {
+  const row = await ctx.store.arenaById(str(id))
+  if (!row || row.organisation_id !== organiser.organisation_id) throw new ActionError(404, 'Arena not found')
+  return row
+}
+
+function osmDeps(ctx: Ctx) {
+  return {
+    fetchJson: ctx.fetchJson ?? (async () => Promise.reject(new Error('OpenStreetMap lookups are not available'))),
+    cache: {
+      get: (key: string) => ctx.store.osmCacheGet(key, OSM_CACHE_MS),
+      put: (key: string, body: unknown) => ctx.store.osmCachePut(key, body),
+    },
+  }
+}
+
+const areaHaOf = (a: Arena) => ringAreaHa(a.boundary) - (a.holes ?? []).reduce((sum, h) => sum + ringAreaHa(h), 0)
+
+const searchParks: Action = async (ctx, body) => {
+  await requireAnyOrganiser(ctx, body)
+  const query = str(body.query).trim()
+  if (query.length < 3 || query.length > 80) throw new ActionError(400, 'Type at least 3 letters')
+  try {
+    return { results: await lookupParks(query, osmDeps(ctx)) }
+  } catch {
+    throw new ActionError(502, 'Park search is unavailable right now — try again in a minute')
+  }
+}
+
+const parkFeatures: Action = async (ctx, body) => {
+  await requireAnyOrganiser(ctx, body)
+  if (!isRing(body.outline)) throw new ActionError(400, 'Invalid park outline')
+  return lookupParkFeatures(body.outline, osmDeps(ctx))
+}
+
+const saveArena: Action = async (ctx, body) => {
+  const organiser = await requireAnyOrganiser(ctx, body)
+  const draft = asDraft(body.draft)
+  const existing = body.arenaId !== undefined ? await requireArena(ctx, organiser, body.arenaId) : null
+  const arena = buildArena(draft, existing?.id ?? 'saved')
+  const fields = { name: arena.name, draft, arena, water_checked: draft.waterChecked }
+  if (existing) {
+    await ctx.store.updateArena(existing.id, fields)
+    return { arenaId: existing.id }
+  }
+  const row = await ctx.store.addArena({ organisation_id: organiser.organisation_id, ...fields })
+  return { arenaId: row.id }
+}
+
+const listArenas: Action = async (ctx, body) => {
+  const organiser = await requireAnyOrganiser(ctx, body)
+  const rows = await ctx.store.arenasFor(organiser.organisation_id)
+  return {
+    arenas: rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      areaHa: areaHaOf(r.arena),
+      waterChecked: r.water_checked,
+      arena: r.arena,
+      problems: pointProblems(r.arena),
+    })),
+  }
+}
+
+const deleteArena: Action = async (ctx, body) => {
+  const organiser = await requireAnyOrganiser(ctx, body)
+  const row = await requireArena(ctx, organiser, body.arenaId)
+  await ctx.store.deleteArena(row.id)
+  return { ok: true }
+}
+
+/** Looks for lakes again on a park saved while Overpass was down; says which points now need moving. */
+const recheckWater: Action = async (ctx, body) => {
+  const organiser = await requireAnyOrganiser(ctx, body)
+  const row = await requireArena(ctx, organiser, body.arenaId)
+  if (row.draft.source !== 'osm' || !row.draft.outline) {
+    if (!row.water_checked) await ctx.store.updateArena(row.id, { water_checked: true })
+    return { waterChecked: true, problems: pointProblems(row.arena) }
+  }
+  const found = await lookupParkFeatures(row.draft.outline, osmDeps(ctx))
+  if (!found.waterChecked) return { waterChecked: false, problems: pointProblems(row.arena) }
+  const draft: ArenaDraft = { ...row.draft, water: found.water, toilets: found.toilets, waterChecked: true }
+  // Rebuild the area without rejecting misplaced points: the organiser moves them afterwards.
+  const area = buildPlayArea({ outline: draft.outline, water: draft.water, circle: draft.circle })
+  const shape = { boundary: area.boundary, holes: area.holes }
+  const arena: Arena = { ...row.arena, ...shape, toilets: draft.toilets.filter((t) => inPlayArea(t, shape)) }
+  await ctx.store.updateArena(row.id, { draft, arena, water_checked: true })
+  return { waterChecked: true, problems: pointProblems(arena) }
+}
+
 const pause: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const marshal = await requireMarshal(ctx, game, body)
@@ -813,6 +956,12 @@ export const actions = {
   report,
   handleAlert,
   removePlayer,
+  searchParks,
+  parkFeatures,
+  saveArena,
+  listArenas,
+  deleteArena,
+  recheckWater,
   createOrganiserInvite,
   redeemOrganiserInvite,
   createMarshalInvite,

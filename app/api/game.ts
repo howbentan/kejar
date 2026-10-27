@@ -22,6 +22,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         push: async (sub, payload) => {
           await webpush.sendNotification(sub as PushSubscription, payload, { TTL: 60, urgency: 'high' })
         },
+        // OpenStreetMap lookups for park setup; a slow public service mustn't hang the request.
+        fetchJson: async (url, init) => {
+          const r = await fetch(url, { ...init, signal: AbortSignal.timeout(25_000) })
+          if (!r.ok) throw new Error(`${new URL(url).host} answered ${r.status}`)
+          return r.json()
+        },
       },
       body,
     )

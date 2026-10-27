@@ -14,6 +14,9 @@ const CENTER = { lat: 3.0, lng: 101.0 }
 let now: number
 let store: MemoryStore
 let pushes: { endpoint: string; payload: unknown }[]
+/** Replies the fake OpenStreetMap services give, in order; an Error is thrown instead. */
+let osmReplies: unknown[]
+let osmCalls: string[]
 
 const run = <T = any>(action: ActionName, body: object) =>
   actions[action](
@@ -23,6 +26,12 @@ const run = <T = any>(action: ActionName, body: object) =>
       rng: seeded(7),
       push: async (sub, payload) => {
         pushes.push({ endpoint: sub.endpoint!, payload: JSON.parse(payload) })
+      },
+      fetchJson: async (url) => {
+        osmCalls.push(url)
+        const r = osmReplies.shift()
+        if (r instanceof Error || r === undefined) throw r ?? new Error('no fake reply')
+        return r
       },
     },
     body,
@@ -57,6 +66,8 @@ beforeEach(() => {
   now = T0
   store = new MemoryStore(() => now)
   pushes = []
+  osmReplies = []
+  osmCalls = []
 })
 
 /** Creates a game with Ben (chaser), Aina #07 and Hafiz #03 (runners), all subscribed to push. */
@@ -953,5 +964,152 @@ describe('review fixes: safety', () => {
     expect(sos.data).toMatchObject({ game_code: g.code, name: 'Aina #07' })
     expect(report.data).toMatchObject({ game_code: g.code, name: 'Hafiz #03', target_name: 'Ben', reason: 'unsafe' })
     expect(removed.data).toMatchObject({ game_code: g.code, by: 'Siti', target_name: 'Ben' })
+  })
+})
+
+describe('saved arenas', () => {
+  const M = 111_195
+  /** dx metres east, dy metres north of CENTER. */
+  const pt = (dx: number, dy: number) => ({ lat: CENTER.lat + dy / M, lng: CENTER.lng + dx / (M * Math.cos((CENTER.lat * Math.PI) / 180)) })
+  const rect = (x0: number, y0: number, x1: number, y1: number) => [pt(x0, y0), pt(x1, y0), pt(x1, y1), pt(x0, y1)]
+  const lake = rect(-50, -50, 50, 50)
+  const draft = (over: object = {}) => ({
+    name: 'Test Park',
+    source: 'osm',
+    osmRef: 'way/1',
+    outline: rect(-200, -200, 200, 200),
+    circle: null,
+    water: [lake],
+    toilets: [],
+    waterChecked: true,
+    jail: pt(100, 100),
+    start: pt(-100, 100),
+    stations: [pt(150, 0), pt(-150, 0)],
+    ...over,
+  })
+
+  it('saved arena round trip', async () => {
+    const organiserToken = await createOrganiser()
+    const { arenaId } = await run('saveArena', { organiserToken, draft: draft() })
+    const { arenas } = await run('listArenas', { organiserToken })
+    expect(arenas).toHaveLength(1)
+    expect(arenas[0]).toMatchObject({ id: arenaId, name: 'Test Park', waterChecked: true, problems: [] })
+    expect(Math.abs(arenas[0].areaHa - 15)).toBeLessThan(0.3)
+    const { code } = await run('create', { organiserToken, savedArenaId: arenaId })
+    const game = (await store.gameByCode(code))!
+    expect(game.arena.stations).toEqual([pt(150, 0), pt(-150, 0)])
+    expect(game.arena.holes).toHaveLength(1)
+  })
+
+  it('arenas are scoped to the organisation', async () => {
+    const mine = await createOrganiser()
+    const theirs = await createOrganiser()
+    const { arenaId } = await run('saveArena', { organiserToken: mine, draft: draft() })
+    await rejects(run('create', { organiserToken: theirs, savedArenaId: arenaId }), 404, 'Arena not found')
+    await rejects(run('saveArena', { organiserToken: theirs, arenaId, draft: draft({ name: 'Mine now' }) }), 404)
+    await rejects(run('deleteArena', { organiserToken: theirs, arenaId }), 404)
+    await rejects(run('recheckWater', { organiserToken: theirs, arenaId }), 404)
+    expect((await run('listArenas', { organiserToken: theirs })).arenas).toEqual([])
+    await rejects(run('listArenas', {}), 403)
+  })
+
+  it('per-game overrides change the game, not the saved arena', async () => {
+    const organiserToken = await createOrganiser()
+    const { arenaId } = await run('saveArena', { organiserToken, draft: draft() })
+    const { code } = await run('create', { organiserToken, savedArenaId: arenaId, overrides: { jail: pt(-100, -100), stations: [pt(0, 150)] } })
+    const game = (await store.gameByCode(code))!
+    expect(game.arena.jail).toEqual(pt(-100, -100))
+    expect(game.arena.stations).toEqual([pt(0, 150)])
+    expect(game.arena.start).toEqual(pt(-100, 100))
+    const saved = (await store.arenaById(arenaId))!
+    expect(saved.arena.jail).toEqual(pt(100, 100))
+    expect(saved.arena.stations).toHaveLength(2)
+    await rejects(
+      run('create', { organiserToken, savedArenaId: arenaId, overrides: { jail: pt(0, 0) } }),
+      400,
+      'Jail must be inside the play area',
+    )
+  })
+
+  it('editing or deleting a saved arena leaves existing games alone', async () => {
+    const organiserToken = await createOrganiser()
+    const { arenaId } = await run('saveArena', { organiserToken, draft: draft() })
+    const { code } = await run('create', { organiserToken, savedArenaId: arenaId })
+    const before = (await store.gameByCode(code))!.arena
+    await run('saveArena', { organiserToken, arenaId, draft: draft({ name: 'Renamed', stations: [] }) })
+    expect((await store.arenaById(arenaId))!.name).toBe('Renamed')
+    await run('deleteArena', { organiserToken, arenaId })
+    expect(await store.arenaById(arenaId)).toBeNull()
+    expect((await store.gameByCode(code))!.arena).toEqual(before)
+  })
+
+  it('standing in the lake counts as outside the play area', async () => {
+    const g = await readyGame({}, { draft: draft() })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    const kinds = async () => (await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts.map((a) => a.kind)
+    await run('location', { code: g.code, token: g.aina.token, ...pt(0, 40), accuracy_m: 5 }) // 10 m into the lake
+    expect(await kinds()).toEqual([])
+    await run('location', { code: g.code, token: g.aina.token, ...pt(0, 20), accuracy_m: 5 }) // 30 m in
+    expect(await kinds()).toEqual(['outside'])
+    await run('location', { code: g.code, token: g.aina.token, ...pt(0, 100), accuracy_m: 5 }) // back on land
+    await run('location', { code: g.code, token: g.aina.token, ...pt(0, 15), accuracy_m: 5 }) // in again
+    expect(await kinds()).toEqual(['outside', 'outside'])
+  })
+
+  it('recheckWater clears the flag and reports misplaced points', async () => {
+    const organiserToken = await createOrganiser()
+    const { arenaId } = await run('saveArena', {
+      organiserToken,
+      draft: draft({ water: [], waterChecked: false, jail: pt(0, 0) }),
+    })
+    expect((await run('listArenas', { organiserToken })).arenas[0].waterChecked).toBe(false)
+    const geometry = (r: { lat: number; lng: number }[]) => [...r, r[0]].map((p) => ({ lat: p.lat, lon: p.lng }))
+    osmReplies.push({ elements: [{ type: 'way', id: 5, tags: { natural: 'water' }, geometry: geometry(lake) }] })
+    expect(await run('recheckWater', { organiserToken, arenaId })).toEqual({
+      waterChecked: true,
+      problems: ['Jail must be inside the play area'],
+    })
+    const [listed] = (await run('listArenas', { organiserToken })).arenas
+    expect(listed).toMatchObject({ waterChecked: true, problems: ['Jail must be inside the play area'] })
+    expect(listed.arena.holes).toHaveLength(1)
+    await rejects(run('create', { organiserToken, savedArenaId: arenaId }), 400, 'Jail must be inside the play area')
+  })
+
+  it('recheckWater keeps the flag when Overpass is still down', async () => {
+    const organiserToken = await createOrganiser()
+    const { arenaId } = await run('saveArena', { organiserToken, draft: draft({ water: [], waterChecked: false }) })
+    osmReplies.push(new Error('504'))
+    expect(await run('recheckWater', { organiserToken, arenaId })).toEqual({ waterChecked: false, problems: [] })
+  })
+
+  it('searchParks needs at least 3 letters and goes through the cache', async () => {
+    const organiserToken = await createOrganiser()
+    await rejects(run('searchParks', { organiserToken, query: 'kl' }), 400, 'Type at least 3 letters')
+    osmReplies.push([])
+    await run('searchParks', { organiserToken, query: 'Taman Tasik Titiwangsa' })
+    expect(await run('searchParks', { organiserToken, query: 'taman tasik titiwangsa' })).toEqual({ results: [] })
+    expect(osmCalls).toHaveLength(1)
+  })
+
+  it('parkFeatures returns lakes and toilets for an outline', async () => {
+    const organiserToken = await createOrganiser()
+    osmReplies.push({ elements: [{ type: 'node', id: 1, lat: 3.0001, lon: 101.0001, tags: { amenity: 'toilets' } }] })
+    expect(await run('parkFeatures', { organiserToken, outline: rect(-200, -200, 200, 200) })).toEqual({
+      water: [],
+      toilets: [{ lat: 3.0001, lng: 101.0001 }],
+      waterChecked: true,
+    })
+    await rejects(run('parkFeatures', { organiserToken, outline: [pt(0, 0)] }), 400)
+  })
+
+  it('create refuses an over-cap park without a circle', async () => {
+    const organiserToken = await createOrganiser()
+    await rejects(
+      run('create', { organiserToken, draft: draft({ outline: rect(-500, -500, 500, 500), water: [], jail: null, start: null, stations: [] }) }),
+      400,
+      'Too big — use part of the park (circle)',
+    )
+    await rejects(run('saveArena', { organiserToken, draft: { name: 'x' } }), 400, 'Invalid play area')
   })
 })
