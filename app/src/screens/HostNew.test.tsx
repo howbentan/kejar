@@ -33,10 +33,14 @@ const setUa = (ua: string) => Object.defineProperty(navigator, 'userAgent', { co
 
 beforeEach(() => {
   call.mockReset()
-  call.mockResolvedValue({ code: 'ABC234', hostKey: 'h1' })
+  call.mockResolvedValue({ code: 'ABC234' })
+  localStorage.setItem('kejar.organiser', JSON.stringify({ organiserToken: 'ot1', name: 'Owner' }))
   Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign: vi.fn() } })
 })
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  localStorage.clear()
+})
 
 describe('HostNew', () => {
   it('creates the game at the centre and size picked on the map', async () => {
@@ -47,7 +51,7 @@ describe('HostNew', () => {
     await waitFor(() =>
       expect(call).toHaveBeenCalledWith(
         'create',
-        expect.objectContaining({ arenaId: 'around-me', center: { lat: 3.5, lng: 101.5 }, radiusM: 300 }),
+        expect.objectContaining({ arenaId: 'around-me', center: { lat: 3.5, lng: 101.5 }, radiusM: 300, organiserToken: 'ot1' }),
       ),
     )
   })
@@ -70,6 +74,13 @@ describe('HostNew', () => {
     fireEvent.click(screen.getByRole('button', { name: 'drop two stations' }))
     expect(screen.getByText('Stations: 2')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /create game/i }))
-    await waitFor(() => expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ stations: [A, B] })))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ stations: [A, B], organiserToken: 'ot1' })))
+  })
+
+  it('asks for an invite link when this phone has no organiser session', () => {
+    localStorage.clear()
+    render(<HostNew />)
+    expect(screen.getByText(/need an invite link/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /create game/i })).toBeNull()
   })
 })

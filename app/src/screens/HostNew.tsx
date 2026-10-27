@@ -3,7 +3,7 @@ import { ARENAS } from '../../shared/arenas.js'
 import { DEFAULT_SETTINGS, type LatLng, type Settings } from '../../shared/types.js'
 import AreaPicker from '../game/AreaPicker'
 import { call } from '../game/api'
-import { saveSession } from '../game/session'
+import { loadOrganiserSession } from '../game/organiserSession'
 import { ErrorText, Pills, Screen } from '../game/ui'
 import { platformOf } from '../spike/device'
 
@@ -38,6 +38,7 @@ export default function HostNew() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const set = (patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch }))
+  const organiser = loadOrganiserSession(localStorage)
 
   async function create() {
     setBusy(true)
@@ -45,17 +46,27 @@ export default function HostNew() {
     try {
       const picked = arenaId === 'around-me'
       if (picked && !center) throw new Error('Move the map to choose your play area first.')
-      const { code, hostKey } = await call<{ code: string; hostKey: string }>('create', {
+      const { code } = await call<{ code: string }>('create', {
         arenaId,
         settings,
+        organiserToken: organiser!.organiserToken,
         ...(picked ? { center, radiusM: Number(size), stations } : {}),
       })
-      saveSession(localStorage, code, { hostKey })
       window.location.assign(`/host/${code}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setBusy(false)
     }
+  }
+
+  if (!organiser) {
+    return (
+      <Screen eyebrow="kejar. · organise">
+        <p className="muted">
+          You need an invite link from another organiser to create games on this phone.
+        </p>
+      </Screen>
+    )
   }
 
   return (
