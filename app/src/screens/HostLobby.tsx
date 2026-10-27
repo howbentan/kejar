@@ -2,17 +2,18 @@ import { useEffect, useState } from 'react'
 import type { Role } from '../../shared/types.js'
 import { call } from '../game/api'
 import { AlertsOnPhone } from '../game/MarshalTools'
+import { loadOrganiserSession } from '../game/organiserSession'
 import { qrDataUrl } from '../game/qr'
-import { loadSession } from '../game/session'
 import { ErrorText, Pills, Screen, tagText } from '../game/ui'
 import { useGameState } from '../game/useGameState'
 
 export default function HostLobby({ code }: { code: string }) {
-  const { hostKey } = loadSession(localStorage, code)
+  const organiser = loadOrganiserSession(localStorage)
   const { view, error: loadError, refresh } = useGameState(code, { sendLocation: 'never' })
   const [qr, setQr] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [marshalInviteUrl, setMarshalInviteUrl] = useState('')
   const joinUrl = `${window.location.origin}/join/${code}`
 
   useEffect(() => {
@@ -27,7 +28,7 @@ export default function HostLobby({ code }: { code: string }) {
     setBusy(true)
     setError('')
     try {
-      await call(action, { code, hostKey, ...body })
+      await call(action, { code, organiserToken: organiser!.organiserToken, ...body })
       refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -36,7 +37,23 @@ export default function HostLobby({ code }: { code: string }) {
     }
   }
 
-  if (!hostKey) {
+  async function inviteMarshal() {
+    setBusy(true)
+    setError('')
+    try {
+      const { inviteToken } = await call<{ inviteToken: string }>('createMarshalInvite', {
+        code,
+        organiserToken: organiser!.organiserToken,
+      })
+      setMarshalInviteUrl(`${window.location.origin}/m/${code}/${inviteToken}`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!organiser) {
     return (
       <Screen eyebrow="kejar. · organise">
         <p className="muted">This phone didn&apos;t create game {code}, so it can&apos;t run it.</p>
@@ -60,6 +77,17 @@ export default function HostLobby({ code }: { code: string }) {
         </div>
       </div>
 
+      <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <button className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={inviteMarshal}>
+          Invite a marshal
+        </button>
+        {marshalInviteUrl && (
+          <p className="muted" style={{ wordBreak: 'break-all' }}>
+            {marshalInviteUrl}
+          </p>
+        )}
+      </div>
+
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <p className="eyebrow">Players ({view?.roster.length ?? 0})</p>
         <button className="btn btn-ghost" style={{ padding: '8px 14px' }} disabled={busy} onClick={() => act('setRoles', { shuffle: true })}>
@@ -75,13 +103,9 @@ export default function HostLobby({ code }: { code: string }) {
               <td style={{ textAlign: 'right' }}>
                 <Pills<Role>
                   label={p.name}
-                  value={p.role}
+                  value={p.role === 'marshal' ? 'marshal' : null}
                   disabled={busy}
-                  options={[
-                    { value: 'runner', text: 'Dikejar' },
-                    { value: 'chaser', text: 'Kejar' },
-                    { value: 'marshal', text: 'Marshal' },
-                  ]}
+                  options={[{ value: 'marshal', text: 'Marshal' }]}
                   onChange={(role) => act('setRoles', { roles: { [p.id]: role } })}
                 />
               </td>

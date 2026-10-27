@@ -47,7 +47,7 @@ const lobbyView = {
 } as unknown as View
 
 beforeEach(() => {
-  localStorage.setItem('kejar.game.ABC234', JSON.stringify({ hostKey: 'h1' }))
+  localStorage.setItem('kejar.organiser', JSON.stringify({ organiserToken: 'h1', name: 'Owner' }))
   call.mockReset()
   call.mockImplementation(async (action: string) => {
     if (action === 'state') return lobbyView
@@ -80,17 +80,17 @@ describe('HostLobby', () => {
     render(<HostLobby code="ABC234" />)
     fireEvent.click(await screen.findByRole('button', { name: /shuffle roles/i }))
     await waitFor(() =>
-      expect(call).toHaveBeenCalledWith('setRoles', { code: 'ABC234', hostKey: 'h1', shuffle: true }),
+      expect(call).toHaveBeenCalledWith('setRoles', { code: 'ABC234', organiserToken: 'h1', shuffle: true }),
     )
   })
 
-  it('sets a role with the pill buttons, showing the current one as selected', async () => {
+  it('sets a player as marshal with the pill button', async () => {
     render(<HostLobby code="ABC234" />)
-    const runner = await screen.findByRole('radio', { name: 'Aina: Dikejar' })
-    expect(runner).toBeChecked()
-    fireEvent.click(screen.getByRole('radio', { name: 'Aina: Kejar' }))
+    const marshal = await screen.findByRole('radio', { name: 'Aina: Marshal' })
+    expect(marshal).not.toBeChecked()
+    fireEvent.click(marshal)
     await waitFor(() =>
-      expect(call).toHaveBeenCalledWith('setRoles', { code: 'ABC234', hostKey: 'h1', roles: { p1: 'chaser' } }),
+      expect(call).toHaveBeenCalledWith('setRoles', { code: 'ABC234', organiserToken: 'h1', roles: { p1: 'marshal' } }),
     )
   })
 })
