@@ -161,7 +161,7 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
     let dot: MapDot
     if (decoyed.has(p.id)) {
       // Drawn the same way as everyone else in range, so a Focus can't expose a Decoy.
-      const spot = decoySpot(at, i.game.arena.boundary, seed)
+      const spot = decoySpot(at, i.game.arena, seed)
       dot = focused ? { ...dotFor(p, at, 'runner'), ...spot, exact: true } : { ...dotFor(p, at, 'runner'), ...spot, fuzzy: true }
     } else if (focused) {
       dot = { ...dotFor(p, at, 'runner'), exact: true }

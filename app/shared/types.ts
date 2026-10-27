@@ -38,6 +38,10 @@ export interface Arena {
   start: LatLng
   /** Power-up stations; index i is station i + 1. */
   stations?: LatLng[]
+  /** Water cut out of the play area (lakes, ponds): outside for every rule. Absent = none. */
+  holes?: LatLng[][]
+  /** Toilets inside the play area, shown on maps. */
+  toilets?: LatLng[]
 }
 
 export interface Game {

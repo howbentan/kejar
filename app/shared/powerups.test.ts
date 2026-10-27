@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { arenaAroundPoint } from './arenas.js'
 import { iso, MIN, player, pos, T0 } from './fixtures.js'
-import { distanceM, pointInPolygon } from './geo.js'
+import { circlePolygon, distanceM, offset, pointInPolygon } from './geo.js'
+import { buildPlayArea, inPlayArea } from './playArea.js'
 import { activeShield, decoySpot, judgeClaim, pickPowerUp } from './powerups.js'
 import { seeded } from './testing.js'
 import type { PowerUp, PowerUpKind } from './types.js'
@@ -86,7 +87,7 @@ describe('pickPowerUp', () => {
 describe('decoySpot', () => {
   it('moves the position 120–180 m', () => {
     for (const seed of ['a', 'b', 'c', 'd']) {
-      const d = distanceM(C, decoySpot(C, arena.boundary, seed))
+      const d = distanceM(C, decoySpot(C, arena, seed))
       expect(d).toBeGreaterThanOrEqual(119)
       expect(d).toBeLessThanOrEqual(181)
     }
@@ -94,7 +95,17 @@ describe('decoySpot', () => {
   it('stays inside the boundary when possible', () => {
     const nearEdge = { lat: 3.0 + 180 / 111_195, lng: 101.0 }
     for (const seed of ['a', 'b', 'c', 'd', 'e']) {
-      expect(pointInPolygon(decoySpot(nearEdge, arena.boundary, seed), arena.boundary)).toBe(true)
+      expect(pointInPolygon(decoySpot(nearEdge, arena, seed), arena.boundary)).toBe(true)
+    }
+  })
+  it('never lands in the lake', () => {
+    // A 120 m wide lake in the middle: several of the 12 candidate spots land in it.
+    const lake = circlePolygon(C, 60, 24)
+    const area = buildPlayArea({ outline: arena.boundary, water: [lake], circle: null })
+    const start = offset(C, 100, Math.PI)
+    for (let i = 0; i < 50; i++) {
+      const spot = decoySpot(start, area, `s${i}`)
+      expect(inPlayArea(spot, area)).toBe(true)
     }
   })
 })

@@ -1,4 +1,5 @@
-import { distanceM, hash, offset, pointInPolygon } from './geo.js'
+import { distanceM, hash, offset } from './geo.js'
+import { inPlayArea } from './playArea.js'
 import type { Arena, LatLng, Phase, Player, Position, PowerUp, PowerUpKind } from './types.js'
 
 /** Spec §4.8.1. */
@@ -58,13 +59,13 @@ export function pickPowerUp(role: 'runner' | 'chaser', rng: () => number): Power
   return kinds[Math.floor(rng() * kinds.length)]
 }
 
-/** A fake position 120–180 m away, kept inside the play area if any of 12 directions allows it. */
-export function decoySpot(p: LatLng, boundary: LatLng[], seed: string): LatLng {
+/** A fake position 120–180 m away, kept inside the play area (and out of lakes) if any of 12 directions allows it. */
+export function decoySpot(p: LatLng, area: Pick<Arena, 'boundary' | 'holes'>, seed: string): LatLng {
   const h = hash(seed)
   const start = ((h & 0xffff) / 0x10000) * 2 * Math.PI
   const dist = DECOY_MIN_M + ((h >>> 16) / 0x10000) * (DECOY_MAX_M - DECOY_MIN_M)
   const options = Array.from({ length: 12 }, (_, k) => offset(p, dist, start + (k * Math.PI) / 6))
-  return options.find((o) => pointInPolygon(o, boundary)) ?? options[0]
+  return options.find((o) => inPlayArea(o, area)) ?? options[0]
 }
 
 /** The runner's shield that is switched on, unused, and less than 10 minutes old. */

@@ -27,6 +27,11 @@ export function pointInPolygon(p: LatLng, poly: LatLng[]): boolean {
 /** 0 inside the polygon; otherwise metres to its nearest edge (flat projection, fine at park scale). */
 export function distanceOutsideM(p: LatLng, poly: LatLng[]): number {
   if (poly.length < 3 || pointInPolygon(p, poly)) return 0
+  return distanceToEdgeM(p, poly)
+}
+
+/** Metres from p to the nearest edge of a ring, from inside or outside (flat projection). */
+export function distanceToEdgeM(p: LatLng, poly: LatLng[]): number {
   const k = Math.cos(rad(p.lat))
   const xy = (q: LatLng) => ({ x: rad(q.lng - p.lng) * k * EARTH_RADIUS_M, y: rad(q.lat - p.lat) * EARTH_RADIUS_M })
   let best = Infinity
