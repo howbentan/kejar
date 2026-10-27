@@ -596,7 +596,7 @@ const redeemMarshalInvite: Action = async (ctx, body) => {
   if (!inviteToken) throw new ActionError(400, 'Missing invite token')
   const name = str(body.name).trim()
   if (name.length < 1 || name.length > 24) throw new ActionError(400, 'Name must be 1–24 characters')
-  const result = await ctx.store.redeemMarshalInvite(hashToken(inviteToken), ctx.now)
+  const result = await ctx.store.redeemMarshalInvite(hashToken(inviteToken), ctx.now, game.id)
   if (!result.ok) {
     if (result.reason === 'invalid') throw new ActionError(404, 'That invite link is not valid')
     if (result.reason === 'redeemed') throw new ActionError(410, 'That invite link has already been used')

@@ -787,6 +787,16 @@ describe('marshal invites', () => {
     await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
     await rejects(run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Second' }), 410)
   })
+
+  it('refuses to redeem a marshal invite against a different game', async () => {
+    const gameA = await readyGame()
+    const gameB = await readyGame()
+    const { inviteToken } = await run('createMarshalInvite', { code: gameA.code, organiserToken: gameA.organiserToken })
+    await rejects(run('redeemMarshalInvite', { code: gameB.code, inviteToken, name: 'Intruder' }), 404)
+    // The invite must still be unredeemed and work on the correct game.
+    const joined = await run('redeemMarshalInvite', { code: gameA.code, inviteToken, name: 'Siti' })
+    expect(joined.token).toHaveLength(43)
+  })
 })
 
 describe('removing a player', () => {

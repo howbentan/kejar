@@ -92,5 +92,6 @@ describe('HostLobby', () => {
     await waitFor(() =>
       expect(call).toHaveBeenCalledWith('setRoles', { code: 'ABC234', organiserToken: 'h1', roles: { p1: 'marshal' } }),
     )
+    expect(screen.queryByRole('radio', { name: /Dikejar|Kejar/ })).toBeNull()
   })
 })

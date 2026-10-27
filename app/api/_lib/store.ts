@@ -105,8 +105,8 @@ export interface GameStore {
   /** Atomically claims the invite (unredeemed, unexpired at `now`), then creates or re-links the organiser. */
   redeemOrganiserInvite(tokenHash: string, now: number, sessionTokenHash: string): Promise<RedeemInviteResult>
   createMarshalInvite(inv: Omit<MarshalInviteRow, 'id'>): Promise<MarshalInviteRow>
-  /** Atomically claims the invite (unredeemed, unexpired at `now`). */
-  redeemMarshalInvite(tokenHash: string, now: number): Promise<RedeemMarshalInviteResult>
+  /** Atomically claims the invite (unredeemed, unexpired at `now`, for this specific game). */
+  redeemMarshalInvite(tokenHash: string, now: number, gameId: string): Promise<RedeemMarshalInviteResult>
 }
 
 export interface SafetyRecord {
@@ -381,8 +381,8 @@ export class MemoryStore implements GameStore {
     this.marshalInviteRows.push(row)
     return { ...row }
   }
-  async redeemMarshalInvite(tokenHash: string, now: number): Promise<RedeemMarshalInviteResult> {
-    const inv = this.marshalInviteRows.find((x) => x.token_hash === tokenHash)
+  async redeemMarshalInvite(tokenHash: string, now: number, gameId: string): Promise<RedeemMarshalInviteResult> {
+    const inv = this.marshalInviteRows.find((x) => x.token_hash === tokenHash && x.game_id === gameId)
     if (!inv) return { ok: false, reason: 'invalid' }
     if (inv.redeemed_at) return { ok: false, reason: 'redeemed' }
     if (now >= Date.parse(inv.expires_at)) return { ok: false, reason: 'expired' }

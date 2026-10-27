@@ -266,20 +266,26 @@ export class SupabaseStore implements GameStore {
   async createMarshalInvite(inv: Omit<MarshalInviteRow, 'id'>): Promise<MarshalInviteRow> {
     return check(await this.db.from('marshal_invites').insert(inv).select('*').single()) as MarshalInviteRow
   }
-  async redeemMarshalInvite(tokenHash: string, now: number): Promise<RedeemMarshalInviteResult> {
+  async redeemMarshalInvite(tokenHash: string, now: number, gameId: string): Promise<RedeemMarshalInviteResult> {
     const nowIso = new Date(now).toISOString()
     const claimed = check(
       await this.db
         .from('marshal_invites')
         .update({ redeemed_at: nowIso })
         .eq('token_hash', tokenHash)
+        .eq('game_id', gameId)
         .is('redeemed_at', null)
         .gt('expires_at', nowIso)
-        .select('game_id, redeemed_at'),
-    ) as { game_id: string; redeemed_at: string }[]
+        .select('game_id'),
+    ) as { game_id: string }[]
     if (claimed[0]) return { ok: true, gameId: claimed[0].game_id }
     const exists = check(
-      await this.db.from('marshal_invites').select('redeemed_at, expires_at').eq('token_hash', tokenHash).maybeSingle(),
+      await this.db
+        .from('marshal_invites')
+        .select('redeemed_at, expires_at')
+        .eq('token_hash', tokenHash)
+        .eq('game_id', gameId)
+        .maybeSingle(),
     ) as { redeemed_at: string | null; expires_at: string } | null
     if (!exists) return { ok: false, reason: 'invalid' }
     return { ok: false, reason: exists.redeemed_at ? 'redeemed' : 'expired' }

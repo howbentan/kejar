@@ -212,8 +212,8 @@ describe('organiser accounts', () => {
       expires_at: new Date(2_000).toISOString(),
       redeemed_at: null,
     })
-    const first = await store.redeemMarshalInvite('mtok1', 1_500)
+    const first = await store.redeemMarshalInvite('mtok1', 1_500, game.id)
     expect(first).toEqual({ ok: true, gameId: game.id })
-    expect(await store.redeemMarshalInvite('mtok1', 1_500)).toEqual({ ok: false, reason: 'redeemed' })
+    expect(await store.redeemMarshalInvite('mtok1', 1_500, game.id)).toEqual({ ok: false, reason: 'redeemed' })
   })
 })
