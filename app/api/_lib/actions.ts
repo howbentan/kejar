@@ -19,7 +19,7 @@ import { shuffleRoles, validateTeams } from '../../shared/teams.js'
 import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type Role, type Settings } from '../../shared/types.js'
 import { viewFor } from '../../shared/views.js'
 import { distanceM, distanceOutsideM } from '../../shared/geo.js'
-import { ORGANISER_INVITE_TTL_MS } from '../../shared/invites.js'
+import { MARSHAL_INVITE_TTL_MS, ORGANISER_INVITE_TTL_MS } from '../../shared/invites.js'
 import { hashToken, newToken } from './secrets.js'
 import type { GameRow, GameStore, OrganiserRow } from './store.js'
 
@@ -574,6 +574,55 @@ const redeemOrganiserInvite: Action = async (ctx, body) => {
   return { organiserToken, organiserId: organiser!.id, name: organiser!.name }
 }
 
+const createMarshalInvite: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  await requireOrganiser(ctx, game, body)
+  requireLobby(game, ctx.now)
+  const inviteToken = newToken()
+  await ctx.store.createMarshalInvite({
+    game_id: game.id,
+    token_hash: hashToken(inviteToken),
+    created_at: iso(ctx.now),
+    expires_at: iso(ctx.now + MARSHAL_INVITE_TTL_MS),
+    redeemed_at: null,
+  })
+  return { inviteToken }
+}
+
+const redeemMarshalInvite: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  if (phaseAt(game, ctx.now).phase !== 'lobby') throw new ActionError(410, 'That invite link is no longer usable — the game already started')
+  const inviteToken = str(body.inviteToken)
+  if (!inviteToken) throw new ActionError(400, 'Missing invite token')
+  const name = str(body.name).trim()
+  if (name.length < 1 || name.length > 24) throw new ActionError(400, 'Name must be 1–24 characters')
+  const result = await ctx.store.redeemMarshalInvite(hashToken(inviteToken), ctx.now)
+  if (!result.ok) {
+    if (result.reason === 'invalid') throw new ActionError(404, 'That invite link is not valid')
+    if (result.reason === 'redeemed') throw new ActionError(410, 'That invite link has already been used')
+    throw new ActionError(410, 'That invite link has expired')
+  }
+  const token = newToken()
+  const p = await ctx.store.addPlayer({
+    game_id: game.id,
+    name,
+    role: 'marshal',
+    tag_id: null,
+    accepted_at: iso(ctx.now),
+    caught_at: null,
+    caught_by: null,
+    jailed: false,
+    freed_once: false,
+    push: null,
+    removed_at: null,
+    outside: false,
+    left_start: false,
+    token_hash: hashToken(token),
+  })
+  await ctx.store.addEvent({ game_id: game.id, type: 'joined', actor_id: p.id, target_id: null, data: {} })
+  return { token, playerId: p.id }
+}
+
 const claim: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
@@ -768,6 +817,8 @@ export const actions = {
   removePlayer,
   createOrganiserInvite,
   redeemOrganiserInvite,
+  createMarshalInvite,
+  redeemMarshalInvite,
 } satisfies Record<string, Action>
 
 export type ActionName = keyof typeof actions

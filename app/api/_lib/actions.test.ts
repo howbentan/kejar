@@ -759,6 +759,36 @@ describe('organiser invites', () => {
   })
 })
 
+describe('marshal invites', () => {
+  it('an organiser pre-assigns a marshal, who joins directly with that role', async () => {
+    const g = await readyGame()
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const joined = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    expect(joined.token).toHaveLength(43)
+    const players = await store.players((await store.gameByCode(g.code))!.id)
+    expect(players.find((p) => p.id === joined.playerId)).toMatchObject({ name: 'Siti', role: 'marshal' })
+  })
+
+  it('refuses a marshal invite once the game has started', async () => {
+    const g = await readyGame()
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    await rejects(run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' }), 410)
+  })
+
+  it('refuses createMarshalInvite from a non-organiser', async () => {
+    const g = await readyGame()
+    await rejects(run('createMarshalInvite', { code: g.code, organiserToken: 'wrong' }), 403)
+  })
+
+  it('refuses to redeem the same marshal invite twice', async () => {
+    const g = await readyGame()
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    await rejects(run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Second' }), 410)
+  })
+})
+
 describe('removing a player', () => {
   it('a removed runner is refused with 403 except state, which shows removed_at', async () => {
     const g = await safetyGame()
