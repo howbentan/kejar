@@ -16,6 +16,7 @@
 - `4-lucky-dip.html`: the left phone, "Pick a card", is the chosen one.
 - `5-later-moments.html`
 - `6-checkin.html` and `7-checkin-states.html`: the check-in moment (§7a); option B in `6-checkin.html` is the chosen one.
+- `8-power-up-slot.html`: the one power-up slot with the shared deck (§7b).
 
 ## 1. Why
 
@@ -147,7 +148,7 @@ When a station claim (or Abang Grab) succeeds:
 5. **`Got Durian!`** (the power-up's name) appears above.
 
 Rules:
-- **The server decides the power-up when the station is scanned,** with the same equal odds as today. The tapped card only reveals it; the player's choice never changes the odds.
+- **The server decides the power-up when the station is scanned:** it's the top card of the player's side's shared deck (power-ups design §5b). The tapped card only reveals it; the player's choice never changes what they get.
 - **Never flip the other cards** to show "what you could have got". They aren't real alternatives, so that would be showing false information.
 - **Tapping during the sweep** skips straight to the reveal.
 - **Card front:** the same layout for every power-up:
@@ -157,6 +158,35 @@ Rules:
   - the plain-English effect line.
 - **Art is a separate task.** Until each character has its illustration, the art spot shows the initials (e.g. `D`, `AG`). All nine share one style: lime line art on black in the round frame, matching stroke weight. This also answers the power-ups design's open question on icons: brand colours, not emoji.
 - **One slot** (power-ups design §5a): the revealed card goes into the player's single power-up slot.
+
+## 7b. The power-up slot (added 2026-10-30)
+
+Mockup: `8-power-up-slot.html` (six situations). Under the map on runner and chaser screens:
+
+- **The slot area:**
+  - a `YOUR POWER-UP` eyebrow;
+  - on the right, the deck counter `DECK · 7 LEFT`, the number of cards left in the player's side's deck.
+- **Empty:** a dashed outline, `No power-up. Find a station and scan it.`, and a lime **Scan station** button.
+- **Holding a card:**
+  - a lime-bordered card (art spot, name, effect line) marked `READY`, which drops in with a bounce when it arrives;
+  - **Use** opens a confirm (`Use Durian?` plus the effect line);
+  - **Scan station** with a full slot is refused: toast `Use your power-up first`, and the note `One power-up at a time. Use Durian, then scan again.`
+- **Effect still running:**
+  - the card stays in the slot, marked `ACTIVE · 9:42 LEFT` (Durian) or with what it's waiting for (e.g. the next ping), plus a small draining ring;
+  - Use is disabled;
+  - scanning is refused with `Your Durian is still switched on`.
+- **Abang Grab:** Use opens a full-screen chooser:
+  - `What should Abang Grab bring?`, with the top three cards as tappable rows and `Keep one. The other two go to the bottom of the deck.`;
+  - the tapped card glows and settles into the slot, the other two slide away down the screen;
+  - toast `Abang Grab hantar Durian!`;
+  - **the delivered card shows it's sealed** (e.g. a small `SEALED` mark), so the player knows Toyol and Ah Long can't take it.
+- **Mat Rempit, team cooldown (chasers):**
+  - Use is disabled, and the card reads `TEAM COOLDOWN · 2:14`, with the reason `Siti used Mat Rempit recently. Your team can use the next one in 2:14.`;
+  - it counts down live, then unlocks;
+  - while another surprise ping is still pending, the reason says so instead.
+- **Taken by Toyol or Ah Long:** the card is yanked sideways off the screen, with the white toast `Toyol curi Durian kau!`, and the slot returns to empty.
+
+This replaces the "hand of cards" idea in §8.
 
 ## 7a. The check-in moment (added 2026-10-30)
 
@@ -187,7 +217,7 @@ Mockups: `6-checkin.html` (option **B, map first**, chosen) and `7-checkin-state
 ## 8. Later: mocked up, not reviewed, not in the playtest build
 
 `5-later-moments.html` shows these. The owner hasn't reviewed them yet, and they wait until after the first playtest:
-- **The power-up slot:** a card drops and bounces in when claimed; it lifts, glows and flies up when used; Toyol or Ah Long yank it sideways with `Toyol curi Durian kau!`.
+- ~~The power-up hand~~ superseded by the one-slot screens in §7b.
 - **Ping reveal:** runners' fuzzy circles drop onto the map one by one with a lime pulse; a missed check-in lands dashed.
 - **Feed and marshal alerts** slide in at the top; an SOS alert flashes lime twice.
 - **Phase changes:**

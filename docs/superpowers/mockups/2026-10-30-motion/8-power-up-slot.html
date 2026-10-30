@@ -1,0 +1,174 @@
+<h2>The one power-up slot, with the shared deck</h2>
+<p class="subtitle">Pick a situation on the right, then use the buttons under the phone. The slot sits under the map on runner and chaser screens.</p>
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  .wrap { display: flex; gap: 28px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+  .kj-phone { width: 260px; height: 520px; border-radius: 30px; background: #0A0A0B; border: 2px solid #2a2a2a; position: relative; overflow: hidden;
+    color: #F5F5F3; font-family: 'Geist', system-ui, sans-serif; }
+  .pad { position: absolute; inset: 0; padding: 16px 12px; }
+  .eb { font: 500 9px 'Geist Mono', monospace; letter-spacing: .2em; color: rgba(245,245,243,.55); }
+  .mini-map { height: 170px; border-radius: 16px; background: #121412; border: 1px solid #262626; margin: 8px 0 12px; position: relative; overflow: hidden; }
+  .mini-map .edge { position: absolute; inset: 12px; border: 1px solid rgba(245,245,243,.3); border-radius: 44%; }
+  .slot { position: relative; border-radius: 18px; border: 1.5px dashed rgba(245,245,243,.25); min-height: 120px; padding: 12px; display: flex; gap: 12px; align-items: center; }
+  .slot.full { border: 2px solid #C6FF3D; background: #141614; }
+  .slot.busy { border-color: rgba(198,255,61,.5); }
+  .slot .art { width: 58px; height: 58px; border-radius: 50%; border: 2px solid #C6FF3D; display: grid; place-items: center; font-weight: 800; color: #C6FF3D; flex: none; }
+  .slot .nm { font-weight: 800; font-size: 20px; letter-spacing: -0.04em; }
+  .slot .fx { font-size: 11px; opacity: .7; margin-top: 2px; }
+  .slot .state { font: 500 10px 'Geist Mono', monospace; letter-spacing: .08em; color: #C6FF3D; margin-top: 6px; }
+  .slot .empty { font-size: 13px; opacity: .7; }
+  .slot.in { animation: drop .55s cubic-bezier(.2,1.5,.4,1); }
+  .slot .card { display: flex; gap: 12px; align-items: center; }
+  .slot.yank .card { animation: yank .7s cubic-bezier(.6,-.3,.7,.2) forwards; }
+  @keyframes drop { from { transform: translateY(-60px) scale(.9); opacity: 0 } to { transform: none; opacity: 1 } }
+  @keyframes yank { 20% { transform: rotate(-6deg) translateX(-6px) } 100% { transform: translateX(300px) rotate(25deg); opacity: 0 } }
+  .ring { position: absolute; right: 12px; top: 12px; width: 26px; height: 26px; }
+  .ring circle { fill: none; stroke-width: 3; } .ring .tr { stroke: #2a2a2a } .ring .pr { stroke: #C6FF3D; stroke-dasharray: 69; transform: rotate(-90deg); transform-origin: center; }
+  .acts { display: flex; gap: 8px; margin-top: 10px; }
+  .b { flex: 1; border-radius: 999px; padding: 11px; text-align: center; font: 700 13px 'Geist', sans-serif; border: 0; cursor: pointer; }
+  .b.lime { background: #C6FF3D; color: #0A0A0B; } .b.ghost { background: transparent; color: #F5F5F3; border: 1px solid #444; }
+  .b:disabled { opacity: .4; cursor: default; }
+  .why { font-size: 11px; opacity: .7; margin-top: 6px; min-height: 14px; }
+  .toast { position: absolute; left: 12px; right: 12px; top: 60px; z-index: 5; background: #141614; border: 1px solid #C6FF3D; border-radius: 14px; padding: 10px; text-align: center;
+    font-weight: 700; font-size: 13px; color: #C6FF3D; transform: translateY(-20px); opacity: 0; transition: all .35s cubic-bezier(.32,.72,0,1); }
+  .toast.white { border-color: #F5F5F3; color: #F5F5F3; }
+  .toast.on { transform: none; opacity: 1; }
+  .confirm { position: absolute; left: 12px; right: 12px; bottom: 16px; z-index: 6; background: #141614; border: 2px solid #C6FF3D; border-radius: 18px; padding: 14px; display: none; }
+  .confirm.on { display: block; animation: drop .4s cubic-bezier(.2,1.4,.4,1); }
+  .confirm b { display: block; margin-bottom: 4px; } .confirm p { margin: 0 0 10px; font-size: 12px; opacity: .75; }
+  /* Abang Grab picker */
+  .picker { position: absolute; inset: 0; background: #0A0A0B; z-index: 7; padding: 16px 12px; display: none; }
+  .picker.on { display: block; animation: drop .4s cubic-bezier(.2,1.4,.4,1); }
+  .pmap { position: relative; height: 300px; border-radius: 18px; background: #121412; border: 1px solid #262626; margin: 10px 0; overflow: hidden; }
+  .pmap .edge { position: absolute; inset: 14px; border: 1px solid rgba(245,245,243,.3); border-radius: 44%; }
+  .st { position: absolute; transform: translate(-50%, -50%); text-align: center; cursor: pointer; }
+  .st i { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #0A0A0B; border: 2px solid #C6FF3D; color: #C6FF3D; font: 800 12px 'Geist', sans-serif; font-style: normal; margin: 0 auto; }
+  .st small { display: block; font: 500 8px 'Geist Mono', monospace; letter-spacing: .06em; margin-top: 2px; color: #C6FF3D; }
+  .st.locked i { border-style: dashed; color: rgba(245,245,243,.6); border-color: rgba(245,245,243,.6); } .st.locked small { color: rgba(245,245,243,.6); }
+  .st.used i { border-color: #333; color: #555; } .st.used small { color: #555; }
+  .tabs { display: flex; flex-direction: column; gap: 8px; max-width: 290px; }
+  .tabs button { text-align: left; background: transparent; color: #F5F5F3; border: 1px solid #444; border-radius: 14px; padding: 10px 12px; font: 600 13px 'Geist', sans-serif; cursor: pointer; }
+  .tabs button.on { border-color: #C6FF3D; box-shadow: 0 0 0 1px #C6FF3D inset; }
+  .tabs button small { display: block; font-weight: 400; opacity: .7; margin-top: 3px; }
+</style>
+
+<div class="wrap">
+  <div class="kj-phone" id="ph">
+    <div class="pad">
+      <div class="eb" id="who">DIKEJAR · #07</div>
+      <div class="mini-map"><div class="edge"></div></div>
+      <div style="display:flex;justify-content:space-between"><div class="eb">YOUR POWER-UP</div><div class="eb" id="deck">DECK · 7 LEFT</div></div>
+      <div class="slot" id="slot" style="margin-top:6px"></div>
+      <div class="acts" id="acts"></div>
+      <div class="why" id="why"></div>
+    </div>
+    <div class="toast" id="toast"></div>
+    <div class="confirm" id="confirm"></div>
+    <div class="picker" id="picker"></div>
+  </div>
+  <div class="tabs" id="tabs">
+    <button data-s="empty" class="on">1. Empty slot<small>Nothing held. Scanning a station fills it.</small></button>
+    <button data-s="held">2. Holding a power-up<small>Durian in the slot. Use it (with a confirm), or try scanning another station.</small></button>
+    <button data-s="active">3. Effect still running<small>Durian is switched on. The slot stays busy until it blocks a catch or its 10 min end.</small></button>
+    <button data-s="grab">4. Abang Grab<small>See the top 3 cards of the deck, keep 1; the other 2 go to the bottom.</small></button>
+    <button data-s="rempit">5. Mat Rempit, team cooldown<small>A chaser's view: another surprise ping is pending, then a 3-minute team wait.</small></button>
+    <button data-s="stolen">6. Toyol takes your card<small>Your only card gets snatched away.</small></button>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id)
+  const slot = $('slot'), acts = $('acts'), why = $('why'), toast = $('toast'), confirmEl = $('confirm'), picker = $('picker')
+  const P = {
+    durian: { n: 'Durian', i: 'D', fx: 'Blocks the next catch, up to 10 min' },
+    grab: { n: 'Abang Grab', i: 'AG', fx: 'Claim any station from anywhere' },
+    rempit: { n: 'Mat Rempit', i: 'MR', fx: 'Every runner checks in now; surprise ping in 30 s' },
+    ponteng: { n: 'Ponteng', i: 'P', fx: "You're left off the next ping" },
+  }
+  let timer = 0
+  function say(t, white) { toast.textContent = t; toast.classList.toggle('white', !!white); toast.classList.add('on'); clearTimeout(say.t); say.t = setTimeout(() => toast.classList.remove('on'), 2200) }
+  function card(p, state) {
+    return `<div class="card"><div class="art">${p.i}</div><div><div class="nm">${p.n}</div><div class="fx">${p.fx}</div>${state ? `<div class="state">${state}</div>` : ''}</div></div>`
+  }
+  function setSlot(html, cls) { slot.className = 'slot ' + (cls || ''); slot.innerHTML = html; void slot.offsetWidth; if ((cls || '').includes('full')) slot.classList.add('in') }
+  function buttons(list) { acts.innerHTML = list.map((b) => `<button class="b ${b.cls}" ${b.dis ? 'disabled' : ''} onclick="${b.fn}">${b.t}</button>`).join('') }
+  function clearAll() { clearInterval(timer); confirmEl.classList.remove('on'); picker.classList.remove('on'); why.textContent = ''; $('who').textContent = 'DIKEJAR · #07' }
+
+  const scenes = {
+    empty() {
+      setSlot(`<div class="empty">No power-up. Find a station and scan it.</div>`)
+      buttons([{ t: 'Scan station', cls: 'lime', fn: "scanFill('durian')" }])
+    },
+    held() {
+      setSlot(card(P.durian, 'READY'), 'full')
+      buttons([{ t: 'Use Durian', cls: 'lime', fn: 'askUse()' }, { t: 'Scan station', cls: 'ghost', fn: 'scanFull()' }])
+    },
+    active() {
+      let left = 9 * 60 + 42
+      setSlot(card(P.durian, 'ACTIVE · 9:42 LEFT') + `<svg class="ring" viewBox="0 0 26 26"><circle class="tr" cx="13" cy="13" r="11"/><circle class="pr" cx="13" cy="13" r="11" id="pr"/></svg>`, 'full busy')
+      buttons([{ t: 'Switched on', cls: 'lime', dis: true }, { t: 'Scan station', cls: 'ghost', fn: 'scanBusy()' }])
+      timer = setInterval(() => {
+        left--; const s = slot.querySelector('.state'); if (s) s.textContent = `ACTIVE · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')} LEFT`
+        const pr = $('pr'); if (pr) pr.style.strokeDashoffset = String(69 * (1 - left / 600))
+      }, 1000)
+    },
+    grab() {
+      setSlot(card(P.grab, 'READY'), 'full')
+      buttons([{ t: 'Use Abang Grab', cls: 'lime', fn: 'openPicker()' }])
+    },
+    rempit() {
+      $('who').textContent = 'KEJAR · BEN'
+      let left = 2 * 60 + 14
+      setSlot(card(P.rempit, 'TEAM COOLDOWN · 2:14'), 'full busy')
+      buttons([{ t: 'Use Mat Rempit', cls: 'lime', dis: true }])
+      why.textContent = 'Siti used Mat Rempit 46 s ago. Your team can use the next one in 2:14.'
+      timer = setInterval(() => {
+        left--; const s = slot.querySelector('.state')
+        if (left <= 0) { clearInterval(timer); s.textContent = 'READY'; slot.classList.remove('busy'); why.textContent = ''; buttons([{ t: 'Use Mat Rempit', cls: 'lime', fn: "say('VROOOM! Surprise ping in 30 s')" }]); return }
+        s.textContent = `TEAM COOLDOWN · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
+        why.textContent = `Siti used Mat Rempit recently. Your team can use the next one in ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}.`
+      }, 1000)
+    },
+    stolen() {
+      setSlot(card(P.durian, 'READY'), 'full')
+      buttons([{ t: 'Toyol strikes', cls: 'ghost', fn: 'getStolen()' }])
+    },
+  }
+  function show(s) { clearAll(); document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.s === s)); scenes[s]() }
+  function scanFill(k) { say('Got Durian!'); $('deck').textContent = 'DECK · 6 LEFT'; setSlot(card(P[k], 'READY'), 'full'); buttons([{ t: 'Use Durian', cls: 'lime', fn: 'askUse()' }, { t: 'Scan station', cls: 'ghost', fn: 'scanFull()' }]) }
+  function scanFull() { say('Use your power-up first', true); why.textContent = 'One power-up at a time. Use Durian, then scan again.' }
+  function scanBusy() { say('Your Durian is still switched on', true); why.textContent = 'The slot frees up when Durian blocks a catch or its 10 minutes end.' }
+  function askUse() {
+    confirmEl.innerHTML = `<b>Use Durian?</b><p>Blocks the next catch, for up to 10 minutes.</p><div class="acts" style="margin:0"><button class="b lime" onclick="useIt()">Use Durian</button><button class="b ghost" onclick="confirmEl.classList.remove('on')">Cancel</button></div>`
+    confirmEl.classList.add('on')
+  }
+  function useIt() { confirmEl.classList.remove('on'); say('Durian on: next catch blocked'); show('active') }
+  function openPicker() {
+    const top = [P.ponteng, P.durian, { n: 'Gostan', i: 'G', fx: 'Next ping shows you somewhere else' }]
+    picker.innerHTML = `<div class="eb">ABANG GRAB · TOP 3 OF THE DECK</div>
+      <p style="font-size:13px;font-weight:700;margin:10px 0 4px">What should Abang Grab bring?</p>
+      <p style="font-size:11px;opacity:.65;margin:0 0 12px">Keep one. The other two go to the bottom of the deck.</p>
+      <div style="display:flex;flex-direction:column;gap:8px">${top.map((p, k) => `<div class="slot full grabcard" style="cursor:pointer;min-height:0" onclick="pick(${k})">${card(p)}</div>`).join('')}</div>
+      <button class="b ghost" style="width:100%;margin-top:12px" onclick="picker.classList.remove('on')">Cancel</button>`
+    picker.classList.add('on')
+    openPicker.top = top
+  }
+  function pick(k) {
+    const cards = picker.querySelectorAll('.grabcard'), chosen = openPicker.top[k]
+    cards.forEach((c, i) => { c.style.transition = 'all .45s cubic-bezier(.32,.72,0,1)'; if (i !== k) { c.style.opacity = 0; c.style.transform = 'translateY(140px) scale(.8)' } else { c.style.transform = 'scale(1.04)'; c.style.boxShadow = '0 0 0 2px #C6FF3D' } })
+    setTimeout(() => {
+      picker.classList.remove('on')
+      say(`Abang Grab hantar ${chosen.n}!`)
+      setSlot(card(chosen, 'READY'), 'full')
+      buttons([{ t: `Use ${chosen.n}`, cls: 'lime', fn: `say('${chosen.n} on')` }])
+      why.textContent = 'The other two went to the bottom of the deck.'
+    }, 650)
+  }
+  function getStolen() {
+    slot.classList.add('yank'); say('Toyol curi Durian kau!', true)
+    setTimeout(() => { setSlot(`<div class="empty">No power-up. Find a station and scan it.</div>`); buttons([{ t: 'Scan station', cls: 'lime', fn: "scanFill('durian')" }]) }, 700)
+  }
+  $('tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) show(b.dataset.s) })
+  show('empty')
+</script>

@@ -16,14 +16,14 @@ The tone is **funny, not scary** (owner's decision).
 ## 2. Goals
 
 1. **Rename the five existing power-ups** to Malaysian characters and slang, keeping their rules.
-2. **Add three new power-ups:** Toyol and Ah Long (a mirrored "take away" pair) and Abang Grab (claim a station from anywhere).
+2. **Add three new power-ups:** Toyol and Ah Long (a mirrored "take away" pair) and Abang Grab (choose your next power-up from the top of the deck, from anywhere; §6.3, revised 2026-10-30).
 
 ## 3. Non-goals
 
 - **Malaysian lines anywhere outside the power-ups.** The chase start, catches, jail, jailbreaks, pings, claims, the hide phase, SOS and alerts, and the organiser and marshal screens keep their current wording (owner's decision). Lines floated in chat, like `Jom kejar!`, `KANTOI!`, `Lepak mamak dulu` and `Tapau`, are dropped.
-- **Fixed power-ups per station.** Stations keep giving a random power-up when claimed.
-  - The owner chose this "option A" after comparing the options. Random means no camping at "the good station", no setup and fresh games at saved parks.
-  - "Option B" (each station always holds the same power-up) and "option C" (shuffled once per game, shown on the map) are possible later upgrades if playtests show players want route planning.
+- **Fixed power-ups per station.** Stations don't hold particular power-ups. They draw from a **shared deck per side** (§5b, owner's decision, 2026-10-30), which replaced the original "random roll on every scan".
+  - No station is "the good one", so there's no camping.
+  - "Fixed per station" (option B) and "shuffled once per game, shown on the map" remain rejected.
 - **Honour-system dares the app can't enforce:** "AIS!" (freeze the nearest chaser 10 s, from the playground game *ais-air*) and "Jem teruk" (chasers held 30 s at the start). Rejected, not deferred (see §4).
 - **TNB potong api** (every chaser's map goes blank for a ping): too strong for now.
 - **Banjir kilat** (flash flood): kept as the name for the future endgame shrinking zone, not a power-up.
@@ -48,7 +48,7 @@ The tone is **funny, not scary** (owner's decision).
 ## 5. How stations work (unchanged, restated for clarity)
 
 - Stations are numbered QR cards placed around the park.
-- Scanning one within 30 m during the chase gives a **random power-up for your side**, picked at that moment, with **equal odds** across your side's list (§6).
+- Scanning one within 30 m during the chase **draws the top card of your side's shared deck** (§5b).
 - Each player can claim each station once per game.
 - A claim locks that station for everyone for 60 s.
 
@@ -79,10 +79,33 @@ Replaces the old "hand of 3".
   - how often each power-up is used, including any that are dumped just to make room;
   - how often Toyol and Ah Long find nothing to take.
 
+## 5b. The shared deck (owner's decision, 2026-10-30)
+
+Replaces "a random roll with equal odds on every scan".
+
+- **At game start the app shuffles one deck per side:** a runners' deck and a chasers' deck. Every station claim **draws the top card** of the claimer's side.
+- **The deck's mix sets the balance** (**Claude's call** for the starting counts; tune after playtests):
+
+  | Deck | Per 10 runners (or 5 chasers), rounded up |
+  |---|---|
+  | Runners | Gostan ×2, Durian ×2, Ponteng ×2, Toyol ×1, Abang Grab ×1 (8 cards) |
+  | Chasers | Mat Rempit ×2, Pak Guard ×2, Ah Long ×1, Abang Grab ×1 (6 cards) |
+
+  For example, 14 runners get two sets (16 cards) and 3 chasers get one set.
+- **When a deck runs out,** the cards already used, or taken by Toyol or Ah Long, are reshuffled into a new deck. Cards still held in players' slots stay out.
+- **Players see how many cards are left** (e.g. `DECK · 7 LEFT`), never which ones.
+- **Two claims at the same moment must never draw the same card.** That needs the same atomic care as station claims (Plan 5's `claim_station`).
+- **Dato Seri isn't in either deck.** It has its own quest (jail design).
+- **Why:**
+  - It keeps the surprise and no-camping of random draws.
+  - It stops silly streaks, like four Abang Grabs in one game.
+  - It adds strategy through scarcity ("both Toyols are gone").
+  - It gives one clear balance dial: the counts.
+
 ## 6. The set
 
-**Runners** draw from: Gostan, Durian, Ponteng, Toyol, Abang Grab.
-**Chasers** draw from: Mat Rempit, Pak Guard, Ah Long, Abang Grab.
+**Runners'** deck holds: Gostan, Durian, Ponteng, Toyol, Abang Grab.
+**Chasers'** deck holds: Mat Rempit, Pak Guard, Ah Long, Abang Grab. (Counts in §5b.)
 
 ### 6.1 Renamed: same rules as today, new name and jokes
 
@@ -101,24 +124,28 @@ They mirror each other: the little thief for runners, the debt collector for cha
 - **Toyol, on use:** pick a random chaser who holds at least one unused power-up, then a random one of theirs, and remove it from the game. The runner doesn't get it, because they couldn't use a chaser's power-up anyway.
 - **Ah Long, on use:** the same, taking from a random **free** (not jailed) runner (**Claude's call**).
 - **Only unused power-ups can be taken.** A Durian that is already switched on can't be taken.
+- **A card delivered by Abang Grab is sealed** (§6.3) and can't be taken either. A player whose only card is sealed counts as having "nothing to take".
 - **If there's nothing to take,** the power-up is not used up. The player sees `Tak ada apa nak curi` (Toyol) or `Semua dah bayar hutang` (Ah Long).
 - **Messages:**
   - The feed shows `Toyol curi barang!` or `Ah Long datang! Hutang kena bayar.`, without saying who did it or who lost what.
   - The player who lost one sees a personal message, e.g. `Toyol curi Mat Rempit kau!` (**Claude's call**), so a disappearing card isn't confusing.
 - **Simultaneous uses:** two take-aways landing at the same moment must never take the same power-up twice, and must never use up the stealer's power-up without taking something. The same atomic-update care as Plan 5's claims and uses applies.
 
-### 6.3 New: Abang Grab (either side)
+### 6.3 New: Abang Grab (either side), revised 2026-10-30 for the shared deck
 
-On use, the player taps a station on the map (or picks it from a list). The app claims that station for them as if they'd scanned it there:
-- The distance and "fresh location" checks are skipped.
-- Everything else applies as normal: chase phase only; the 60 s lock; once per player per station; jailed runners can't use it.
-- They get a random power-up for their side, exactly as a scan would.
+With a shared deck every station draws from the same cards, so claiming a particular station remotely no longer means much. Abang Grab is now **"order off the menu"** (owner's decision):
+
+1. **The player draws Abang Grab** like any card, at random from the top of their side's deck. It sits in their one slot.
+2. **On use, from anywhere,** during the chase, by anyone not jailed, the app shows the **top 3 cards** of the player's side's deck: `What should Abang Grab bring?`
+3. **The player keeps one.** It **replaces Abang Grab in their slot** and is held like any card; choosing it doesn't switch it on. The other two go to the **bottom** of the deck.
+4. **The kept card is sealed:** **Toyol and Ah Long can't take it** while it's held (owner's decision). A delivered card arrives sealed.
 
 Details:
-- **Refused, not used up,** if that station is locked or already claimed by this player. They see the usual station message ("recharging — 0:42" or "already used this station") and can pick another.
-- **The slot:** Abang Grab is in your slot, so you can always grab. It's used up when the grab succeeds, and the new power-up takes its place.
-- **Message:** `Abang Grab hantar dari Station 3! Dapat: Durian` to the user. The feed shows the existing pickup line, unchanged.
-- **The sneaky tactic:** a grab locks the station for everyone for 60 s, so it can block someone walking there. That's intended.
+- **If the deck has fewer than 3 cards,** show what's there. If it's empty, reshuffle first (§5b). If there's still nothing, refuse without using Abang Grab up.
+- **No buffed versions:** the delivered card works exactly like a drawn one (owner's decision, after rejecting a buff as too strong). Abang Grab's reward is the choice, the peek at the deck, no walk to a station, and the seal.
+- **Message:** `Abang Grab hantar Durian!` to the user, and `The other two went to the bottom of the deck.` The feed shows the existing pickup line, without naming the card.
+- **The old "pick a station on the map, which locks it for 60 s" version is dropped,** and so is its station-blocking tactic.
+- **Simultaneous draws:** the peek, the choice and the deck reorder are one atomic step. Two Abang Grabs or a station claim at the same moment must never hand out the same card.
 
 ## 7. Power-up wording
 
@@ -143,6 +170,6 @@ Details:
 
 ## 10. Left to the builder
 
-- Exact screen layout for picking a station for Abang Grab (map tap or list), as long as it works by tapping on a phone.
+- Exact screen layout for Abang Grab's "top 3" choice, as long as it works by tapping on a phone (see the mockup `docs/superpowers/mockups/2026-10-30-motion/8-power-up-slot.html`).
 - How the "taken" state is stored (e.g. a `taken_at` / `taken_by` column), as long as it's atomic and taken power-ups no longer appear in anyone's hand.
 - Copy for power-up refusal edge cases not listed above, in the same voice as §6.
