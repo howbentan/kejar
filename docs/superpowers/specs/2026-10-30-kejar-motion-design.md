@@ -17,8 +17,10 @@
 - `5-later-moments.html`
 - `6-checkin.html` and `7-checkin-states.html`: the check-in moment (§7a); option B in `6-checkin.html` is the chosen one.
 - `8-power-up-slot.html`: the one power-up slot with the shared deck (§7b).
-- `9-penjara-dare-reel.html`, `10-dato-seri.html` and `11-rarity-tiers.html`: Penjara and Dato Seri (jail design §3a and §4a) and the rarity tiers (power-ups design §5c).
+- `9-penjara-dare-reel.html` and `10-dato-seri.html`: Penjara and Dato Seri (jail design §3a and §4a).
+- `11-rarity-tiers.html`: **superseded.** Blue and purple tiers were rejected; only its yellow legendary (option B) was kept.
 - `12-marshal-sos.html`: the marshal's side of an SOS (§6.5).
+- `13-card-art.html`: the doodle sticker art for all nine cards (power-ups design §5c).
 
 ## 1. Why
 
@@ -186,9 +188,9 @@ Rules:
   - a **round art spot** for the character's illustration;
   - the name in Geist 800;
   - the plain-English effect line.
-- **Art is a separate task.** Until each character has its illustration, the art spot shows the initials (e.g. `D`, `AG`). All nine share one style: lime line art on black in the round frame, matching stroke weight. This also answers the power-ups design's open question on icons: brand colours, not emoji.
+- **Art** (decided 2026-10-30, power-ups design §5c): each card shows its **doodle sticker** in the character's own colours, from `13-card-art.html`. Hand-drawn wobble, a white sticker edge and a slight tilt. The sticker wiggles briefly when the card lands.
 - **One slot** (power-ups design §5a): the revealed card goes into the player's single power-up slot.
-- **Rarity colour on the front** (added 2026-10-30, power-ups design §5c): the front is blue for rare and purple for epic, with the epic glow and sparkles. The back stays the same lime design for every card, so the rarity is only seen on the flip. Dato Seri (legendary yellow) never comes from the lucky dip.
+- **No rarity colours** (power-ups design §5c): every deck card has the same lime-framed front. Dato Seri, the only yellow card, never comes from the lucky dip.
 
 ## 7b. The power-up slot (added 2026-10-30)
 

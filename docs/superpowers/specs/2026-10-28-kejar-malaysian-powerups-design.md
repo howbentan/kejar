@@ -102,24 +102,27 @@ Replaces "a random roll with equal odds on every scan".
   - It adds strategy through scarcity ("both Toyols are gone").
   - It gives one clear balance dial: the counts.
 
-## 5c. Rarity tiers (owner's decision, 2026-10-30)
+## 5c. How the cards look (owner's decision, 2026-10-30)
 
-Every power-up card shows a rarity colour, so players can tell at a glance how good a draw is.
+- **No rarity tiers.** Every deck card uses the **same brand card:**
+  - black, with a Volt lime border and a thinner inner border;
+  - a lime `POWER-UP` eyebrow;
+  - the art;
+  - the name in white Geist 800 and the plain-English effect line.
+- **The art is a doodle sticker in the character's own colours:**
+  - a hand-drawn, slightly wobbly ink outline;
+  - flat fills in real-life colours (green durian, red kapcai, grey shark);
+  - a thick white sticker edge with a drop shadow, and a slight tilt.
 
-| Tier | Colour | Cards | Why this tier |
-|---|---|---|---|
-| Rare | Blue `#3D8BFF` | Gostan, Durian, Ponteng, Mat Rempit, Pak Guard | 2 copies per deck set (§5b) |
-| Epic | Purple `#A855F7` | Toyol, Ah Long, Abang Grab | 1 copy per deck set |
-| Legendary | Yellow `#FFD60A` | Dato Seri only | One per game, earned by quest (jail design §4) |
-
-- **The colours (blue, purple, yellow) are the owner's call.** Which card sits in which tier is **Claude's call**: the tier follows how many copies are in the deck, so the colour tells the truth about how often you'll see a card. If the deck counts change, the tiers move with them.
-- **Effects step up with the tier:**
-  - **Rare:** a dark blue card with a blue frame. No glow.
-  - **Epic:** a deep purple card with a purple frame, a slow glow pulse and a small sparkle burst when it's revealed.
-  - **Legendary:** a solid yellow face with dark text, a light sweep across it, a stronger glow pulse and a big sparkle burst (§4a of the jail design).
-- **A deliberate exception to "Volt, black and white only" (§8).** The rarity colours appear **only on power-up cards**: the lucky dip reveal, the power-up slot and Dato Seri's moments. Buttons, banners and every other screen stay Volt, black and white, so lime still means "tap here".
-- **Gold was mocked up and rejected for legendary** in favour of yellow (owner's decision). Claude's concern was that yellow sits close to Volt lime. To keep them apart, the legendary yellow is always a solid card face with dark text and a glow, never a button or a lime-style outline.
-- **Mockup:** `docs/superpowers/mockups/2026-10-30-motion/11-rarity-tiers.html`, where option B is the chosen yellow.
+  The drawings are in `docs/superpowers/mockups/2026-10-30-motion/13-card-art.html`. Mine (Claude's) set the direction and can be redrawn by an illustrator later in the same style.
+- **The same drawing is used everywhere,** from the full card in the lucky dip down to the power-up slot and the feed. At small sizes the characters are recognised by colour and shape.
+- **Dato Seri is the one legendary card,** and the only one that isn't lime: a yellow face (`#FFF27A` → `#FFD60A` → `#F5B800`) with dark text, a light sweep and a glow (jail design §4a). Gold was mocked up and rejected for yellow (owner's decision).
+- **Rejected: blue "rare" and purple "epic" tiers** (mockup `11-rarity-tiers.html`, now superseded). Claude's reasons, which the owner agreed with:
+  - every deck card is situational, not "better", so tiers would make most draws feel like a letdown;
+  - there are only 8 kinds, which players learn in one game;
+  - coloured frames clash with the colourful stickers;
+  - with every other card lime, the yellow Dato Seri stands out more.
+- **If playtests show draws feel flat,** the 1-copy cards (Toyol, Ah Long, Abang Grab) could get a small extra sparkle on reveal, without changing their frame.
 
 ## 6. The set
 
@@ -174,7 +177,7 @@ Details:
 
 ## 8. Constraints
 
-- **Brand colours:** Volt `#C6FF3D`, black and white only, except the rarity colours on power-up cards (§5c).
+- **Brand colours:** Volt `#C6FF3D`, black and white only, except the doodle art in its own colours and Dato Seri's legendary yellow (§5c).
 - **Fonts:** Geist and Geist Mono.
 - **Free tiers only;** keep the single `api/game.ts` function.
 - **Database:** the database only accepts the five current power-up kinds (`0004_powerups.sql` checks the kind), so the new ones need a numbered migration, which the owner runs in Supabase by hand.
@@ -183,7 +186,7 @@ Details:
 
 ## 9. Open questions for the owner
 
-1. **Icons.** The chat used emoji (🍈 Durian, 🏍️ Mat Rempit, 👶 Toyol, 💸 Ah Long, 🛵 Abang Grab, 🔙 Gostan, 🎒 Ponteng, 📹 Pak Guard). Emoji are full-colour, which breaks the "Volt, black and white only" brand rule.
+1. **Icons: answered 2026-10-30** (§5c): doodle stickers in each character's own colours, on the brand card. The original question: the chat used emoji (🍈 Durian, 🏍️ Mat Rempit, 👶 Toyol, 💸 Ah Long, 🛵 Abang Grab, 🔙 Gostan, 🎒 Ponteng, 📹 Pak Guard). Emoji are full-colour, which breaks the "Volt, black and white only" brand rule.
    - **Default if unanswered:** simple monochrome icons drawn in the brand colours, with the emoji used only as a guide to what each icon shows.
 2. **Ah Long's targets.** Should Ah Long also be able to take from jailed runners' hands? The default above is free runners only.
 
