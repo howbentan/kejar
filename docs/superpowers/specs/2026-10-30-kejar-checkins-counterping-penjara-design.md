@@ -1,6 +1,6 @@
-# Kejar: auto-jail for missed check-ins, counter-pings, and Penjara
+# Kejar: on-time check-ins, auto-jail, seeing the chasers, and Penjara
 
-**Status:** Agreed with the owner in chat, 2026-10-28 to 2026-10-30, and checked by a reviewer (build order and results resolved in §8a). Not built. **Build this before the Malaysian power-ups and jail dare-wheel specs** (§8a).
+**Status:** Agreed with the owner in chat, 2026-10-28 to 2026-10-30, and checked by a reviewer (build order and results resolved in §8a). Revised the same day: a tight check-in window (§4.2), and the chaser view merged into the check-in behind an organiser switch (§5). Not built. **Build this before the Malaysian power-ups and jail dare-wheel specs** (§8a).
 **Builds on:**
 - `docs/superpowers/specs/2026-10-19-kejar-design.md` §4.5 (pings and check-ins) and §4.7 (jail and jailbreak).
 - `docs/superpowers/specs/2026-10-28-kejar-jail-dato-seri-design.md`: the jail dare wheel and Dato Seri.
@@ -8,12 +8,13 @@
 
 ## 1. Why
 
-A review of the game's strategy found two holes.
+A review of the game's strategy found three holes.
 
 1. **Skipping check-ins costs nothing.** A runner who ignores the check-in alert is shown to chasers at their old position, marked "missed check-in". Marshals get an alert after 2 misses, but there's no in-game penalty.
    - So a smart runner can stop checking in and move around freely: an unlimited, free Ponteng.
    - Once one player works that out, the game falls apart for everyone, and the real Ponteng power-up becomes pointless.
-2. **Rescuers walk in blind.** Runners never learn where chasers are (apart from a "chaser nearby" warning within ~100 m while their page is open). A chaser waiting at the jail therefore turns every rescue attempt into a trap, and jailbreaks die out.
+2. **A check-in counts any time since the last ping.** Found while checking the code. A runner can open Kejar just *after* a ping, pocket the phone, and run anywhere for the next five minutes. At the next ping they're shown at that old spot with no "missed check-in" mark. It's the same exploit as hole 1, just better hidden.
+3. **Rescuers walk in blind.** Runners never learn where chasers are (apart from a "chaser nearby" warning within ~100 m while their page is open). A chaser waiting at the jail therefore turns every rescue attempt into a trap, and jailbreaks die out.
 
 The owner's direction for both:
 - The fixes must be decided by the app, never by a referee.
@@ -21,30 +22,39 @@ The owner's direction for both:
 
 ## 2. Goals
 
-1. **Make missed check-ins cost something real** (§4): two missed in a row sends the runner to Penjara automatically.
-2. **Let runners see chasers too, on a delay** (§5): one minute after each ping, runners get a fuzzy "counter-ping" of where the chasers are.
+1. **Make check-ins on time and on purpose** (§4):
+   - only a check-in in the window just before a ping counts;
+   - two missed in a row sends the runner to Penjara automatically.
+2. **Let runners see chasers at check-in, if the organiser switches it on** (§5): the same moment they check in, runners see where the chasers were when their alert went off.
 3. **Rename the jail to Penjara** wherever players see it (§6).
 
 ## 3. Non-goals
 
 - **A no-catch safe zone around Penjara.** It was proposed and dropped by the owner.
   - Camping at Penjara is a real trade-off: a chaser on guard is a chaser not hunting.
-  - Counter-pings (§5) make it visible, so runners can plan around it.
+  - When the chaser view is on (§5), runners can see whether Penjara is guarded and plan around it.
 - **Automatic background location (no check-ins at all).** A web page can't read location while the screen is off or the page is closed. That needs a native app, which stays off the table for now (owner's decision, 2026-10-30): events first, app maybe later.
 - **Banning or removing runners for missed check-ins.** The owner's first instinct was "banned, out of the game". It was softened because push alerts can fail and GPS can drop under trees, so an unlucky runner would be knocked out through no fault of their own.
-- **Anything a marshal has to judge.** Both mechanics are decided by the app.
+- **Anything a marshal has to judge.** Everything here is decided by the app.
+- **A separate "counter-ping" a minute after each ping.** That was an earlier version. It was replaced by showing chasers at the check-in itself (§5), so runners don't need a second phone moment.
+- **Orang Bunian** (a chaser power-up to hide from runners' view). Discussed as a counter for chasers; left out for now. Revisit if the chaser view proves popular and chasers want a way to hide from it.
 
 ## 4. Auto-jail: two missed check-ins in a row
 
 ### 4.1 The rule
 At each **scheduled** ping's reveal, a free runner who missed **both this check-in and the one before it** is sent to Penjara automatically, exactly as if a chaser had caught them.
 
-### 4.2 What counts as a check-in
-Unchanged from today:
-- A check-in for ping *k* is any location the runner's phone sent after the previous scheduled reveal (or after the chase started, for the first ping), up to ping *k*'s reveal.
+### 4.2 What counts as a check-in (tightened)
+- **The check-in window** for a scheduled ping runs from its **alert** to its **reveal**.
+- **The alert moves to 45 s before the reveal** (it was 30 s), so a late push alert still leaves time to open Kejar (**Claude's call**).
+- **A check-in for ping *k* is a location the runner's phone sent inside ping *k*'s window.** That window is the 45 s up to the reveal.
+- **A location sent before the window doesn't count,** even if it came after the previous ping. Chasers see that runner marked "missed check-in" at that older spot, and it counts towards auto-jail.
+- **Keeping Kejar open the whole time is fine.** The page keeps sending locations, some of which land inside every window, so such a runner never misses.
+- **Mat Rempit's surprise pings keep their own 30 s alert.** Only scheduled pings move to 45 s.
 - Locations from the hide phase don't count.
 - **Ponteng and Gostan users did check in.** Those power-ups only hide or move what chasers see; the phone still sent its location. So they're never penalised.
-- **Mat Rempit's surprise pings don't count.** With only 30 s notice, missing one is not a fault. This matches how the marshal "missed 2 check-ins" alert already counts (`missedTwoInARow` in `app/shared/alerts.ts`).
+- **Mat Rempit's surprise pings don't count towards auto-jail.** With only 30 s notice, missing one is not a fault. This matches how the marshal "missed 2 check-ins" alert already counts (`missedTwoInARow` in `app/shared/alerts.ts`). That function must be updated to use the new window, not "anything since the last ping".
+- **Fixed-schedule mode** (no push alerts) uses the same window. Runners watch the on-screen countdown and open Kejar during the last 45 s.
 
 ### 4.3 One free miss
 A single missed check-in costs nothing beyond what it does today (shown at your old spot, marked "missed check-in"). Only the **second miss in a row** triggers auto-jail, so one dropped alert never costs anyone the game.
@@ -78,32 +88,46 @@ The app needs to know when each runner was last released. Today there's only a `
 ### 4.6 Pauses
 While a marshal has the game paused, no pings reveal, so nobody can miss a check-in. After resuming, the schedule continues as normal (it already shifts by the pause length).
 
-## 5. Counter-pings: runners see the chasers, a minute later
+## 5. Seeing the chasers at check-in (organiser switch)
 
-### 5.1 The rule
-**60 seconds after each scheduled ping's reveal**, every free runner can see where every chaser is at that moment, drawn the same way runners are shown to chasers:
-- **fuzzy circles of about 15 m**, using the same fuzz as runner pings;
-- labelled with the chaser's name.
+### 5.1 The switch
+- New game setting: **"Dikejar can see Kejar at check-in"**, on or off, chosen when creating the game.
+- **Default: off** (**Claude's call**). Off is how the game works today, the closest to proven hide-and-seek formats.
+- The owner plans to play one game with it off and one with it on at early events, then compare which players enjoyed more. Watch catches per game, jailbreaks and how many check-ins were on time.
 
-That counter-ping stays on the runner's map until the next one replaces it.
+### 5.2 When it's on
+At the moment a scheduled ping's **alert** goes out (45 s before the reveal), the app records where every chaser is: a **snapshot**. When a free runner opens Kejar inside that check-in window, their map shows the chasers **as they were in the snapshot**:
+- **fuzzy circles of about 30 m**, twice the runners' 15 m, because runners see chasers up to 45 s before chasers see them (**Claude's call**, and the first dial to turn after a playtest);
+- labelled with the chaser's name;
+- **frozen.** The circles don't move as chasers move; they stay until the runner's next check-in replaces them.
 
-### 5.2 Quiet, not buzzing (owner's decision)
-- **No push notification for counter-pings.** Runners' phones already buzz for every check-in. A second buzz a minute later would double the phone time, screen glow and battery drain, and break the "phone in pocket" design.
-- **The check-in screen shows a countdown** after the ping, `Kejar revealed in 0:45`, so every runner knows when to look if they want to.
-- Looking is a **choice and a risk**: pulling the phone out to check gives away a hiding spot with the glow.
+### 5.3 Why it's frozen at the alert (the strategy)
+- **Chasers know the snapshot is taken at the alert.** From that moment until the next alert, they can move unseen: reposition, flank, or bluff. For example, a chaser stands by Penjara at the alert so it looks guarded, then walks off to hunt; or appears far away, then sneaks back.
+- **Runners**, after checking in, can move before the reveal, as they always could.
+- **So each side sees the other at a fixed moment, about 45 s apart, and each gets a window to act unseen.** Showing chasers live instead would give chasers nowhere to hide and no way to bluff, which is too strong for runners.
 
-### 5.3 Details
-- **Only after scheduled pings,** not after Mat Rempit's surprise pings (**Claude's call**). Mat Rempit is a chaser advantage; it shouldn't also hand runners a free counter-ping.
-- **A chaser whose phone hasn't sent a location for over 60 s** is shown at their last known spot, marked as old: a dashed circle, the same way a runner's missed check-in is drawn (**Claude's call**).
-- **Chasers know it happened:** the feed shows `Counter-ping: Dikejar can see you`. This is plain English, plus the existing role name; the Malaysian wording scope is power-ups only, apart from Penjara (§6).
+**Briefing lines:**
+- to runners: *"When your phone buzzes, open it. You check in, and you see where the chasers were at that moment."*
+- to chasers: *"Runners see where you were when their phone buzzed, so move after that."*
+
+### 5.4 Details
+- **Only scheduled pings take a snapshot,** not Mat Rempit's surprise pings (**Claude's call**). Mat Rempit is a chaser advantage; it shouldn't also hand runners a free look.
+- **No new notifications.** The view arrives with the check-in the runner is already doing. There's no extra buzz and no second phone moment.
+- **A chaser whose last location is over 60 s old at the snapshot** is shown at that last known spot, marked as old: a dashed circle, like a runner's missed check-in (**Claude's call**).
+- **Chasers know when they've been snapshotted.** Their screen marks the moment of each alert, e.g. `Snapshot taken — Dikejar can see where you were`, so they know their unseen window has started. The feed shows the same line. Plain English, plus the existing role name.
+- **A runner who doesn't check in sees nothing new.** They keep the previous snapshot (or none). Skipping check-ins means flying blind as well as risking auto-jail.
 - **Unchanged views:**
-  - Jailed runners keep their existing spectator map (everyone, 2 minutes delayed).
+  - Jailed runners keep their spectator map (everyone, 2 minutes delayed).
   - Marshals still see chasers live.
-- **Pauses** shift counter-pings exactly as they shift pings, since a counter-ping is just "reveal time + 60 s".
-- **The chaser-nearby warning** (≤100 m, live, while the runner's page is open) stays as it is.
+  - The live chaser-nearby warning (≤100 m, while the page is open) stays.
+- **Pauses** shift the alert, and so the snapshot, exactly as they shift pings.
 
-### 5.4 Balance lever (not built now)
-If playtests show runners are now too strong, the first thing to try is **switching counter-pings off for the last 10 minutes**, so the finish gets tense again. This belongs with the endgame work, not this spec.
+### 5.5 Balance levers (not built now)
+If playtests with the switch on show chasers struggling to catch anyone, the levers, in order:
+1. widen the chaser circles beyond 30 m;
+2. add more chasers per runner, or use shorter ping intervals;
+3. hide the chaser view in the last 10 minutes (endgame work);
+4. add Orang Bunian (§3) as a chaser counter.
 
 ## 6. Penjara
 
@@ -119,7 +143,7 @@ If playtests show runners are now too strong, the first thing to try is **switch
 ## 7. Anti-goals
 
 - **Punishing bad luck.** One free miss (§4.3) and the "freed runners start fresh" rule (§4.4) exist so nobody is jailed for something outside their control.
-- **Making phones louder.** No new push notifications (§5.2).
+- **Making phones louder.** No new push notifications (§5.4).
 - **Hiding the reason.** A runner sent to Penjara automatically must always be told why (§4.5).
 
 ## 8. Constraints
@@ -127,10 +151,11 @@ If playtests show runners are now too strong, the first thing to try is **switch
 - **Brand colours:** Volt `#C6FF3D`, black and white only.
 - **Fonts:** Geist and Geist Mono.
 - **Free tiers only,** with the single `api/game.ts` function.
-- **Database:** any new field (e.g. `freed_at`) is a numbered migration that the owner runs in Supabase by hand.
+- **Database:** any new field (e.g. `freed_at`) is a numbered migration that the owner runs in Supabase by hand. The switch is one more field in the game's existing `settings`.
+- **The alert lead time** (`ALERT_LEAD_MS`, now 30 s) splits in two: 45 s for scheduled pings and 30 s for Mat Rempit's (Flare) bonus pings.
 - **Shared code:** reuse the existing pieces rather than duplicating them:
   - the missed-check-in counting (`missedTwoInARow`);
-  - the fuzz (`fuzz` / `FUZZ_RADIUS_M`);
+  - the fuzz (`fuzz`; chasers use a 30 m radius alongside `FUZZ_RADIUS_M`);
   - the pause-aware clock (`toWall`).
 
 ## 8a. Build order (Claude's call, resolved after the reviewer's check)
@@ -156,5 +181,6 @@ Whichever of those specs is planned next should list these as tasks.
 ## 9. Left to the builder
 
 - How "last released" is stored (a `freed_at` field, or derived from release events), as long as all three release paths reset the streak.
-- Where the counter-ping countdown sits on the runner screens, as long as it shows after every scheduled ping.
-- How chasers' counter-ping circles are visually distinguished from runner circles on a runner's own map (runners already see their teammates' dots), using brand colours only.
+- How the snapshot is stored (e.g. chaser positions read "as of the alert time", which the existing position history already supports).
+- How chasers' circles are visually distinguished from teammates' dots on a runner's map, using brand colours only.
+- Where the "snapshot taken" marker sits on the chaser screen.
