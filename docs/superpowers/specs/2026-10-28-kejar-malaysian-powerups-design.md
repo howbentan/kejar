@@ -37,7 +37,7 @@ The tone is **funny, not scary** (owner's decision).
   - claims within 30 m of the station;
   - each station locked for 60 s after a claim;
   - each player claims each station once;
-  - at most 3 unused power-ups in hand;
+  - ~~at most 3 unused power-ups in hand~~ **replaced by one power-up slot (§5a, owner's decision 2026-10-30);**
   - jailed runners and marshals can't claim.
   - **Exception, owner's decision 2026-10-28:** Pak Guard's reveal radius drops from Focus's original 150 m to 75 m, to keep it clearly weaker than the chaser legendary power-up being designed alongside it (Bomoh/Pontianak, not yet finalised — see `docs/superpowers/specs/2026-10-28-kejar-jail-dato-seri-design.md` and ongoing chat). Since Pak Guard is just Focus renamed, this changes `FOCUS_M` in `app/shared/views.ts` immediately, ahead of the rename itself shipping.
 - **Making stealing feel unfair.** A steal that finds nothing to take must not use up the stealer's power-up.
@@ -51,6 +51,33 @@ The tone is **funny, not scary** (owner's decision).
 - Scanning one within 30 m during the chase gives a **random power-up for your side**, picked at that moment, with **equal odds** across your side's list (§6).
 - Each player can claim each station once per game.
 - A claim locks that station for everyone for 60 s.
+
+## 5a. One power-up at a time (owner's decision, 2026-10-30)
+
+Replaces the old "hand of 3".
+
+- **Each player holds at most one power-up.** You can't claim at a station (or with Abang Grab) while your slot is full; the station refuses as "hand full", with copy like `Use your power-up first`.
+- **Your slot stays busy while your power-up's effect is still running,** not just until you tap Use. This stops "use it, grab another, use that too" stacking:
+
+  | Power-up | Slot busy until |
+  |---|---|
+  | Durian | it blocks a catch, or its 10 minutes end |
+  | Ponteng, Gostan, Pak Guard | the reveal their effect lands on (the next ping, scheduled or surprise) |
+  | Mat Rempit | its surprise ping has been revealed |
+  | Toyol, Ah Long, Abang Grab | done the moment they succeed |
+
+- **Mat Rempit: one at a time, team-wide.**
+  - No chaser can use Mat Rempit while another surprise ping is still pending.
+  - After each surprise ping is revealed, the chasers' team waits **3 minutes** before the next one.
+  - A refused use isn't spent; the player sees when it can be used again.
+  - This replaces today's behaviour, where two can run back to back.
+- **Why:** with three slots, players could stack Durians (becoming uncatchable), bank power-ups for the finish, and chain surprise pings. One slot keeps the real strategy (timing and bluffing about what you hold) and drops the stockpiling.
+- **Knock-on effects:**
+  - Toyol and Ah Long now take a player's *only* card, and will more often find nothing to take (not spent, as before).
+  - The jail design's Dato Seri simply occupies the one slot.
+- **Watch at the first playtest:**
+  - how often each power-up is used, including any that are dumped just to make room;
+  - how often Toyol and Ah Long find nothing to take.
 
 ## 6. The set
 
@@ -89,7 +116,7 @@ On use, the player taps a station on the map (or picks it from a list). The app 
 
 Details:
 - **Refused, not used up,** if that station is locked or already claimed by this player. They see the usual station message ("recharging — 0:42" or "already used this station") and can pick another.
-- **The hand limit:** Abang Grab is used up when the grab succeeds, freeing its own slot, so a full hand (3) can still grab.
+- **The slot:** Abang Grab is in your slot, so you can always grab. It's used up when the grab succeeds, and the new power-up takes its place.
 - **Message:** `Abang Grab hantar dari Station 3! Dapat: Durian` to the user. The feed shows the existing pickup line, unchanged.
 - **The sneaky tactic:** a grab locks the station for everyone for 60 s, so it can block someone walking there. That's intended.
 

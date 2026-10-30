@@ -81,7 +81,25 @@ Also floated: surprise missions, a bounty on the longest survivor. **Malaysian p
 - "Jail" becomes "Penjara" for players.
 - **Build this first, before the playtest and before the other two designs.**
 
-Suggested next: a real playtest in a park, then the endgame ideas above (the shrinking zone can reuse the Plan 4b play-area code); the owner hasn't chosen.
+**Motion design (designed 2026-10-30, not built).** `docs/superpowers/specs/2026-10-30-kejar-motion-design.md`, with mockups in `docs/superpowers/mockups/2026-10-30-motion/`.
+- Uses the Motion library.
+- The catch "dikejar!" stamp, plus bars and a walk-to-Penjara guide for the caught runner.
+- A press-and-hold SOS bar with "What's happening?" reasons; disputes go through SOS.
+- Report and feedback move to the results screen.
+- A pick-a-card lucky dip for power-ups.
+
+**Locked 2026-10-30: power-ups are one slot per player** (Malaysian power-ups design §5a).
+- A slot stays busy while its effect runs.
+- Mat Rempit is one at a time, with a 3-minute team cooldown.
+
+**PLAYTEST BUILD (owner's decision, 2026-10-30): no new mechanics until a real game has been played.** Build only:
+1. the check-in design (tight window, auto-jail, optional chaser view at check-in, Penjara);
+2. one power-up slot plus the Mat Rempit rule, on today's power-ups;
+3. motion design §4–§7: catch stamp, runner bars and Penjara guide, SOS bar with post-game report and feedback, lucky dip.
+
+Then playtest with friends, then a run club. Note catches per game, jailbreaks, on-time check-ins, and power-up usage.
+
+Suggested next: write the playtest build plan, then a real playtest in a park, then the endgame ideas above (the shrinking zone can reuse the Plan 4b play-area code); the owner hasn't chosen.
 
 ## Setting up a new machine
 1. Install Node 20+ and Git, then clone: `git clone https://github.com/howbentan/kejar.git`

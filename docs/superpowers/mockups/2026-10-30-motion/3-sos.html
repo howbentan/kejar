@@ -1,0 +1,182 @@
+<h2>SOS, with every recommendation in</h2>
+<p class="subtitle">Left: the in-game SOS bar (interactive). Right: the new post-game feedback and report on the results screen. Try a quick <b>tap</b>, a full <b>hold</b>, and the <b>accessibility</b> switch.</p>
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  .wrap { display: flex; gap: 28px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .cap { font-size: 12px; opacity: .75; max-width: 260px; text-align: center; }
+  .kj-phone { width: 260px; height: 520px; border-radius: 30px; background: #0A0A0B; border: 2px solid #2a2a2a;
+    position: relative; overflow: hidden; color: #F5F5F3; font-family: 'Geist', system-ui, sans-serif; user-select: none; -webkit-user-select: none; }
+  .bg { position: absolute; inset: 0; padding: 16px 12px; opacity: .35; font-size: 11px; }
+  .bg .bar { height: 160px; border-radius: 14px; background: #141614; border: 1px solid #222; margin: 8px 0; }
+  .dock { position: absolute; left: 0; right: 0; bottom: 0; padding: 12px; background: linear-gradient(to top, #0A0A0B 75%, transparent); }
+  .eb { font: 500 9px 'Geist Mono', monospace; letter-spacing: .2em; color: rgba(245,245,243,.55); text-align: center; margin-bottom: 8px; min-height: 11px; }
+  .eb.tip { color: #C6FF3D; }
+  .sosbar { position: relative; height: 54px; border-radius: 999px; border: 2px solid #C6FF3D; background: #C6FF3D; cursor: pointer; touch-action: none;
+    transition: transform .2s cubic-bezier(.32,.72,0,1); }
+  .sosbar .fill { position: absolute; inset: 0; border-radius: 999px; background: #C6FF3D; transform-origin: left; transform: scaleX(0); }
+  .sosbar .lbl { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 800; letter-spacing: .12em; font-size: 17px; color: #0A0A0B; }
+  .sosbar .lbl.lower { letter-spacing: -0.03em; font-size: 19px; }
+  .holding .sosbar { background: #141614; transform: scale(.97); }
+  .holding .sosbar .lbl { mix-blend-mode: difference; color: #C6FF3D; }
+  .rip { position: absolute; inset: 0; border-radius: 999px; border: 2px solid #C6FF3D; opacity: 0; pointer-events: none; }
+  .holding .rip { animation: rip 1s cubic-bezier(.32,.72,0,1) infinite; }
+  .holding .rip:nth-of-type(2) { animation-delay: .33s } .holding .rip:nth-of-type(3) { animation-delay: .66s }
+  @keyframes rip { 0% { transform: scale(1, 1); opacity: .9 } 100% { transform: scale(1.12, 1.9); opacity: 0 } }
+  .sent .sosbar { animation: pop .45s cubic-bezier(.2,1.6,.4,1); }
+  @keyframes pop { 50% { transform: scale(1.05) } }
+
+  .sheet { position: absolute; left: 10px; right: 10px; bottom: 96px; background: #141614; border: 1px solid rgba(255,255,255,.12); border-radius: 20px;
+    padding: 12px; transform: translateY(20px); opacity: 0; pointer-events: none; transition: all .35s cubic-bezier(.32,.72,0,1); overflow: hidden; }
+  .sheet.on { transform: none; opacity: 1; pointer-events: auto; }
+  .sheet .ok { color: #C6FF3D; font-weight: 800; font-size: 15px; }
+  .sheet .q { font-size: 12px; opacity: .7; margin: 4px 0 8px; }
+  .sheet .timer { position: absolute; left: 0; bottom: 0; height: 3px; background: #C6FF3D; width: 100%; transform-origin: left; }
+  .sheet.on .timer { animation: drain 20s linear forwards; }
+  @keyframes drain { to { transform: scaleX(0) } }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border: 1px solid rgba(255,255,255,.2); border-radius: 999px; padding: 6px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .chip.on { background: #C6FF3D; color: #0A0A0B; border-color: #C6FF3D; }
+  .who { margin-top: 8px; display: none; } .who.on { display: block; }
+  .saved { margin-top: 8px; font: 500 10px 'Geist Mono', monospace; letter-spacing: .08em; color: #C6FF3D; min-height: 12px; }
+  .confirm { position: absolute; left: 10px; right: 10px; bottom: 96px; background: #141614; border: 2px solid #C6FF3D; border-radius: 20px; padding: 14px; display: none; text-align: center; }
+  .confirm.on { display: block; }
+  .confirm b { display: block; font-size: 15px; margin-bottom: 10px; }
+  .confirm button { width: 100%; border: 0; border-radius: 999px; padding: 12px; font: 800 15px 'Geist', sans-serif; background: #C6FF3D; color: #0A0A0B; cursor: pointer; }
+  .confirm button.ghost { background: transparent; color: #F5F5F3; border: 1px solid #444; margin-top: 6px; font-weight: 600; }
+  .a11y { display: flex; gap: 8px; align-items: center; font-size: 12px; cursor: pointer; }
+  .reset { background: transparent; color: #F5F5F3; border: 1px solid #444; border-radius: 999px; padding: 6px 14px; cursor: pointer; font-family: 'Geist', sans-serif; }
+
+  /* results / feedback */
+  .res { position: absolute; inset: 0; padding: 16px 14px; overflow: auto; }
+  .res .eb { text-align: left; }
+  .res h4 { font-size: 26px; font-weight: 800; letter-spacing: -0.05em; margin: 6px 0 12px; }
+  .res h4 span { color: #C6FF3D; }
+  .box { border: 1px solid rgba(255,255,255,.12); border-radius: 18px; padding: 12px; margin-bottom: 10px; background: rgba(255,255,255,.03); }
+  .box .t { font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+  .stars { display: flex; gap: 6px; } .stars i { width: 30px; height: 30px; border-radius: 50%; border: 1px solid #444; display: grid; place-items: center; font-style: normal; font-size: 12px; cursor: pointer; }
+  .stars i.on { background: #C6FF3D; color: #0A0A0B; border-color: #C6FF3D; }
+  .fake-input { border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 10px; font-size: 12px; opacity: .6; margin-top: 8px; }
+  .send { width: 100%; border: 0; border-radius: 999px; padding: 11px; font: 800 14px 'Geist', sans-serif; background: #C6FF3D; color: #0A0A0B; margin-top: 8px; }
+</style>
+
+<div class="wrap">
+  <div class="col">
+    <div class="kj-phone" id="ph">
+      <div class="bg">Dikejar · #07<div class="bar"></div>Feed…</div>
+      <div class="sheet" id="sheet">
+        <div class="ok">Marshals alerted</div>
+        <div class="q">What's happening? (optional, helps the marshal)</div>
+        <div class="chips" id="reasons">
+          <span class="chip" data-r="Hurt">Hurt</span><span class="chip" data-r="Lost">Lost</span>
+          <span class="chip" data-r="Unsafe player" data-who="1">Unsafe player</span>
+          <span class="chip" data-r="Catch dispute" data-who="1">Catch dispute</span>
+          <span class="chip" data-r="Something else">Something else</span>
+        </div>
+        <div class="who" id="who"><div class="q">With who?</div>
+          <div class="chips" id="people"><span class="chip">Ben</span><span class="chip">Siti</span><span class="chip">Hafiz</span><span class="chip">Wei</span></div></div>
+        <div class="saved" id="saved"></div>
+        <div class="timer"></div>
+      </div>
+      <div class="confirm" id="confirm">
+        <b>Send SOS to marshals?</b>
+        <button onclick="sendSos()">Yes, send SOS</button>
+        <button class="ghost" onclick="closeConfirm()">Cancel</button>
+      </div>
+      <div class="dock">
+        <div class="eb" id="eb">HOLD 1 S · MARSHALS COME TO YOU</div>
+        <div class="sosbar" id="bar"><i class="rip"></i><i class="rip"></i><i class="rip"></i><div class="fill"></div><div class="lbl" id="lbl">SOS</div></div>
+      </div>
+    </div>
+    <label class="a11y"><input type="checkbox" id="a11y"> Accessibility mode (screen reader / can't long-press)</label>
+    <button class="reset" onclick="resetAll()">Reset</button>
+    <p class="cap"><b>In:</b> capitals "SOS" at rest and lowercase "sos sent". A quick tap shows "Hold for 1 second". The card closes itself after 20 s (the bar along its bottom). Accessibility mode becomes tap, then confirm.</p>
+  </div>
+
+  <div class="col">
+    <div class="kj-phone">
+      <div class="res">
+        <div class="eb">GAME OVER · RESULTS</div>
+        <h4>Dikejar win<span>.</span></h4>
+        <div class="box"><div class="t">How fun was it?</div>
+          <div class="stars" id="stars"><i>1</i><i>2</i><i>3</i><i>4</i><i>5</i></div>
+          <div class="fake-input">What would you change? (optional)</div>
+          <button class="send">Send feedback</button></div>
+        <div class="box"><div class="t">Report a player</div>
+          <div class="q" style="font-size:12px;opacity:.7;margin-bottom:8px">For anything a marshal should know about. Saved for the organiser.</div>
+          <div class="chips"><span class="chip">Rough play</span><span class="chip">Catch dispute</span><span class="chip">Something else</span></div>
+          <div class="fake-input">Who? · Note (optional)</div>
+          <button class="send" style="background:transparent;color:#F5F5F3;border:1px solid #444">Send report</button></div>
+      </div>
+    </div>
+    <p class="cap"><b>New:</b> post-game feedback (helps you improve events) and a report form for non-urgent issues, on the results screen.</p>
+  </div>
+</div>
+
+<script>
+  const HOLD = 1000, TAP_MS = 250
+  const ph = document.getElementById('ph'), bar = document.getElementById('bar'), fill = bar.querySelector('.fill'), lbl = document.getElementById('lbl'), eb = document.getElementById('eb')
+  const sheet = document.getElementById('sheet'), who = document.getElementById('who'), saved = document.getElementById('saved'), confirmEl = document.getElementById('confirm')
+  const a11y = document.getElementById('a11y')
+  let start = 0, raf = 0, reason = '', closeTimer = 0, tipTimer = 0
+  const HINT = 'HOLD 1 S · MARSHALS COME TO YOU'
+  const tick = () => {
+    const p = Math.min(1, (performance.now() - start) / HOLD)
+    fill.style.transform = `scaleX(${p})`
+    if (p >= 1) { finish(); return }
+    raf = requestAnimationFrame(tick)
+  }
+  function finish() { cancelAnimationFrame(raf); start = 0; ph.classList.remove('holding'); sendSos() }
+  function sendSos() {
+    closeConfirm()
+    fill.style.transform = 'scaleX(1)'
+    lbl.textContent = 'sos sent'; lbl.classList.add('lower')
+    ph.classList.remove('sent'); void ph.offsetWidth; ph.classList.add('sent')
+    if (navigator.vibrate) navigator.vibrate([300, 100, 300])
+    sheet.classList.remove('on'); void sheet.offsetWidth; sheet.classList.add('on')
+    saved.textContent = 'SAVED · SOS FROM AINA #07'
+    clearTimeout(closeTimer); closeTimer = setTimeout(() => sheet.classList.remove('on'), 20000)
+  }
+  function closeConfirm() { confirmEl.classList.remove('on') }
+  bar.addEventListener('pointerdown', (e) => {
+    e.preventDefault()
+    if (a11y.checked) { confirmEl.classList.add('on'); return }
+    if (navigator.vibrate) navigator.vibrate(30)
+    ph.classList.add('holding'); start = performance.now(); raf = requestAnimationFrame(tick)
+  })
+  ;['pointerup', 'pointerleave', 'pointercancel'].forEach((ev) => bar.addEventListener(ev, () => {
+    if (!start) return
+    const held = performance.now() - start
+    cancelAnimationFrame(raf); start = 0; ph.classList.remove('holding'); fill.style.transform = 'scaleX(0)'
+    // A quick tap teaches the gesture instead of looking like a failure.
+    eb.textContent = held < TAP_MS ? 'HOLD FOR 1 SECOND TO SEND SOS' : 'LET GO TOO EARLY · HOLD 1 S'
+    eb.classList.add('tip'); clearTimeout(tipTimer); tipTimer = setTimeout(() => { eb.textContent = HINT; eb.classList.remove('tip') }, 2000)
+  }))
+  a11y.addEventListener('change', () => { eb.textContent = a11y.checked ? 'TAP SOS, THEN CONFIRM' : HINT })
+  document.getElementById('reasons').addEventListener('click', (e) => {
+    const c = e.target.closest('.chip'); if (!c) return
+    document.querySelectorAll('#reasons .chip').forEach((x) => x.classList.toggle('on', x === c))
+    document.querySelectorAll('#people .chip').forEach((x) => x.classList.remove('on'))
+    reason = c.dataset.r; who.classList.toggle('on', !!c.dataset.who)
+    saved.textContent = `SAVED · SOS FROM AINA #07: ${reason.toUpperCase()}`
+  })
+  document.getElementById('people').addEventListener('click', (e) => {
+    const c = e.target.closest('.chip'); if (!c) return
+    document.querySelectorAll('#people .chip').forEach((x) => x.classList.toggle('on', x === c))
+    saved.textContent = `SAVED · SOS FROM AINA #07: ${reason.toUpperCase()} WITH ${c.textContent.toUpperCase()}`
+  })
+  document.getElementById('stars').addEventListener('click', (e) => {
+    const i = e.target.closest('i'); if (!i) return
+    const n = Number(i.textContent); document.querySelectorAll('#stars i').forEach((x) => x.classList.toggle('on', Number(x.textContent) <= n))
+  })
+  document.querySelectorAll('.res .chips .chip').forEach((c) => c.addEventListener('click', () => {
+    c.parentElement.querySelectorAll('.chip').forEach((x) => x.classList.toggle('on', x === c))
+  }))
+  function resetAll() {
+    sheet.classList.remove('on'); who.classList.remove('on'); closeConfirm(); fill.style.transform = 'scaleX(0)'
+    lbl.textContent = 'SOS'; lbl.classList.remove('lower'); ph.classList.remove('sent'); clearTimeout(closeTimer)
+    document.querySelectorAll('#ph .chip').forEach((x) => x.classList.remove('on')); saved.textContent = ''; reason = ''
+    eb.textContent = a11y.checked ? 'TAP SOS, THEN CONFIRM' : HINT; eb.classList.remove('tip')
+  }
+</script>

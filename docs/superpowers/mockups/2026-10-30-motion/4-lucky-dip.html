@@ -1,0 +1,131 @@
+<h2>Lucky dip: cards spread across the middle of the screen</h2>
+<p class="subtitle">Left: <b>tap a card</b> to draw it. If you don't tap within 3 s, the sweep picks for you. Right: the sweep always picks. <b>Scan again</b> replays each one. Click a card below a phone to choose.</p>
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  .kj-phone { width: 260px; height: 480px; border-radius: 30px; background: #0A0A0B; border: 2px solid #2a2a2a; position: relative; overflow: hidden;
+    color: #F5F5F3; font-family: 'Geist', system-ui, sans-serif; margin: 0 auto; user-select: none; -webkit-user-select: none; }
+  .eb { font: 500 9px 'Geist Mono', monospace; letter-spacing: .2em; color: rgba(245,245,243,.55); position: absolute; top: 18px; left: 0; right: 0; text-align: center; }
+  .hint { position: absolute; left: 0; right: 0; bottom: 22px; text-align: center; font-weight: 700; font-size: 13px; color: #C6FF3D; transition: opacity .3s; }
+  .hint .bar { display: block; height: 3px; margin: 8px auto 0; width: 120px; background: #C6FF3D; transform-origin: left; }
+  .hint.count .bar { animation: drain 3s linear forwards; }
+  @keyframes drain { to { transform: scaleX(0) } }
+  .got { position: absolute; left: 0; right: 0; top: 52px; text-align: center; font-weight: 800; font-size: 20px; letter-spacing: -0.03em; color: #C6FF3D; opacity: 0; transition: opacity .3s; }
+  .got.on { opacity: 1; }
+  .fan { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+  .tc { position: absolute; width: 96px; height: 150px; left: -48px; top: -75px; transform-origin: 50% 50%; perspective: 800px;
+    transition: transform .55s cubic-bezier(.32,.72,0,1), opacity .35s ease, filter .2s; }
+  .tappable .tc { cursor: pointer; }
+  .tappable .tc:hover { filter: drop-shadow(0 0 8px rgba(198,255,61,.6)); }
+  .tc .inner { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform .7s cubic-bezier(.3,1.3,.5,1); }
+  .tc .face { position: absolute; inset: 0; border-radius: 14px; backface-visibility: hidden; overflow: hidden; }
+  .tc .back { background: #0A0A0B; border: 2px solid #C6FF3D; }
+  .tc .back::before { content: ''; position: absolute; inset: 6px; border: 1px solid rgba(198,255,61,.55); border-radius: 9px; }
+  .tc .back::after { content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(45deg, rgba(198,255,61,.12) 0 2px, transparent 2px 10px), repeating-linear-gradient(-45deg, rgba(198,255,61,.12) 0 2px, transparent 2px 10px);
+    mask: radial-gradient(circle at 50% 50%, transparent 0 26px, #000 27px); -webkit-mask: radial-gradient(circle at 50% 50%, transparent 0 26px, #000 27px); }
+  .tc .back .seal { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 48px; height: 48px; border-radius: 50%;
+    border: 1px solid #C6FF3D; display: grid; place-items: center; font-weight: 800; letter-spacing: -0.06em; font-size: 14px; z-index: 1; }
+  .tc .back .seal span { color: #C6FF3D; }
+  .tc .corner { position: absolute; width: 10px; height: 10px; border-color: #C6FF3D; border-style: solid; z-index: 1; }
+  .tc .c1 { top: 10px; left: 10px; border-width: 2px 0 0 2px } .tc .c2 { top: 10px; right: 10px; border-width: 2px 2px 0 0 }
+  .tc .c3 { bottom: 10px; left: 10px; border-width: 0 0 2px 2px } .tc .c4 { bottom: 10px; right: 10px; border-width: 0 2px 2px 0 }
+  .tc .front { transform: rotateY(180deg); background: #141614; border: 2px solid #C6FF3D; display: flex; flex-direction: column; align-items: center; padding: 14px 10px; text-align: center; }
+  .tc .front::before { content: ''; position: absolute; inset: 6px; border: 1px solid rgba(198,255,61,.4); border-radius: 9px; pointer-events: none; }
+  .tc .front .num { font: 500 8px 'Geist Mono', monospace; letter-spacing: .2em; color: #C6FF3D; }
+  .tc .front .art { width: 58px; height: 58px; border-radius: 50%; border: 2px solid #C6FF3D; margin: 9px 0; display: grid; place-items: center; font-weight: 800; font-size: 18px; color: #C6FF3D; }
+  .tc .front .nm { font-weight: 800; font-size: 18px; letter-spacing: -0.04em; }
+  .tc .front .fx { font-size: 9px; opacity: .7; margin-top: 4px; line-height: 1.3; }
+  .tc.lit { filter: drop-shadow(0 0 10px rgba(198,255,61,.85)); }
+  .tc.lit .back { border-color: #F5F5F3; }
+  .tc.gone { opacity: 0; }
+  .again { display: block; margin: 10px auto 0; background: #C6FF3D; color: #0A0A0B; border: 0; border-radius: 999px; padding: 8px 18px; font-weight: 700; cursor: pointer; font-family: 'Geist', sans-serif; }
+</style>
+
+<div class="cards">
+  <div class="card" data-choice="pick-a-card" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#000;padding:12px">
+      <div class="kj-phone" id="L"><div class="eb">STATION 3</div><div class="got"></div><div class="fan"></div>
+        <div class="hint">Pick a card<span class="bar"></span></div></div>
+      <button class="again" onclick="event.stopPropagation(); start('L', true)">Scan again</button>
+    </div>
+    <div class="card-body"><h3>A. Pick a card</h3><p>Tap any face-down card to draw it. No tap within 3 s (the lime bar), and the sweep picks for you.</p></div>
+  </div>
+
+  <div class="card" data-choice="sweep" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#000;padding:12px">
+      <div class="kj-phone" id="R"><div class="eb">STATION 3 · TAP TO SKIP</div><div class="got"></div><div class="fan"></div>
+        <div class="hint" style="opacity:0"></div></div>
+      <button class="again" onclick="event.stopPropagation(); start('R', false)">Scan again</button>
+    </div>
+    <div class="card-body"><h3>B. The sweep</h3><p>Hands-free: the spotlight sweeps, slows, and picks. Tap to skip to the result.</p></div>
+  </div>
+</div>
+
+<script>
+  const POWERS = [
+    { n: 'Gostan', i: 'G', fx: 'Next ping shows you somewhere else' },
+    { n: 'Durian', i: 'D', fx: 'Blocks the next catch, up to 10 min' },
+    { n: 'Ponteng', i: 'P', fx: "You're left off the next ping" },
+    { n: 'Toyol', i: 'T', fx: "Takes one of a chaser's power-ups" },
+    { n: 'Abang Grab', i: 'AG', fx: 'Claim any station from anywhere' },
+  ]
+  const ROT = [-14, -7, 0, 7, 14]
+  const X = [-82, -41, 0, 41, 82], Y = [22, 7, 0, 7, 22]
+  const spread = (k) => `translate(${X[k]}px, ${Y[k]}px) rotate(${ROT[k]}deg)`
+  const state = {}
+  const cardHtml = (k) => `<div class="tc" data-k="${k}" style="transform: rotate(0deg)"><div class="inner">
+      <div class="face back"><i class="corner c1"></i><i class="corner c2"></i><i class="corner c3"></i><i class="corner c4"></i><div class="seal">kejar<span>.</span></div></div>
+      <div class="face front"></div></div></div>`
+
+  function start(id, tappable) {
+    const s = state[id] || (state[id] = {})
+    ;(s.timers || []).forEach(clearTimeout); s.timers = []; s.done = false
+    // The server decides the power-up at the scan; the tapped card just reveals it.
+    s.win = POWERS[Math.floor(Math.random() * POWERS.length)]
+    const ph = document.getElementById(id), fan = ph.querySelector('.fan'), hint = ph.querySelector('.hint'), got = ph.querySelector('.got')
+    fan.innerHTML = ROT.map((_, k) => cardHtml(k)).join('')
+    got.classList.remove('on'); got.textContent = ''
+    ph.classList.toggle('tappable', tappable)
+    const later = (fn, ms) => s.timers.push(setTimeout(fn, ms))
+    later(() => fan.querySelectorAll('.tc').forEach((c, k) => (c.style.transform = spread(k))), 60)
+    if (tappable) {
+      hint.style.opacity = 1; hint.classList.remove('count'); void hint.offsetWidth; hint.classList.add('count')
+      fan.querySelectorAll('.tc').forEach((c) => c.addEventListener('click', (e) => { e.stopPropagation(); if (!s.done && !s.sweeping) reveal(id, Number(c.dataset.k)) }))
+      later(() => { hint.style.opacity = 0; sweep(id) }, 3100)
+    } else {
+      ph.onclick = (e) => { e.stopPropagation(); if (!s.done) reveal(id, s.target ?? 2) }
+      later(() => sweep(id), 500)
+    }
+  }
+  function sweep(id) {
+    const s = state[id], ph = document.getElementById(id)
+    s.sweeping = true
+    s.target = Math.floor(Math.random() * 5)
+    const hops = 9 + ((s.target - 4 + 5) % 5)
+    let t = 0
+    for (let h = 0; h <= hops; h++) {
+      const k = h % 5
+      s.timers.push(setTimeout(() => { ph.querySelectorAll('.tc').forEach((c) => c.classList.remove('lit')); ph.querySelector(`.tc[data-k="${k}"]`).classList.add('lit') }, t))
+      t += 45 + h * h * 1.3
+    }
+    s.timers.push(setTimeout(() => reveal(id, s.target), t + 100))
+  }
+  function reveal(id, pick) {
+    const s = state[id]; if (s.done) return
+    s.done = true; s.sweeping = false
+    s.timers.forEach(clearTimeout); s.timers = []
+    const ph = document.getElementById(id), hint = ph.querySelector('.hint'), w = s.win
+    hint.style.opacity = 0
+    ph.querySelectorAll('.tc').forEach((c, k) => {
+      c.classList.remove('lit')
+      if (k === pick) {
+        c.querySelector('.front').innerHTML = `<div class="num">POWER-UP</div><div class="art">${w.i}</div><div class="nm">${w.n}</div><div class="fx">${w.fx}</div>`
+        c.style.transform = 'translate(0, 0) rotate(0deg) scale(1.6)'; c.style.zIndex = 5
+        setTimeout(() => (c.querySelector('.inner').style.transform = 'rotateY(180deg)'), 250)
+      } else { c.classList.add('gone'); c.style.transform = `translate(${X[k] * 1.6}px, ${Y[k] + 60}px) rotate(${ROT[k] * 2}deg)` }
+    })
+    setTimeout(() => { const g = ph.querySelector('.got'); g.textContent = `Got ${w.n}!`; g.classList.add('on') }, 700)
+  }
+  setTimeout(() => { start('L', true); start('R', false) }, 400)
+</script>

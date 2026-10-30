@@ -42,9 +42,9 @@ The moment a runner is jailed, they spin a wheel with **10–12 slices**:
   1. **The organiser sets a fresh catchphrase** when creating the game, and teases the event on social media the day before — *without* giving the phrase away, e.g. "someone special is walking the park today — find them." This builds hype without handing the win to anyone who didn't show up.
   2. **A distinctly-vested quest-giver wanders the live event.** The app shows every player a **fuzzy, live-updating hint** of roughly where the quest-giver currently is, somewhere in the **100–200 m** range of fuzziness, refreshed about as often as a ping (**Claude's call on the exact numbers, consistent with similar numbers elsewhere in this doc**). This hint is **unconditional — the app never checks whether the player actually knows the phrase** (**Claude's call, resolving a self-contradiction a reviewer caught**): adding a phrase-check just to unlock a hint screen would mean building a whole second verification path for something that doesn't need one, since the real gate is step 3 below. Anyone can look at the hint; only someone who's actually heard the phrase will know what to say once they get there.
   3. **The player finds the quest-giver and says the phrase to them, in person.** The quest-giver listens and decides whether it's right — a real human verification, not an app check.
-  4. **On granting it, the quest-giver taps a confirm action on their own device** (the same kind of admin action marshals already perform, like pause/resume), which fills the player's hand with Dato Seri (all three slots) in the game's actual state. They also hand the player a **physical coin** as proof.
+  4. **On granting it, the quest-giver taps a confirm action on their own device** (the same kind of admin action marshals already perform, like pause/resume), which puts Dato Seri in the player's one power-up slot in the game's actual state (updated 2026-10-30: power-ups are now one slot per player, see the Malaysian power-ups design §5a). They also hand the player a **physical coin** as proof.
   - Exactly **one** Dato Seri exists per game, not scaled by player count — the scarcity is the point, and the phrase changes every event so it never becomes stale trivia regulars just already know.
-  - Claiming it fills all **three** hand slots at once; a runner can't hold anything else alongside it, and can't claim it if their hand isn't empty (**Claude's call**, consistent with how claiming already works when a hand is full).
+  - Claiming it **occupies the runner's one power-up slot**, so they can't hold anything else alongside it, and they can't claim it while their slot is full (**updated 2026-10-30** for one slot per player; previously "fills all three hand slots").
 - **Using it — "Settle," verified by a person too:**
   - Only usable while jailed. The holder physically shows their coin to **Pak Pulis** at the jail — a different role from the wandering quest-giver, stationed where jailed players actually are.
   - **Pak Pulis looks at the coin, decides it's genuine, and taps "confirm Settle" on their own marshal screen** — another deliberate, conscious exception to "no app-decided power-up effects" (§9), made the same way as acquisition: because the owner wants Dato Seri's two key moments to feel like real human interactions, not phone taps.
@@ -61,7 +61,7 @@ The moment a runner is jailed, they spin a wheel with **10–12 slices**:
 ## 5. Non-goals
 
 - No random chance of failure for Settle.
-- No exception to the hand-of-3 limit: Dato Seri deliberately crowds out everything else while held.
+- No exception to the one-slot limit: Dato Seri deliberately crowds out everything else while held.
 - No scaling the badge... — there's no physical badge any more. No scaling the number of valid catchphrases or claims per game — always exactly one.
 - No map marker, no station, no Abang Grab eligibility.
 - No opening Settle (or the wheel's free slice) to everyone unconditionally — this was floated and rejected in brainstorming specifically because it guts the catch mechanic; see §2.4.

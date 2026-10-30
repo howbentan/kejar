@@ -1,0 +1,98 @@
+<h2>Aina's phone: a stamp that pops over the bars</h2>
+<p class="subtitle">The chasers' stamp on a black plate (no glow), so it sits on top of the white bars. They land together, then the Penjara screen with a cheeky line and directions. Each <b>Replay</b> picks a different line. Below are all the lines; click the ones you like.</p>
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  .kj-wrap { display: flex; gap: 28px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+  .kj-phone { width: 240px; height: 460px; border-radius: 30px; background: #0A0A0B; border: 2px solid #2a2a2a;
+    position: relative; overflow: hidden; color: #F5F5F3; font-family: 'Geist', system-ui, sans-serif; }
+  .run { position: absolute; inset: 0; padding: 16px 12px; font-size: 11px; opacity: .45; }
+  .run .bar { height: 120px; border-radius: 14px; background: #141614; border: 1px solid #222; margin: 8px 0; }
+  .stamp { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%) rotate(-8deg) scale(3); opacity: 0;
+    background: #0A0A0B; border: 4px solid #C6FF3D; color: #C6FF3D; padding: 4px 14px 8px; font-weight: 800; letter-spacing: -0.06em;
+    line-height: 1; font-size: 44px; border-radius: 10px; white-space: nowrap; z-index: 3;
+    box-shadow: 0 0 0 6px #0A0A0B; }
+  .bars { position: absolute; inset: 0; display: flex; justify-content: space-evenly; z-index: 2; pointer-events: none; }
+  .bars i { width: 7px; background: #F5F5F3; transform: translateY(-100%); }
+  .jail { position: absolute; inset: 0; background: #0A0A0B; padding: 18px 14px; opacity: 0; z-index: 1; }
+  .eb { font-family: 'Geist Mono', monospace; font-size: 9px; letter-spacing: .2em; color: rgba(245,245,243,.55); }
+  .jail h4 { font-size: 30px; font-weight: 800; letter-spacing: -0.05em; margin: 12px 0 2px; }
+  .jail h4 span { color: #C6FF3D; }
+  .line { font-size: 15px; font-weight: 600; color: #C6FF3D; margin: 0 0 12px; min-height: 20px; }
+  .map { position: relative; height: 170px; border-radius: 16px; background: #121412; border: 1px solid #262626; overflow: hidden; }
+  .map .edge { position: absolute; inset: 14px; border: 1px solid rgba(245,245,243,.35); border-radius: 45%; }
+  .map .you { position: absolute; left: 30%; top: 70%; width: 12px; height: 12px; border-radius: 50%; background: #F5F5F3;
+    box-shadow: 0 0 0 6px rgba(245,245,243,.25); }
+  .map .pen { position: absolute; left: 66%; top: 28%; transform: translate(-50%, -50%); text-align: center; }
+  .map .pen b { display: block; width: 16px; height: 16px; border-radius: 50%; background: #0A0A0B; border: 3px solid #C6FF3D; margin: 0 auto 3px; }
+  .map .pen em { font-style: normal; font-size: 9px; font-weight: 700; letter-spacing: .08em; color: #C6FF3D; }
+  .map svg { position: absolute; inset: 0; }
+  .dist { display: flex; justify-content: space-between; align-items: baseline; margin-top: 10px; }
+  .dist b { font-family: 'Geist Mono', monospace; font-size: 26px; font-weight: 500; }
+  .dist span { font-size: 11px; opacity: .65; }
+  .hint { font-size: 11px; opacity: .6; margin-top: 6px; }
+  .kj-replay { display: block; margin: 10px auto 0; background: #C6FF3D; color: #0A0A0B; border: 0; border-radius: 999px;
+    padding: 8px 18px; font-weight: 700; cursor: pointer; font-family: 'Geist', system-ui, sans-serif; }
+  .play .stamp { animation: st .5s cubic-bezier(.2,1.6,.4,1) .05s forwards, out .3s ease-in 1.5s forwards; }
+  .play .bars i { animation: drop .45s cubic-bezier(.5,0,.6,1.4) .05s forwards; }
+  .play .bars i:nth-child(2) { animation-delay: .1s } .play .bars i:nth-child(3) { animation-delay: .15s }
+  .play .bars i:nth-child(4) { animation-delay: .2s } .play .bars i:nth-child(5) { animation-delay: .25s }
+  .play .bars { animation: out .35s ease-in 1.5s forwards; }
+  .play .jail { animation: fin .4s ease-out 1.6s forwards; }
+  .kj-phone.play { animation: shake .35s ease-in-out .35s; }
+  @keyframes st { to { transform: translate(-50%, -50%) rotate(-8deg) scale(1); opacity: 1 } }
+  @keyframes out { to { opacity: 0 } }
+  @keyframes drop { to { transform: translateY(0) } }
+  @keyframes fin { to { opacity: 1 } }
+  @keyframes shake { 0%,100% { transform: none } 25% { transform: translateX(-6px) } 50% { transform: translateX(5px) } 75% { transform: translateX(-3px) } }
+  .lines .option .content p { margin: 0; }
+</style>
+
+<div class="kj-wrap">
+  <div>
+    <div class="kj-phone" id="ph">
+      <div class="run">Dikejar · #07<div class="bar"></div>Feed…</div>
+      <div class="stamp">dikejar!</div>
+      <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="jail">
+        <div class="eb">PENJARA</div>
+        <h4>Ben got you<span>.</span></h4>
+        <p class="line" id="line">Masuk penjara, bossku!</p>
+        <div class="map">
+          <div class="edge"></div>
+          <svg viewBox="0 0 212 170"><line x1="70" y1="125" x2="140" y2="50" stroke="#C6FF3D" stroke-width="2" stroke-dasharray="4 4"/></svg>
+          <div class="you"></div>
+          <div class="pen"><b></b><em>PENJARA</em></div>
+        </div>
+        <div class="dist"><b>140 m</b><span>to Penjara</span></div>
+        <p class="hint">Walk, don't run. A teammate can break you out.</p>
+      </div>
+    </div>
+    <button class="kj-replay" onclick="kjPlay()">Replay</button>
+  </div>
+
+  <div style="max-width:380px">
+    <h3>Pick the lines you like (click as many as you want)</h3>
+    <div class="options lines" data-multiselect>
+      <div class="option" data-choice="masuk-penjara-bossku" onclick="toggleSelect(this)"><div class="letter">1</div><div class="content"><h3>Masuk penjara, bossku!</h3><p>Your line. "Bossku" is tied to a political slogan; see the note.</p></div></div>
+      <div class="option" data-choice="kena-cekup" onclick="toggleSelect(this)"><div class="letter">2</div><div class="content"><h3>Ops, kena cekup!</h3><p>"Oops, nabbed!"</p></div></div>
+      <div class="option" data-choice="lepak-penjara" onclick="toggleSelect(this)"><div class="letter">3</div><div class="content"><h3>Lepak kat Penjara dulu, bro.</h3><p>"Chill at Penjara for now, bro."</p></div></div>
+      <div class="option" data-choice="habis-la" onclick="toggleSelect(this)"><div class="letter">4</div><div class="content"><h3>Habis la, boss.</h3><p>"It's over, boss." Dramatic and funny.</p></div></div>
+      <div class="option" data-choice="tak-payah-lari" onclick="toggleSelect(this)"><div class="letter">5</div><div class="content"><h3>Tak payah lari dah.</h3><p>"No point running now."</p></div></div>
+      <div class="option" data-choice="penjara-tunggu" onclick="toggleSelect(this)"><div class="letter">6</div><div class="content"><h3>Jom, Penjara tengah tunggu.</h3><p>"Come on, Penjara's waiting."</p></div></div>
+      <div class="option" data-choice="nasib-badan" onclick="toggleSelect(this)"><div class="letter">7</div><div class="content"><h3>Nasib badan la, bro.</h3><p>"Just your luck, bro."</p></div></div>
+      <div class="option" data-choice="hailat-bro" onclick="toggleSelect(this)"><div class="letter">8</div><div class="content"><h3>Hailat bro.</h3><p>Your addition.</p></div></div>
+      <div class="option" data-choice="skill-issue" onclick="toggleSelect(this)"><div class="letter">9</div><div class="content"><h3>Skill issue.</h3><p>Your addition.</p></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const LINES = ['Masuk penjara, bossku!', 'Ops, kena cekup!', 'Lepak kat Penjara dulu, bro.', 'Habis la, boss.', 'Tak payah lari dah.', 'Jom, Penjara tengah tunggu.', 'Nasib badan la, bro.', 'Hailat bro.', 'Skill issue.']
+  let k = 0
+  function kjPlay() {
+    document.getElementById('line').textContent = LINES[k++ % LINES.length]
+    const el = document.getElementById('ph'); el.classList.remove('play'); void el.offsetWidth; el.classList.add('play')
+  }
+  setTimeout(kjPlay, 500)
+</script>
