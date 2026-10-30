@@ -24,6 +24,7 @@
 - `13-card-art.html`: the doodle sticker art for all nine cards (power-ups design §5c).
 - `14-ping-feed-celebrations.html`: the ripple ping (§8.1), the feed (§8.2) and six celebration options. The owner chose D (scribble) mixed with E (victory lap).
 - `15-marker-scribble.html`: the marker scribble across the app (§8.5), including the chosen results celebration.
+- `16-organiser-setup.html`: organiser setup, walking the park and the lobby (`2026-10-30-kejar-organiser-setup-design.md`).
 
 ## 1. Why
 

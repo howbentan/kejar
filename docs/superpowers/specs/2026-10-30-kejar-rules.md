@@ -119,6 +119,7 @@ Rules:
 | Power-up names, effects, one slot, shared deck, Abang Grab, Toyol and Ah Long, card look | `2026-10-28-kejar-malaysian-powerups-design.md` |
 | Dare reel, Dato Seri (both modes of it), Pak Pulis | `2026-10-28-kejar-jail-dato-seri-design.md` |
 | Everything that moves, SOS, the marshal SOS screen, the crew of two, the feed, results, the scribble | `2026-10-30-kejar-motion-design.md` |
+| Creating a game (five steps), the kit checklist, walking the park, lobby checks | `2026-10-30-kejar-organiser-setup-design.md` |
 | Organiser accounts; real parks and saved arenas | `2026-10-26-kejar-plan4a-organiser-accounts-design.md`, `2026-10-27-kejar-plan4b-arenas-design.md` |
 | Endgame ideas (not approved) | `2026-10-26-kejar-endgame-intensity-design.md` |
 | Chaser legendary (unfinished) | `2026-10-30-kejar-chaser-legendary-design.md` |
@@ -142,7 +143,7 @@ Rules:
 
 ## 10. Still to design before building
 
-1. **Organiser setup,** including the mode switch, the event-day checklist (§5) and the Dato Seri stash drop.
+1. ~~**Organiser setup**~~ **designed 2026-10-30:** `2026-10-30-kejar-organiser-setup-design.md` covers five setup steps, the kit checklist, walking the park, the stash drop and lobby checks.
 2. **The runner's chase screen audit,** with the feed as a one-line ticker (§7).
 3. **The lobby's how-to-play card,** one per mode: what you are, how to check in, how you get caught, and the power-ups in this mode's deck.
 4. **The auto-jailed runner** variant of the Penjara screen (`You missed 2 check-ins`).

@@ -104,7 +104,7 @@ Then playtest with friends, then a run club. Note catches per game, jailbreaks, 
 
 **Consolidated 2026-10-30:** one rules doc with a **Game mode switch, Core or Full** (rules doc). Core is the chase, check-ins, Penjara and four power-ups (Durian, Ponteng, Mat Rempit, Pak Guard). Full adds the rest and Dato Seri.
 
-Designed 2026-10-30 (motion design §6.5–§8.5, power-ups §5c): the marshal SOS screen, a two-person crew, card art (doodle stickers), the ripple ping, the English feed, the results victory lap and the marker scribble. Suggested next: the organiser setup (with the mode switch and event-day checklist), the chase-screen audit, the per-mode how-to-play card and the auto-jailed runner (rules doc §10), then plans and build (rules doc §12), then the endgame ideas above (the shrinking zone can reuse the Plan 4b play-area code); the owner hasn't chosen.
+Designed 2026-10-30 (motion design §6.5–§8.5, power-ups §5c): the marshal SOS screen, a two-person crew, card art (doodle stickers), the ripple ping, the English feed, the results victory lap and the marker scribble. **Organiser setup designed 2026-10-30:** `docs/superpowers/specs/2026-10-30-kejar-organiser-setup-design.md` covers five steps, the kit checklist, walking the park and lobby checks. Suggested next: the chase-screen audit, the per-mode how-to-play card and the auto-jailed runner (rules doc §10), then plans and build (rules doc §12), then the endgame ideas above (the shrinking zone can reuse the Plan 4b play-area code); the owner hasn't chosen.
 
 ## Setting up a new machine
 1. Install Node 20+ and Git, then clone: `git clone https://github.com/howbentan/kejar.git`
