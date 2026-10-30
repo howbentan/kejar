@@ -83,6 +83,25 @@ Mockup: `docs/superpowers/mockups/2026-10-30-motion/9-penjara-dare-reel.html`. T
   - If the holder is the only one in jail (or the only eligible one), Settle just frees them alone.
   - **Claiming Dato Seri stays secret**, like every other runner power-up. **Using Settle is visible** — it's a physical, in-person hand-off at the jail that anyone nearby can see, the same way an ordinary jailbreak already is, so there's nothing to hide there anyway (**Claude's call**).
 
+## 4a. How Dato Seri looks (decided with mockups, 2026-10-30)
+
+Dato Seri is the one **legendary** card (power-ups design §5c), so its moments are **yellow**, not Volt lime. That's a deliberate exception to the brand colours, used only for the legendary. Gold was mocked up first, but the owner chose yellow.
+
+- **Every player's map:** a dashed yellow **hint zone** (100–200 m fuzzy) with a `?` badge in the middle that twinkles, plus a slow ripple. It moves as the quest-giver walks.
+- **The legendary card**, in the slot:
+  - a yellow gradient face (`#FFF27A` → `#FFD60A` → `#F5B800`) with dark text and a thin inner border;
+  - a `★ LEGENDARY · ONE PER GAME` eyebrow, the name and the effect line;
+  - a light sweep across it every few seconds and a slow yellow glow pulse.
+- **Granting (quest-giver's phone):**
+  - The phrase is shown in yellow, visible only to them. They pick the player from a list; players whose slot is full are greyed out with the reason (e.g. `holding Durian`).
+  - `Grant Dato Seri` is a yellow button. On tap, the card lands in the player's slot with a pop and spin, and a sparkle burst plays on both phones, along with a long buzz pattern on the player's phone.
+  - The quest-giver then sees `Dato Seri → Aina #07 · Hand Aina the coin now` and a picture of the **coin**: a yellow coin that slowly spins.
+- **Settle (Pak Pulis's phone):**
+  - It shows the coin and the eligible list (`Free one more (Aina chooses)`). Runners who have already been freed once are greyed out.
+  - `Confirm Settle` is a yellow button. The bars drop and lift with a yellow flash and a big sparkle burst, then `Aina #07 and Hafiz #03 are free · Keep the coin`.
+- **Reduced motion:** the sweep, glow, spin and sparkles are skipped, and the colours and text stay (motion design §3).
+- **Mockup:** `docs/superpowers/mockups/2026-10-30-motion/10-dato-seri.html`.
+
 ## 5. Non-goals
 
 - No random chance of failure for Settle.
@@ -100,7 +119,7 @@ Mockup: `docs/superpowers/mockups/2026-10-30-motion/9-penjara-dare-reel.html`. T
 
 ## 7. Constraints
 
-- **Brand colours:** Volt `#C6FF3D`, black and white only, matching every other screen.
+- **Brand colours:** Volt `#C6FF3D`, black and white only, matching every other screen. The one exception is Dato Seri's legendary yellow (§4a).
 - **Fonts:** Geist and Geist Mono.
 - **Free tiers only;** keep the single `api/game.ts` function.
 - **Database:** needs a numbered migration, run by hand in Supabase as usual. At minimum: a field for the game's current catchphrase (set at creation) and whether Dato Seri has been claimed yet (and by whom); the quest-giver's live position, for the fuzzy hint; and a small per-player flag marking whether this jailing has already had its one dare-wheel spin (reset each time that runner is caught again — corrects an earlier draft of this doc, which wrongly said the wheel needed no new state at all). Settle and the wheel's free slice both reuse the existing `jailed`/`freed_once` player fields exactly as ordinary jailbreak does today, so every escape path shares one source of truth for "has this runner already been freed."

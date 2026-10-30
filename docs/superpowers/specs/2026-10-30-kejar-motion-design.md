@@ -158,6 +158,7 @@ Rules:
   - the plain-English effect line.
 - **Art is a separate task.** Until each character has its illustration, the art spot shows the initials (e.g. `D`, `AG`). All nine share one style: lime line art on black in the round frame, matching stroke weight. This also answers the power-ups design's open question on icons: brand colours, not emoji.
 - **One slot** (power-ups design §5a): the revealed card goes into the player's single power-up slot.
+- **Rarity colour on the front** (added 2026-10-30, power-ups design §5c): the front is blue for rare and purple for epic, with the epic glow and sparkles. The back stays the same lime design for every card, so the rarity is only seen on the flip. Dato Seri (legendary yellow) never comes from the lucky dip.
 
 ## 7b. The power-up slot (added 2026-10-30)
 

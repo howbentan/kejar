@@ -1,0 +1,111 @@
+<h2>Rarity tiers: rare blue, epic purple, legendary yellow (owner chose B, yellow)</h2>
+<p class="subtitle">Each column shows the same three tiers: <b>rare (blue)</b>, <b>epic (purple)</b> and <b>legendary</b>. The only difference is the legendary colour. Tap <b>Draw</b> on a card to replay its reveal. The lime strip on top is our brand Volt, so you can see how close each one sits to it.</p>
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  .wrap { display: flex; gap: 28px; flex-wrap: wrap; justify-content: center; }
+  .col { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .kj-phone { width: 260px; min-height: 560px; border-radius: 30px; background: #0A0A0B; border: 2px solid #2a2a2a; position: relative; overflow: hidden;
+    color: #F5F5F3; font-family: 'Geist', system-ui, sans-serif; padding: 16px 14px; box-sizing: border-box; }
+  .eb { font: 500 9px 'Geist Mono', monospace; letter-spacing: .2em; color: rgba(245,245,243,.55); }
+  h4 { margin: 6px 0 10px; font-size: 22px; font-weight: 800; letter-spacing: -0.05em; }
+  h4 span { color: #C6FF3D; }
+  .brand { display: flex; gap: 6px; margin-bottom: 12px; }
+  .brand i { flex: 1; height: 14px; border-radius: 4px; }
+  .brand small { font: 500 8px 'Geist Mono', monospace; letter-spacing: .1em; opacity: .6; }
+
+  .pc { border-radius: 16px; padding: 12px; display: flex; gap: 10px; align-items: center; position: relative; overflow: hidden; margin-bottom: 12px; cursor: pointer; }
+  .pc .art { width: 46px; height: 46px; border-radius: 50%; background: #0A0A0B; display: grid; place-items: center; font-weight: 800; flex: none; font-size: 14px; }
+  .pc .tag { font: 500 8px 'Geist Mono', monospace; letter-spacing: .18em; opacity: .8; }
+  .pc b { display: block; font-size: 18px; letter-spacing: -0.04em; font-weight: 800; }
+  .pc small { font-size: 11px; opacity: .8; }
+
+  /* rare: blue, quiet */
+  .rare { background: #0F1A2E; border: 1.5px solid #3D8BFF; color: #F5F5F3; }
+  .rare .art { color: #6AA8FF; box-shadow: 0 0 0 2px #3D8BFF; }
+  .rare .tag { color: #6AA8FF; }
+  /* epic: purple, glows */
+  .epic { background: linear-gradient(135deg, #2A1347, #160A26); border: 1.5px solid #A855F7; color: #F5F5F3; box-shadow: 0 0 16px rgba(168,85,247,.45); animation: eglow 2.4s ease-in-out infinite; }
+  @keyframes eglow { 50% { box-shadow: 0 0 26px rgba(192,132,252,.75) } }
+  .epic .art { color: #C084FC; box-shadow: 0 0 0 2px #A855F7; }
+  .epic .tag { color: #C084FC; }
+  /* legendary: solid face, sheen, glow */
+  .leg { color: #1a1408; animation: lglow 2.2s ease-in-out infinite; }
+  .leg::before { content: ''; position: absolute; inset: 4px; border: 1px solid rgba(10,10,11,.35); border-radius: 12px; pointer-events: none; }
+  .leg::after { content: ''; position: absolute; top: -40%; bottom: -40%; width: 40px; left: -60px; transform: rotate(20deg);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.8), transparent); animation: sheen 2.6s ease-in-out infinite; }
+  @keyframes sheen { 0% { left: -60px } 55%, 100% { left: 120% } }
+  .gold .leg { background: linear-gradient(135deg, #FFE7A3 0%, #E8C15C 35%, #B8892E 70%, #F3D27A 100%); --g: 232,193,92; }
+  .gold .leg .art { color: #E8C15C; }
+  .yellow .leg { background: linear-gradient(135deg, #FFF27A 0%, #FFD60A 45%, #F5B800 100%); --g: 255,214,10; }
+  .yellow .leg .art { color: #FFD60A; }
+  .leg { box-shadow: 0 0 0 1px rgba(var(--g),1), 0 0 18px rgba(var(--g),.55); }
+  @keyframes lglow { 50% { box-shadow: 0 0 0 1px rgba(var(--g),1), 0 0 32px rgba(var(--g),.9) } }
+
+  .pc.in { animation: pin .8s cubic-bezier(.2,1.5,.4,1); }
+  .epic.in { animation: pin .8s cubic-bezier(.2,1.5,.4,1), eglow 2.4s ease-in-out .8s infinite; }
+  .leg.in { animation: lin 1s cubic-bezier(.2,1.5,.4,1), lglow 2.2s ease-in-out 1s infinite; }
+  @keyframes pin { 0% { transform: scale(.7); opacity: 0 } 100% { transform: none; opacity: 1 } }
+  @keyframes lin { 0% { transform: scale(.4) rotate(-12deg); opacity: 0; filter: brightness(3) } 60% { transform: scale(1.08) rotate(2deg); opacity: 1; filter: brightness(1.6) } 100% { transform: none; filter: none } }
+  .spark { position: absolute; width: 7px; height: 7px; pointer-events: none; z-index: 6;
+    clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: spark 1s ease-out forwards; }
+  @keyframes spark { 0% { transform: translate(0,0) scale(.4) rotate(0); opacity: 1 } 100% { transform: translate(var(--x), var(--y)) scale(1.4) rotate(160deg); opacity: 0 } }
+
+  .coin { width: 64px; height: 64px; border-radius: 50%; margin: 6px auto 0; display: grid; place-items: center; font-weight: 800; letter-spacing: -0.05em; font-size: 14px; animation: spin 3s linear infinite; }
+  .gold .coin { color: #3a2a08; background: radial-gradient(circle at 35% 30%, #FFF1C2, #E8C15C 45%, #A87A22 85%); box-shadow: inset 0 0 0 3px #F3D27A, inset 0 0 0 6px #B8892E, 0 0 16px rgba(232,193,92,.6); }
+  .yellow .coin { color: #3a2e00; background: radial-gradient(circle at 35% 30%, #FFFBD0, #FFD60A 45%, #D99A00 85%); box-shadow: inset 0 0 0 3px #FFE95C, inset 0 0 0 6px #E0A800, 0 0 16px rgba(255,214,10,.6); }
+  @keyframes spin { 100% { transform: rotateY(360deg) } }
+  .lbl { font: 500 9px 'Geist Mono', monospace; letter-spacing: .18em; opacity: .6; text-align: center; margin-top: 6px; }
+  .b { background: transparent; color: #F5F5F3; border: 1px solid #444; border-radius: 999px; padding: 6px 14px; cursor: pointer; font-family: 'Geist', sans-serif; }
+</style>
+
+<div class="wrap">
+  <div class="col gold" data-choice="gold">
+    <div class="kj-phone" id="g">
+      <div class="eb">OPTION A · GOLD</div><h4>Legendary in gold<span>.</span></h4>
+      <div class="brand"><i style="background:#C6FF3D"></i><i style="background:linear-gradient(135deg,#FFE7A3,#E8C15C,#B8892E)"></i></div>
+      <div class="pc rare"><div class="art">GO</div><div><div class="tag">RARE</div><b>Gostan</b><small>Fake ping, 30 m back.</small></div></div>
+      <div class="pc epic"><div class="art">TY</div><div><div class="tag">EPIC</div><b>Toyol</b><small>Steal a chaser's card.</small></div></div>
+      <div class="pc leg"><div class="art">DS</div><div><div class="tag">★ LEGENDARY · ONE PER GAME</div><b>Dato Seri</b><small>Settle: free you and one friend.</small></div></div>
+      <div class="coin">DS</div><div class="lbl">THE PHYSICAL COIN</div>
+    </div>
+    <button class="b" onclick="replay('g')">Draw all three again</button>
+  </div>
+
+  <div class="col yellow" data-choice="yellow">
+    <div class="kj-phone" id="y">
+      <div class="eb">OPTION B · YELLOW</div><h4>Legendary in yellow<span>.</span></h4>
+      <div class="brand"><i style="background:#C6FF3D"></i><i style="background:linear-gradient(135deg,#FFF27A,#FFD60A,#F5B800)"></i></div>
+      <div class="pc rare"><div class="art">GO</div><div><div class="tag">RARE</div><b>Gostan</b><small>Fake ping, 30 m back.</small></div></div>
+      <div class="pc epic"><div class="art">TY</div><div><div class="tag">EPIC</div><b>Toyol</b><small>Steal a chaser's card.</small></div></div>
+      <div class="pc leg"><div class="art">DS</div><div><div class="tag">★ LEGENDARY · ONE PER GAME</div><b>Dato Seri</b><small>Settle: free you and one friend.</small></div></div>
+      <div class="coin">DS</div><div class="lbl">THE PHYSICAL COIN</div>
+    </div>
+    <button class="b" onclick="replay('y')">Draw all three again</button>
+  </div>
+</div>
+
+<script>
+  function sparkle(host, el, colour, n = 22) {
+    const h = host.getBoundingClientRect(), r = el.getBoundingClientRect()
+    const cx = r.left - h.left + r.width / 2, cy = r.top - h.top + r.height / 2
+    for (let k = 0; k < n; k++) {
+      const s = document.createElement('i'); s.className = 'spark'; s.style.background = colour
+      const a = (k / n) * Math.PI * 2, d = 50 + Math.random() * 80
+      s.style.left = cx + 'px'; s.style.top = cy + 'px'
+      s.style.setProperty('--x', Math.cos(a) * d + 'px'); s.style.setProperty('--y', Math.sin(a) * d + 'px')
+      s.style.animationDelay = Math.random() * 0.15 + 's'
+      host.appendChild(s); setTimeout(() => s.remove(), 1300)
+    }
+  }
+  function reveal(host, el) {
+    el.classList.remove('in'); void el.offsetWidth; el.classList.add('in')
+    if (el.classList.contains('leg')) sparkle(host, el, host.id === 'g' ? '#FFE7A3' : '#FFF27A', 26)
+    else if (el.classList.contains('epic')) sparkle(host, el, '#C084FC', 12)
+  }
+  function replay(id) {
+    const host = document.getElementById(id)
+    host.querySelectorAll('.pc').forEach((el, k) => setTimeout(() => reveal(host, el), k * 700))
+  }
+  document.querySelectorAll('.pc').forEach((el) => el.addEventListener('click', () => reveal(el.closest('.kj-phone'), el)))
+</script>

@@ -102,6 +102,25 @@ Replaces "a random roll with equal odds on every scan".
   - It adds strategy through scarcity ("both Toyols are gone").
   - It gives one clear balance dial: the counts.
 
+## 5c. Rarity tiers (owner's decision, 2026-10-30)
+
+Every power-up card shows a rarity colour, so players can tell at a glance how good a draw is.
+
+| Tier | Colour | Cards | Why this tier |
+|---|---|---|---|
+| Rare | Blue `#3D8BFF` | Gostan, Durian, Ponteng, Mat Rempit, Pak Guard | 2 copies per deck set (§5b) |
+| Epic | Purple `#A855F7` | Toyol, Ah Long, Abang Grab | 1 copy per deck set |
+| Legendary | Yellow `#FFD60A` | Dato Seri only | One per game, earned by quest (jail design §4) |
+
+- **The colours (blue, purple, yellow) are the owner's call.** Which card sits in which tier is **Claude's call**: the tier follows how many copies are in the deck, so the colour tells the truth about how often you'll see a card. If the deck counts change, the tiers move with them.
+- **Effects step up with the tier:**
+  - **Rare:** a dark blue card with a blue frame. No glow.
+  - **Epic:** a deep purple card with a purple frame, a slow glow pulse and a small sparkle burst when it's revealed.
+  - **Legendary:** a solid yellow face with dark text, a light sweep across it, a stronger glow pulse and a big sparkle burst (§4a of the jail design).
+- **A deliberate exception to "Volt, black and white only" (§8).** The rarity colours appear **only on power-up cards**: the lucky dip reveal, the power-up slot and Dato Seri's moments. Buttons, banners and every other screen stay Volt, black and white, so lime still means "tap here".
+- **Gold was mocked up and rejected for legendary** in favour of yellow (owner's decision). Claude's concern was that yellow sits close to Volt lime. To keep them apart, the legendary yellow is always a solid card face with dark text and a glow, never a button or a lime-style outline.
+- **Mockup:** `docs/superpowers/mockups/2026-10-30-motion/11-rarity-tiers.html`, where option B is the chosen yellow.
+
 ## 6. The set
 
 **Runners'** deck holds: Gostan, Durian, Ponteng, Toyol, Abang Grab.
@@ -155,7 +174,7 @@ Details:
 
 ## 8. Constraints
 
-- **Brand colours:** Volt `#C6FF3D`, black and white only.
+- **Brand colours:** Volt `#C6FF3D`, black and white only, except the rarity colours on power-up cards (§5c).
 - **Fonts:** Geist and Geist Mono.
 - **Free tiers only;** keep the single `api/game.ts` function.
 - **Database:** the database only accepts the five current power-up kinds (`0004_powerups.sql` checks the kind), so the new ones need a numbered migration, which the owner runs in Supabase by hand.
