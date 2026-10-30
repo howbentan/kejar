@@ -35,6 +35,31 @@ The moment a runner is jailed, they spin a wheel with **10–12 slices**:
   - **It still spends the runner's one lifetime "freed" flag**, the same flag ordinary jailbreak and Dato Seri's Settle both use (**Claude's call** — without this, the wheel would quietly break the base design's guarantee that games actually end, by giving every runner a repeatable, free way out). If a runner has already used their one lifetime "freed," landing on this slice does nothing (**left to the builder**: whether that's a different flavour message, or the slice is simply excluded from their wheel once they're used up).
 - **Exactly one spin per jailing (Claude's call, fixes a contradiction a reviewer caught).** A jailed runner gets one spin for this jail stay, not unlimited re-rolls — otherwise the ~1-in-10 odds in the previous point are meaningless, since anyone could just keep spinning until they hit "free." This needs one small piece of per-jailing state (e.g. a flag that resets the next time that runner is caught again), which §7's "no new persistent state beyond an event when a dare is confirmed" undersold — that line is corrected in §7 below. A fresh jailing (i.e. being caught again later) resets it, so it's not a resource to ration across the whole game, just within one stay in jail.
 
+## 3a. How the dare wheel looks and feels (decided with mockups, 2026-10-30)
+
+Mockup: `docs/superpowers/mockups/2026-10-30-motion/9-penjara-dare-reel.html`. The owner chose a **reel**, not a wheel, after a round wheel looked cluttered. A split-flap "departure board" was the runner-up.
+
+- **When:** the pull becomes available **once the jailed runner arrives at Penjara** (within 30 m, the same point the walk-to-Penjara guide hands over), so dares are performed where Pak Pulis is (**Claude's call**).
+- **The screen:**
+  - `PENJARA` eyebrow, `Your dare.` and `One pull. One slot sets you free.`;
+  - one full-width lime-bordered **reel window**, with lime markers either side of the middle line;
+  - the **Penjara lever** directly **underneath**: a wide lime handle with cell-bar grips that the player pulls straight down along a short track. A tap pulls it for them.
+- **The pull:**
+  - the handle ratchets down and springs back;
+  - the reel scrolls dare cards upward, slows down over about 2.8 s, and stops with a small shake;
+  - the lever then greys out: `ONE PULL PER STAY`.
+- **The free slot** is the lime card in the reel; every other card is a dare (name plus a one-line description).
+- **Landing on a dare:** a sad two-note "wah-wah", a short buzz, and a card `PERFORM IT FOR PAK PULIS` plus the dare. Pak Pulis's screen lists it with **Done ✓**. Once tapped, the runner's card updates to `PAK PULIS SAYS: DONE ✓ · NOW WAIT FOR A RESCUE`.
+- **Landing on free:**
+  - a lime flash and a long buzz, and the result card turns lime: `YOU'RE FREE` / `Keluar penjara! Walk away from Penjara and hide. This uses your one escape.`;
+  - the sound is the **vine boom** (owner's choice; the owner supplied the clip). **Check its licence before shipping.** Until then the repo mockup uses a generated fanfare.
+- **Sound:**
+  - a click per card passing the markers, a ratchet when pulling, a clunk when it stops;
+  - a **mute toggle** on the screen;
+  - sound is fine here because jailed players aren't hiding. iPhones in silent mode may not play it.
+- **No casino styling:** no fruit symbols, no "jackpot" wording. It's a dare, not a prize.
+- **Not built yet.** It reuses the motion design's ground rules (Motion library, transform and opacity only, reduced motion respected).
+
 ## 4. Dato Seri (new, rare, runner power-up)
 
 - **Side:** runner — joins Gostan, Durian, Ponteng and Toyol from the sibling doc's runner list.
