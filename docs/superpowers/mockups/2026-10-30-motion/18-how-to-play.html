@@ -1,0 +1,377 @@
+<h2>How to play: a short story, per side and per mode</h2>
+<p class="subtitle">When the organiser taps "Brief the players", every phone opens this. It's 5–7 full-screen cards, like Instagram stories: tap right for next, left for back. Each card has one marker doodle, one headline and one line. The last card is "I'm ready", which ticks you off on the organiser's lobby. Switch side and mode under the phone.</p>
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  .wrap { display: flex; gap: 28px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .kj-phone { width: 260px; height: 540px; border-radius: 30px; background: #0A0A0B; border: 2px solid #2a2a2a; position: relative; overflow: hidden;
+    color: #F5F5F3; font-family: 'Geist', system-ui, sans-serif; flex: none; user-select: none; }
+  .segs { position: absolute; left: 12px; right: 12px; top: 12px; display: flex; gap: 4px; z-index: 3; }
+  .segs i { flex: 1; height: 3px; border-radius: 2px; background: #2a2a2a; overflow: hidden; position: relative; }
+  .segs i b { position: absolute; inset: 0; background: #C6FF3D; transform-origin: left; transform: scaleX(0); }
+  .segs i.done b { transform: none; }
+  .segs i.cur b { animation: seg 7s linear forwards; } @keyframes seg { to { transform: none } }
+  .hdr { position: absolute; left: 14px; right: 14px; top: 24px; display: flex; justify-content: space-between; z-index: 3; }
+  .eb { font: 500 9px 'Geist Mono', monospace; letter-spacing: .2em; color: rgba(245,245,243,.55); }
+  .badge { font: 500 8px 'Geist Mono', monospace; letter-spacing: .14em; border: 1px solid #C6FF3D; color: #C6FF3D; border-radius: 5px; padding: 2px 5px; }
+  .art { position: absolute; left: 0; right: 0; top: 60px; height: 250px; display: grid; place-items: center; }
+  .art svg.dd { width: 220px; height: 220px; overflow: visible; }
+  .art svg.dd path, .art svg.dd circle, .art svg.dd rect { fill: none; stroke: #C6FF3D; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+  .art svg.dd { filter: url(#boil); }
+  .art svg.dd .w { stroke: #F5F5F3; } .art svg.dd .fill { fill: #C6FF3D; stroke: none; }
+  .art svg.dd .band { stroke: #F5F5F3; stroke-width: 7; }
+  .art svg.dd .thick { stroke-width: 5.5; }
+  .art svg.dd .thin { stroke: #F5F5F3; stroke-width: 2; opacity: .55; }
+  .art svg.dd .ghost { opacity: .32; stroke-width: 1.6; }
+  .art .stks { display: flex; flex-wrap: wrap; gap: 4px; justify-content: center; width: 220px; }
+  .art .stks svg { width: 62px; height: 62px; }
+  .art .stks.pop { position: absolute; left: 0; right: 0; top: -14px; margin: 0 auto; width: 210px; gap: 0; }
+  .art .stks.pop svg { width: 46px; height: 46px; }
+  .txt { position: absolute; left: 18px; right: 18px; top: 322px; }
+  .txt h4 { margin: 0 0 8px; font-size: 30px; font-weight: 800; letter-spacing: -0.055em; line-height: 1; }
+  .txt h4 span { color: #C6FF3D; }
+  .txt p { margin: 0; font-size: 14px; line-height: 1.4; opacity: .82; }
+  .txt p b { color: #C6FF3D; font-weight: 700; opacity: 1; }
+  .nav { position: absolute; inset: 0; display: flex; z-index: 2; } .nav div { flex: 1; cursor: pointer; } .nav div:last-child { flex: 2; }
+  .ready { position: absolute; left: 16px; right: 16px; bottom: 18px; z-index: 4; border-radius: 999px; padding: 13px; font: 800 15px 'Geist', sans-serif; border: 0; background: #C6FF3D; color: #0A0A0B; cursor: pointer; display: none; }
+  .hint { position: absolute; left: 0; right: 0; bottom: 22px; text-align: center; font: 500 9px 'Geist Mono', monospace; letter-spacing: .14em; opacity: .45; z-index: 1; }
+  .ctl { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  .ctl button { background: transparent; color: #F5F5F3; border: 1px solid #444; border-radius: 999px; padding: 6px 12px; font: 600 12px 'Geist', sans-serif; cursor: pointer; }
+  .ctl button.on { background: #C6FF3D; color: #0A0A0B; border-color: #C6FF3D; }
+  /* lobby side */
+  .lob { padding: 16px 14px; position: absolute; inset: 0; }
+  .lob h4 { margin: 6px 0 4px; font-size: 24px; font-weight: 800; letter-spacing: -0.05em; }
+  .bar { height: 8px; border-radius: 4px; background: #222; overflow: hidden; margin: 8px 0 4px; } .bar b { display: block; height: 100%; background: #C6FF3D; width: 0; transition: width .5s; }
+  .pl { display: flex; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #1d1d1d; font-size: 12px; }
+  .pl .s { font: 500 8.5px 'Geist Mono', monospace; letter-spacing: .1em; opacity: .55; } .pl .s.ok { color: #C6FF3D; opacity: 1; }
+  .note { max-width: 280px; font-size: 12px; opacity: .75; text-align: center; margin: 0; }
+</style>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- hand-drawn wobble -->
+    <filter id="wob" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="3.2"/>
+    </filter>
+    <!-- sticker: thick white edge plus a drop shadow -->
+    <filter id="stk" x="-25%" y="-25%" width="150%" height="150%">
+      <feMorphology in="SourceAlpha" operator="dilate" radius="4.5" result="d"/>
+      <feFlood flood-color="#F5F5F3"/><feComposite in2="d" operator="in" result="w"/>
+      <feOffset in="w" dy="3.5" result="o"/><feFlood flood-color="#000" flood-opacity=".55"/><feComposite in2="o" operator="in" result="sh"/>
+      <feMerge><feMergeNode in="sh"/><feMergeNode in="w"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+</svg>
+
+<svg width="0" height="0" style="position:absolute"><defs><filter id="boil" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence id="boilT" type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="1"/><feDisplacementMap in="SourceGraphic" scale="3.6"/></filter></defs></svg>
+<div class="wrap">
+  <div class="col">
+    <div class="kj-phone" id="ph">
+      <div class="segs" id="segs"></div>
+      <div class="hdr"><span class="eb" id="who">HOW TO PLAY · DIKEJAR</span><span class="badge" id="badge">CORE</span></div>
+      <div class="art" id="art"></div>
+      <div class="txt" id="txt"></div>
+      <div class="hint" id="hint">TAP TO CONTINUE</div>
+      <div class="nav"><div onclick="go(-1)"></div><div onclick="go(1)"></div></div>
+      <button class="ready" id="ready" onclick="imReady()">I'm ready</button>
+    </div>
+    <div class="ctl"><button class="on" id="bR" onclick="setRole('r')">Dikejar</button><button id="bC" onclick="setRole('c')">Kejar</button><span style="width:10px"></span><button class="on" id="bCore" onclick="setMode('core')">Core</button><button id="bFull" onclick="setMode('full')">Full</button></div>
+    <p class="note">Each card auto-advances after 7 s, or tap. Marshals get no story; they get the organiser's crew brief instead.</p>
+  </div>
+
+  <div class="col">
+    <div class="kj-phone"><div class="lob">
+      <div class="eb">GAME K7P2 · LOBBY</div>
+      <h4>Briefing sent<span style="color:#C6FF3D">.</span></h4>
+      <p style="font-size:12px;opacity:.7;margin:0"><span id="rc">13</span> of 18 ready. Start whenever you like; the rest can read it while hiding.</p>
+      <div class="bar"><b id="rb" style="width:72%"></b></div>
+      <div class="pl"><span>Aina #07</span><span class="s" id="aina">READING 3/6</span></div>
+      <div class="pl"><span>Hafiz #03</span><span class="s ok">READY</span></div>
+      <div class="pl"><span>Wei #14</span><span class="s ok">READY</span></div>
+      <div class="pl"><span>Ben · Kejar</span><span class="s ok">READY</span></div>
+      <div class="pl"><span>Siti #11</span><span class="s">NOT OPENED</span></div>
+      <div class="pl"><span>Darren #09</span><span class="s ok">READY</span></div>
+      <p style="font-size:11px;opacity:.55;margin-top:10px">Players who join late get the story when they join. Anyone can reopen it from the menu during the game.</p>
+    </div></div>
+    <p class="note">The organiser's lobby: a ready count and who's still reading. It never blocks Start.</p>
+  </div>
+</div>
+
+<script>
+  const INK = 'stroke="#141414" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"'
+  const spiky = (cx, cy, rx, ry, n) => {
+    const p = []
+    for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2, r = k % 2 ? 1 : 1.16; p.push(`${(cx + Math.cos(a) * rx * r).toFixed(1)} ${(cy + Math.sin(a) * ry * r).toFixed(1)}`) }
+    return 'M' + p.join(' L') + ' Z'
+  }
+  const star = (cx, cy, R, r) => {
+    const p = []
+    for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + (k * Math.PI) / 5, rr = k % 2 ? r : R; p.push(`${(cx + Math.cos(a) * rr).toFixed(1)} ${(cy + Math.sin(a) * rr).toFixed(1)}`) }
+    return 'M' + p.join(' L') + ' Z'
+  }
+
+  const ART = {
+    gostan: `
+      <path d="M78 24 Q52 6 26 22" fill="none" stroke="#141414" stroke-width="9" stroke-linecap="round"/>
+      <path d="M78 24 Q52 6 26 22" fill="none" stroke="#FFD60A" stroke-width="5" stroke-linecap="round"/>
+      <path d="M16 26 L30 12 L34 30 Z" fill="#FFD60A" ${INK}/>
+      <path d="M12 62 Q12 50 22 48 L33 36 Q37 32 45 32 L62 32 Q70 32 74 40 L81 48 Q90 50 90 59 L90 66 Q90 70 85 70 L16 70 Q12 70 12 66 Z" fill="#E63946" ${INK}/>
+      <path d="M36 47 L43 38 L55 38 L55 47 Z" fill="#A8DADC" ${INK}/>
+      <path d="M59 38 L66 38 Q70 40 73 47 L59 47 Z" fill="#A8DADC" ${INK}/>
+      <path d="M48 54 h8" ${INK}/>
+      <circle cx="29" cy="70" r="9" fill="#2a2a2a" ${INK}/><circle cx="29" cy="70" r="3.2" fill="#ccc"/>
+      <circle cx="73" cy="70" r="9" fill="#2a2a2a" ${INK}/><circle cx="73" cy="70" r="3.2" fill="#ccc"/>
+      <circle cx="86" cy="56" r="2.6" fill="#FFF3B0" ${INK}/><rect x="11" y="54" width="5" height="6" fill="#FFFFFF" ${INK}/>
+      <path d="M92 76 h6 M90 82 h8" ${INK}/>`,
+    durian: `
+      <path d="M50 26 Q47 14 55 7" fill="none" stroke="#141414" stroke-width="8" stroke-linecap="round"/>
+      <path d="M50 26 Q47 14 55 7" fill="none" stroke="#7A5230" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="${spiky(50, 58, 29, 31, 30)}" fill="#8DA33B" ${INK}/>
+      <path d="M50 36 Q66 50 60 80 Q44 62 50 36 Z" fill="#F7D154" ${INK}/>
+      <path d="M53 50 q4 3 3 8 M55 64 q3 3 2 7" fill="none" stroke="#D9A92B" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M30 48 l4 4 M28 64 l5 2 M38 76 l3 -3 M72 56 l-4 3 M70 72 l-4 -2" ${INK}/>
+      <path d="M14 36 q-5 -6 0 -12 q5 -6 0 -12 M86 36 q5 -6 0 -12 q-5 -6 0 -12" fill="none" stroke="#9BC53D" stroke-width="3.2" stroke-linecap="round"/>`,
+    ponteng: `
+      <path d="M16 72 Q6 58 18 48 Q16 32 34 32 Q42 16 60 26 Q80 22 82 40 Q96 48 88 66 Q86 76 70 74 L28 76 Q14 78 16 72 Z" fill="#4CAF50" ${INK}/>
+      <path d="M26 46 q4 -3 7 1 M66 36 q4 -3 7 1 M74 60 q4 -3 7 1 M30 64 q4 -3 7 1" fill="none" stroke="#2E7D32" stroke-width="2.6" stroke-linecap="round"/>
+      <ellipse cx="44" cy="50" rx="6.5" ry="7.5" fill="#fff" ${INK}/><ellipse cx="59" cy="50" rx="6.5" ry="7.5" fill="#fff" ${INK}/>
+      <circle cx="41.5" cy="51" r="2.8" fill="#141414"/><circle cx="56.5" cy="51" r="2.8" fill="#141414"/>
+      <path d="M38 40 l9 2 M53 42 l9 -2" ${INK}/>
+      <path d="M60 70 L72 66 Q80 70 92 72 Q100 74 98 84 L62 86 Q56 82 60 70 Z" fill="#E4E4E4" ${INK}/>
+      <path d="M58 80 L99 79 L98 86 L62 88 Z" fill="#1D3557" ${INK}/>
+      <path d="M68 70 l4 -4 M74 72 l4 -4 M80 73 l3 -4" ${INK}/>`,
+    toyol: `
+      <path d="M31 40 L12 24 L32 54 Z" fill="#8DBE7A" ${INK}/><path d="M69 40 L88 24 L68 54 Z" fill="#8DBE7A" ${INK}/>
+      <path d="M36 64 Q50 96 64 64 Q50 58 36 64 Z" fill="#8DBE7A" ${INK}/>
+      <path d="M38 76 Q50 84 62 76 L60 70 Q50 74 40 70 Z" fill="#F5F5F3" ${INK}/>
+      <circle cx="50" cy="42" r="22" fill="#8DBE7A" ${INK}/>
+      <path d="M50 20 q-3 -7 4 -10" fill="none" ${INK}/>
+      <circle cx="41" cy="40" r="7" fill="#fff" ${INK}/><circle cx="59" cy="40" r="7" fill="#fff" ${INK}/>
+      <circle cx="42" cy="41" r="3.6" fill="#E63946"/><circle cx="58" cy="41" r="3.6" fill="#E63946"/>
+      <circle cx="42" cy="41" r="1.4" fill="#141414"/><circle cx="58" cy="41" r="1.4" fill="#141414"/>
+      <path d="M39 53 Q50 62 61 53" fill="none" ${INK}/><path d="M47 56 v4 h5 v-4" fill="#fff" ${INK}/>
+      <path d="M62 70 L78 64" ${INK}/>
+      <circle cx="83" cy="62" r="8" fill="#FFD60A" ${INK}/><path d="M83 57 v10" stroke="#B8860B" stroke-width="2.4" stroke-linecap="round"/>`,
+    grab: `
+      <rect x="56" y="26" width="34" height="34" rx="4" fill="#1FA855" ${INK}/>
+      <path d="M56 36 h34" ${INK}/><path d="M66 46 q7 6 14 0" fill="none" stroke="#F5F5F3" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="42" cy="60" r="17" fill="#C68B59" ${INK}/>
+      <path d="M16 54 Q16 24 42 24 Q68 24 68 54 Z" fill="#1FA855" ${INK}/>
+      <path d="M30 30 Q42 26 54 30" fill="none" stroke="#F5F5F3" stroke-width="3" stroke-linecap="round"/>
+      <path d="M18 46 Q42 38 66 46 L66 52 L18 52 Z" fill="#2a2a2a" ${INK}/>
+      <circle cx="36" cy="60" r="2.2" fill="#141414"/><circle cx="48" cy="60" r="2.2" fill="#141414"/>
+      <path d="M35 67 Q42 73 49 67" fill="none" ${INK}/>
+      <path d="M26 62 Q28 76 42 78 Q56 76 58 62" fill="none" ${INK}/>
+      <path d="M2 40 h9 M0 50 h9 M3 60 h8" ${INK}/>`,
+    rempit: `
+      <g transform="rotate(-16 50 62)">
+        <circle cx="16" cy="58" r="6" fill="#bbb" ${INK}/><circle cx="8" cy="50" r="5" fill="#ccc" ${INK}/><circle cx="4" cy="62" r="4" fill="#ddd" ${INK}/>
+        <path d="M30 60 Q18 56 12 62 Q20 64 14 70 Q24 68 30 64 Z" fill="#FF8C1A" ${INK}/>
+        <circle cx="34" cy="70" r="12" fill="#2a2a2a" ${INK}/><circle cx="34" cy="70" r="4" fill="#ccc"/>
+        <circle cx="78" cy="70" r="12" fill="#2a2a2a" ${INK}/><circle cx="78" cy="70" r="4" fill="#ccc"/>
+        <path d="M34 70 L48 56 M78 70 L72 50" ${INK}/>
+        <path d="M40 60 L52 46 L72 46 L80 54 L62 62 Z" fill="#E63946" ${INK}/>
+        <path d="M48 46 L64 44" stroke="#141414" stroke-width="6" stroke-linecap="round"/>
+        <path d="M72 46 L76 34 L84 32" fill="none" ${INK}/><circle cx="82" cy="44" r="3.4" fill="#FFF3B0" ${INK}/>
+        <path d="M54 54 h10" stroke="#F5F5F3" stroke-width="2.6" stroke-linecap="round"/>
+      </g>
+      <path d="M88 20 l8 -4 M86 30 l10 -2" ${INK}/>`,
+    guard: `
+      <path d="M78 66 L100 34 L100 78 Z" fill="#FFE66D" opacity=".85"/>
+      <circle cx="44" cy="56" r="21" fill="#C68B59" ${INK}/>
+      <path d="M22 44 Q22 22 44 22 Q66 22 66 44 Z" fill="#1D3557" ${INK}/>
+      <path d="M18 44 L74 44 Q80 49 70 51 L18 49 Z" fill="#14213D" ${INK}/>
+      <path d="${star(44, 33, 6, 2.6)}" fill="#FFD60A" stroke="#141414" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M33 54 h8" ${INK}/><circle cx="53" cy="55" r="2.6" fill="#141414"/><path d="M48 49 l9 -1" ${INK}/>
+      <path d="M32 64 Q38 58 44 63 Q50 58 56 64 Q50 68 44 65 Q38 68 32 64 Z" fill="#2a2a2a" ${INK}/>
+      <path d="M64 80 L78 64 L86 70 L72 86 Z" fill="#3a3a3a" ${INK}/><path d="M78 64 L86 70" stroke="#FFE66D" stroke-width="3"/>`,
+    along: `
+      <path d="M44 32 L54 8 L66 32 Z" fill="#8D99AE" ${INK}/>
+      <path d="M6 66 Q20 30 58 30 Q84 32 94 54 Q86 72 56 74 Q28 76 6 66 Z" fill="#8D99AE" ${INK}/>
+      <path d="M18 66 Q50 58 90 58 Q82 72 56 74 Q30 76 18 66 Z" fill="#EDF2F4" ${INK}/>
+      <path d="M56 42 h13 v4 q-6.5 5 -13 0 Z M72 42 h13 v4 q-6.5 5 -13 0 Z" fill="#141414" ${INK}/><path d="M69 43 h3" ${INK}/>
+      <path d="M62 62 l3 4 l3 -4 l3 4 l3 -4 l3 4 l3 -4" fill="none" stroke="#141414" stroke-width="2.4" stroke-linejoin="round"/>
+      <path d="M36 72 Q54 84 74 72" fill="none" stroke="#141414" stroke-width="7" stroke-linecap="round"/>
+      <path d="M36 72 Q54 84 74 72" fill="none" stroke="#FFD60A" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 3"/>
+      <circle cx="55" cy="81" r="5" fill="#FFD60A" ${INK}/>
+      <path d="M8 36 L26 26 L32 40 L14 50 Z" fill="#6FBF73" ${INK}/><path d="M14 30 L32 22 L36 34 L20 42 Z" fill="#A3D9A5" ${INK}/>
+      <circle cx="26" cy="32" r="3" fill="none" stroke="#2E7D32" stroke-width="2"/>`,
+    dato: `
+      <path d="M14 100 Q16 76 50 76 Q84 76 86 100 Z" fill="#7B1E3A" ${INK}/>
+      <path d="M28 78 L74 100" stroke="#141414" stroke-width="11" stroke-linecap="round"/><path d="M28 78 L74 100" stroke="#FFD60A" stroke-width="7" stroke-linecap="round"/>
+      <path d="${star(64, 88, 7, 3)}" fill="#FFD60A" ${INK}/>
+      <circle cx="50" cy="56" r="21" fill="#B9784F" ${INK}/>
+      <path d="M29 44 L29 24 Q50 17 71 24 L71 44 Z" fill="#1b1b1b" ${INK}/>
+      <path d="M30 40 L70 40" stroke="#E8B92E" stroke-width="3.2"/>
+      <path d="M39 54 q3.5 -3.5 7 0 M54 54 q3.5 -3.5 7 0" fill="none" ${INK}/>
+      <path d="M36 66 Q43 59 50 64 Q57 59 64 66 Q60 63 58 68 Q50 65 42 68 Q40 63 36 66 Z" fill="#2a2a2a" ${INK}/>
+      <path d="M84 30 l4 -8 M90 38 l8 -2 M12 30 l-4 -8 M10 40 l-8 -2" stroke="#141414" stroke-width="3" stroke-linecap="round"/>`,
+  }
+
+  const sticker = (k) => `<svg viewBox="-8 -6 116 116"><g filter="url(#stk)"><g filter="url(#wob)">${ART[k]}</g></g></svg>`
+  const $ = (id) => document.getElementById(id)
+  // ---- doodle kit v2: little scenes with a stick-figure cast, sketchy double lines and "line boil" ----
+  const W = 'class="w"', L = '', F = 'class="fill"', T = 'class="thin"'
+  // stick figure. pose: stand | run | peek | up | sad | sit. vest: lime vest (Kejar). band: lime armband (Dikejar).
+  function fig(x, y, pose = 'stand', o = {}) {
+    const s = o.s || 1, f = (dx, dy) => `${(x + dx * s).toFixed(1)} ${(y + dy * s).toFixed(1)}`
+    const P = {
+      stand: { h: [0, -40], b: [[0, -31], [0, -2]], a: [[[0, -24], [-13, -8]], [[0, -24], [13, -8]]], l: [[[0, -2], [-9, 20]], [[0, -2], [9, 20]]] },
+      run: { h: [3, -40], b: [[1, -31], [-3, -2]], a: [[[0, -24], [-15, -14]], [[0, -24], [14, -30]]], l: [[[-3, -2], [-18, 16]], [[-3, -2], [9, 10], [15, 22]]] },
+      up: { h: [0, -40], b: [[0, -31], [0, -2]], a: [[[0, -26], [-14, -46]], [[0, -26], [14, -46]]], l: [[[0, -2], [-9, 20]], [[0, -2], [9, 20]]] },
+      sad: { h: [2, -37], b: [[1, -28], [0, -2]], a: [[[0, -22], [-8, -2]], [[0, -22], [8, -2]]], l: [[[0, -2], [-7, 20]], [[0, -2], [7, 20]]] },
+      phone: { h: [0, -40], b: [[0, -31], [0, -2]], a: [[[0, -24], [-12, -8]], [[0, -24], [10, -20], [14, -28]]], l: [[[0, -2], [-9, 20]], [[0, -2], [9, 20]]] },
+    }[pose]
+    const seg = (pts) => 'M' + pts.map(([a, b]) => f(a, b)).join(' L')
+    let out = `<circle cx="${x + P.h[0] * s}" cy="${y + P.h[1] * s}" r="${9 * s}" ${W}/>`
+    out += `<path d="${seg(P.b)}" ${W}/>` + P.a.map((a) => `<path d="${seg(a)}" ${W}/>`).join('') + P.l.map((l) => `<path d="${seg(l)}" ${W}/>`).join('')
+    if (o.band) { const [p, q] = P.a[1]; out += `<path d="M${f(p[0] + (q[0] - p[0]) * .3, p[1] + (q[1] - p[1]) * .3)} L${f(p[0] + (q[0] - p[0]) * .55, p[1] + (q[1] - p[1]) * .55)}" class="band"/>` }
+    if (o.vest) out += `<path d="M${f(-7, -29)} L${f(7, -29)} L${f(6, -10)} L${f(-6, -10)} Z" ${F}/>`
+    if (o.eyes !== false) out += `<circle cx="${x + (P.h[0] + 3) * s}" cy="${y + (P.h[1] - 1) * s}" r="1.6" ${F}/>`
+    if (o.phone) { const q = P.a[1][P.a[1].length - 1]; out += `<rect x="${x + q[0] * s - 4}" y="${y + q[1] * s - 9}" width="9" height="14" rx="2" ${L}/>` }
+    return out
+  }
+  const bars = (x, y, w, h, n = 5) => Array.from({ length: n }, (_, k) => `<path d="M${x + (k * w) / (n - 1)} ${y} V${y + h}" ${W}/>`).join('') + `<path d="M${x - 6} ${y} H${x + w + 6} M${x - 6} ${y + h} H${x + w + 6}" ${W}/>`
+  const watch = (x, y, r, frac = .7) => {
+    const a = -Math.PI / 2 + frac * Math.PI * 2, lx = x + Math.cos(a) * r, ly = y + Math.sin(a) * r
+    return `<circle cx="${x}" cy="${y}" r="${r}" ${W}/><path d="M${x} ${y - r - 6} V${y - r} M${x - 5} ${y - r - 6} H${x + 5}" ${W}/><path d="M${x} ${y - r} A${r} ${r} 0 ${frac > .5 ? 1 : 0} 1 ${lx.toFixed(1)} ${ly.toFixed(1)}" class="thick"/><path d="M${x} ${y} L${x + r * .5} ${y - r * .4}" ${W}/>`
+  }
+  const buzz = (x, y, dir = 1) => `<path d="M${x} ${y} l${6 * dir} 5 l${-6 * dir} 5 l${6 * dir} 5 l${-6 * dir} 5"/>`
+  const burst = (x, y, r1, r2, n = 8, off = 0) => Array.from({ length: n }, (_, k) => { const a = off + (k / n) * Math.PI * 2; return `<path d="M${(x + Math.cos(a) * r1).toFixed(1)} ${(y + Math.sin(a) * r1).toFixed(1)} L${(x + Math.cos(a) * r2).toFixed(1)} ${(y + Math.sin(a) * r2).toFixed(1)}"/>` }).join('')
+  const ground = (y) => `<path d="M14 ${y} q30 -4 60 0 t60 0 t62 0" ${T}/>`
+  const dd = (inner) => `<svg class="dd" viewBox="0 0 210 210">${inner}</svg>`
+
+  const D = {
+    hide: dd(`${ground(186)}
+      <path d="M128 186 C132 150 128 120 132 96 M150 186 C146 150 150 120 146 96" ${W}/>
+      <path d="M98 100 C80 98 78 70 98 66 C96 40 128 34 138 52 C150 30 186 40 180 66 C200 72 196 104 172 104 C164 116 110 118 98 100 Z" ${W}/>
+      <path d="M112 78 q6 -6 12 0 M150 64 q6 -6 12 0 M160 88 q6 -6 12 0" ${T}/>
+      ${fig(118, 172, 'stand', { band: true })}
+      <path d="M40 176 l8 0 M56 170 l8 0 M72 176 l8 0 M88 170 l8 0" ${T}/>
+      ${watch(42, 52, 18, .65)}
+      <path d="M104 118 q-6 -8 -2 -16 M96 122 q-10 -8 -6 -20"/>`),
+    phone: dd(`${ground(186)}
+      <path d="M58 92 C58 150 70 176 105 176 C140 176 152 150 152 92" ${W}/>
+      <path d="M58 92 H152" ${W}/>
+      <rect x="86" y="44" width="38" height="70" rx="7" ${L}/><path d="M98 104 h14" ${L}/>
+      <path d="M95 74 l7 8 l14 -16" class="thick"/>
+      ${buzz(70, 46, -1)}${buzz(140, 46, 1)}${buzz(60, 60, -1)}${buzz(150, 60, 1)}
+      ${watch(172, 150, 16, .8)}`),
+    two: dd(`<rect x="22" y="40" width="40" height="66" rx="7" ${W}/><rect x="74" y="40" width="40" height="66" rx="7" ${W}/>
+      <path d="M30 56 L54 90 M54 56 L30 90" class="thick"/><path d="M82 56 L106 90 M106 56 L82 90" class="thick"/>
+      <path d="M124 76 C140 70 146 84 160 80 M152 72 l10 8 l-12 5"/>
+      ${bars(146, 104, 50, 70, 5)}${fig(171, 172, 'sad', { band: true, s: .8 })}
+      <path d="M30 150 q18 10 36 0 q18 -10 36 0" ${T}/>`),
+    tag: dd(`<path d="M20 120 C60 104 120 100 190 108 M20 160 C60 148 120 146 190 152" ${W}/>
+      <path d="M70 106 C68 124 68 140 70 152 M104 102 C102 124 102 140 104 150" ${W}/>
+      <g transform="rotate(-24 138 70)"><rect x="112" y="48" width="52" height="40" rx="5" ${L}/>
+        <path d="M120 56 h10 v10 h-10z M146 56 h10 v10 h-10z M120 72 h10 v10 h-10z M136 72 h6 M146 78 h10" ${T}/></g>
+      <path d="M104 112 l6 -6 l6 6 l6 -6 l6 6 l6 -6" />
+      <path d="M160 40 C176 30 190 34 194 44 C198 56 186 62 174 60" ${W}/><path d="M168 50 l-10 8" ${W}/>
+      ${burst(150, 92, 34, 46, 7, .3)}`),
+    free: dd(`${ground(188)}${bars(124, 70, 66, 100, 5)}
+      ${fig(146, 160, 'up', { band: true, s: .75 })}${fig(170, 160, 'up', { band: true, s: .75 })}
+      ${fig(70, 178, 'phone', { band: true, phone: true })}
+      <circle cx="70" cy="150" r="44" ${T} stroke-dasharray="3 7"/>
+      <path d="M70 106 A44 44 0 1 1 26 150" class="thick ring"/>
+      ${burst(158, 52, 12, 22, 6)}`),
+    sos: dd(`${ground(186)}${fig(56, 176, 'phone', { band: true, phone: true })}
+      <rect x="20" y="40" width="96" height="30" rx="15" ${W}/><rect x="20" y="40" width="64" height="30" rx="15" ${F} opacity=".85"/>
+      <circle cx="68" cy="55" r="40" ${T} stroke-dasharray="3 8"/>
+      <path d="M150 176 C140 150 116 140 92 136" stroke-dasharray="6 8"/><path d="M98 128 l-8 8 l11 3"/>
+      ${fig(164, 178, 'run', { s: .9 })}<path d="M184 140 h12 M182 150 h14 M186 160 h10" ${T}/>
+      <path d="M156 146 l10 0 l0 14 l-10 0 z" ${W}/>`),
+    wait: dd(`${ground(186)}<path d="M30 160 H180" ${W}/><path d="M30 168 H180" stroke-dasharray="8 8"/>
+      ${fig(80, 156, 'stand', { vest: true })}${fig(130, 156, 'stand', { vest: true })}
+      ${watch(105, 52, 26, .4)}${burst(105, 52, 34, 42, 10)}`),
+    circles: dd(`<rect x="20" y="24" width="170" height="162" rx="18" ${W}/>
+      <path d="M40 60 q40 -20 70 4 t70 0 M30 140 q50 20 90 -6 t62 8" ${T}/>
+      <circle cx="105" cy="110" r="6" ${F}/><circle cx="105" cy="110" r="30"/><circle cx="105" cy="110" r="58" stroke-dasharray="4 8"/>
+      <circle cx="58" cy="66" r="16" ${W}/><circle cx="156" cy="80" r="16" ${W}/><circle cx="138" cy="156" r="16" ${W} stroke-dasharray="6 6"/>`),
+    rip: dd(`${fig(60, 180, 'run', { vest: true })}
+      <rect x="112" y="46" width="64" height="104" rx="10" ${W}/>
+      <path d="M124 66 v-8 h10 M164 58 h10 v8 M174 128 v8 h-10 M134 138 h-10 v-8" class="thick"/>
+      <rect x="132" y="78" width="26" height="26" rx="3" ${L}/><path d="M138 84 h6 v6 h-6z M150 92 h3 M138 98 h10" ${T}/>
+      <path d="M80 110 C96 100 104 96 118 94" ${W}/><path d="M88 60 l10 10 M74 50 l6 14" ${T}/>
+      ${burst(145, 92, 64, 72, 10)}`),
+    stop: dd(`${ground(188)}${bars(140, 76, 54, 96, 4)}
+      ${fig(118, 178, 'phone', { band: true, phone: true, s: .85 })}
+      <circle cx="118" cy="150" r="36" ${T} stroke-dasharray="3 7"/><path d="M118 114 A36 36 0 0 1 154 150" class="thick ring"/>
+      ${fig(46, 178, 'run', { vest: true })}<path d="M10 136 h16 M6 148 h18 M12 160 h14" ${T}/>
+      <path d="M62 120 C76 108 86 108 96 116 M90 108 l7 9 l-11 2"/>`),
+  }
+
+  D.snap = dd(`<rect x="40" y="64" width="130" height="92" rx="12" ${W}/><circle cx="105" cy="110" r="28"/><path d="M78 64 l8 -14 h38 l8 14" ${W}/>${burst(105, 110, 36, 44, 8)}${fig(105, 124, 'stand', { vest: true, s: .55, eyes: false })}`)
+
+  D.station = dd(`${ground(190)}<path d="M150 190 V112" ${W}/><rect x="122" y="80" width="56" height="44" rx="5" ${W}/>
+      <path d="M130 88 h10 v10 h-10z M160 88 h10 v10 h-10z M130 106 h10 v10 h-10z M148 110 h6 M160 106 h10" ${T}/>
+      ${fig(84, 182, 'phone', { band: true, phone: true })}<path d="M96 150 C108 140 116 124 122 112" stroke-dasharray="4 6"/>
+      ${burst(150, 102, 34, 44, 9, .2)}`)
+
+  // sketchy second pass + draw-on + line boil
+  let boilT = null
+  function sketch(svg) {
+    svg.querySelectorAll('path, circle, rect').forEach((p) => {
+      if (p.classList.contains('fill')) return
+      const c = p.cloneNode(); c.classList.add('ghost'); c.setAttribute('transform', `translate(${(Math.random() * 2 - 1).toFixed(1)} ${(Math.random() * 2 - 1).toFixed(1)})`)
+      p.after(c)
+    })
+  }
+
+  const STORIES = {
+    r: [
+      { a: 'hide', h: 'You\'re Dikejar<span>.</span>', p: 'Hide, keep moving, and <b>stay free until time runs out</b>. Kejar get released after the hide time.' },
+      { a: 'phone', h: 'When it buzzes, check in<span>.</span>', p: 'Phone in your pocket. When it buzzes, <b>open Kejar within 45 s</b>. Kejar then see roughly where you were.' },
+      { a: 'two', h: 'Miss two, you\'re out<span>.</span>', p: 'One missed check-in is free. <b>Miss two in a row and you go to Penjara</b> automatically.' },
+      { a: 'tag', h: 'Tag ripped? Stop<span>.</span>', p: 'If a Kejar rips your armband tag, stop and <b>walk to Penjara</b>. No running, no arguing: use SOS.' },
+      { a: 'free', h: 'Break them out<span>.</span>', p: 'Scan the Penjara card, then <b>stay within 30 m for 10 seconds</b>. Kejar get warned, so be quick. Each person can only be freed once.' },
+      { a: 'stk:durian,ponteng', full: 'stk:gostan,durian,ponteng,toyol,grab', h: 'Grab power-ups<span>.</span>', p: 'Scan a <b>station</b> to draw a power-up. You hold <b>one at a time</b>, so use it before you grab another.' },
+      { a: 'sos', h: 'Anything wrong? SOS<span>.</span>', p: 'Hurt, lost, or a dispute? <b>Hold SOS for 1 second.</b> A marshal comes to you.' },
+    ],
+    c: [
+      { a: 'wait', h: 'You\'re Kejar<span>.</span>', p: '<b>Wait at the start</b> until you\'re released. Then catch every Dikejar before time runs out.' },
+      { a: 'circles', h: 'Pings show circles<span>.</span>', p: 'Every few minutes, Dikejar show as <b>fuzzy circles</b> where they checked in. Dashed means they missed.' },
+      { a: 'rip', h: 'Rip, then scan<span>.</span>', p: '<b>One hand, upper arm, tag only.</b> No grabbing or tackling. Then scan the tag to make it count.' },
+      { fullOnly: true, a: 'snap', h: 'They can see you too<span>.</span>', fullSwitch: true, p: 'When their phone buzzes, Dikejar see <b>where you were at that moment</b>. Move after the buzz.' },
+      { a: 'stop', h: 'Stop the rescue<span>.</span>', p: 'When a Dikejar starts a rescue, <b>you get 10 seconds</b>. Catch them at Penjara and nobody gets out.' },
+      { a: 'stk:rempit,guard', full: 'stk:rempit,guard,along,grab', h: 'Grab power-ups<span>.</span>', p: 'Scan a <b>station</b> to draw a power-up. You hold <b>one at a time</b>.' },
+      { a: 'sos', h: 'Anything wrong? SOS<span>.</span>', p: 'Hurt, or a dispute? <b>Hold SOS for 1 second.</b> Never sort it out physically.' },
+    ],
+  }
+  let role = 'r', mode = 'core', i = 0, cards = [], timer
+  function build() { cards = STORIES[role].filter((c) => !c.fullOnly || mode === 'full'); i = 0; render() }
+  function render() {
+    clearTimeout(timer)
+    const c = cards[i], last = i === cards.length - 1
+    $('segs').innerHTML = cards.map((_, k) => `<i class="${k < i ? 'done' : k === i ? 'cur' : ''}"><b></b></i>`).join('')
+    $('who').textContent = 'HOW TO PLAY · ' + (role === 'r' ? 'DIKEJAR' : 'KEJAR'); $('badge').textContent = mode.toUpperCase()
+    const a = mode === 'full' && c.full ? c.full : c.a
+    $('art').innerHTML = a.startsWith('stk:') ? `<div style="position:relative">${D.station}<div class="stks pop">${a.slice(4).split(',').map(sticker).join('')}</div></div>` : D[a]
+    $('txt').innerHTML = `<h4>${c.h}</h4><p>${c.p}</p>${c.fullSwitch ? '<p style="font-size:10px;opacity:.5;margin-top:6px">Only shown when the organiser turned this on.</p>' : ''}`
+    $('ready').style.display = last ? 'block' : 'none'; $('hint').style.display = last ? 'none' : 'block'
+    // draw the doodle
+    const svg = $('art').querySelector('svg.dd')
+    if (svg) sketch(svg)
+    if (svg) svg.querySelectorAll('path, circle, rect').forEach((p, k) => {
+      if (p.classList.contains('fill')) { p.animate([{ opacity: 0 }, { opacity: .9 }], { duration: 300, delay: Math.min(200 + k * 45, 1500), fill: 'both' }); return }
+      const L = p.getTotalLength() + 2, dash = p.getAttribute('stroke-dasharray')
+      if (dash) { p.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 400, delay: Math.min(k * 45, 1400), fill: 'both' }); return }
+      p.animate([{ strokeDasharray: `${L}`, strokeDashoffset: L }, { strokeDasharray: `${L}`, strokeDashoffset: 0 }], { duration: 360, delay: Math.min(k * 45, 1400), easing: 'ease-in-out', fill: 'both' })
+    })
+    $('art').querySelectorAll('.stks svg').forEach((s, k) => s.animate([{ transform: 'scale(0) rotate(-25deg)' }, { transform: 'scale(1.1) rotate(6deg)', offset: .6 }, { transform: 'none' }], { duration: 500, delay: k * 110, easing: 'ease-out', fill: 'both' }))
+    $('txt').animate([{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 350, fill: 'both' })
+    if (!last) timer = setTimeout(() => go(1), 7000)
+  }
+  function go(d) { const n = i + d; if (n < 0 || n >= cards.length) return; i = n; render() }
+  function setRole(r) { role = r; $('bR').classList.toggle('on', r === 'r'); $('bC').classList.toggle('on', r === 'c'); build() }
+  function setMode(m) { mode = m; $('bCore').classList.toggle('on', m === 'core'); $('bFull').classList.toggle('on', m === 'full'); build() }
+  function imReady() {
+    $('ready').textContent = 'Ready ✓'; $('aina').textContent = 'READY'; $('aina').classList.add('ok'); $('rc').textContent = '14'; $('rb').style.width = '78%'
+    setTimeout(() => { $('ready').textContent = "I'm ready" }, 1800)
+  }
+  // line boil: re-seed the wobble a few times a second, like hand-drawn animation
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) { let sd = 1; setInterval(() => { sd = sd % 3 + 1; document.getElementById('boilT').setAttribute('seed', sd) }, 140) }
+  build()
+</script>

@@ -215,7 +215,7 @@ Freeing everyone with one quick scan was judged too swingy: one runner could und
 
 1. ~~**Organiser setup**~~ **designed 2026-10-30:** `2026-10-30-kejar-organiser-setup-design.md` covers five setup steps, the kit checklist, walking the park, the stash drop and lobby checks.
 2. ~~**The chase screen audit**~~ **designed 2026-10-30:** motion design §8.6 (one screen, map as the hero, a dock with the slot, one Scan button, a ticker and SOS) and §8.7 (the lock-screen status notification with clock times).
-3. **The lobby's how-to-play card,** one per mode: what you are, how to check in, how you get caught, and the power-ups in this mode's deck.
+3. ~~**The how-to-play card**~~ **designed 2026-10-30:** motion design §8.8, a briefing story per side and mode with self-drawing doodle scenes.
 4. **The auto-jailed runner** variant of the Penjara screen (`You missed 2 check-ins`).
 
 ## 11. Still open (owner's decisions)

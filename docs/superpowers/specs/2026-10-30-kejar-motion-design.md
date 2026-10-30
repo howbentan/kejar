@@ -26,6 +26,7 @@
 - `15-marker-scribble.html`: the marker scribble across the app (§8.5), including the chosen results celebration.
 - `16-organiser-setup.html`: organiser setup, walking the park and the lobby (`2026-10-30-kejar-organiser-setup-design.md`).
 - `17-chase-screen.html`: the chase screen before and after (§8.6).
+- `18-how-to-play.html`: the briefing story per side and mode, with the doodle style (§8.8).
 
 ## 1. Why
 
@@ -319,6 +320,7 @@ A hand-drawn lime marker that draws itself over the screen, used for hype and wa
   | Results | §8.4. |
 - **Rules** (Claude's suggestion, agreed):
   - **Shapes only, never handwriting:** circles, underlines, arrows, stars, ticks, X's and bursts. All text stays in Geist.
+  - **Drawn in the §8.8 doodle style:** a sketchy double line and line boil.
   - **Lime on black, black on lime,** one marker weight (about 3 px) everywhere, with a slight hand-drawn wobble.
   - **Sized from the text it marks:** circles are measured from the words' box with room on every side, so no letters sit outside the loop (owner's request).
   - **Hype and wayfinding only.** **Never on safety screens:** SOS, the marshal screens, pause, removal and reports stay clean and calm.
@@ -373,6 +375,34 @@ The owner asked for a countdown on the phone's lock screen. **A live ticking tim
   - On iPhone, web push only works when Kejar is added to the home screen (iOS 16.4+), and iPhones are still untested (`docs/superpowers/spike-results.md`).
   - Some Android battery savers delay pushes, which is another reason to show times rather than countdowns.
 - **Server work** (left to the builder): the existing push sender gains the status payload and the `tag`. Each update is one push per subscribed player, at most about one a minute, so it stays within free-tier limits.
+
+### 8.8 How to play: the briefing story (agreed 2026-10-30)
+
+Mockup: `18-how-to-play.html`. When the organiser taps **Brief the players** in the lobby (organiser setup design §5), every player's phone opens this story. It's also shown to anyone who joins later, and can be reopened from the menu during the game.
+
+- **Format:** full-screen cards like Instagram stories, with a progress bar of segments at the top and a `CORE` / `FULL` badge.
+  - Tap the right side to go forward, the left side to go back. Each card moves on by itself after 7 s.
+  - **Each card has one doodle scene, one headline (Geist 800) and one line.**
+- **The last card has `I'm ready`,** which ticks the player off in the lobby (`13 of 18 ready`, with each player's status: reading, ready or not opened). **It never blocks Start.**
+- **Dikejar (Core: 7 cards):**
+  1. You're Dikejar. (Hide, keep moving, stay free until time runs out.)
+  2. When it buzzes, check in. (Open Kejar within 45 s.)
+  3. Miss two, you're out. (One miss is free.)
+  4. Tag ripped? Stop. (Walk to Penjara; use SOS, never argue.)
+  5. Break them out. (Scan the Penjara card, then stay within 30 m for 10 seconds.)
+  6. Grab power-ups. (Scan a station; hold one at a time. Shows this mode's stickers.)
+  7. Anything wrong? SOS.
+- **Kejar (Core: 6 cards):** You're Kejar (wait at the start) · Pings show circles · Rip, then scan (one hand, upper arm, tag only) · Stop the rescue (you get 10 seconds) · Grab power-ups · SOS.
+- **Full adds** the Full deck's stickers on the power-up card, and for Kejar, "They can see you too" **only if** the organiser turned the snapshot switch on.
+- **Never mentioned: Dato Seri** (rules doc §9b).
+- **Marshals get no story.** The organiser briefs the crew in person.
+
+**The doodle style** (owner asked for better doodles, 2026-10-30). This also upgrades the marker scribble in §8.5:
+- **Little scenes, not abstract marks,** with a stick-figure cast. Dikejar wear a **white armband** (the real one is dark; white shows on a black screen), Kejar wear a **lime vest**, so the sides are recognisable in every drawing.
+- **A sketchy double line:** every stroke is drawn twice, the second faint and slightly offset, like a marker going over itself.
+- **Line boil:** the wobble filter's seed changes about 7 times a second, so lines shimmer like hand-drawn animation. It's off with reduced motion.
+- **Each scene draws itself in about 1.5 s,** then stays still.
+- **Build note:** in testing, applying the wobble filter to the whole SVG worked, while applying it to an inner group hid the strokes in Chrome.
 
 ## 9. Constraints
 
