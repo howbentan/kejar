@@ -65,10 +65,14 @@ A web app for organised, real-world chase games (runners vs chasers, with marsha
 - Endgame visuals.
 
 Also floated: surprise missions, a bounty on the longest survivor. **Malaysian power-ups (designed 2026-10-28, not built).** `docs/superpowers/specs/2026-10-28-kejar-malaysian-powerups-design.md`.
-- Funny, local renames: Gostan, Durian, Ponteng, Mat Rempit, Pak Guard.
+- Funny, local renames: Gostan, Durian, Ponteng, Mat Rempit, Pak Guard (now 75 m, not 150 m — see below).
 - New power-ups: Toyol and Ah Long ("take away"), and Abang Grab (claim a station remotely).
 - Malaysian slang applies to the power-ups only; all other wording stays as it is.
 - Stations stay random-on-claim.
+
+**Jail gets a dare wheel, plus a rare runner escape power-up, Dato Seri (designed 2026-10-28, checked and ready for a plan, not built).** `docs/superpowers/specs/2026-10-28-kejar-jail-dato-seri-design.md`.
+
+**A legendary power-up for chasers, to mirror Dato Seri (brainstorm in progress, 2026-10-30 — not finished).** `docs/superpowers/specs/2026-10-30-kejar-chaser-legendary-design.md`. The character (Bomoh vs Pontianak, or a safer backup) is the one open blocker, deliberately left for the owner to sanity-check with actual Malaysian people first; everything else about the mechanic (rarity, hand cost, discovery, effect duration, staffing) is already pinned down in that file. Pick up there on a new device.
 
 Suggested next: a real playtest in a park, then the endgame ideas above (the shrinking zone can reuse the Plan 4b play-area code); the owner hasn't chosen.
 
