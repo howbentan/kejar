@@ -1,0 +1,398 @@
+<h2>Ping ripple, a feed that tells you what to do, and six ways to celebrate</h2>
+<p class="subtitle">Top row: the ping reveal and the feed, reworked. Below: six results celebrations made of doodles. Each phone has a replay button underneath. Click the cards you like.</p>
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  .kj-phone { width: 236px; height: 440px; border-radius: 28px; background: #0A0A0B; border: 2px solid #2a2a2a; position: relative; overflow: hidden;
+    color: #F5F5F3; font-family: 'Geist', system-ui, sans-serif; margin: 0 auto; }
+  .eb { font: 500 9px 'Geist Mono', monospace; letter-spacing: .2em; color: rgba(245,245,243,.55); }
+  .pad { position: absolute; inset: 0; padding: 16px 12px; }
+  .btns { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+  .btns button { background: #C6FF3D; color: #0A0A0B; border: 0; border-radius: 999px; padding: 7px 12px; font: 700 12px 'Geist', sans-serif; cursor: pointer; }
+  .btns button.ghost { background: transparent; color: #F5F5F3; border: 1px solid #444; }
+  .btns button.ghost.on { background: #F5F5F3; color: #0A0A0B; }
+  .stk { width: 30px; height: 30px; flex: none; }
+  .sec { font: 500 10px 'Geist Mono', monospace; letter-spacing: .2em; opacity: .55; margin: 24px 0 10px; text-align: center; }
+
+  /* 1. ping ripple */
+  .map { position: absolute; left: 12px; right: 12px; top: 40px; height: 330px; border-radius: 18px; background: #121412; border: 1px solid #262626; overflow: hidden; }
+  .map .edge { position: absolute; inset: 16px; border: 1px solid rgba(245,245,243,.3); border-radius: 44%; }
+  .me { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: #C6FF3D; border: 2px solid #0A0A0B; transform: translate(-50%, -50%); z-index: 3; }
+  .wave { position: absolute; width: 20px; height: 20px; border-radius: 50%; transform: translate(-50%, -50%) scale(0); pointer-events: none; }
+  .wave.w1 { border: 2.5px solid #C6FF3D; box-shadow: 0 0 18px rgba(198,255,61,.5), inset 0 0 18px rgba(198,255,61,.25); }
+  .wave.w2 { border: 1.5px solid rgba(198,255,61,.55); }
+  .wave.w3 { border: 1px solid rgba(198,255,61,.3); }
+  .fz { position: absolute; width: 46px; height: 46px; border-radius: 50%; background: rgba(245,245,243,.12); border: 1.2px solid #F5F5F3; transform: translate(-50%, -50%) scale(0); opacity: 0; }
+  .fz.miss { border-style: dashed; background: transparent; }
+  .fz.exact { width: 14px; height: 14px; background: #F5F5F3; border: 2px solid #0A0A0B; }
+  .fz b { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); font: 600 9px 'Geist', sans-serif; white-space: nowrap; margin-top: 2px; }
+  .fz.on { animation: fzin .5s cubic-bezier(.2,1.6,.4,1) forwards; }
+  .fz.on::after { content: ''; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid #C6FF3D; animation: fzring .7s ease-out forwards; }
+  .fz.jail { animation: fzin .5s cubic-bezier(.2,1.6,.4,1) forwards, tojail 1s cubic-bezier(.6,0,.4,1) 1.6s forwards; }
+  @keyframes fzin { 0% { transform: translate(-50%, -50%) scale(0); opacity: 0 } 100% { transform: translate(-50%, -50%) scale(1); opacity: 1 } }
+  @keyframes fzring { 0% { transform: scale(1); opacity: .9 } 100% { transform: scale(2); opacity: 0 } }
+  @keyframes tojail { to { left: 14%; top: 88%; transform: translate(-50%, -50%) scale(.35); opacity: .6 } }
+  .focus { position: absolute; width: 120px; height: 120px; border-radius: 50%; border: 1.5px dashed #C6FF3D; transform: translate(-50%, -50%); opacity: 0; transition: opacity .3s; }
+  .focus.on { opacity: 1; }
+  .pen { position: absolute; left: 14%; top: 88%; transform: translate(-50%, -50%); font: 500 8px 'Geist Mono', monospace; letter-spacing: .1em; border: 1px solid #F5F5F3; border-radius: 6px; padding: 2px 4px; }
+  .cnt { position: absolute; left: 12px; right: 12px; top: 378px; font: 500 10px 'Geist Mono', monospace; letter-spacing: .08em; text-align: center; color: #C6FF3D; min-height: 14px; }
+
+  /* 2. feed */
+  .feed { position: absolute; left: 10px; right: 10px; top: 36px; bottom: 10px; display: flex; flex-direction: column; gap: 7px; overflow: hidden; }
+  .fi { border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 8px 9px; background: rgba(255,255,255,.03); display: flex; gap: 8px; align-items: flex-start; }
+  .fi .h { font-size: 12px; font-weight: 700; line-height: 1.25; }
+  .fi .m { font-size: 11px; line-height: 1.3; margin-top: 3px; color: #C6FF3D; }
+  .fi .m::before { content: '→ '; }
+  .fi .t { font: 500 8px 'Geist Mono', monospace; opacity: .5; letter-spacing: .1em; }
+  .fi.act { border-color: #C6FF3D; background: rgba(198,255,61,.07); }
+  .fi.leg { border-color: #FFD60A; box-shadow: 0 0 12px rgba(255,214,10,.35); }
+  .fi.leg .m { color: #FFD60A; }
+  .fi .stk { animation: stkpop .6s cubic-bezier(.2,1.8,.4,1) .15s both; }
+  .fi .ic { width: 30px; height: 30px; flex: none; border-radius: 50%; border: 1.5px solid rgba(245,245,243,.4); display: grid; place-items: center; font: 500 9px 'Geist Mono', monospace; }
+  .fi.new { animation: fiin .45s cubic-bezier(.32,.72,0,1) both; }
+  @keyframes fiin { from { transform: translateY(-14px); opacity: 0 } to { transform: none; opacity: 1 } }
+  @keyframes stkpop { 0% { transform: scale(0) rotate(-30deg) } 100% { transform: none } }
+
+  /* celebrations: shared results card */
+  .res { position: absolute; inset: 0; padding: 16px 12px; }
+  .res h4 { font-size: 28px; font-weight: 800; letter-spacing: -0.05em; margin: 8px 0 10px; position: relative; display: inline-block; z-index: 2; }
+  .res h4 span { color: #C6FF3D; }
+  .aw { border: 1px solid rgba(255,255,255,.12); border-radius: 12px; padding: 7px 10px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; position: relative; z-index: 1; background: #0A0A0B; }
+  .aw .l { font: 500 8px 'Geist Mono', monospace; letter-spacing: .15em; opacity: .6; } .aw .n { font-weight: 700; font-size: 13px; }
+  .aw .v { font: 500 15px 'Geist Mono', monospace; color: #C6FF3D; white-space: nowrap; }
+  .fx { position: absolute; inset: 0; pointer-events: none; z-index: 4; overflow: hidden; }
+  .fx .s { position: absolute; width: 54px; height: 54px; }
+  .fx .s svg { width: 100%; height: 100%; }
+  /* B slap */
+  @keyframes slap { 0% { transform: scale(2.6) rotate(var(--r)); opacity: 0 } 55% { transform: scale(.92) rotate(var(--r)); opacity: 1 } 75% { transform: scale(1.04) rotate(var(--r)) } 100% { transform: scale(1) rotate(var(--r)); opacity: 1 } }
+  .shake { animation: shk .25s; } @keyframes shk { 30% { transform: translate(2px, -2px) } 60% { transform: translate(-2px, 1px) } }
+  /* D scribble */
+  .scr path { fill: none; stroke: #C6FF3D; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+  /* E victory lap */
+  .lap { position: absolute; top: 300px; left: 0; display: flex; align-items: center; transform: translateX(-120%); }
+  .lap .s { position: relative; width: 70px; height: 70px; }
+  .lap .ban { background: #C6FF3D; color: #0A0A0B; font: 800 13px 'Geist', sans-serif; letter-spacing: -0.03em; padding: 6px 12px; border: 2.5px solid #141414; border-radius: 4px; white-space: nowrap; transform: rotate(-3deg); margin-left: -6px; }
+  .lap.go { animation: lap 3.2s cubic-bezier(.45,.05,.55,.95) forwards; }
+  @keyframes lap { 0% { transform: translateX(260px) } 100% { transform: translateX(-340px) } }
+  .trail { position: absolute; top: 330px; left: 0; right: 0; height: 3px; background: repeating-linear-gradient(90deg, #C6FF3D 0 10px, transparent 10px 18px); transform-origin: right; transform: scaleX(0); }
+  .trail.go { animation: trail 3.2s linear forwards; } @keyframes trail { to { transform: scaleX(1) } }
+  /* F team photo */
+  .flash { position: absolute; inset: 0; background: #F5F5F3; opacity: 0; z-index: 5; pointer-events: none; }
+  .flash.go { animation: fl .5s ease-out; } @keyframes fl { 0% { opacity: .95 } 100% { opacity: 0 } }
+  .polaroid { position: absolute; left: 18px; right: 18px; top: 250px; height: 150px; background: #F5F5F3; border-radius: 6px; padding: 8px 8px 26px; transform: rotate(-3deg) translateY(30px); opacity: 0; z-index: 3; box-shadow: 0 8px 20px rgba(0,0,0,.6); }
+  .polaroid .ph { background: #141614; height: 100%; border-radius: 3px; display: flex; align-items: flex-end; justify-content: center; gap: 0; overflow: hidden; }
+  .polaroid .ph .s { position: relative; width: 50px; height: 50px; margin: 0 -6px; }
+  .polaroid .cap2 { position: absolute; bottom: 5px; left: 0; right: 0; text-align: center; color: #141414; font: 700 12px 'Geist', sans-serif; letter-spacing: -0.02em; }
+  .polaroid.go { animation: pol .6s cubic-bezier(.2,1.4,.4,1) .35s forwards; }
+  @keyframes pol { to { opacity: 1; transform: rotate(-3deg) } }
+  .polaroid.go .ph .s { animation: hop .5s cubic-bezier(.3,1.6,.5,1) both; }
+  @keyframes hop { 0% { transform: translateY(60px) } 100% { transform: none } }
+</style>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- hand-drawn wobble -->
+    <filter id="wob" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="3.2"/>
+    </filter>
+    <!-- sticker: thick white edge plus a drop shadow -->
+    <filter id="stk" x="-25%" y="-25%" width="150%" height="150%">
+      <feMorphology in="SourceAlpha" operator="dilate" radius="4.5" result="d"/>
+      <feFlood flood-color="#F5F5F3"/><feComposite in2="d" operator="in" result="w"/>
+      <feOffset in="w" dy="3.5" result="o"/><feFlood flood-color="#000" flood-opacity=".55"/><feComposite in2="o" operator="in" result="sh"/>
+      <feMerge><feMergeNode in="sh"/><feMergeNode in="w"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+</svg>
+
+<div class="cards">
+  <div class="card" data-choice="ping-ripple" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#000;padding:12px">
+      <div class="kj-phone"><div class="pad"><div class="eb">KEJAR · CHASING</div></div>
+        <div class="map" id="map"><div class="edge"></div><div class="focus" id="focus"></div><div class="pen">PENJARA</div><div class="me" id="me"></div></div>
+        <div class="cnt" id="cnt"></div></div>
+      <div class="btns"><button onclick="event.stopPropagation(); ping(false)">Ping!</button><button class="ghost" onclick="event.stopPropagation(); ping(true)">With Pak Guard</button></div>
+    </div>
+    <div class="card-body"><h3>1. Ping: a ripple from you</h3><p>A lime wave rolls out from your dot to the edge of the screen, with two fainter echoes behind it. Each Dikejar circle pops in the moment the wave passes over it, so near ones appear first. A second missed check-in still slides off to Penjara afterwards.</p></div>
+  </div>
+
+  <div class="card" data-choice="feed-english" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#000;padding:12px">
+      <div class="kj-phone"><div class="pad"><div class="eb" id="feedeb">FEED · YOU'RE DIKEJAR</div></div><div class="feed" id="feed"></div></div>
+      <div class="btns"><button onclick="event.stopPropagation(); feedAdd()">Next line</button><button class="ghost on" id="rr" onclick="event.stopPropagation(); setRole('runner')">As Dikejar</button><button class="ghost" id="rc" onclick="event.stopPropagation(); setRole('chaser')">As Kejar</button></div>
+    </div>
+    <div class="card-body"><h3>2. Feed: what happened, and what it means for you</h3><p>Every line is plain English: what happened in bold, then a lime "→" line saying what it means <i>for your side</i>. Switch sides to see the same events read differently. Lines that need you to act now get a lime box. Power-up names stay as the card names.</p></div>
+  </div>
+</div>
+
+<div class="sec">RESULTS CELEBRATIONS · PICK ONE OR MIX</div>
+<div class="cards" id="cel"></div>
+
+<script>
+  const INK = 'stroke="#141414" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"'
+  const spiky = (cx, cy, rx, ry, n) => {
+    const p = []
+    for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2, r = k % 2 ? 1 : 1.16; p.push(`${(cx + Math.cos(a) * rx * r).toFixed(1)} ${(cy + Math.sin(a) * ry * r).toFixed(1)}`) }
+    return 'M' + p.join(' L') + ' Z'
+  }
+  const star = (cx, cy, R, r) => {
+    const p = []
+    for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + (k * Math.PI) / 5, rr = k % 2 ? r : R; p.push(`${(cx + Math.cos(a) * rr).toFixed(1)} ${(cy + Math.sin(a) * rr).toFixed(1)}`) }
+    return 'M' + p.join(' L') + ' Z'
+  }
+
+  const ART = {
+    gostan: `
+      <path d="M78 24 Q52 6 26 22" fill="none" stroke="#141414" stroke-width="9" stroke-linecap="round"/>
+      <path d="M78 24 Q52 6 26 22" fill="none" stroke="#FFD60A" stroke-width="5" stroke-linecap="round"/>
+      <path d="M16 26 L30 12 L34 30 Z" fill="#FFD60A" ${INK}/>
+      <path d="M12 62 Q12 50 22 48 L33 36 Q37 32 45 32 L62 32 Q70 32 74 40 L81 48 Q90 50 90 59 L90 66 Q90 70 85 70 L16 70 Q12 70 12 66 Z" fill="#E63946" ${INK}/>
+      <path d="M36 47 L43 38 L55 38 L55 47 Z" fill="#A8DADC" ${INK}/>
+      <path d="M59 38 L66 38 Q70 40 73 47 L59 47 Z" fill="#A8DADC" ${INK}/>
+      <path d="M48 54 h8" ${INK}/>
+      <circle cx="29" cy="70" r="9" fill="#2a2a2a" ${INK}/><circle cx="29" cy="70" r="3.2" fill="#ccc"/>
+      <circle cx="73" cy="70" r="9" fill="#2a2a2a" ${INK}/><circle cx="73" cy="70" r="3.2" fill="#ccc"/>
+      <circle cx="86" cy="56" r="2.6" fill="#FFF3B0" ${INK}/><rect x="11" y="54" width="5" height="6" fill="#FFFFFF" ${INK}/>
+      <path d="M92 76 h6 M90 82 h8" ${INK}/>`,
+    durian: `
+      <path d="M50 26 Q47 14 55 7" fill="none" stroke="#141414" stroke-width="8" stroke-linecap="round"/>
+      <path d="M50 26 Q47 14 55 7" fill="none" stroke="#7A5230" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="${spiky(50, 58, 29, 31, 30)}" fill="#8DA33B" ${INK}/>
+      <path d="M50 36 Q66 50 60 80 Q44 62 50 36 Z" fill="#F7D154" ${INK}/>
+      <path d="M53 50 q4 3 3 8 M55 64 q3 3 2 7" fill="none" stroke="#D9A92B" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M30 48 l4 4 M28 64 l5 2 M38 76 l3 -3 M72 56 l-4 3 M70 72 l-4 -2" ${INK}/>
+      <path d="M14 36 q-5 -6 0 -12 q5 -6 0 -12 M86 36 q5 -6 0 -12 q-5 -6 0 -12" fill="none" stroke="#9BC53D" stroke-width="3.2" stroke-linecap="round"/>`,
+    ponteng: `
+      <path d="M16 72 Q6 58 18 48 Q16 32 34 32 Q42 16 60 26 Q80 22 82 40 Q96 48 88 66 Q86 76 70 74 L28 76 Q14 78 16 72 Z" fill="#4CAF50" ${INK}/>
+      <path d="M26 46 q4 -3 7 1 M66 36 q4 -3 7 1 M74 60 q4 -3 7 1 M30 64 q4 -3 7 1" fill="none" stroke="#2E7D32" stroke-width="2.6" stroke-linecap="round"/>
+      <ellipse cx="44" cy="50" rx="6.5" ry="7.5" fill="#fff" ${INK}/><ellipse cx="59" cy="50" rx="6.5" ry="7.5" fill="#fff" ${INK}/>
+      <circle cx="41.5" cy="51" r="2.8" fill="#141414"/><circle cx="56.5" cy="51" r="2.8" fill="#141414"/>
+      <path d="M38 40 l9 2 M53 42 l9 -2" ${INK}/>
+      <path d="M60 70 L72 66 Q80 70 92 72 Q100 74 98 84 L62 86 Q56 82 60 70 Z" fill="#E4E4E4" ${INK}/>
+      <path d="M58 80 L99 79 L98 86 L62 88 Z" fill="#1D3557" ${INK}/>
+      <path d="M68 70 l4 -4 M74 72 l4 -4 M80 73 l3 -4" ${INK}/>`,
+    toyol: `
+      <path d="M31 40 L12 24 L32 54 Z" fill="#8DBE7A" ${INK}/><path d="M69 40 L88 24 L68 54 Z" fill="#8DBE7A" ${INK}/>
+      <path d="M36 64 Q50 96 64 64 Q50 58 36 64 Z" fill="#8DBE7A" ${INK}/>
+      <path d="M38 76 Q50 84 62 76 L60 70 Q50 74 40 70 Z" fill="#F5F5F3" ${INK}/>
+      <circle cx="50" cy="42" r="22" fill="#8DBE7A" ${INK}/>
+      <path d="M50 20 q-3 -7 4 -10" fill="none" ${INK}/>
+      <circle cx="41" cy="40" r="7" fill="#fff" ${INK}/><circle cx="59" cy="40" r="7" fill="#fff" ${INK}/>
+      <circle cx="42" cy="41" r="3.6" fill="#E63946"/><circle cx="58" cy="41" r="3.6" fill="#E63946"/>
+      <circle cx="42" cy="41" r="1.4" fill="#141414"/><circle cx="58" cy="41" r="1.4" fill="#141414"/>
+      <path d="M39 53 Q50 62 61 53" fill="none" ${INK}/><path d="M47 56 v4 h5 v-4" fill="#fff" ${INK}/>
+      <path d="M62 70 L78 64" ${INK}/>
+      <circle cx="83" cy="62" r="8" fill="#FFD60A" ${INK}/><path d="M83 57 v10" stroke="#B8860B" stroke-width="2.4" stroke-linecap="round"/>`,
+    grab: `
+      <rect x="56" y="26" width="34" height="34" rx="4" fill="#1FA855" ${INK}/>
+      <path d="M56 36 h34" ${INK}/><path d="M66 46 q7 6 14 0" fill="none" stroke="#F5F5F3" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="42" cy="60" r="17" fill="#C68B59" ${INK}/>
+      <path d="M16 54 Q16 24 42 24 Q68 24 68 54 Z" fill="#1FA855" ${INK}/>
+      <path d="M30 30 Q42 26 54 30" fill="none" stroke="#F5F5F3" stroke-width="3" stroke-linecap="round"/>
+      <path d="M18 46 Q42 38 66 46 L66 52 L18 52 Z" fill="#2a2a2a" ${INK}/>
+      <circle cx="36" cy="60" r="2.2" fill="#141414"/><circle cx="48" cy="60" r="2.2" fill="#141414"/>
+      <path d="M35 67 Q42 73 49 67" fill="none" ${INK}/>
+      <path d="M26 62 Q28 76 42 78 Q56 76 58 62" fill="none" ${INK}/>
+      <path d="M2 40 h9 M0 50 h9 M3 60 h8" ${INK}/>`,
+    rempit: `
+      <g transform="rotate(-16 50 62)">
+        <circle cx="16" cy="58" r="6" fill="#bbb" ${INK}/><circle cx="8" cy="50" r="5" fill="#ccc" ${INK}/><circle cx="4" cy="62" r="4" fill="#ddd" ${INK}/>
+        <path d="M30 60 Q18 56 12 62 Q20 64 14 70 Q24 68 30 64 Z" fill="#FF8C1A" ${INK}/>
+        <circle cx="34" cy="70" r="12" fill="#2a2a2a" ${INK}/><circle cx="34" cy="70" r="4" fill="#ccc"/>
+        <circle cx="78" cy="70" r="12" fill="#2a2a2a" ${INK}/><circle cx="78" cy="70" r="4" fill="#ccc"/>
+        <path d="M34 70 L48 56 M78 70 L72 50" ${INK}/>
+        <path d="M40 60 L52 46 L72 46 L80 54 L62 62 Z" fill="#E63946" ${INK}/>
+        <path d="M48 46 L64 44" stroke="#141414" stroke-width="6" stroke-linecap="round"/>
+        <path d="M72 46 L76 34 L84 32" fill="none" ${INK}/><circle cx="82" cy="44" r="3.4" fill="#FFF3B0" ${INK}/>
+        <path d="M54 54 h10" stroke="#F5F5F3" stroke-width="2.6" stroke-linecap="round"/>
+      </g>
+      <path d="M88 20 l8 -4 M86 30 l10 -2" ${INK}/>`,
+    guard: `
+      <path d="M78 66 L100 34 L100 78 Z" fill="#FFE66D" opacity=".85"/>
+      <circle cx="44" cy="56" r="21" fill="#C68B59" ${INK}/>
+      <path d="M22 44 Q22 22 44 22 Q66 22 66 44 Z" fill="#1D3557" ${INK}/>
+      <path d="M18 44 L74 44 Q80 49 70 51 L18 49 Z" fill="#14213D" ${INK}/>
+      <path d="${star(44, 33, 6, 2.6)}" fill="#FFD60A" stroke="#141414" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M33 54 h8" ${INK}/><circle cx="53" cy="55" r="2.6" fill="#141414"/><path d="M48 49 l9 -1" ${INK}/>
+      <path d="M32 64 Q38 58 44 63 Q50 58 56 64 Q50 68 44 65 Q38 68 32 64 Z" fill="#2a2a2a" ${INK}/>
+      <path d="M64 80 L78 64 L86 70 L72 86 Z" fill="#3a3a3a" ${INK}/><path d="M78 64 L86 70" stroke="#FFE66D" stroke-width="3"/>`,
+    along: `
+      <path d="M44 32 L54 8 L66 32 Z" fill="#8D99AE" ${INK}/>
+      <path d="M6 66 Q20 30 58 30 Q84 32 94 54 Q86 72 56 74 Q28 76 6 66 Z" fill="#8D99AE" ${INK}/>
+      <path d="M18 66 Q50 58 90 58 Q82 72 56 74 Q30 76 18 66 Z" fill="#EDF2F4" ${INK}/>
+      <path d="M56 42 h13 v4 q-6.5 5 -13 0 Z M72 42 h13 v4 q-6.5 5 -13 0 Z" fill="#141414" ${INK}/><path d="M69 43 h3" ${INK}/>
+      <path d="M62 62 l3 4 l3 -4 l3 4 l3 -4 l3 4 l3 -4" fill="none" stroke="#141414" stroke-width="2.4" stroke-linejoin="round"/>
+      <path d="M36 72 Q54 84 74 72" fill="none" stroke="#141414" stroke-width="7" stroke-linecap="round"/>
+      <path d="M36 72 Q54 84 74 72" fill="none" stroke="#FFD60A" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 3"/>
+      <circle cx="55" cy="81" r="5" fill="#FFD60A" ${INK}/>
+      <path d="M8 36 L26 26 L32 40 L14 50 Z" fill="#6FBF73" ${INK}/><path d="M14 30 L32 22 L36 34 L20 42 Z" fill="#A3D9A5" ${INK}/>
+      <circle cx="26" cy="32" r="3" fill="none" stroke="#2E7D32" stroke-width="2"/>`,
+    dato: `
+      <path d="M14 100 Q16 76 50 76 Q84 76 86 100 Z" fill="#7B1E3A" ${INK}/>
+      <path d="M28 78 L74 100" stroke="#141414" stroke-width="11" stroke-linecap="round"/><path d="M28 78 L74 100" stroke="#FFD60A" stroke-width="7" stroke-linecap="round"/>
+      <path d="${star(64, 88, 7, 3)}" fill="#FFD60A" ${INK}/>
+      <circle cx="50" cy="56" r="21" fill="#B9784F" ${INK}/>
+      <path d="M29 44 L29 24 Q50 17 71 24 L71 44 Z" fill="#1b1b1b" ${INK}/>
+      <path d="M30 40 L70 40" stroke="#E8B92E" stroke-width="3.2"/>
+      <path d="M39 54 q3.5 -3.5 7 0 M54 54 q3.5 -3.5 7 0" fill="none" ${INK}/>
+      <path d="M36 66 Q43 59 50 64 Q57 59 64 66 Q60 63 58 68 Q50 65 42 68 Q40 63 36 66 Z" fill="#2a2a2a" ${INK}/>
+      <path d="M84 30 l4 -8 M90 38 l8 -2 M12 30 l-4 -8 M10 40 l-8 -2" stroke="#141414" stroke-width="3" stroke-linecap="round"/>`,
+  }
+
+  const sticker = (k, cls = 'stk') => `<svg class="${cls}" viewBox="-8 -6 116 116"><g filter="url(#stk)"><g filter="url(#wob)">${ART[k]}</g></g></svg>`
+  const $ = (id) => document.getElementById(id)
+
+  // 1. ripple ping
+  const ME = { x: 50, y: 55 }
+  function ping(focus) {
+    const map = $('map'), cnt = $('cnt'), me = $('me')
+    me.style.left = ME.x + '%'; me.style.top = ME.y + '%'
+    const fo = $('focus'); fo.style.left = ME.x + '%'; fo.style.top = ME.y + '%'; fo.classList.toggle('on', focus)
+    map.querySelectorAll('.fz, .wave').forEach((f) => f.remove()); cnt.textContent = ''
+    const W = map.clientWidth, H = map.clientHeight
+    const far = Math.max(...[[0, 0], [W, 0], [0, H], [W, H]].map(([x, y]) => Math.hypot(x - (ME.x / 100) * W, y - (ME.y / 100) * H)))
+    const DUR = 1500
+    ;['w1', 'w2', 'w3'].forEach((w, k) => {
+      const d = document.createElement('div'); d.className = 'wave ' + w; d.style.left = ME.x + '%'; d.style.top = ME.y + '%'; map.appendChild(d)
+      d.animate([{ transform: 'translate(-50%,-50%) scale(0)', opacity: 1 }, { transform: `translate(-50%,-50%) scale(${(far * 2) / 20})`, opacity: k ? 0 : 0.25 }],
+        { duration: DUR, delay: k * 220, easing: 'cubic-bezier(.25,.6,.4,1)', fill: 'forwards' })
+    })
+    const pts = [{ x: 30, y: 30, l: '#07' }, { x: 62, y: 46, l: '#03', near: true }, { x: 40, y: 78, l: '#14 · missed 1', miss: true }, { x: 82, y: 72, l: '#22 · missed 2', miss: true, jail: true }, { x: 75, y: 20, l: '#09' }, { x: 18, y: 58, l: '#11' }]
+    // reveal time follows the wave's easing closely enough: distance share of the duration
+    pts.forEach((p) => {
+      const dist = Math.hypot(((p.x - ME.x) / 100) * W, ((p.y - ME.y) / 100) * H)
+      const t = Math.pow(dist / far, 1.35) * DUR
+      setTimeout(() => {
+        const f = document.createElement('div')
+        f.className = 'fz ' + (p.jail ? 'jail' : 'on') + (p.miss ? ' miss' : '') + (focus && p.near ? ' exact' : '')
+        f.style.left = p.x + '%'; f.style.top = p.y + '%'; f.innerHTML = `<b>${p.l}</b>`; map.appendChild(f)
+      }, t)
+    })
+    setTimeout(() => { cnt.textContent = '#22 MISSED 2 CHECK-INS · SENT TO PENJARA' }, 2700)
+  }
+  setTimeout(() => ping(false), 500)
+
+  // 2. feed, role-aware
+  const EVENTS = [
+    { ic: 'PING', h: 'Ping: 5 Dikejar seen, 1 missed check-in.', runner: 'Kejar now know roughly where you were.', chaser: 'Fresh circles are on your map.' },
+    { k: 'rempit', h: 'A Kejar used Mat Rempit.', runner: 'Check in now. An extra ping lands in 30 s.', chaser: 'Extra ping in 30 s. Get close to the circles.', act: 'runner' },
+    { ic: 'CATCH', h: 'Ben caught #14.', runner: '#14 is walking to Penjara. 9 Dikejar still free.', chaser: 'Nice. 9 Dikejar left to find.' },
+    { k: 'durian', h: '#07 blocked a catch with Durian.', runner: '#07 is still free. Their Durian is used up.', chaser: "That catch didn't count. #07 has no Durian now." },
+    { k: 'toyol', h: 'A Dikejar used Toyol.', runner: "One Kejar just lost their power-up.", chaser: 'Check your slot: one of you lost a power-up.' },
+    { ic: 'FREE', h: 'Hafiz freed 2 Dikejar from Penjara.', runner: 'Penjara is empty again. Keep rescues coming.', chaser: '2 more Dikejar are loose near Penjara.' },
+    { k: 'guard', h: 'A Kejar used Pak Guard.', runner: 'At the next ping, anyone within 75 m of that Kejar shows exactly. Move away.', chaser: 'Next ping shows Dikejar near them exactly.', act: 'runner' },
+    { k: 'along', h: 'A Kejar used Ah Long.', runner: 'A free Dikejar just lost their power-up. Check your slot.', chaser: "One Dikejar's power-up is gone." },
+    { k: 'dato', h: 'Dato Seri has been found.', runner: 'One of you holds the legendary: they can free themselves and a friend from Penjara.', chaser: 'A Dikejar can now break out of Penjara with a friend.', leg: true },
+    { ic: '2×', h: '#22 missed 2 check-ins in a row.', runner: '#22 went to Penjara. Check in when your phone buzzes, or you\'re next.', chaser: 'One less to find. #22 is in Penjara.' },
+    { ic: '5:00', h: '5 minutes left.', runner: 'Survive 5 more minutes and Dikejar win.', chaser: 'Catch every free Dikejar in 5 minutes to win.', act: 'both' },
+  ]
+  let role = 'runner', shown = []
+  const line = (E, t) => {
+    const act = E.act === 'both' || E.act === role
+    return `<div class="fi new ${act ? 'act' : ''} ${E.leg ? 'leg' : ''}">${E.k ? sticker(E.k) : `<div class="ic">${E.ic}</div>`}<div><div class="t">${t}</div><div class="h">${E.h}</div><div class="m">${E[role]}</div></div></div>`
+  }
+  function render() { $('feed').innerHTML = shown.slice(-5).reverse().map(([E, t]) => line(E, t)).join('') }
+  let fk = 0
+  function feedAdd() { shown.push([EVENTS[fk++ % EVENTS.length], `${String(20 - fk).padStart(2, '0')}:${String((fk * 17) % 60).padStart(2, '0')} LEFT`]); render() }
+  function setRole(r) { role = r; $('rr').classList.toggle('on', r === 'runner'); $('rc').classList.toggle('on', r === 'chaser'); $('feedeb').textContent = r === 'runner' ? "FEED · YOU'RE DIKEJAR" : "FEED · YOU'RE KEJAR"; render() }
+  ;[0, 1, 2].forEach(() => feedAdd())
+
+  // celebrations
+  const RUNNERS = ['gostan', 'durian', 'ponteng', 'toyol', 'grab']
+  const ALL = ['gostan', 'durian', 'ponteng', 'toyol', 'grab', 'rempit', 'guard', 'along', 'dato']
+  const CEL = [
+    { id: 'rain', t: 'A. Sticker rain', d: 'Every doodle tumbles from the top, bounces and piles up at the bottom of the screen, like emptying a sticker packet.' },
+    { id: 'slap', t: 'B. Sticker slap', d: "The winning side's stickers get slapped onto the screen one by one around the title, each with a thud, a squash and a little screen shake." },
+    { id: 'works', t: 'C. Doodle fireworks', d: 'Hand-drawn lime and white bursts draw themselves across the screen, wobbly like marker pen, with sticker sparks at the centre.' },
+    { id: 'scribble', t: 'D. Marker scribble', d: 'A lime marker circles the winner, underlines it twice, adds stars and an arrow to the top award, like hyping someone in a group chat.' },
+    { id: 'lap', t: 'E. Victory lap', d: "The winning side's sticker races across dragging a banner: Gostan's car reversing in for Dikejar, a Mat Rempit wheelie for Kejar." },
+    { id: 'photo', t: 'F. Team photo', d: "Camera flash, then a polaroid drops in with the winning side's stickers hopping into a group shot, captioned with the game and date." },
+  ]
+  $('cel').innerHTML = CEL.map((c) => `
+    <div class="card" data-choice="cel-${c.id}" onclick="toggleSelect(this)">
+      <div class="card-image" style="background:#000;padding:12px">
+        <div class="kj-phone" id="ph-${c.id}"><div class="res">
+          <div class="eb">GAME OVER</div><h4 id="h-${c.id}">Dikejar win<span>.</span></h4>
+          <div class="aw" id="a1-${c.id}"><div><div class="l">LONGEST SURVIVOR</div><div class="n">Aina #07</div></div><div class="v">38m</div></div>
+          <div class="aw"><div><div class="l">MOST CATCHES</div><div class="n">Ben</div></div><div class="v">4</div></div>
+          <div class="aw"><div><div class="l">PENJARA HERO</div><div class="n">Hafiz #03</div></div><div class="v">3</div></div>
+        </div><div class="fx" id="fx-${c.id}"></div></div>
+        <div class="btns"><button onclick="event.stopPropagation(); play('${c.id}')">Play</button>${c.id === 'lap' ? `<button class="ghost" onclick="event.stopPropagation(); play('lap', true)">Kejar win</button>` : ''}</div>
+      </div>
+      <div class="card-body"><h3>${c.t}</h3><p>${c.d}</p></div>
+    </div>`).join('')
+
+  const R = (a, b) => a + Math.random() * (b - a)
+  function play(id, alt) {
+    const fx = $('fx-' + id), ph = $('ph-' + id)
+    fx.innerHTML = ''; fx.className = 'fx'
+    $('h-' + id).innerHTML = alt ? 'Kejar win<span>.</span>' : 'Dikejar win<span>.</span>'
+    const W = ph.clientWidth, H = ph.clientHeight
+    if (id === 'rain') {
+      ALL.concat(ALL).forEach((k, i) => {
+        const s = document.createElement('div'); s.className = 's'; s.innerHTML = sticker(k, ''); fx.appendChild(s)
+        const x = R(-10, W - 44), floor = H - 54 - (i % 3) * 30 - R(0, 10), r0 = R(-90, 90), r1 = R(-25, 25)
+        s.style.left = x + 'px'
+        s.animate([{ transform: `translateY(-80px) rotate(${r0}deg)` }, { transform: `translateY(${floor}px) rotate(${r1}deg)`, offset: .6, easing: 'ease-out' },
+          { transform: `translateY(${floor - 30}px) rotate(${r1 / 2}deg)`, offset: .78, easing: 'ease-in' }, { transform: `translateY(${floor}px) rotate(${r1}deg)` }],
+          { duration: 1300, delay: i * 90, easing: 'cubic-bezier(.5,0,.75,0)', fill: 'both' })
+      })
+    }
+    if (id === 'slap') {
+      const spots = [[6, 50], [150, 40], [10, 330], [150, 320], [80, 170]]
+      RUNNERS.forEach((k, i) => setTimeout(() => {
+        const s = document.createElement('div'); s.className = 's'; s.style.width = s.style.height = '76px'; s.innerHTML = sticker(k, '')
+        s.style.left = spots[i][0] + 'px'; s.style.top = spots[i][1] + 'px'; s.style.setProperty('--r', R(-18, 18) + 'deg')
+        s.style.animation = 'slap .38s cubic-bezier(.3,1.4,.5,1) both'; fx.appendChild(s)
+        setTimeout(() => { ph.classList.remove('shake'); void ph.offsetWidth; ph.classList.add('shake') }, 200)
+      }, 250 + i * 380))
+    }
+    if (id === 'works') {
+      const bursts = [[60, 110, '#C6FF3D', 'durian'], [170, 80, '#F5F5F3', 'toyol'], [120, 250, '#C6FF3D', 'gostan'], [50, 340, '#F5F5F3', 'ponteng'], [180, 330, '#C6FF3D', 'grab']]
+      bursts.forEach(([x, y, c, k], i) => setTimeout(() => {
+        let rays = ''
+        for (let a = 0; a < 12; a++) {
+          const an = (a / 12) * Math.PI * 2, r1 = 10, r2 = R(34, 46)
+          const mx = Math.cos(an + .2) * (r2 * .6), my = Math.sin(an + .2) * (r2 * .6)
+          rays += `<path d="M${Math.cos(an) * r1} ${Math.sin(an) * r1} Q${mx} ${my} ${Math.cos(an) * r2} ${Math.sin(an) * r2}" pathLength="1"/>`
+        }
+        const w = document.createElement('div'); w.style.cssText = `position:absolute;left:${x - 50}px;top:${y - 50}px;width:100px;height:100px`
+        w.innerHTML = `<svg viewBox="-50 -50 100 100" width="100" height="100" style="overflow:visible"><g filter="url(#wob)" fill="none" stroke="${c}" stroke-width="2.6" stroke-linecap="round">${rays}</g></svg>
+          <div class="s" style="left:32px;top:32px;width:36px;height:36px">${sticker(k, '')}</div>`
+        fx.appendChild(w)
+        w.querySelectorAll('path').forEach((p) => p.animate([{ strokeDasharray: '1', strokeDashoffset: 1 }, { strokeDasharray: '1', strokeDashoffset: 0 }], { duration: 450, easing: 'ease-out', fill: 'both' }))
+        w.animate([{ opacity: 1 }, { opacity: 1, offset: .7 }, { opacity: 0 }], { duration: 1800, fill: 'forwards' })
+        w.querySelector('.s').animate([{ transform: 'scale(0) rotate(-40deg)' }, { transform: 'scale(1.2) rotate(10deg)', offset: .5 }, { transform: 'scale(1)' }], { duration: 500, easing: 'ease-out' })
+      }, 200 + i * 420))
+    }
+    if (id === 'scribble') {
+      const h = $('h-' + id), hr = h.getBoundingClientRect(), pr = ph.getBoundingClientRect(), a = $('a1-' + id).getBoundingClientRect()
+      const x = hr.left - pr.left, y = hr.top - pr.top, w = hr.width, hh = hr.height
+      const ax = a.right - pr.left - 34, ay = a.bottom - pr.top + 2
+      fx.innerHTML = `<svg class="scr" width="${W}" height="${H}" style="position:absolute;inset:0" filter="url(#wob)">
+        <path pathLength="1" d="M${x + w * .5} ${y - 4} C${x + w + 16} ${y - 6} ${x + w + 14} ${y + hh + 8} ${x + w * .5} ${y + hh + 6} C${x - 14} ${y + hh + 6} ${x - 12} ${y - 10} ${x + w * .6} ${y - 8}"/>
+        <path pathLength="1" d="M${x} ${y + hh + 14} Q${x + w / 2} ${y + hh + 8} ${x + w + 4} ${y + hh + 14}"/>
+        <path pathLength="1" d="M${x + 6} ${y + hh + 21} Q${x + w / 2} ${y + hh + 16} ${x + w - 6} ${y + hh + 21}"/>
+        <path pathLength="1" d="M${ax + 14} ${ay + 40} Q${ax + 20} ${ay + 14} ${ax + 2} ${ay + 2} M${ax + 2} ${ay + 2} l11 0 M${ax + 2} ${ay + 2} l2 11"/>
+        <path pathLength="1" d="M${x + w + 24} ${y - 10} l4 10 l10 2 l-8 6 l2 10 l-8 -6 l-8 6 l2 -10 l-8 -6 l10 -2 Z"/>
+        <path pathLength="1" d="M${x - 2} ${y - 14} l3 6 l6 1 l-5 4 l1 6 l-5 -3 l-5 3 l1 -6 l-5 -4 l6 -1 Z"/>
+        <path pathLength="1" d="M${W - 40} ${H - 70} q8 -10 16 0 q8 10 16 0"/>
+      </svg>`
+      fx.querySelectorAll('path').forEach((p, i) => p.animate([{ strokeDasharray: '1', strokeDashoffset: 1 }, { strokeDasharray: '1', strokeDashoffset: 0 }], { duration: 420, delay: 200 + i * 300, easing: 'ease-in-out', fill: 'both' }))
+      const st = document.createElement('div'); st.className = 's'; st.style.cssText = `left:${W - 70}px;top:${H - 80}px;width:60px;height:60px`; st.innerHTML = sticker('toyol', ''); fx.appendChild(st)
+      st.animate([{ transform: 'scale(0) rotate(-30deg)' }, { transform: 'scale(1.15) rotate(8deg)', offset: .6 }, { transform: 'scale(1) rotate(-4deg)' }], { duration: 500, delay: 2300, easing: 'ease-out', fill: 'both' })
+    }
+    if (id === 'lap') {
+      fx.innerHTML = `<div class="trail"></div><div class="lap"><div class="s">${sticker(alt ? 'rempit' : 'gostan', '')}</div><div class="ban">${alt ? 'KEJAR WIN!' : 'DIKEJAR WIN!'}</div></div>`
+      const lap = fx.querySelector('.lap'), tr = fx.querySelector('.trail')
+      if (alt) { lap.style.flexDirection = 'row-reverse'; lap.querySelector('.ban').style.marginLeft = '0'; lap.querySelector('.ban').style.marginRight = '-6px'; lap.style.animationDirection = 'reverse'; tr.style.transformOrigin = 'left' }
+      requestAnimationFrame(() => { lap.classList.add('go'); tr.classList.add('go') })
+    }
+    if (id === 'photo') {
+      fx.innerHTML = `<div class="flash"></div><div class="polaroid"><div class="ph">${RUNNERS.map((k, i) => `<div class="s" style="animation-delay:${0.7 + i * 0.12}s">${sticker(k, '')}</div>`).join('')}</div><div class="cap2">Dikejar · Taman Tasik · 30 Oct</div></div>`
+      requestAnimationFrame(() => { fx.querySelector('.flash').classList.add('go'); fx.querySelector('.polaroid').classList.add('go') })
+    }
+  }
+  setTimeout(() => CEL.forEach((c, i) => setTimeout(() => play(c.id), i * 300)), 800)
+</script>

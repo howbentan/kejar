@@ -1,8 +1,7 @@
 # Kejar: motion design for the playtest build
 
 **Status:** Agreed with the owner in chat on 2026-10-30, using live mockups (`docs/superpowers/mockups/2026-10-30-motion/`), then checked by a reviewer (answers in §11). Not built.
-- **Playtest scope** is §4–§7.
-- §8 is mocked up but **not reviewed or in scope**.
+- **Playtest scope** is §4–§8. §8 was agreed with the owner on 2026-10-30, after the reviewer's check, so it hasn't been reviewed yet.
 
 **Builds on:**
 - `docs/superpowers/specs/2026-10-19-kejar-design.md` §5: safety.
@@ -14,13 +13,15 @@
 - `2-catch-runner.html`
 - `3-sos.html`
 - `4-lucky-dip.html`: the left phone, "Pick a card", is the chosen one.
-- `5-later-moments.html`
+- `5-later-moments.html`: **superseded** by `14-ping-feed-celebrations.html` and `15-marker-scribble.html` (§8).
 - `6-checkin.html` and `7-checkin-states.html`: the check-in moment (§7a); option B in `6-checkin.html` is the chosen one.
 - `8-power-up-slot.html`: the one power-up slot with the shared deck (§7b).
 - `9-penjara-dare-reel.html` and `10-dato-seri.html`: Penjara and Dato Seri (jail design §3a and §4a).
 - `11-rarity-tiers.html`: **superseded.** Blue and purple tiers were rejected; only its yellow legendary (option B) was kept.
 - `12-marshal-sos.html`: the marshal's side of an SOS (§6.5).
 - `13-card-art.html`: the doodle sticker art for all nine cards (power-ups design §5c).
+- `14-ping-feed-celebrations.html`: the ripple ping (§8.1), the feed (§8.2) and six celebration options. The owner chose D (scribble) mixed with E (victory lap).
+- `15-marker-scribble.html`: the marker scribble across the app (§8.5), including the chosen results celebration.
 
 ## 1. Why
 
@@ -247,16 +248,78 @@ Mockups: `6-checkin.html` (option **B, map first**, chosen) and `7-checkin-state
 
 **Colour meaning across check-ins:** lime means you're fine, dark means wait, white means a warning. There's no red, since the brand doesn't use it.
 
-## 8. Later: mocked up, not reviewed, not in the playtest build
+## 8. Later moments (agreed 2026-10-30)
 
-`5-later-moments.html` shows these. The owner hasn't reviewed them yet, and they wait until after the first playtest:
-- ~~The power-up hand~~ superseded by the one-slot screens in §7b.
-- **Ping reveal:** runners' fuzzy circles drop onto the map one by one with a lime pulse; a missed check-in lands dashed.
-- **Feed and marshal alerts** slide in at the top; an SOS alert flashes lime twice.
-- **Phase changes:**
-  - a lime wipe sweeps across for `Kejar released.`;
-  - a dark panel slides down for `Game paused`, with the frozen clock.
-- **Results:** the winner pops in, then each award slides up one after another, with its number counting up.
+Replaces the earlier unreviewed list. ~~The power-up hand~~ is superseded by the one-slot screens in §7b.
+
+### 8.1 Ping reveal: a ripple from you
+- When a ping lands, a **lime wave rolls out from the viewer's own dot** to the far edge of the map, with two fainter echoes behind it (about 1.5 s).
+- **Each runner's fuzzy circle pops in the moment the wave passes over it,** so near runners appear first. The reveal time comes from each circle's distance from the viewer, along the wave's easing.
+- A missed check-in lands as a **dashed** circle. A runner's second miss in a row (auto-jail) lands dashed, then slides off to Penjara, with `#22 MISSED 2 CHECK-INS · SENT TO PENJARA` under the map.
+- **Pak Guard:** a dashed 75 m ring around that chaser, and runners inside it land as exact dots instead of circles.
+- **If the viewer has no position** (e.g. a marshal without GPS), the wave starts from the middle of the play area.
+
+### 8.2 Feed: what happened, and what it means for you
+- **All feed lines are in plain English** (owner's decision). Power-up and role names stay as they are (Durian, Mat Rempit, Kejar, Dikejar).
+- **Each line has two parts:**
+  - what happened, in bold;
+  - a lime `→` line saying what it means **for the reader's side**. Runners and chasers see different `→` lines for the same event.
+- **Lines that need the reader to act now get a lime box,** e.g. Mat Rempit for runners, or `5 minutes left` for everyone.
+- **Power-up lines show that card's doodle sticker,** popping in; other lines show a small mono label (`PING`, `CATCH`, `FREE`, `2×`, `5:00`). Dato Seri's line has a yellow edge.
+- **SOS never appears in the feed.** It goes to marshals as a takeover (§6.5).
+- **Secrecy rules still apply** (power-ups design §8): Gostan, Ponteng and Abang Grab's card never appear; Toyol, Ah Long and Mat Rempit say "a Kejar/Dikejar", never who.
+- **Starting lines** (Claude's wording; final copy is left to the builder):
+
+  | Event | Bold line | → Dikejar | → Kejar |
+  |---|---|---|---|
+  | Ping | `Ping: 5 Dikejar seen, 1 missed check-in.` | Kejar now know roughly where you were. | Fresh circles are on your map. |
+  | Mat Rempit | `A Kejar used Mat Rempit.` | **Check in now. An extra ping lands in 30 s.** | Extra ping in 30 s. Get close to the circles. |
+  | Catch | `Ben caught #14.` | #14 is walking to Penjara. 9 Dikejar still free. | Nice. 9 Dikejar left to find. |
+  | Durian | `#07 blocked a catch with Durian.` | #07 is still free. Their Durian is used up. | That catch didn't count. #07 has no Durian now. |
+  | Toyol | `A Dikejar used Toyol.` | One Kejar just lost their power-up. | Check your slot: one of you lost a power-up. |
+  | Jailbreak | `Hafiz freed 2 Dikejar from Penjara.` | Penjara is empty again. | 2 more Dikejar are loose near Penjara. |
+  | Pak Guard | `A Kejar used Pak Guard.` | **At the next ping, anyone within 75 m of that Kejar shows exactly. Move away.** | Next ping shows Dikejar near them exactly. |
+  | Ah Long | `A Kejar used Ah Long.` | A free Dikejar just lost their power-up. Check your slot. | One Dikejar's power-up is gone. |
+  | Dato Seri found | `Dato Seri has been found.` | One of you holds the legendary: they can free themselves and a friend from Penjara. | A Dikejar can now break out of Penjara with a friend. |
+  | Auto-jail | `#22 missed 2 check-ins in a row.` | #22 went to Penjara. Check in when your phone buzzes, or you're next. | One less to find. #22 is in Penjara. |
+  | 5 minutes left | `5 minutes left.` | **Survive 5 more minutes and Dikejar win.** | **Catch every free Dikejar in 5 minutes to win.** |
+
+  Bold `→` lines are the ones in a lime box. `Dato Seri has been found` is **Claude's call**: in stash mode the hint zone disappears for everyone when it's claimed, so the feed says why. Claiming it in quest-giver mode stays secret, so that line is stash mode only.
+
+### 8.3 Phase changes
+- **`Kejar released.`:** a lime wipe sweeps across, holds and sweeps off.
+- **`Game paused`:** a dark panel slides down over the game, with the frozen clock. It slides back up on resume.
+- **New, `5 minutes left`:** a white card pops in (`5 minutes left` · `Stay hidden. Kejar are getting desperate.` for runners), and the game clock turns lime and pulses until the end. The feed also gets its `5 minutes left` line (§8.2).
+
+### 8.4 Results: victory lap, then the marker
+1. **Victory lap:** the winning side's sticker drives across the bottom of the screen dragging a lime banner: **Gostan's car reversing in** with `DIKEJAR WIN!`, or a **Mat Rempit wheelie** with `KEJAR WIN!` (about 2.6 s).
+2. **The marker scribble** (§8.5), starting as the lap passes: it circles the winner title, underlines it twice, adds two stars and draws an arrow to the top award.
+3. **The awards** count up as before. Award rows involving a power-up show its sticker.
+4. **The `How fun was it?` rating and `Report a player` card** (§6.4) comes last.
+- **Suggested extra awards** (Claude's call, for the owner to confirm): `BEST PLAY` (e.g. a Durian that saved someone) and `FOUND DATO SERI` (with how many it freed, on a yellow-edged row).
+- The other five celebration options in `14-ping-feed-celebrations.html` (sticker rain, sticker slap, doodle fireworks, team photo) were not chosen.
+
+### 8.5 The marker scribble: Kejar's hype language
+A hand-drawn lime marker that draws itself over the screen, used for hype and wayfinding. Mockup: `15-marker-scribble.html`.
+
+- **Where it appears:**
+
+  | Screen | The marker |
+  |---|---|
+  | Lobby, when sides are set | Circles `Dikejar.` / `Kejar.` (your side), underlines it, adds a star. |
+  | Hide phase | Rings the countdown, then three arrows burst outwards ("scatter"). In the last 10 seconds the ring is redrawn every second. |
+  | Check-in | When the server confirms, a big **black** tick is drawn across the lime check-in button. |
+  | Lucky dip | Circles `Got Durian!` and adds emphasis marks around the revealed card. |
+  | Caught (runner) | Underlines the chaser's name in `Ben got you.`, then draws a dashed route from your dot to a big X on Penjara. Same on-device route as §5. |
+  | Results | §8.4. |
+- **Rules** (Claude's suggestion, agreed):
+  - **Shapes only, never handwriting:** circles, underlines, arrows, stars, ticks, X's and bursts. All text stays in Geist.
+  - **Lime on black, black on lime,** one marker weight (about 3 px) everywhere, with a slight hand-drawn wobble.
+  - **Sized from the text it marks:** circles are measured from the words' box with room on every side, so no letters sit outside the loop (owner's request).
+  - **Hype and wayfinding only.** **Never on safety screens:** SOS, the marshal screens, pause, removal and reports stay clean and calm.
+  - **One scribble moment per screen,** drawn in under 2 s (each stroke about 0.4 s), then it stays still.
+  - **Reduced motion:** the marks appear already drawn.
+- **Build note** (left to the builder): draw each stroke by animating its dash offset from the path's real length. The wobble is an SVG displacement filter. In testing, applying it to an inner group hid the strokes in Chrome, while applying it to the whole overlay SVG worked.
 
 ## 9. Constraints
 

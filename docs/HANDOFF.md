@@ -99,7 +99,7 @@ Also floated: surprise missions, a bounty on the longest survivor. **Malaysian p
 
 Then playtest with friends, then a run club. Note catches per game, jailbreaks, on-time check-ins, and power-up usage.
 
-Suggested next: keep designing the remaining screens (one power-up slot, jail dare wheel and Dato Seri, card art, the later motion moments), then plan and build., then the endgame ideas above (the shrinking zone can reuse the Plan 4b play-area code); the owner hasn't chosen.
+Designed 2026-10-30 (motion design §6.5–§8.5, power-ups §5c): the marshal SOS screen, a two-person crew, card art (doodle stickers), the ripple ping, the English feed, the results victory lap and the marker scribble. Suggested next: the organiser setup and the remaining screens (the auto-jailed runner, the organiser switch), then a consolidation pass and plans, then build, then the endgame ideas above (the shrinking zone can reuse the Plan 4b play-area code); the owner hasn't chosen.
 
 ## Setting up a new machine
 1. Install Node 20+ and Git, then clone: `git clone https://github.com/howbentan/kejar.git`

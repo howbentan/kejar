@@ -171,7 +171,8 @@ Details:
 
 ## 7. Power-up wording
 
-- Each power-up's **name and its messages** are the ones in §6. Those are the only Malaysian lines this adds.
+- Each power-up's **name** is the one in §6.
+- **Updated 2026-10-30: the messages players read are in plain English** (owner's decision for the feed, motion design §8.2). The Malay message lines in §6 are kept as the original jokes and tone, but the app shows English. **Claude's call:** apply the same to personal messages (e.g. `Gostan! Your next ping shows you somewhere else.` and the chaser's Durian screen `Durian! That catch doesn't count. Hand the tag back.`), so a player never has to read Malay. The owner can keep a Malay line where it's obvious from context.
 - **Every power-up card** shows a short plain-English line under its local name saying what it does, e.g. `Blocks the next catch, up to 10 min` (**Claude's call**), so players who don't speak Malay can still play.
 - **All other wording stays as it is today,** including the feed's existing lines for pickups, pings and catches, and the existing "Kejar" (chasers) and "Dikejar" (runners) naming.
 
