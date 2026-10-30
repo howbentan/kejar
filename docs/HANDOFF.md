@@ -1,10 +1,13 @@
 # Kejar: handoff notes
 
-Start here on a new machine or in a new Claude session. Last updated 2026-10-23.
+Start here on a new machine or in a new Claude session. Last updated 2026-10-30.
+
+**Read `docs/superpowers/specs/2026-10-30-kejar-rules.md` first.** It's the single source of truth for the game (Core and Full modes, every number, which spec owns what, and what's still open). The notes below are history and status.
 
 ## What Kejar is
 A web app for organised, real-world chase games (runners vs chasers, with marshals) in parks, run as paid events in Malaysia.
-- Full design: `docs/superpowers/specs/2026-10-19-kejar-design.md`
+- Current rules: `docs/superpowers/specs/2026-10-30-kejar-rules.md`
+- Original full design: `docs/superpowers/specs/2026-10-19-kejar-design.md`
 - Roadmap: `docs/superpowers/plans/2026-10-20-kejar-roadmap.md`
 
 ## Live
@@ -66,9 +69,9 @@ A web app for organised, real-world chase games (runners vs chasers, with marsha
 
 Also floated: surprise missions, a bounty on the longest survivor. **Malaysian power-ups (designed 2026-10-28, not built).** `docs/superpowers/specs/2026-10-28-kejar-malaysian-powerups-design.md`.
 - Funny, local renames: Gostan, Durian, Ponteng, Mat Rempit, Pak Guard (now 75 m, not 150 m — see below).
-- New power-ups: Toyol and Ah Long ("take away"), and Abang Grab (claim a station remotely).
-- Malaysian slang applies to the power-ups only; all other wording stays as it is.
-- Stations stay random-on-claim.
+- New power-ups: Toyol and Ah Long ("take away"), and Abang Grab (see the top 3 cards of your deck, keep 1, sealed).
+- Local names stay; everything players read is plain English (rules doc §6).
+- Stations draw from a shared deck per side (power-ups §5b).
 
 **Jail gets a dare wheel, plus a rare runner escape power-up, Dato Seri (designed 2026-10-28, checked and ready for a plan, not built; 2026-10-30: two modes, a hidden QR stash by default or the quest-giver, in yellow as the one legendary, §4a–§4b).** Events are designed to run with **two people**: the organiser as roaming marshal plus one helper at Penjara (motion design §6.6). The marshal's SOS screen is §6.5. `docs/superpowers/specs/2026-10-28-kejar-jail-dato-seri-design.md`.
 
@@ -99,7 +102,9 @@ Also floated: surprise missions, a bounty on the longest survivor. **Malaysian p
 
 Then playtest with friends, then a run club. Note catches per game, jailbreaks, on-time check-ins, and power-up usage.
 
-Designed 2026-10-30 (motion design §6.5–§8.5, power-ups §5c): the marshal SOS screen, a two-person crew, card art (doodle stickers), the ripple ping, the English feed, the results victory lap and the marker scribble. Suggested next: the organiser setup and the remaining screens (the auto-jailed runner, the organiser switch), then a consolidation pass and plans, then build, then the endgame ideas above (the shrinking zone can reuse the Plan 4b play-area code); the owner hasn't chosen.
+**Consolidated 2026-10-30:** one rules doc with a **Game mode switch, Core or Full** (rules doc). Core is the chase, check-ins, Penjara and four power-ups (Durian, Ponteng, Mat Rempit, Pak Guard). Full adds the rest and Dato Seri.
+
+Designed 2026-10-30 (motion design §6.5–§8.5, power-ups §5c): the marshal SOS screen, a two-person crew, card art (doodle stickers), the ripple ping, the English feed, the results victory lap and the marker scribble. Suggested next: the organiser setup (with the mode switch and event-day checklist), the chase-screen audit, the per-mode how-to-play card and the auto-jailed runner (rules doc §10), then plans and build (rules doc §12), then the endgame ideas above (the shrinking zone can reuse the Plan 4b play-area code); the owner hasn't chosen.
 
 ## Setting up a new machine
 1. Install Node 20+ and Git, then clone: `git clone https://github.com/howbentan/kejar.git`

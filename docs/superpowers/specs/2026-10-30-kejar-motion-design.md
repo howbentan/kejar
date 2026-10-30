@@ -1,5 +1,7 @@
 # Kejar: motion design for the playtest build
 
+> **Current rules:** `docs/superpowers/specs/2026-10-30-kejar-rules.md` is the single source of truth for the game as a whole (Core and Full modes, 2026-10-30). Where this doc disagrees with it, the rules doc wins; its §9 lists what changed.
+
 **Status:** Agreed with the owner in chat on 2026-10-30, using live mockups (`docs/superpowers/mockups/2026-10-30-motion/`), then checked by a reviewer (answers in §11). Not built.
 - **Playtest scope** is §4–§8. §8 was agreed with the owner on 2026-10-30, after the reviewer's check, so it hasn't been reviewed yet.
 

@@ -1,5 +1,7 @@
 # Kejar: design
 
+> **Current rules:** `docs/superpowers/specs/2026-10-30-kejar-rules.md` is the single source of truth for the game as a whole (Core and Full modes, 2026-10-30). Where this doc disagrees with it, the rules doc wins; its §9 lists what changed.
+
 *Real-life chase, refereed by your phone.*
 Date: 2026-10-19 · Status: draft for approval
 

@@ -1,5 +1,7 @@
 # Kejar Plan 4a: organiser accounts, invites, and marshal pre-assignment
 
+> **Current rules:** `docs/superpowers/specs/2026-10-30-kejar-rules.md` is the single source of truth for the game as a whole (Core and Full modes, 2026-10-30). Where this doc disagrees with it, the rules doc wins; its §9 lists what changed.
+
 **Status:** Design approved by the owner (2026-10-26). Ready for an implementation plan.
 **Part of:** Plan 4 (Arena setup), split into two sequential pieces. This spec is piece 1 only. Piece 2 — OpenStreetMap park import, boundary/no-go/walk-only zone editing, station and jail placement — is a separate future spec that depends on this one (arenas need an organisation to belong to, which this piece creates).
 **Related:** `docs/superpowers/specs/2026-10-19-kejar-design.md` (base design), `docs/superpowers/plans/2026-10-20-kejar-roadmap.md`, `docs/HANDOFF.md`

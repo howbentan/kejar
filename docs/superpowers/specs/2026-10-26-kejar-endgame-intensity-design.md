@@ -1,5 +1,7 @@
 # Kejar: endgame intensity — brainstorm notes
 
+> **Current rules:** `docs/superpowers/specs/2026-10-30-kejar-rules.md` is the single source of truth for the game as a whole (Core and Full modes, 2026-10-30). Where this doc disagrees with it, the rules doc wins; its §9 lists what changed.
+
 **Status:** Draft — brainstorming in progress, nothing here is approved or scoped to build yet.
 **Started:** 2026-10-26
 **Related:** `docs/superpowers/specs/2026-10-19-kejar-design.md` (base design), `docs/HANDOFF.md` (open discussion that kicked this off)

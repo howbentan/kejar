@@ -1,5 +1,7 @@
 # Kejar Plan 4b: real park outlines and a saved arena library
 
+> **Current rules:** `docs/superpowers/specs/2026-10-30-kejar-rules.md` is the single source of truth for the game as a whole (Core and Full modes, 2026-10-30). Where this doc disagrees with it, the rules doc wins; its §9 lists what changed.
+
 **Status:** Draft for the owner's review (2026-10-27).
 **Part of:** Plan 4 (arena setup), piece 2. Piece 1, Plan 4a, is already built: organiser accounts, invites and marshal links (`2026-10-26-kejar-plan4a-organiser-accounts-design.md`).
 **Related:**

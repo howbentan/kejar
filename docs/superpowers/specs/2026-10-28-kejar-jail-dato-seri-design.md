@@ -1,5 +1,7 @@
 # Kejar: jail gets a dare wheel and Dato Seri
 
+> **Current rules:** `docs/superpowers/specs/2026-10-30-kejar-rules.md` is the single source of truth for the game as a whole (Core and Full modes, 2026-10-30). Where this doc disagrees with it, the rules doc wins; its §9 lists what changed.
+
 **Status:** Design agreed with the owner in chat on 2026-10-28, revised substantially across two builder-check rounds, then revised again after the owner deliberately reversed the "no marshal judgement" direction for Dato Seri specifically, then re-checked against that latest version in a third builder-check round (resolved in §7). Not built. Two conflicts with a sibling spec are deliberate, not oversights (see §9). Ready for `writing-plans`. **Updated 2026-10-30:** Dato Seri now has two modes, a hidden QR stash (the default) and the quest-giver (§4b), plus its yellow legendary look (§4a).
 **Builds on:**
 - `docs/superpowers/specs/2026-10-19-kejar-design.md` §4.7 (jail and jailbreak) and §4.8 (power-ups): the rules this extends.

@@ -1,5 +1,7 @@
 # Kejar: a legendary power-up for chasers (name TBD)
 
+> **Current rules:** `docs/superpowers/specs/2026-10-30-kejar-rules.md` is the single source of truth for the game as a whole (Core and Full modes, 2026-10-30). Where this doc disagrees with it, the rules doc wins; its §9 lists what changed.
+
 **Status:** Brainstorm in progress, **not finished and not approved**. The character (§3) is deliberately on hold pending the owner's own real-world cultural sanity check. This file exists so the brainstorm can continue from another device — it is notes, not a finished design doc, and nothing here should be built yet.
 **Builds on:**
 - `docs/superpowers/specs/2026-10-28-kejar-malaysian-powerups-design.md`: Pak Guard's reveal radius (already shipped at 75 m, was 150 m) was dropped specifically to keep it clearly weaker than this power-up.
@@ -12,7 +14,7 @@ Dato Seri gives runners a rare, ceremony-gated escape. The owner wants a chaser-
 ## 2. Decided so far
 
 - **Side:** chaser.
-- **Rarity and hand cost, matching Dato Seri (owner's decision, 2026-10-30):** exactly one exists per game, and claiming it fills all 3 hand slots at once, same as Dato Seri.
+- **Rarity and hand cost, matching Dato Seri (owner's decision, 2026-10-30):** exactly one exists per game, and claiming it **takes the one power-up slot** (updated 2026-10-30 for one slot; this said "fills all 3 hand slots"). **Full mode only** (rules doc §3). **Staffing must now fit the crew of two** (rules doc §5), so the staffed ritual below needs rethinking: probably a hidden stash like Dato Seri's, with the ritual as an optional volunteer mode (open, rules doc §11). Original note.
 - **Location: stationary and hidden,** not wandering like Dato Seri's quest-giver — a deliberate mechanical difference between the two legendaries.
 - **Discovery: hybrid.** The app gives a broad fuzzy hint (reusing Dato Seri's hint tech) to narrow the search area; the actual spot is physically/atmospherically decorated for the payoff once found, rather than a full physical clue trail or a pure app-only reveal.
 - **Grant: staffed, human-verified, same ceremony family as Dato Seri.** A person in character performs a ritual (a coconut-smashing ritual, if the character ends up being Bomoh) for the chaser who finds them, then grants the power-up in person — not an app-decided grant.

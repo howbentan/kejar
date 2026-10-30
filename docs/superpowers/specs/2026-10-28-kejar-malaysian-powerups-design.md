@@ -1,5 +1,7 @@
 # Kejar: Malaysian power-ups
 
+> **Current rules:** `docs/superpowers/specs/2026-10-30-kejar-rules.md` is the single source of truth for the game as a whole (Core and Full modes, 2026-10-30). Where this doc disagrees with it, the rules doc wins; its §9 lists what changed.
+
 **Status:** Design agreed with the owner in chat on 2026-10-28, checked by a reviewer, and narrowed to power-ups only the same day; open questions in §9. Not built yet.
 **Builds on:**
 - `2026-10-19-kejar-design.md` §4.8 and §4.8.1: the power-up station rules this keeps.

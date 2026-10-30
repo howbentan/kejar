@@ -1,5 +1,7 @@
 # Kejar: on-time check-ins, auto-jail, seeing the chasers, and Penjara
 
+> **Current rules:** `docs/superpowers/specs/2026-10-30-kejar-rules.md` is the single source of truth for the game as a whole (Core and Full modes, 2026-10-30). Where this doc disagrees with it, the rules doc wins; its §9 lists what changed.
+
 **Status:** Agreed with the owner in chat, 2026-10-28 to 2026-10-30, and checked by a reviewer (build order and results resolved in §8a). Revised the same day: a tight check-in window (§4.2), and the chaser view merged into the check-in behind an organiser switch (§5). Not built. **Build this before the Malaysian power-ups and jail dare-wheel specs** (§8a).
 **Builds on:**
 - `docs/superpowers/specs/2026-10-19-kejar-design.md` §4.5 (pings and check-ins) and §4.7 (jail and jailbreak).
