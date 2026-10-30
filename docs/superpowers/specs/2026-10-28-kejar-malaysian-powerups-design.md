@@ -39,6 +39,7 @@ The tone is **funny, not scary** (owner's decision).
   - each player claims each station once;
   - at most 3 unused power-ups in hand;
   - jailed runners and marshals can't claim.
+  - **Exception, owner's decision 2026-10-28:** Pak Guard's reveal radius drops from Focus's original 150 m to 75 m, to keep it clearly weaker than the chaser legendary power-up being designed alongside it (Bomoh/Pontianak, not yet finalised — see `docs/superpowers/specs/2026-10-28-kejar-jail-dato-seri-design.md` and ongoing chat). Since Pak Guard is just Focus renamed, this changes `FOCUS_M` in `app/shared/views.ts` immediately, ahead of the rename itself shipping.
 - **Making stealing feel unfair.** A steal that finds nothing to take must not use up the stealer's power-up.
 - **Power-ups that need a referee (owner's decision).** Every power-up's effect must be decided entirely by the app: no honour rules, no waiting periods players must count for themselves, no marshal judgement. Disputes in a physical chase get heated, and marshals should watch for safety, not settle arguments.
   - This is why Durian loses Shield's old "10 s head start". That replaces the base spec's §4.8 table row and §4.8.1 Shield rule. In the code, the chaser's `shielded` message in `ChaserChase.tsx` (and its test) changes accordingly.
@@ -64,7 +65,7 @@ The tone is **funny, not scary** (owner's decision).
 | **Durian** | Shield | runner | Blocks the next catch; lasts up to 10 min. The catch simply doesn't count: the chaser hands the tag back and play carries on at once. **No 10 s head start** (owner's decision, see §4). | The chaser's catch screen says `Bau durian! Tak boleh dekat. Pulangkan tag.` The feed says `#07 kena durian!` |
 | **Ponteng** | Cloak | runner | You're left off the next ping, and it looks like you never checked in. | Kept secret. The user sees `Ponteng ping!` |
 | **Mat Rempit** | Flare | chaser | Every free runner gets "check in now"; an extra ping comes 30 s later. The regular schedule doesn't move. | The feed says `VROOOM! Mat Rempit buat round. Ping dalam 30 s!` |
-| **Pak Guard** | Focus | chaser | At the next ping, runners within 150 m of you show exactly instead of fuzzy. | The feed says `Pak Guard tengah check CCTV…` |
+| **Pak Guard** | Focus | chaser | At the next ping, runners within 75 m of you show exactly instead of fuzzy. | The feed says `Pak Guard tengah check CCTV…` |
 
 ### 6.2 New: Toyol (runner) and Ah Long (chaser), the "take away" pair
 

@@ -55,6 +55,7 @@ A web app for organised, real-world chase games (runners vs chasers, with marsha
 - Runners keep phones pocketed and check in at pings; chasers and marshals keep the page open.
 - **Kejar stays a web app** (owner's decision, 2026-10-24). No native app, no Capacitor wrapper, no Bluetooth catching: Bluetooth distance is unreliable, it goes through walls, and iOS restricts it.
 - MapLibre **v5** (v6's separate worker broke production builds).
+- **Focus/Pak Guard's reveal radius is 75 m, not 150 m** (owner's decision, 2026-10-28), to keep it clearly weaker than the chaser legendary power-up being designed alongside it. `FOCUS_M` in `app/shared/views.ts` already reflects this.
 
 ## Open discussion (undecided)
 **Endgame intensity.** Proposed, not yet approved:

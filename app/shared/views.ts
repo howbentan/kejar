@@ -9,7 +9,7 @@ export const FUZZ_RADIUS_M = 15
 export const NEARBY_M = 100
 export const FRESH_MS = 60_000
 /** Focus shows runners this close to the chaser exactly. */
-export const FOCUS_M = 150
+export const FOCUS_M = 75
 const FEED_MAX = 20
 
 export interface MapDot {
