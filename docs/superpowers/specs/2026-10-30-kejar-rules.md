@@ -79,6 +79,7 @@ Rules:
 | Penjara rescue | scan the Penjara QR, then stay within 30 m for 10 s; frees everyone inside | this doc §9a |
 | Freed | once per runner per game, by any route | base §4.7 |
 | Dato Seri hint | fuzzy zone 100–200 m | jail design §4 |
+| Dato Seri Settle | frees the holder plus up to 2 jailed Dikejar (freed-once rule applies) | this doc §9c |
 | Spectator delay in Penjara | 2 min | base §4.3 |
 | SOS | hold 1 s; details card closes after 20 s | motion design §6 |
 
@@ -184,6 +185,7 @@ Prices are from MR.DIY's online listings on 2026-10-30 and may change. Velcro st
 | Base §4.7: one scan at Penjara frees everyone at once | A **10-second hold** after the scan (§9a) |
 | Jail §4b and motion §8.2: everyone sees a yellow Dato Seri zone; the feed says `Dato Seri has been found` | **Dato Seri is a secret** (§9b): an unlabelled `?` zone, and the feed says `Something legendary was found.` |
 | Check-ins design §4.5: auto-jail is final like a catch | A marshal can **undo** an auto-jail for a phone fault, without using the runner's one escape (motion §5b) |
+| Jail design §4: Settle frees the holder plus one other | **Plus up to 2 others**, the holder's choice (§9c) |
 | Base §3: marshals in black or white vests | **Orange vests** plus a MARSHAL lanyard card (§5a) |
 | Dato Seri stash: what if the finder's slot is full? | **Not said before. Claude's call:** the scan is refused with `Use or lose your power-up first`, and the stash stays claimable |
 
@@ -211,6 +213,14 @@ Freeing everyone with one quick scan was judged too swingy: one runner could und
 - **When it's claimed,** the zone disappears and the feed says `Something legendary was found.` (it never names the card).
 - **Settle is still visible** when it happens at Penjara. That's the moment everyone learns about it, which is part of the fun.
 - **Organisers do see it,** in the mode step, settings and kit list (organiser setup design).
+
+## 9c. Settle frees you plus 2 (owner's decision, 2026-10-30)
+
+Dato Seri is the one legendary, so its Settle is now bigger: it frees **the holder and up to 2 other jailed Dikejar of the holder's choice** (was 1).
+- **The "freed once" rule still applies** to everyone it frees. Runners already freed once can't be picked, so it often frees fewer than 3.
+- **Why it's not too strong:** the holder must be caught first, there's one per game, it's secret, and it's found by luck. A 10-second rescue can still free more, but with risk; Settle is smaller and certain.
+- **Counterplay for chasers:** the feed tells everyone at once, `Something legendary freed 3 Dikejar!` (with the real number), as a lime-box line for Kejar. Freed runners walk out of Penjara as usual and can be caught again (for good, since their escape is used).
+- **Where it lives:** jail design §4, both Dato Seri modes.
 
 ## 10. Still to design before building
 

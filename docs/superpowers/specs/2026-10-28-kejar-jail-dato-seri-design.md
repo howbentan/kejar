@@ -16,7 +16,7 @@ Being jailed today is dead time: a caught runner just watches a spectator map de
 
 1. Give every jailed player something fun to do in person while they wait, regardless of power-ups.
 2. Give every jailed player a small, genuine flicker of hope of walking free on pure luck, without that hope ever being reliable enough to lean on.
-3. Add a rare, powerful power-up — **Dato Seri** — that lets its holder guarantee their own release, plus one other jailed runner, instead of only waiting on a teammate. Themed as "making a call" the way a Dato Seri would in real life: not a gamble, just effort and connections.
+3. Add a rare, powerful power-up — **Dato Seri** — that lets its holder guarantee their own release, plus **up to two** other jailed runners (updated 2026-10-30, rules doc §9c; was one), instead of only waiting on a teammate. Themed as "making a call" the way a Dato Seri would in real life: not a gamble, just effort and connections.
 4. Keep catches meaningful throughout: every way out of jail should be either risky for someone else (teammate rescue), low-odds (the wheel), or gated behind a genuinely scarce resource (Dato Seri) — never free, guaranteed, and available to everyone at once.
 
 ## 3. The dare wheel (every jailed player, every jail stay)
@@ -93,7 +93,7 @@ Dato Seri is the one **legendary** card (power-ups design §5c), so its moments 
 - **The legendary card**, in the slot:
   - a yellow gradient face (`#FFF27A` → `#FFD60A` → `#F5B800`) with dark text and a thin inner border;
   - a `★ LEGENDARY · ONE PER GAME` eyebrow, the name and the effect line;
-  - a light sweep across it every few seconds and a slow yellow glow pulse.
+  - a light sweep across it every few seconds and a slow yellow glow pulse. **Updated 2026-10-30:** the light sweep is replaced by an **iridescent foil** layer that follows the phone's tilt (motion design §8.9), and claiming it gets the **yellow marker** (motion §7).
 - **Granting (quest-giver's phone):**
   - The phrase is shown in yellow, visible only to them. They pick the player from a list; players whose slot is full are greyed out with the reason (e.g. `holding Durian`).
   - `Grant Dato Seri` is a yellow button. On tap, the card lands in the player's slot with a pop and spin, and a sparkle burst plays on both phones, along with a long buzz pattern on the player's phone.
@@ -127,6 +127,10 @@ The organiser picks a **Dato Seri mode** when creating the game. Both end in the
   - If nobody finds it, it simply goes unclaimed.
   - The organiser can move the stash before the game starts.
 - **The mockup in §4a shows quest-giver mode.** In stash mode the map phone is the same, and the grant moment is the normal scan reveal with the legendary card.
+
+## 4d. Settle frees up to 2 others (owner's decision, 2026-10-30)
+
+Everything in §4 that says Settle frees the holder "plus one" other runner now means **plus up to two**, chosen by the holder from the eligible list. The freed-once rule and the "refuse if nobody can be freed" rule are unchanged. In quest-giver mode Pak Pulis picks up to two names on the holder's say-so; in stash mode the holder picks them on their own phone. The feed line is `Something legendary freed 3 Dikejar!` with the real count (rules doc §9c). The mockup `10-dato-seri.html` still shows "Free one more".
 
 ## 4c. Kept secret (owner's decision, 2026-10-30)
 

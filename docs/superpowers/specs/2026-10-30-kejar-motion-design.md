@@ -28,6 +28,8 @@
 - `17-chase-screen.html`: the chase screen before and after (§8.6).
 - `18-how-to-play.html`: the briefing story per side and mode, with the doodle style (§8.8).
 - `19-auto-jailed.html`: the auto-jailed runner, "out for good", and the marshal undo (§5a–§5b).
+- `20-kitchen-fits.html`: role scramble, lobby and share tickets, Dato Seri foil, hold to confirm, and the loader (§8.9).
+- `21-station-claim.html`: the polished station claim, Dato Seri's yellow marker, and refusals (§7).
 
 ## 1. Why
 
@@ -200,6 +202,10 @@ The goal is the smallest safe crew: **two people**.
 ## 7. The lucky dip: claiming a power-up
 
 When a station claim (or Abang Grab) succeeds:
+0. **Scan and claim** (polished 2026-10-30, mockup `21-station-claim.html`):
+   - the camera view shows a **lime viewfinder** with a sweeping scan line and `Point at the station card`;
+   - on a good scan, a lime **`CLAIMED · Station 3 ✓`** stamp slams in at a slight angle, with a short buzz;
+   - the top corner shows the side's deck count, ticking down: `DECK · 8 LEFT` → `7 LEFT`.
 1. **Five face-down cards fan out across the middle of the screen,** side by side in a gentle arc. Each card is about 96×150 px; they're spread evenly, not bunched at the top (owner's request).
    - **Card back:** the same for every card, ornate like a tarot card but built only from the brand:
      - black, with a lime outer border and a thinner inner border;
@@ -210,11 +216,27 @@ When a station claim (or Abang Grab) succeeds:
 3. **The player taps any card.** If they don't tap in time, a **lime spotlight sweeps** across the cards, slows down, and picks one.
 4. **The chosen card rises to the centre** (about 1.6× its size) and **flips**. The others drift down and fade away.
 5. **`Got Durian!`** (the power-up's name) appears above.
+6. **The marker** (§8.5, polished 2026-10-30): it circles `Got Durian!` and adds a star, draws **emphasis marks** on both sides of the card, then draws **an arrow down to the slot**.
+7. **Into the slot:** the card shrinks and flies into the dock's slot, which pulses lime and reads `Durian · TAP TO USE`.
+
+**Flick to pick** (2026-10-30, inspired by a playing-card fan): the player can **flick a card upwards** as well as tap it. Both pick the same way.
+
+**Dato Seri gets the yellow marker** (owner's decision, 2026-10-30). Scanning the hidden stash skips the five-card fan, since there's only one card:
+- the yellow `?` zone collapses into the spot, and the foil Dato Seri card (§8.9) bursts in with a long buzz;
+- `Dato Seri.` with a yellow full stop, and `Legendary. In Penjara, free yourself and up to two friends. Only one exists.`;
+- **the marker draws in yellow:** a double loop around the card, three stars, burst lines and a **crown over the name**. **This is the only time the marker is ever yellow** (an exception to §8.5's "lime on black");
+- the slot then shows Dato Seri with a yellow edge and `★ LEGENDARY`.
+
+**When a claim is refused:** a calm card, **no marker** (it's for hype, not for "no"). Each one says why and what to do next:
+- **Slot full:** `Your slot is full. Use your Durian first, then come back.`, with `Use Durian now` / `Keep it`.
+- **Cooling down:** `Station 3 is cooling down.`, with a live `READY IN 0:42`.
+- **Too far:** `Get closer. You need to be within 30 m of Station 3.`, with a live `YOU'RE 48 M AWAY`.
+- **Already claimed:** `You've used Station 3 this game. Try another one.`, with `4 STATIONS LEFT FOR YOU`.
 
 Rules:
 - **The server decides the power-up when the station is scanned:** it's the top card of the player's side's shared deck (power-ups design §5b). The tapped card only reveals it; the player's choice never changes what they get.
 - **Never flip the other cards** to show "what you could have got". They aren't real alternatives, so that would be showing false information.
-- **Tapping during the sweep** skips straight to the reveal.
+- **Tapping (or flicking) during the sweep** skips straight to the reveal.
 - **Card front:** the same layout for every power-up:
   - a `POWER-UP` eyebrow;
   - a **round art spot** for the character's illustration;
@@ -312,6 +334,7 @@ Replaces the earlier unreviewed list. ~~The power-up hand~~ is superseded by the
   | Pak Guard | `A Kejar used Pak Guard.` | **At the next ping, anyone within 75 m of that Kejar shows exactly. Move away.** | Next ping shows Dikejar near them exactly. |
   | Ah Long | `A Kejar used Ah Long.` | A free Dikejar just lost their power-up. Check your slot. | One Dikejar's power-up is gone. |
   | Legendary found (Full, stash) | `Something legendary was found.` | The yellow ? zone is gone. | The yellow ? zone is gone. |
+  | Settle used | `Something legendary freed 3 Dikejar!` | 3 of you are back in the game. | **3 Dikejar are walking out of Penjara. Catch them.** |
   | Rescue starting | `Rescue starting at Penjara!` | **Hafiz is breaking them out. 10 s.** | **Catch them in 10 s and nobody gets out.** |
   | Auto-jail | `#22 missed 2 check-ins in a row.` | #22 went to Penjara. Check in when your phone buzzes, or you're next. | One less to find. #22 is in Penjara. |
   | 5 minutes left | `5 minutes left.` | **Survive 5 more minutes and Dikejar win.** | **Catch every free Dikejar in 5 minutes to win.** |
@@ -347,7 +370,7 @@ A hand-drawn lime marker that draws itself over the screen, used for hype and wa
 - **Rules** (Claude's suggestion, agreed):
   - **Shapes only, never handwriting:** circles, underlines, arrows, stars, ticks, X's and bursts. All text stays in Geist.
   - **Drawn in the §8.8 doodle style:** a sketchy double line and line boil.
-  - **Lime on black, black on lime,** one marker weight (about 3 px) everywhere, with a slight hand-drawn wobble.
+  - **Lime on black, black on lime,** one marker weight (about 3 px) everywhere, with a slight hand-drawn wobble. **The one exception:** claiming Dato Seri draws the marker in **yellow** (§7).
   - **Sized from the text it marks:** circles are measured from the words' box with room on every side, so no letters sit outside the loop (owner's request).
   - **Hype and wayfinding only.** **Never on safety screens:** SOS, the marshal screens, pause, removal and reports stay clean and calm.
   - **One scribble moment per screen,** drawn in under 2 s (each stroke about 0.4 s), then it stays still.
@@ -429,6 +452,25 @@ Mockup: `18-how-to-play.html`. When the organiser taps **Brief the players** in 
 - **Line boil:** the wobble filter's seed changes about 7 times a second, so lines shimmer like hand-drawn animation. It's off with reduced motion.
 - **Each scene draws itself in about 1.5 s,** then stays still.
 - **Build note:** in testing, applying the wobble filter to the whole SVG worked, while applying it to an inner group hid the strokes in Chrome.
+
+### 8.9 Five pieces inspired by dqnamo's "Kitchen" (agreed 2026-10-30)
+
+Mockup: `20-kitchen-fits.html`. Inspired by experiments at `https://www.dqnamo.com/kitchen`. **No licence is stated there, so no code is copied.** Each piece is rebuilt in Kejar's own CSS and Motion.
+
+1. **Role reveal scramble** (lobby, when sides are set): `You're` then the role scrambles through random letters in Geist Mono lime and settles on **`Dikejar.`** / **`Kejar.`** (about 1 s). It runs before the lobby marker (§8.5).
+2. **Your game ticket** (lobby): a ticket drops in under the role.
+   - Volt lime paper for Dikejar, white for Kejar, with cut corners, side notches and a dashed perforation.
+   - **Body:** `kejar.`, the game code, the role in big type, the park, date and time, mode and length.
+   - **Stub:** `YOUR TAG #07` (or `YOUR VEST K2`) and a QR.
+   - It tilts slightly with the phone, using device orientation, with a soft glare. There's no tilt with reduced motion.
+3. **The share ticket** (results): the same ticket stamped with the player's result: `Survived 38:12` (counting up), the winning side, rescues, and on the stub their best award (`LONGEST SURVIVOR · 1st of 14`).
+   - **`Save image`** renders it as a picture for Instagram stories or WhatsApp, and **`Share`** uses the phone's share sheet.
+   - **The stub's QR links to the organiser's next event,** which is free marketing for run-club events. This is the "shareable result card" from base design §4.9.
+4. **Foil on Dato Seri only:** an iridescent foil layer (colour-dodge gradient plus fine diagonal lines) over the yellow card, moving with the phone's tilt. It replaces the light sweep. **Deck cards never get foil.**
+5. **Hold to confirm for marshal actions:** **Remove player**, **End game early** and **`Phone problem: undo`** (§5b) use a white bar that fills while held (1.5 s) instead of an "Are you sure?" popup. Letting go early rolls it back. After it's done, `<name> was removed · Undo` shows for 5 s with a draining line. It's white, so it never looks like SOS (lime).
+6. **Loading:** the marker traces the outline of `kejar` (with line boil), the letters fill white, then the lime full stop pops in. It loops gently if loading takes longer, and replaces the spinner on first open and when joining a game.
+
+Not used: receipt printer (maybe later for paid events), cassette player, magnetic drop zone, model selector, animated signature (the marker already does this), tactile button and scroll fade list (small details for the builder).
 
 ## 9. Constraints
 

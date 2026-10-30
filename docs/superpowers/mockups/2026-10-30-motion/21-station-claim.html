@@ -1,0 +1,367 @@
+<h2>Claiming a power-up, polished, with the marker</h2>
+<p class="subtitle">Left: the full station flow. Scan, then "Station 3", then five cards fan out. Flick one up (or tap it) within 3 s, it flips, and the marker hypes it before it flies into your slot. Middle: finding Dato Seri, with the same marker in yellow. Right: when a claim is refused. Press Play under each phone.</p>
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  .kj-phone { width: 260px; height: 540px; border-radius: 28px; background: #0A0A0B; border: 2px solid #2a2a2a; position: relative; overflow: hidden;
+    color: #F5F5F3; font-family: 'Geist', system-ui, sans-serif; margin: 0 auto; flex: none; user-select: none; }
+  .card-image { flex-direction: column !important; align-items: center; }
+  .eb { font: 500 9px 'Geist Mono', monospace; letter-spacing: .2em; color: rgba(245,245,243,.55); }
+  .btns { display: flex; gap: 6px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
+  .btns button { background: transparent; color: #F5F5F3; border: 1px solid #444; border-radius: 999px; padding: 6px 12px; font: 600 12px 'Geist', sans-serif; cursor: pointer; }
+  .stage { position: absolute; inset: 0; }
+  .top { position: absolute; left: 14px; right: 14px; top: 14px; display: flex; justify-content: space-between; z-index: 4; }
+  .deck { font: 500 9px 'Geist Mono', monospace; letter-spacing: .14em; color: #C6FF3D; }
+  /* scan */
+  .cam { position: absolute; inset: 0; background: radial-gradient(circle at 50% 45%, #2a2f2a, #0d0f0d 70%); display: grid; place-items: center; transition: opacity .3s; }
+  .vf { width: 150px; height: 150px; position: relative; }
+  .vf i { position: absolute; width: 26px; height: 26px; border: 3px solid #C6FF3D; }
+  .vf i:nth-child(1) { left: 0; top: 0; border-right: 0; border-bottom: 0; } .vf i:nth-child(2) { right: 0; top: 0; border-left: 0; border-bottom: 0; }
+  .vf i:nth-child(3) { left: 0; bottom: 0; border-right: 0; border-top: 0; } .vf i:nth-child(4) { right: 0; bottom: 0; border-left: 0; border-top: 0; }
+  .vf .qr { position: absolute; inset: 30px; background: #F5F5F3; padding: 8px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; box-sizing: border-box; }
+  .vf .qr b { background: #0A0A0B; } .vf .qr b.o { background: transparent; }
+  .vf .line { position: absolute; left: 6px; right: 6px; height: 2px; background: #C6FF3D; box-shadow: 0 0 10px #C6FF3D; animation: sweep 1.2s ease-in-out infinite; }
+  @keyframes sweep { 0%, 100% { top: 10% } 50% { top: 88% } }
+  .camtxt { position: absolute; bottom: 70px; left: 0; right: 0; text-align: center; font-size: 12px; opacity: .75; }
+  .stamp { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%) scale(0); background: #C6FF3D; color: #0A0A0B; border-radius: 14px; padding: 10px 16px; text-align: center; z-index: 6; opacity: 0; }
+  .stamp b { display: block; font-size: 26px; font-weight: 800; letter-spacing: -0.05em; }
+  .stamp small { font: 500 9px 'Geist Mono', monospace; letter-spacing: .14em; }
+  .stamp.go { animation: st 1s cubic-bezier(.2,1.6,.4,1) forwards; }
+  @keyframes st { 0% { transform: translate(-50%, -50%) scale(2.2) rotate(-8deg); opacity: 0 } 25% { transform: translate(-50%, -50%) scale(1) rotate(-4deg); opacity: 1 } 80% { opacity: 1 } 100% { opacity: 0; transform: translate(-50%, -50%) scale(.9) rotate(-4deg) } }
+  /* cards */
+  .prompt { position: absolute; left: 0; right: 0; top: 70px; text-align: center; font-size: 22px; font-weight: 800; letter-spacing: -0.05em; opacity: 0; transition: opacity .3s; }
+  .tbar { position: absolute; left: 40px; right: 40px; top: 104px; height: 4px; border-radius: 2px; background: #222; overflow: hidden; opacity: 0; }
+  .tbar b { display: block; height: 100%; background: #C6FF3D; transform-origin: left; }
+  .cd { position: absolute; width: 84px; height: 130px; left: 50%; top: 260px; margin: -65px 0 0 -42px; perspective: 600px; transition: transform .55s cubic-bezier(.2,1.3,.4,1), opacity .4s, left .5s, top .5s; cursor: pointer; touch-action: none; }
+  .cd .in { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform .6s cubic-bezier(.3,1.3,.5,1); }
+  .cd.flip .in { transform: rotateY(180deg); }
+  .cd .f { position: absolute; inset: 0; border-radius: 9px; backface-visibility: hidden; box-sizing: border-box; }
+  .cd .back { background: #0A0A0B; border: 2px solid #C6FF3D; display: grid; place-items: center; }
+  .cd .back::before { content: ''; position: absolute; inset: 5px; border: 1px solid rgba(198,255,61,.5); border-radius: 6px; background: repeating-linear-gradient(45deg, rgba(198,255,61,.08) 0 2px, transparent 2px 9px); }
+  .cd .back b { position: relative; font-weight: 800; font-size: 12px; letter-spacing: -0.05em; width: 38px; height: 38px; border-radius: 50%; border: 1.5px solid #C6FF3D; display: grid; place-items: center; background: #0A0A0B; }
+  .cd .back b span { color: #C6FF3D; }
+  .cd .front { transform: rotateY(180deg); background: #141614; border: 2px solid #C6FF3D; display: flex; flex-direction: column; align-items: center; padding: 6px 4px; }
+  .cd .front .e { font: 500 5.5px 'Geist Mono', monospace; letter-spacing: .14em; color: #C6FF3D; }
+  .cd .front svg { width: 64px; height: 64px; }
+  .cd .front b { font-weight: 800; letter-spacing: -0.04em; font-size: 12px; margin-top: auto; }
+  .cd .front small { font-size: 6.5px; opacity: .78; text-align: center; line-height: 1.2; }
+  .cd.lit .back { box-shadow: 0 0 0 3px #C6FF3D, 0 0 18px rgba(198,255,61,.6); }
+  .got { position: absolute; left: 0; right: 0; top: 66px; text-align: center; opacity: 0; transition: opacity .3s; }
+  .got h4 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.055em; display: inline-block; }
+  .got h4 span { color: #C6FF3D; }
+  .got p { margin: 4px 0 0; font-size: 12px; opacity: .75; }
+  /* dock */
+  .dock { position: absolute; left: 10px; right: 10px; bottom: 12px; height: 56px; display: flex; gap: 8px; z-index: 3; }
+  .slot { flex: 1; border: 1.5px dashed #444; border-radius: 14px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 4px; font-size: 11px; opacity: .8; transition: border-color .3s, background .3s; }
+  .slot.full { border-style: solid; border-color: #C6FF3D; opacity: 1; }
+  .slot.full.pulse { animation: sp .6s ease-out; } @keyframes sp { 50% { background: rgba(198,255,61,.25) } }
+  .slot .s { width: 40px; height: 40px; flex: none; }
+  .slot b { font-size: 13px; display: block; } .slot small { font: 500 8px 'Geist Mono', monospace; letter-spacing: .1em; color: #C6FF3D; }
+  .scanb { width: 74px; border-radius: 14px; background: #F5F5F3; color: #0A0A0B; display: grid; place-items: center; font-weight: 800; font-size: 13px; }
+  .scr { position: absolute; inset: 0; width: 260px; height: 540px; pointer-events: none; z-index: 5; overflow: visible; }
+  .scr path { fill: none; stroke: #C6FF3D; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+  .scr path.ghost { opacity: .3; stroke-width: 1.6; }
+  .scr.yel path { stroke: #FFD60A; }
+  /* dato */
+  .zone { position: absolute; left: 50%; top: 210px; width: 200px; height: 200px; margin: -100px; border-radius: 50%; border: 1.5px dashed #FFD60A; background: radial-gradient(circle, rgba(255,214,10,.2), transparent 70%); display: grid; place-items: center; font-weight: 800; font-size: 22px; color: #FFD60A; transition: opacity .4s; }
+  .leg { position: absolute; left: 50%; top: 270px; width: 150px; height: 220px; margin: -110px 0 0 -75px; border-radius: 14px; overflow: hidden; background: linear-gradient(150deg, #FFF27A, #FFD60A 50%, #F5B800); color: #1a1600; box-shadow: 0 0 24px rgba(255,214,10,.55); transform: scale(0) rotate(-14deg); opacity: 0; }
+  .leg .inner { position: absolute; inset: 5px; border: 1px solid rgba(26,22,0,.35); border-radius: 10px; display: flex; flex-direction: column; align-items: center; padding: 8px; }
+  .leg .e { font: 500 6.5px 'Geist Mono', monospace; letter-spacing: .16em; }
+  .leg svg.art { width: 94px; height: 94px; }
+  .leg b { font-weight: 800; letter-spacing: -0.05em; font-size: 18px; margin-top: auto; }
+  .leg small { font-size: 8px; text-align: center; opacity: .8; }
+  .leg .foil { position: absolute; inset: 0; mix-blend-mode: color-dodge; opacity: .55; background: linear-gradient(115deg, transparent 20%, #ff8af1 32%, #7af7ff 42%, #f6ff7a 52%, #a07aff 62%, transparent 75%); background-size: 250% 250%; animation: foil 3s ease-in-out infinite alternate; }
+  @keyframes foil { from { background-position: 20% 30% } to { background-position: 80% 70% } }
+  .leg.go { animation: lin 1s cubic-bezier(.2,1.5,.4,1) forwards; }
+  @keyframes lin { 0% { transform: scale(.3) rotate(-16deg); opacity: 0; filter: brightness(3) } 60% { transform: scale(1.08) rotate(3deg); opacity: 1; filter: brightness(1.5) } 100% { transform: rotate(-3deg); opacity: 1; filter: none } }
+  .legtxt { position: absolute; left: 0; right: 0; top: 40px; text-align: center; opacity: 0; transition: opacity .4s; }
+  .legtxt h4 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.055em; display: inline-block; } .legtxt h4 span { color: #FFD60A; }
+  .legtxt p { margin: 4px 14px 0; font-size: 11.5px; opacity: .75; }
+  /* refusals */
+  .rf { margin: 0 14px 10px; border-radius: 14px; border: 1px solid #333; padding: 10px 12px; font-size: 12px; }
+  .rf b { display: block; font-size: 15px; letter-spacing: -0.03em; margin-bottom: 2px; }
+  .rf .m { font: 500 9px 'Geist Mono', monospace; letter-spacing: .1em; color: #C6FF3D; margin-top: 6px; }
+  .rf .act { display: flex; gap: 6px; margin-top: 8px; } .rf .act span { flex: 1; text-align: center; border-radius: 999px; padding: 6px; font-size: 11px; font-weight: 700; border: 1px solid #444; } .rf .act span.p { background: #C6FF3D; color: #0A0A0B; border-color: #C6FF3D; }
+</style>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- hand-drawn wobble -->
+    <filter id="wob" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="3.2"/>
+    </filter>
+    <!-- sticker: thick white edge plus a drop shadow -->
+    <filter id="stk" x="-25%" y="-25%" width="150%" height="150%">
+      <feMorphology in="SourceAlpha" operator="dilate" radius="4.5" result="d"/>
+      <feFlood flood-color="#F5F5F3"/><feComposite in2="d" operator="in" result="w"/>
+      <feOffset in="w" dy="3.5" result="o"/><feFlood flood-color="#000" flood-opacity=".55"/><feComposite in2="o" operator="in" result="sh"/>
+      <feMerge><feMergeNode in="sh"/><feMergeNode in="w"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+</svg>
+<svg width="0" height="0" style="position:absolute"><defs><filter id="boil" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence id="boilT" type="fractalNoise" baseFrequency="0.03" numOctaves="2" seed="1"/><feDisplacementMap in="SourceGraphic" scale="3"/></filter></defs></svg>
+
+<div class="cards">
+  <div class="card" data-choice="station-claim" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#000;padding:12px">
+      <div class="kj-phone" id="ph1">
+        <div class="stage" id="st1"></div>
+        <svg class="scr" id="s1" viewBox="0 0 260 540"></svg>
+      </div>
+      <div class="btns"><button onclick="event.stopPropagation(); claim()">Play</button><button onclick="event.stopPropagation(); claim('grab')">Play (Abang Grab)</button></div>
+    </div>
+    <div class="card-body"><h3>1. Scan a station, then pick a card</h3><p>
+      <b>Scan:</b> the viewfinder sweeps, then locks on. A lime <b>"Station 3 ✓"</b> stamp slams in, with <b>DECK · 7 LEFT</b> at the top.<br>
+      <b>Pick:</b> five cards fan out across the middle with a 3 s bar. <b>Flick one up</b> (or tap it); if you don't, a spotlight sweeps and picks.<br>
+      <b>Reveal:</b> the card rises, flips, and the marker <b>circles "Got Durian!"</b>, adds <b>emphasis marks</b> around the card and draws an <b>arrow down to your slot</b>. Then the card shrinks into the slot, which pulses.</p></div>
+  </div>
+
+  <div class="card" data-choice="dato-yellow-marker" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#000;padding:12px">
+      <div class="kj-phone" id="ph2">
+        <div class="stage" id="st2"></div>
+        <svg class="scr yel" id="s2" viewBox="0 0 260 540"></svg>
+      </div>
+      <div class="btns"><button onclick="event.stopPropagation(); dato()">Play</button></div>
+    </div>
+    <div class="card-body"><h3>2. Dato Seri: the marker goes yellow</h3><p>Scanning the hidden stash card skips the five-card fan; there's only one. The yellow ? zone collapses, the foil card bursts in, and <b>the marker draws in yellow</b>: a double loop around the card, stars, burst lines and a crown over the name. It's the only time the marker is ever yellow.</p></div>
+  </div>
+
+  <div class="card" data-choice="claim-refused" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#000;padding:12px">
+      <div class="kj-phone"><div class="stage" style="padding-top:16px">
+        <div class="eb" style="margin:0 14px 10px">WHEN A CLAIM IS REFUSED</div>
+        <div class="rf"><b>Your slot is full.</b>Use your Durian first, then come back.<div class="act"><span class="p">Use Durian now</span><span>Keep it</span></div></div>
+        <div class="rf"><b>Station 3 is cooling down.</b>Someone just claimed it.<div class="m">READY IN 0:42</div></div>
+        <div class="rf"><b>Get closer.</b>You need to be within 30 m of Station 3.<div class="m">YOU'RE 48 M AWAY</div></div>
+        <div class="rf"><b>Already claimed.</b>You've used Station 3 this game. Try another one.<div class="m">4 STATIONS LEFT FOR YOU</div></div>
+        <p style="font-size:11px;opacity:.55;margin:4px 14px 0">No marker here: it's for hype, not for "no". Each refusal says what to do next.</p>
+      </div></div>
+    </div>
+    <div class="card-body"><h3>3. Refusals: clear and calm</h3><p>Every "no" says why and what to do next, with a live number where it helps (cooldown time, distance, stations left). "Slot full" offers to use the current card right there, since that's what you'd do next anyway.</p></div>
+  </div>
+</div>
+
+<script>
+  const INK = 'stroke="#141414" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"'
+  const spiky = (cx, cy, rx, ry, n) => {
+    const p = []
+    for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2, r = k % 2 ? 1 : 1.16; p.push(`${(cx + Math.cos(a) * rx * r).toFixed(1)} ${(cy + Math.sin(a) * ry * r).toFixed(1)}`) }
+    return 'M' + p.join(' L') + ' Z'
+  }
+  const star = (cx, cy, R, r) => {
+    const p = []
+    for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + (k * Math.PI) / 5, rr = k % 2 ? r : R; p.push(`${(cx + Math.cos(a) * rr).toFixed(1)} ${(cy + Math.sin(a) * rr).toFixed(1)}`) }
+    return 'M' + p.join(' L') + ' Z'
+  }
+
+  const ART = {
+    gostan: `
+      <path d="M78 24 Q52 6 26 22" fill="none" stroke="#141414" stroke-width="9" stroke-linecap="round"/>
+      <path d="M78 24 Q52 6 26 22" fill="none" stroke="#FFD60A" stroke-width="5" stroke-linecap="round"/>
+      <path d="M16 26 L30 12 L34 30 Z" fill="#FFD60A" ${INK}/>
+      <path d="M12 62 Q12 50 22 48 L33 36 Q37 32 45 32 L62 32 Q70 32 74 40 L81 48 Q90 50 90 59 L90 66 Q90 70 85 70 L16 70 Q12 70 12 66 Z" fill="#E63946" ${INK}/>
+      <path d="M36 47 L43 38 L55 38 L55 47 Z" fill="#A8DADC" ${INK}/>
+      <path d="M59 38 L66 38 Q70 40 73 47 L59 47 Z" fill="#A8DADC" ${INK}/>
+      <path d="M48 54 h8" ${INK}/>
+      <circle cx="29" cy="70" r="9" fill="#2a2a2a" ${INK}/><circle cx="29" cy="70" r="3.2" fill="#ccc"/>
+      <circle cx="73" cy="70" r="9" fill="#2a2a2a" ${INK}/><circle cx="73" cy="70" r="3.2" fill="#ccc"/>
+      <circle cx="86" cy="56" r="2.6" fill="#FFF3B0" ${INK}/><rect x="11" y="54" width="5" height="6" fill="#FFFFFF" ${INK}/>
+      <path d="M92 76 h6 M90 82 h8" ${INK}/>`,
+    durian: `
+      <path d="M50 26 Q47 14 55 7" fill="none" stroke="#141414" stroke-width="8" stroke-linecap="round"/>
+      <path d="M50 26 Q47 14 55 7" fill="none" stroke="#7A5230" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="${spiky(50, 58, 29, 31, 30)}" fill="#8DA33B" ${INK}/>
+      <path d="M50 36 Q66 50 60 80 Q44 62 50 36 Z" fill="#F7D154" ${INK}/>
+      <path d="M53 50 q4 3 3 8 M55 64 q3 3 2 7" fill="none" stroke="#D9A92B" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M30 48 l4 4 M28 64 l5 2 M38 76 l3 -3 M72 56 l-4 3 M70 72 l-4 -2" ${INK}/>
+      <path d="M14 36 q-5 -6 0 -12 q5 -6 0 -12 M86 36 q5 -6 0 -12 q-5 -6 0 -12" fill="none" stroke="#9BC53D" stroke-width="3.2" stroke-linecap="round"/>`,
+    ponteng: `
+      <path d="M16 72 Q6 58 18 48 Q16 32 34 32 Q42 16 60 26 Q80 22 82 40 Q96 48 88 66 Q86 76 70 74 L28 76 Q14 78 16 72 Z" fill="#4CAF50" ${INK}/>
+      <path d="M26 46 q4 -3 7 1 M66 36 q4 -3 7 1 M74 60 q4 -3 7 1 M30 64 q4 -3 7 1" fill="none" stroke="#2E7D32" stroke-width="2.6" stroke-linecap="round"/>
+      <ellipse cx="44" cy="50" rx="6.5" ry="7.5" fill="#fff" ${INK}/><ellipse cx="59" cy="50" rx="6.5" ry="7.5" fill="#fff" ${INK}/>
+      <circle cx="41.5" cy="51" r="2.8" fill="#141414"/><circle cx="56.5" cy="51" r="2.8" fill="#141414"/>
+      <path d="M38 40 l9 2 M53 42 l9 -2" ${INK}/>
+      <path d="M60 70 L72 66 Q80 70 92 72 Q100 74 98 84 L62 86 Q56 82 60 70 Z" fill="#E4E4E4" ${INK}/>
+      <path d="M58 80 L99 79 L98 86 L62 88 Z" fill="#1D3557" ${INK}/>
+      <path d="M68 70 l4 -4 M74 72 l4 -4 M80 73 l3 -4" ${INK}/>`,
+    toyol: `
+      <path d="M31 40 L12 24 L32 54 Z" fill="#8DBE7A" ${INK}/><path d="M69 40 L88 24 L68 54 Z" fill="#8DBE7A" ${INK}/>
+      <path d="M36 64 Q50 96 64 64 Q50 58 36 64 Z" fill="#8DBE7A" ${INK}/>
+      <path d="M38 76 Q50 84 62 76 L60 70 Q50 74 40 70 Z" fill="#F5F5F3" ${INK}/>
+      <circle cx="50" cy="42" r="22" fill="#8DBE7A" ${INK}/>
+      <path d="M50 20 q-3 -7 4 -10" fill="none" ${INK}/>
+      <circle cx="41" cy="40" r="7" fill="#fff" ${INK}/><circle cx="59" cy="40" r="7" fill="#fff" ${INK}/>
+      <circle cx="42" cy="41" r="3.6" fill="#E63946"/><circle cx="58" cy="41" r="3.6" fill="#E63946"/>
+      <circle cx="42" cy="41" r="1.4" fill="#141414"/><circle cx="58" cy="41" r="1.4" fill="#141414"/>
+      <path d="M39 53 Q50 62 61 53" fill="none" ${INK}/><path d="M47 56 v4 h5 v-4" fill="#fff" ${INK}/>
+      <path d="M62 70 L78 64" ${INK}/>
+      <circle cx="83" cy="62" r="8" fill="#FFD60A" ${INK}/><path d="M83 57 v10" stroke="#B8860B" stroke-width="2.4" stroke-linecap="round"/>`,
+    grab: `
+      <rect x="56" y="26" width="34" height="34" rx="4" fill="#1FA855" ${INK}/>
+      <path d="M56 36 h34" ${INK}/><path d="M66 46 q7 6 14 0" fill="none" stroke="#F5F5F3" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="42" cy="60" r="17" fill="#C68B59" ${INK}/>
+      <path d="M16 54 Q16 24 42 24 Q68 24 68 54 Z" fill="#1FA855" ${INK}/>
+      <path d="M30 30 Q42 26 54 30" fill="none" stroke="#F5F5F3" stroke-width="3" stroke-linecap="round"/>
+      <path d="M18 46 Q42 38 66 46 L66 52 L18 52 Z" fill="#2a2a2a" ${INK}/>
+      <circle cx="36" cy="60" r="2.2" fill="#141414"/><circle cx="48" cy="60" r="2.2" fill="#141414"/>
+      <path d="M35 67 Q42 73 49 67" fill="none" ${INK}/>
+      <path d="M26 62 Q28 76 42 78 Q56 76 58 62" fill="none" ${INK}/>
+      <path d="M2 40 h9 M0 50 h9 M3 60 h8" ${INK}/>`,
+    rempit: `
+      <g transform="rotate(-16 50 62)">
+        <circle cx="16" cy="58" r="6" fill="#bbb" ${INK}/><circle cx="8" cy="50" r="5" fill="#ccc" ${INK}/><circle cx="4" cy="62" r="4" fill="#ddd" ${INK}/>
+        <path d="M30 60 Q18 56 12 62 Q20 64 14 70 Q24 68 30 64 Z" fill="#FF8C1A" ${INK}/>
+        <circle cx="34" cy="70" r="12" fill="#2a2a2a" ${INK}/><circle cx="34" cy="70" r="4" fill="#ccc"/>
+        <circle cx="78" cy="70" r="12" fill="#2a2a2a" ${INK}/><circle cx="78" cy="70" r="4" fill="#ccc"/>
+        <path d="M34 70 L48 56 M78 70 L72 50" ${INK}/>
+        <path d="M40 60 L52 46 L72 46 L80 54 L62 62 Z" fill="#E63946" ${INK}/>
+        <path d="M48 46 L64 44" stroke="#141414" stroke-width="6" stroke-linecap="round"/>
+        <path d="M72 46 L76 34 L84 32" fill="none" ${INK}/><circle cx="82" cy="44" r="3.4" fill="#FFF3B0" ${INK}/>
+        <path d="M54 54 h10" stroke="#F5F5F3" stroke-width="2.6" stroke-linecap="round"/>
+      </g>
+      <path d="M88 20 l8 -4 M86 30 l10 -2" ${INK}/>`,
+    guard: `
+      <path d="M78 66 L100 34 L100 78 Z" fill="#FFE66D" opacity=".85"/>
+      <circle cx="44" cy="56" r="21" fill="#C68B59" ${INK}/>
+      <path d="M22 44 Q22 22 44 22 Q66 22 66 44 Z" fill="#1D3557" ${INK}/>
+      <path d="M18 44 L74 44 Q80 49 70 51 L18 49 Z" fill="#14213D" ${INK}/>
+      <path d="${star(44, 33, 6, 2.6)}" fill="#FFD60A" stroke="#141414" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M33 54 h8" ${INK}/><circle cx="53" cy="55" r="2.6" fill="#141414"/><path d="M48 49 l9 -1" ${INK}/>
+      <path d="M32 64 Q38 58 44 63 Q50 58 56 64 Q50 68 44 65 Q38 68 32 64 Z" fill="#2a2a2a" ${INK}/>
+      <path d="M64 80 L78 64 L86 70 L72 86 Z" fill="#3a3a3a" ${INK}/><path d="M78 64 L86 70" stroke="#FFE66D" stroke-width="3"/>`,
+    along: `
+      <path d="M44 32 L54 8 L66 32 Z" fill="#8D99AE" ${INK}/>
+      <path d="M6 66 Q20 30 58 30 Q84 32 94 54 Q86 72 56 74 Q28 76 6 66 Z" fill="#8D99AE" ${INK}/>
+      <path d="M18 66 Q50 58 90 58 Q82 72 56 74 Q30 76 18 66 Z" fill="#EDF2F4" ${INK}/>
+      <path d="M56 42 h13 v4 q-6.5 5 -13 0 Z M72 42 h13 v4 q-6.5 5 -13 0 Z" fill="#141414" ${INK}/><path d="M69 43 h3" ${INK}/>
+      <path d="M62 62 l3 4 l3 -4 l3 4 l3 -4 l3 4 l3 -4" fill="none" stroke="#141414" stroke-width="2.4" stroke-linejoin="round"/>
+      <path d="M36 72 Q54 84 74 72" fill="none" stroke="#141414" stroke-width="7" stroke-linecap="round"/>
+      <path d="M36 72 Q54 84 74 72" fill="none" stroke="#FFD60A" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 3"/>
+      <circle cx="55" cy="81" r="5" fill="#FFD60A" ${INK}/>
+      <path d="M8 36 L26 26 L32 40 L14 50 Z" fill="#6FBF73" ${INK}/><path d="M14 30 L32 22 L36 34 L20 42 Z" fill="#A3D9A5" ${INK}/>
+      <circle cx="26" cy="32" r="3" fill="none" stroke="#2E7D32" stroke-width="2"/>`,
+    dato: `
+      <path d="M14 100 Q16 76 50 76 Q84 76 86 100 Z" fill="#7B1E3A" ${INK}/>
+      <path d="M28 78 L74 100" stroke="#141414" stroke-width="11" stroke-linecap="round"/><path d="M28 78 L74 100" stroke="#FFD60A" stroke-width="7" stroke-linecap="round"/>
+      <path d="${star(64, 88, 7, 3)}" fill="#FFD60A" ${INK}/>
+      <circle cx="50" cy="56" r="21" fill="#B9784F" ${INK}/>
+      <path d="M29 44 L29 24 Q50 17 71 24 L71 44 Z" fill="#1b1b1b" ${INK}/>
+      <path d="M30 40 L70 40" stroke="#E8B92E" stroke-width="3.2"/>
+      <path d="M39 54 q3.5 -3.5 7 0 M54 54 q3.5 -3.5 7 0" fill="none" ${INK}/>
+      <path d="M36 66 Q43 59 50 64 Q57 59 64 66 Q60 63 58 68 Q50 65 42 68 Q40 63 36 66 Z" fill="#2a2a2a" ${INK}/>
+      <path d="M84 30 l4 -8 M90 38 l8 -2 M12 30 l-4 -8 M10 40 l-8 -2" stroke="#141414" stroke-width="3" stroke-linecap="round"/>`,
+  }
+
+  const sticker = (k) => `<svg viewBox="-8 -6 116 116"><g filter="url(#stk)"><g filter="url(#wob)">${ART[k]}</g></g></svg>`
+  const $ = (id) => document.getElementById(id)
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+  function draw(svg, paths, start = 0, gap = 240, dur = 360) {
+    svg.style.filter = 'url(#boil)'
+    svg.innerHTML = paths.map((d) => `<path d="${d}"/><path class="ghost" d="${d}" transform="translate(1.2 -1)"/>`).join('')
+    svg.querySelectorAll('path').forEach((p, k) => {
+      const L = p.getTotalLength() + 2
+      p.animate([{ strokeDasharray: `${L}`, strokeDashoffset: L }, { strokeDasharray: `${L}`, strokeDashoffset: 0 }], { duration: dur, delay: start + Math.floor(k / 2) * gap, easing: 'ease-in-out', fill: 'both' })
+    })
+  }
+  const rel = (el, ph) => { const a = el.getBoundingClientRect(), p = ph.getBoundingClientRect(); return { x: a.left - p.left, y: a.top - p.top, w: a.width, h: a.height } }
+  const ring = (b, px = 16, py = 12) => { const cx = b.x + b.w / 2, cy = b.y + b.h / 2, rx = b.w / 2 + px, ry = b.h / 2 + py, k = 1.36; return `M${cx + rx * .15} ${cy - ry} C${cx + rx * k} ${cy - ry} ${cx + rx * k} ${cy + ry} ${cx} ${cy + ry} C${cx - rx * k} ${cy + ry} ${cx - rx * k} ${cy - ry * 1.08} ${cx + rx * .35} ${cy - ry * 1.06}` }
+  const starP = (x, y, s = 1) => `M${x} ${y} l${4 * s} ${10 * s} l${10 * s} ${2 * s} l${-8 * s} ${6 * s} l${2 * s} ${10 * s} l${-8 * s} ${-6 * s} l${-8 * s} ${6 * s} l${2 * s} ${-10 * s} l${-8 * s} ${-6 * s} l${10 * s} ${-2 * s} Z`
+  const CARDS = { durian: ['Durian', 'Blocks the next catch, up to 10 min.'], grab: ['Abang Grab', 'See the top 3 cards, keep one.'] }
+
+  let running = false, running2 = false
+  async function claim(k = 'durian') {
+    if (running) return; running = true
+    const st = $('st1'), ph = $('ph1'), s1 = $('s1'); s1.innerHTML = ''
+    st.innerHTML = `
+      <div class="top"><span class="eb">DIKEJAR · #07</span><span class="deck" id="deck">DECK · 8 LEFT</span></div>
+      <div class="cam" id="cam"><div class="vf"><i></i><i></i><i></i><i></i><div class="qr">${Array.from({ length: 49 }, (_, i) => `<b class="${(i * 7) % 3 ? '' : 'o'}"></b>`).join('')}</div><div class="line"></div></div><div class="camtxt">Point at the station card</div></div>
+      <div class="stamp" id="stamp"><small>CLAIMED</small><b>Station 3 ✓</b></div>
+      <div class="prompt" id="prompt">Pick a card</div><div class="tbar" id="tbar"><b id="tb"></b></div>
+      <div class="got" id="got"><h4 id="goth">Got ${CARDS[k][0]}!</h4><p>Into your slot. Use it when it counts.</p></div>
+      <div class="dock"><div class="slot" id="slot">Empty slot</div><div class="scanb">Scan</div></div>`
+    await wait(1400)
+    $('cam').style.opacity = 0; $('stamp').classList.add('go'); if (navigator.vibrate) navigator.vibrate(80)
+    await wait(900); $('deck').textContent = 'DECK · 7 LEFT'
+    // fan
+    const pos = [[-96, 18, -16], [-48, 4, -8], [0, 0, 0], [48, 4, 8], [96, 18, 16]]
+    pos.forEach((p, i) => {
+      const c = document.createElement('div'); c.className = 'cd'; c.dataset.i = i
+      c.innerHTML = `<div class="in"><div class="f back"><b>kejar<span>.</span></b></div><div class="f front"><div class="e">POWER-UP</div>${sticker(k)}<b>${CARDS[k][0]}</b><small>${CARDS[k][1]}</small></div></div>`
+      c.style.transform = 'translate(0,60px) scale(.6)'; c.style.opacity = 0; st.appendChild(c)
+      setTimeout(() => { c.style.opacity = 1; c.style.transform = `translate(${p[0]}px,${p[1]}px) rotate(${p[2]}deg)` }, 60 * i)
+      // flick or tap to pick
+      let y0 = null
+      c.addEventListener('pointerdown', (e) => { y0 = e.clientY; e.stopPropagation() })
+      c.addEventListener('pointerup', (e) => { if (y0 !== null) { pick(i); y0 = null } })
+    })
+    $('prompt').style.opacity = 1; $('tbar').style.opacity = 1
+    $('tb').animate([{ transform: 'scaleX(1)' }, { transform: 'scaleX(0)' }], { duration: 3000, fill: 'forwards' })
+    let picked = false
+    const cards = () => [...st.querySelectorAll('.cd')]
+    async function pick(i) {
+      if (picked) return; picked = true
+      $('prompt').style.opacity = 0; $('tbar').style.opacity = 0
+      cards().forEach((c, j) => { if (j !== i) { c.style.opacity = 0; c.style.transform += ' translateY(60px)' } })
+      const c = cards()[i]; c.classList.remove('lit'); c.style.zIndex = 4
+      c.style.transform = 'translate(0,-6px) scale(1.55)'
+      await wait(450); c.classList.add('flip'); if (navigator.vibrate) navigator.vibrate([60, 40, 120])
+      await wait(650); $('got').style.opacity = 1
+      await wait(80)
+      const h = rel($('goth'), ph), cb = rel(c, ph), sl = rel($('slot'), ph)
+      draw(s1, [
+        ring(h, 14, 10),
+        `M${cb.x - 10} ${cb.y + 20} l-12 -10 M${cb.x - 14} ${cb.y + cb.h / 2} l-16 0 M${cb.x - 10} ${cb.y + cb.h - 20} l-12 10`,
+        `M${cb.x + cb.w + 10} ${cb.y + 20} l12 -10 M${cb.x + cb.w + 14} ${cb.y + cb.h / 2} l16 0 M${cb.x + cb.w + 10} ${cb.y + cb.h - 20} l12 10`,
+        `M${cb.x + cb.w - 6} ${cb.y + cb.h + 6} C${cb.x + cb.w + 20} ${cb.y + cb.h + 30} ${sl.x + 80} ${sl.y - 40} ${sl.x + 46} ${sl.y - 6} M${sl.x + 46} ${sl.y - 6} l2 -12 M${sl.x + 46} ${sl.y - 6} l12 -2`,
+        starP(h.x + h.w + 6, h.y - 14, .7),
+      ], 0, 220)
+      await wait(1900)
+      c.style.transition = 'transform .5s cubic-bezier(.5,0,.75,0), opacity .5s'
+      c.style.transform = `translate(${sl.x + 24 - 130}px, ${sl.y + 28 - 260}px) scale(.25)`; c.style.opacity = 0
+      s1.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, delay: 200, fill: 'forwards' })
+      await wait(520)
+      const slot = $('slot'); slot.className = 'slot full pulse'; slot.innerHTML = `<div class="s">${sticker(k)}</div><div><b>${CARDS[k][0]}</b><small>TAP TO USE</small></div>`
+      $('got').style.opacity = 0
+      running = false; s1.getAnimations().forEach((a) => a.cancel()); s1.innerHTML = ''
+    }
+    // auto sweep after 3 s
+    setTimeout(async () => {
+      if (picked) return
+      const cs = cards()
+      for (let n = 0; n < 7 && !picked; n++) { cs.forEach((x) => x.classList.remove('lit')); cs[n % 5].classList.add('lit'); await wait(120 + n * 30) }
+      if (!picked) pick(1)
+    }, 3100)
+  }
+
+  async function dato() {
+    if (running2) return; running2 = true
+    const st = $('st2'), ph = $('ph2'), s2 = $('s2'); s2.innerHTML = ''
+    st.innerHTML = `
+      <div class="top"><span class="eb">DIKEJAR · #11</span><span></span></div>
+      <div class="zone" id="zone">?</div>
+      <div class="legtxt" id="lt"><h4 id="lth">Dato Seri<span>.</span></h4><p>Legendary. In Penjara, free yourself and up to two friends. Only one exists.</p></div>
+      <div class="leg" id="leg"><div class="inner"><div class="e">★ LEGENDARY</div><svg class="art" viewBox="-8 -6 116 116"><g filter="url(#stk)"><g filter="url(#wob)">${ART.dato}</g></g></svg><b>Dato Seri</b><small>In Penjara: free you and 2 friends.</small></div><div class="foil"></div></div>
+      <div class="dock"><div class="slot" id="slot2">Empty slot</div><div class="scanb">Scan</div></div>`
+    await wait(900)
+    const z = $('zone'); z.animate([{ transform: 'scale(1)' }, { transform: 'scale(.1)', opacity: 0 }], { duration: 500, easing: 'cubic-bezier(.6,0,.4,1)', fill: 'forwards' })
+    await wait(420); $('leg').classList.add('go'); if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 250])
+    await wait(700); $('lt').style.opacity = 1
+    await wait(60)
+    const cb = rel($('leg'), ph), h = rel($('lth'), ph), cx = cb.x + cb.w / 2
+    draw(s2, [
+      ring(cb, 18, 14), ring(cb, 26, 20),
+      `M${h.x + h.w / 2 - 22} ${h.y - 4} l6 -16 l10 10 l6 -14 l6 14 l10 -10 l6 16 Z`,
+      starP(cb.x - 30, cb.y + 20, .9), starP(cb.x + cb.w + 14, cb.y + cb.h - 60, .8), starP(cb.x + cb.w + 10, cb.y + 4, .55),
+      `M${cb.x - 20} ${cb.y + cb.h - 30} l-16 6 M${cb.x - 18} ${cb.y + cb.h - 14} l-14 12 M${cb.x + cb.w + 20} ${cb.y + 60} l16 -4 M${cb.x + cb.w + 22} ${cb.y + 78} l18 4`,
+    ], 0, 230)
+    await wait(2800)
+    const slot = $('slot2'); slot.className = 'slot full pulse'; slot.style.borderColor = '#FFD60A'
+    slot.innerHTML = `<div class="s">${sticker('dato')}</div><div><b>Dato Seri</b><small style="color:#FFD60A">★ LEGENDARY</small></div>`
+    running2 = false
+  }
+
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) { let sd = 1; setInterval(() => { sd = sd % 3 + 1; $('boilT').setAttribute('seed', sd) }, 140) }
+  setTimeout(() => { claim(); setTimeout(dato, 300) }, 700)
+</script>

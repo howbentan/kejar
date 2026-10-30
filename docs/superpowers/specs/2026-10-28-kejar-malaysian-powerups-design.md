@@ -118,7 +118,7 @@ Replaces "a random roll with equal odds on every scan".
 
   The drawings are in `docs/superpowers/mockups/2026-10-30-motion/13-card-art.html`. Mine (Claude's) set the direction and can be redrawn by an illustrator later in the same style.
 - **The same drawing is used everywhere,** from the full card in the lucky dip down to the power-up slot and the feed. At small sizes the characters are recognised by colour and shape.
-- **Dato Seri is the one legendary card,** and the only one that isn't lime: a yellow face (`#FFF27A` → `#FFD60A` → `#F5B800`) with dark text, a light sweep and a glow (jail design §4a). Gold was mocked up and rejected for yellow (owner's decision).
+- **Dato Seri is the one legendary card,** and the only one that isn't lime: a yellow face (`#FFF27A` → `#FFD60A` → `#F5B800`) with dark text, an iridescent foil and a glow (jail design §4a, motion design §8.9). Gold was mocked up and rejected for yellow (owner's decision).
 - **Rejected: blue "rare" and purple "epic" tiers** (mockup `11-rarity-tiers.html`, now superseded). Claude's reasons, which the owner agreed with:
   - every deck card is situational, not "better", so tiers would make most draws feel like a letdown;
   - there are only 8 kinds, which players learn in one game;
