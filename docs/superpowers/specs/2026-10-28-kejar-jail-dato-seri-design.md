@@ -1,6 +1,6 @@
 # Kejar: jail gets a dare wheel and Dato Seri
 
-**Status:** Design agreed with the owner in chat on 2026-10-28, revised substantially across two builder-check rounds, then revised again after the owner deliberately reversed the "no marshal judgement" direction for Dato Seri specifically, then re-checked against that latest version in a third builder-check round (resolved in §7). Not built. Two conflicts with a sibling spec are deliberate, not oversights (see §9). Ready for `writing-plans`.
+**Status:** Design agreed with the owner in chat on 2026-10-28, revised substantially across two builder-check rounds, then revised again after the owner deliberately reversed the "no marshal judgement" direction for Dato Seri specifically, then re-checked against that latest version in a third builder-check round (resolved in §7). Not built. Two conflicts with a sibling spec are deliberate, not oversights (see §9). Ready for `writing-plans`. **Updated 2026-10-30:** Dato Seri now has two modes, a hidden QR stash (the default) and the quest-giver (§4b), plus its yellow legendary look (§4a).
 **Builds on:**
 - `docs/superpowers/specs/2026-10-19-kejar-design.md` §4.7 (jail and jailbreak) and §4.8 (power-ups): the rules this extends.
 - `docs/superpowers/plans/2026-10-24-kejar-plan-5-power-ups.md`: how power-ups are claimed and held today.
@@ -102,12 +102,36 @@ Dato Seri is the one **legendary** card (power-ups design §5c), so its moments 
 - **Reduced motion:** the sweep, glow, spin and sparkles are skipped, and the colours and text stay (motion design §3).
 - **Mockup:** `docs/superpowers/mockups/2026-10-30-motion/10-dato-seri.html`.
 
+## 4b. Two ways to run Dato Seri (owner's decision, 2026-10-30)
+
+The organiser picks a **Dato Seri mode** when creating the game. Both end in the same game state, "this runner holds Dato Seri", and only the claim and the Settle check differ. The goal is to run events with a crew of two (motion design §6.6).
+
+| | **Hidden stash** (the default; build this first) | **Quest-giver** (when there are volunteers) |
+|---|---|---|
+| Placing it | The organiser hides a small printed **Dato Seri QR card** somewhere subtle (under a bench, behind a sign), then taps **`Drop Dato Seri here`** on their phone to save the spot. | A vested quest-giver walks the park (§4). |
+| Hint | The same fuzzy yellow zone (100–200 m) for everyone, all game, but **fixed** around the stash, like a geocache. | The fuzzy zone **moves** with the quest-giver. |
+| Getting it | **The first runner to scan the card** gets it. This reuses the station scan, including the within-30 m check. After that the card stops working. | Say the catchphrase in person; the quest-giver taps Grant. |
+| Proof | None needed: the app knows who scanned it. | Physical coin. |
+| Settle | **Self-serve:** the holder scans the Penjara QR (`KEJAR:JAIL`) with Dato Seri in their slot and picks one jailed friend on their phone. The app applies the same eligibility rules as §4 and refuses if neither can be freed. | Shows the coin to Pak Pulis, who confirms (§4). |
+| Extra people | None | A quest-giver and a Pak Pulis |
+
+- **Why the stash is the default:** a volunteer, a catchphrase and a coin are three things the organiser has to arrange for every event. The stash needs only a printed card. Self-serve Settle is also app-decided, which fits the power-ups design's "no refereed power-ups" better than the coin.
+- **Why scanning, not "walk into the area":** phone GPS is often 10–30 m off, so a geofence would grant it to someone walking past by accident and miss someone standing on the spot. Scanning makes it found, not random.
+- **Hype without a catchphrase:** the organiser can still tease `Something legendary is hidden in the park today` the day before.
+- **What stays the same in both modes:** one per game, runners only, it takes the one slot, it can't be taken by Toyol or Ah Long, the yellow legendary look (§4a), and Settle's rules on who can be freed.
+- **Stash details (Claude's calls):**
+  - The hint is shown from the start of the chase phase. Hidden stashes don't need the quest-giver's lobby-phase hunt.
+  - Chasers can see the hint too, but can't scan the card. They can guard the area, which adds risk around the stash.
+  - If nobody finds it, it simply goes unclaimed.
+  - The organiser can move the stash before the game starts.
+- **The mockup in §4a shows quest-giver mode.** In stash mode the map phone is the same, and the grant moment is the normal scan reveal with the legendary card.
+
 ## 5. Non-goals
 
 - No random chance of failure for Settle.
 - No exception to the one-slot limit: Dato Seri deliberately crowds out everything else while held.
 - No scaling the badge... — there's no physical badge any more. No scaling the number of valid catchphrases or claims per game — always exactly one.
-- No map marker, no station, no Abang Grab eligibility.
+- No exact map marker and no ordinary station (stash mode's card shows only a fuzzy zone, §4b), and no Abang Grab eligibility.
 - No opening Settle (or the wheel's free slice) to everyone unconditionally — this was floated and rejected in brainstorming specifically because it guts the catch mechanic; see §2.4.
 - **Dato Seri cannot be stolen by Toyol or Ah Long (Claude's call).** The sibling doc's Ah Long steals a random unused power-up from a random free runner, and an unused, hand-filling Dato Seri would technically qualify. Given how much ceremony this design puts around Dato Seri being rare, letting one unrelated dice roll permanently delete the only copy in the game would undercut the whole point, so Toyol and Ah Long's steal pool explicitly excludes it.
 
@@ -127,7 +151,8 @@ Dato Seri is the one **legendary** card (power-ups design §5c), so its moments 
   - **Implementation shape (Claude's call, resolved in the third builder-check round): a scoped invite/token, not a new `Role` value.** The `Role` enum (`'runner' | 'chaser' | 'marshal'`) is load-bearing elsewhere — team-ratio checks, roster lists, and the map legend all assume every player is one of those three. Adding `'quest-giver'` or `'pak-pulis'` to it would mean threading exceptions through all of that for two people who never appear on a roster or a map dot. Instead, these follow the existing `createMarshalInvite`/`redeemMarshalInvite` pattern: a narrow-scoped invite link that, when redeemed, unlocks exactly one action (`grantDatoSeri` or `confirmSettle`) on that device, with no `Player` row created and no exposure to team balance or the map.
   - **The hint pipeline runs for the whole lifetime of the game, not just the chase phase (Claude's call, resolved in the third builder-check round).** Unlike station claims (§4.8.1, "chase phase only"), the quest-giver starts wandering and the fuzzy hint becomes visible as soon as the game exists — covering lobby and hide phase too — since the social-media tease goes out the day before and the whole point is to let early arrivers start hunting before the chase even begins. It stops once Dato Seri is claimed, or the game ends. This needs its own always-on feed rather than reusing the existing phase-gated position/location pipeline that chaser and marshal views rely on.
   - **Settle's confirm screen is a single Pak-Pulis-side action, not a two-device handshake (Claude's call, confirming what §4 already implies).** §4 already says the target is "chosen by the holder" — that's the holder telling Pak Pulis who to free out loud, the same in-person ceremony as showing the coin. Pak Pulis then picks that name from a list of currently-jailed eligible runners on their own screen and confirms, matching the existing single-device shape of `removePlayer`/`pause`/`resume`. No request needs to come from the holder's phone.
-- **The physical coin** is a real printed/manufactured prop the organiser needs to produce and bring to every event, same category of cost as the printed station QR cards and tags already budgeted in the base design.
+- **Stash mode (§4b)** needs only the stash's saved spot and claimed state, a printed Dato Seri QR card, and no quest-giver or Pak Pulis invites.
+- **The physical coin** (quest-giver mode only) is a real printed/manufactured prop the organiser needs to produce and bring to every event, same category of cost as the printed station QR cards and tags already budgeted in the base design.
 
 ## 8. What changed from the first draft
 

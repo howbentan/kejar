@@ -70,7 +70,7 @@ Also floated: surprise missions, a bounty on the longest survivor. **Malaysian p
 - Malaysian slang applies to the power-ups only; all other wording stays as it is.
 - Stations stay random-on-claim.
 
-**Jail gets a dare wheel, plus a rare runner escape power-up, Dato Seri (designed 2026-10-28, checked and ready for a plan, not built).** `docs/superpowers/specs/2026-10-28-kejar-jail-dato-seri-design.md`.
+**Jail gets a dare wheel, plus a rare runner escape power-up, Dato Seri (designed 2026-10-28, checked and ready for a plan, not built; 2026-10-30: two modes, a hidden QR stash by default or the quest-giver, in yellow as the one legendary, §4a–§4b).** Events are designed to run with **two people**: the organiser as roaming marshal plus one helper at Penjara (motion design §6.6). The marshal's SOS screen is §6.5. `docs/superpowers/specs/2026-10-28-kejar-jail-dato-seri-design.md`.
 
 **A legendary power-up for chasers, to mirror Dato Seri (brainstorm in progress, 2026-10-30 — not finished).** `docs/superpowers/specs/2026-10-30-kejar-chaser-legendary-design.md`. The character (Bomoh vs Pontianak, or a safer backup) is the one open blocker, deliberately left for the owner to sanity-check with actual Malaysian people first; everything else about the mechanic (rarity, hand cost, discovery, effect duration, staffing) is already pinned down in that file. Pick up there on a new device.
 

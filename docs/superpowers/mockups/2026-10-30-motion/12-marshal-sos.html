@@ -1,0 +1,198 @@
+<h2>Marshal: when an SOS comes in</h2>
+<p class="subtitle">Three phones, one story. <b>Tap "Send a test SOS"</b> under phone 1: the marshal's phone takes over, then the runner's details arrive a moment later. Tap <b>I'm going</b> to see phone 2 (walking to them, with what the other marshals see). Phone 3 is the inbox, with live alerts and the post-game reports tab.</p>
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  .wrap { display: flex; gap: 26px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 270px; }
+  .cap { font-size: 12px; opacity: .75; text-align: center; margin: 0; }
+  .kj-phone { width: 260px; height: 540px; border-radius: 30px; background: #0A0A0B; border: 2px solid #2a2a2a; position: relative; overflow: hidden;
+    color: #F5F5F3; font-family: 'Geist', system-ui, sans-serif; }
+  .pad { position: absolute; inset: 0; padding: 16px 14px; display: flex; flex-direction: column; overflow-y: auto; }
+  .eb { font: 500 9px 'Geist Mono', monospace; letter-spacing: .2em; color: rgba(245,245,243,.55); }
+  h4 { margin: 6px 0 6px; font-size: 22px; font-weight: 800; letter-spacing: -0.05em; }
+  h4 span { color: #C6FF3D; }
+  .muted { font-size: 12px; opacity: .65; margin: 0; }
+  .b { width: 100%; border-radius: 999px; padding: 12px; font: 800 14px 'Geist', sans-serif; border: 0; cursor: pointer; background: #C6FF3D; color: #0A0A0B; }
+  .b.dark { background: #0A0A0B; color: #C6FF3D; }
+  .b.ghost { background: transparent; color: #F5F5F3; border: 1px solid #444; font-weight: 600; }
+  .test { background: transparent; color: #F5F5F3; border: 1px solid #444; border-radius: 999px; padding: 6px 14px; cursor: pointer; font-family: 'Geist', sans-serif; font-size: 12px; }
+
+  /* idle marshal screen behind the takeover */
+  .map { height: 190px; border-radius: 16px; background: #121412; border: 1px solid #262626; position: relative; overflow: hidden; margin: 8px 0; }
+  .map svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .dot { position: absolute; width: 8px; height: 8px; border-radius: 50%; transform: translate(-50%, -50%); }
+  .me { background: #F5F5F3; box-shadow: 0 0 0 3px rgba(245,245,243,.25); }
+  .pin { width: 16px; height: 16px; background: #C6FF3D; border: 2px solid #0A0A0B; }
+  .pin::after { content: ''; position: absolute; inset: -8px; border-radius: 50%; border: 2px solid #C6FF3D; animation: rip 1.4s ease-out infinite; }
+  @keyframes rip { 0% { transform: scale(.4); opacity: 1 } 100% { transform: scale(2.2); opacity: 0 } }
+  .row { display: flex; justify-content: space-between; font-size: 12px; opacity: .8; }
+
+  /* the takeover */
+  .take { position: absolute; inset: 0; background: #C6FF3D; color: #0A0A0B; padding: 18px 16px; display: flex; flex-direction: column; transform: translateY(100%); transition: transform .45s cubic-bezier(.2,1.2,.4,1); z-index: 5; }
+  .take.on { transform: none; }
+  .take .eb { color: rgba(10,10,11,.6); }
+  .take .big { font-size: 64px; font-weight: 800; letter-spacing: -0.07em; line-height: .9; margin: 10px 0 4px; position: relative; text-transform: none; }
+  .take .big::after { content: ''; position: absolute; left: 0; top: 50%; width: 70px; height: 70px; margin-top: -35px; border-radius: 50%; border: 3px solid #0A0A0B; opacity: 0; animation: rip 1.6s ease-out infinite; }
+  .take .who { font-size: 20px; font-weight: 800; letter-spacing: -0.04em; }
+  .take .meta { font: 500 10px 'Geist Mono', monospace; letter-spacing: .1em; margin-top: 4px; }
+  .why { margin-top: 14px; border-radius: 14px; background: #0A0A0B; color: #F5F5F3; padding: 12px; min-height: 58px; }
+  .why .eb { color: rgba(245,245,243,.55); }
+  .why b { display: block; font-size: 16px; margin-top: 4px; letter-spacing: -0.02em; }
+  .why b.wait { opacity: .5; font-weight: 600; font-size: 13px; }
+  .why b.new { animation: pop .5s cubic-bezier(.2,1.6,.4,1); color: #C6FF3D; }
+  @keyframes pop { 0% { transform: scale(.85); opacity: 0 } 100% { transform: none; opacity: 1 } }
+  .dir { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+  .arrow { width: 54px; height: 54px; border-radius: 50%; background: #0A0A0B; display: grid; place-items: center; flex: none; }
+  .arrow svg { width: 28px; height: 28px; transition: transform .6s; }
+  .dir .d { font-size: 30px; font-weight: 800; letter-spacing: -0.05em; line-height: 1; }
+  .dir small { font: 500 10px 'Geist Mono', monospace; letter-spacing: .08em; display: block; margin-top: 3px; }
+  .others { font: 500 10px 'Geist Mono', monospace; letter-spacing: .08em; margin-top: 12px; opacity: .75; }
+  .take .acts { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+
+  /* phone 2: going */
+  .going-card { border: 2px solid #C6FF3D; border-radius: 16px; padding: 12px; margin-top: 4px; }
+  .going-card .who { font-weight: 800; font-size: 17px; letter-spacing: -0.03em; }
+  .going-card .why2 { font-size: 13px; color: #C6FF3D; margin: 2px 0 8px; }
+  .big-d { display: flex; align-items: baseline; gap: 8px; }
+  .big-d b { font-size: 40px; font-weight: 800; letter-spacing: -0.06em; }
+  .big-d span { font: 500 10px 'Geist Mono', monospace; letter-spacing: .1em; opacity: .7; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .chip { border: 1px solid #444; border-radius: 999px; padding: 6px 10px; font-size: 12px; cursor: pointer; background: transparent; color: #F5F5F3; font-family: 'Geist', sans-serif; }
+  .chip.on { background: #C6FF3D; color: #0A0A0B; border-color: #C6FF3D; font-weight: 700; }
+  .peer { border: 1px dashed #444; border-radius: 14px; padding: 10px; margin-top: 10px; font-size: 12px; }
+  .peer .eb { margin-bottom: 4px; }
+  .done-note { border-radius: 14px; background: #141614; padding: 12px; margin-top: 10px; font-size: 13px; display: none; }
+  .done-note b { color: #C6FF3D; }
+
+  /* phone 3: inbox */
+  .tabs { display: flex; gap: 6px; margin: 6px 0 10px; }
+  .tab { flex: 1; border-radius: 999px; padding: 8px; text-align: center; font-size: 12px; font-weight: 700; border: 1px solid #333; cursor: pointer; }
+  .tab.on { background: #F5F5F3; color: #0A0A0B; border-color: #F5F5F3; }
+  .al { border-radius: 14px; padding: 10px 12px; margin-bottom: 8px; background: #141614; border: 1px solid #262626; }
+  .al.sos { background: #C6FF3D; color: #0A0A0B; border-color: #C6FF3D; }
+  .al.sos .eb { color: rgba(10,10,11,.6); }
+  .al p { margin: 3px 0 0; font-size: 13px; }
+  .al .tg { font: 500 9px 'Geist Mono', monospace; letter-spacing: .1em; margin-top: 6px; opacity: .8; }
+  .al.done { opacity: .45; }
+  .grp { font: 500 9px 'Geist Mono', monospace; letter-spacing: .2em; opacity: .5; margin: 10px 0 6px; }
+  .stars { color: #C6FF3D; letter-spacing: 2px; }
+</style>
+
+<div class="wrap">
+  <!-- phone 1 -->
+  <div class="col">
+    <div class="kj-phone">
+      <div class="pad">
+        <div class="eb">MARSHAL · LIVE</div>
+        <h4>All quiet<span>.</span></h4>
+        <div class="row"><span>23:41 left</span><span>11 free · 3 in Penjara · 4 Kejar</span></div>
+        <div class="map"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M8 20 Q30 4 62 10 T94 40 Q98 70 74 90 T22 88 Q2 64 8 20Z" fill="none" stroke="#3a3a3a" stroke-width=".8"/></svg>
+          <i class="dot me" style="left:30%;top:62%"></i></div>
+        <p class="muted">SOS takes over the whole screen, even if you're on another tab of Kejar. With the page closed, it arrives as a push notification that opens straight to this.</p>
+      </div>
+      <div class="take" id="take">
+        <div class="eb">MARSHALS · SOS · SENT 0:04 AGO</div>
+        <div class="big">sos</div>
+        <div class="who">Aina #07</div>
+        <div class="meta">RUNNER · FREE · GPS ±12 M</div>
+        <div class="why"><div class="eb">WHAT'S HAPPENING</div><b class="wait" id="why">Waiting for Aina to say…</b></div>
+        <div class="dir">
+          <div class="arrow"><svg viewBox="0 0 24 24" id="arr"><path d="M12 2 L19 20 L12 16 L5 20 Z" fill="#C6FF3D"/></svg></div>
+          <div><div class="d">180 m</div><small>NORTH-EAST · NEAR THE LAKE PATH</small></div>
+        </div>
+        <div class="others" id="others">NOBODY'S GOING YET</div>
+        <div class="acts">
+          <button class="b dark" onclick="going()">I'm going</button>
+          <button class="b ghost" style="color:#0A0A0B;border-color:rgba(10,10,11,.3)" onclick="closeTake()">See the map first</button>
+        </div>
+      </div>
+    </div>
+    <button class="test" onclick="sendSos()">Send a test SOS</button>
+    <p class="cap"><b>1. The takeover.</b> The whole screen turns lime with a long buzz pattern. The runner's reason arrives a few seconds later, when they tap a chip. The arrow and distance work without a map.</p>
+  </div>
+
+  <!-- phone 2 -->
+  <div class="col">
+    <div class="kj-phone">
+      <div class="pad">
+        <div class="eb">MARSHAL · YOU'RE GOING</div>
+        <h4>Head to Aina<span>.</span></h4>
+        <div class="map" style="height:150px"><svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M8 20 Q30 4 62 10 T94 40 Q98 70 74 90 T22 88 Q2 64 8 20Z" fill="none" stroke="#3a3a3a" stroke-width=".8"/>
+          <line x1="30" y1="62" x2="70" y2="30" stroke="#C6FF3D" stroke-width=".8" stroke-dasharray="2 2"/></svg>
+          <i class="dot me" id="me2" style="left:30%;top:62%"></i><i class="dot pin" style="left:70%;top:30%"></i></div>
+        <div class="going-card">
+          <div class="who">Aina #07</div>
+          <div class="why2" id="why2">Catch dispute with Ben #K2</div>
+          <div class="big-d"><b id="dist">180 m</b><span>NORTH-EAST</span></div>
+          <p class="muted">Aina's dot updates every few seconds while her SOS is open, even outside pings.</p>
+        </div>
+        <div class="eb" style="margin-top:12px">WHEN IT'S SORTED</div>
+        <div class="chips" id="out">
+          <button class="chip" onclick="pick(this)">Sorted, all good</button>
+          <button class="chip" onclick="pick(this)">First aid given</button>
+          <button class="chip" onclick="pick(this)">Player left the game</button>
+          <button class="chip" onclick="pick(this)">False alarm</button>
+        </div>
+        <button class="b" id="close2" onclick="closeSos()">Close SOS</button>
+        <div class="done-note" id="dn"><b>Closed.</b> Saved to the game's safety records with your note. Aina sees "A marshal closed your SOS".</div>
+        <div class="peer"><div class="eb">WHAT SITI (OTHER MARSHAL) SEES</div>SOS · Aina #07 · <b>Hafiz is going</b> · 2 min ago</div>
+      </div>
+    </div>
+    <p class="cap"><b>2. On the way.</b> "I'm going" tells the other marshals, so not everyone runs. The marshal closes it with one outcome chip, which goes into the safety records.</p>
+  </div>
+
+  <!-- phone 3 -->
+  <div class="col">
+    <div class="kj-phone">
+      <div class="pad">
+        <div class="eb">MARSHAL · ALERTS</div>
+        <h4>Inbox<span>.</span></h4>
+        <div class="tabs"><div class="tab on" id="t1" onclick="tab(1)">Live · 4</div><div class="tab" id="t2" onclick="tab(2)">After game · 2</div></div>
+        <div id="live">
+          <div class="al sos"><div class="eb">SOS · 1 MIN AGO</div><p><b>Aina #07</b>: Catch dispute with Ben #K2</p><div class="tg">HAFIZ IS GOING · 180 M NE</div></div>
+          <div class="grp">NEEDS A LOOK</div>
+          <div class="al"><div class="eb">BOUNDARY · 2 MIN AGO</div><p>Wei #14 is 60 m outside the play area.</p></div>
+          <div class="al"><div class="eb">CATCH · 4 MIN AGO</div><p>Siti #03 caught twice in a minute. Flagged.</p></div>
+          <div class="al"><div class="eb">CHECK-INS · 6 MIN AGO</div><p>Darren #11 missed 2 check-ins. Sent to Penjara.</p></div>
+          <div class="grp">CLOSED</div>
+          <div class="al done"><div class="eb">SOS · 18 MIN AGO</div><p>Jun #05: Hurt</p><div class="tg">SITI · FIRST AID GIVEN</div></div>
+        </div>
+        <div id="after" style="display:none">
+          <div class="al"><div class="eb">REPORT · ROUGH PLAY</div><p><b>Aina #07</b> about <b>Ben #K2</b>: "Grabbed my arm, not the band."</p><div class="tg">ALSO: CATCH DISPUTE SOS DURING THE GAME</div></div>
+          <div class="al"><div class="eb">REPORT · SOMETHING ELSE</div><p><b>Wei #14</b> about <b>Darren #11</b>: "Kept hiding in the toilets."</p></div>
+          <div class="grp">HOW FUN WAS IT? · 16 OF 18 RATED</div>
+          <div class="al"><p><span class="stars">★★★★☆</span> 4.3 average</p><p class="muted" style="margin-top:4px">"More power-up stations near the lake." · "Hide phase too short."</p></div>
+        </div>
+      </div>
+    </div>
+    <p class="cap"><b>3. The inbox.</b> An open SOS is always pinned on top in lime. Other alerts sit below, then closed ones fade out. After the game, the reports and ratings get their own tab, linked to any SOS from the game.</p>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id)
+  let t
+  function sendSos() {
+    const take = $('take'), why = $('why')
+    take.classList.remove('on'); void take.offsetWidth; take.classList.add('on')
+    why.className = 'wait'; why.textContent = 'Waiting for Aina to say…'
+    $('others').textContent = "NOBODY'S GOING YET"
+    if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400])
+    clearTimeout(t)
+    t = setTimeout(() => { why.className = 'new'; why.textContent = 'Catch dispute with Ben #K2' }, 2200)
+  }
+  function closeTake() { $('take').classList.remove('on') }
+  function going() { $('others').textContent = "YOU'RE GOING · SITI CAN SEE THAT"; setTimeout(closeTake, 700); walk() }
+  function walk() {
+    let d = 180; const me = $('me2'); me.style.left = '30%'; me.style.top = '62%'
+    const iv = setInterval(() => {
+      d -= 15; $('dist').textContent = Math.max(d, 0) + ' m'
+      const f = 1 - d / 180; me.style.left = 30 + 40 * f + '%'; me.style.top = 62 - 32 * f + '%'
+      if (d <= 0) { clearInterval(iv); $('dist').textContent = "You're there" }
+    }, 300)
+  }
+  function pick(el) { document.querySelectorAll('#out .chip').forEach((c) => c.classList.remove('on')); el.classList.add('on') }
+  function closeSos() { $('dn').style.display = 'block'; $('close2').disabled = true; $('close2').style.opacity = .4 }
+  function tab(n) { $('t1').classList.toggle('on', n === 1); $('t2').classList.toggle('on', n === 2); $('live').style.display = n === 1 ? '' : 'none'; $('after').style.display = n === 2 ? '' : 'none' }
+</script>

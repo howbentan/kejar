@@ -17,6 +17,8 @@
 - `5-later-moments.html`
 - `6-checkin.html` and `7-checkin-states.html`: the check-in moment (§7a); option B in `6-checkin.html` is the chosen one.
 - `8-power-up-slot.html`: the one power-up slot with the shared deck (§7b).
+- `9-penjara-dare-reel.html`, `10-dato-seri.html` and `11-rarity-tiers.html`: Penjara and Dato Seri (jail design §3a and §4a) and the rarity tiers (power-ups design §5c).
+- `12-marshal-sos.html`: the marshal's side of an SOS (§6.5).
 
 ## 1. Why
 
@@ -132,6 +134,34 @@ Replaces the in-game SOS and Report buttons (`SafetyBar`).
     - `Send report`.
 - **Reports reuse the existing report action and safety records.** That action must accept reports after the game has ended, for players who were in it.
 - **Marshals and the organiser** see post-game reports alongside the game's alerts.
+
+### 6.5 The marshal's side of an SOS (added 2026-10-30)
+
+Mockup: `12-marshal-sos.html`. This replaces today's single alert row in `MarshalTools`. The organiser gets this screen too, since the organiser's live view is already a marshal view.
+
+- **Takeover:** a new SOS turns the **whole screen lime**, sliding up over whatever the marshal had open, with a long buzz pattern (`400-150-400-150-400`). With the page closed it arrives as a push notification that opens straight to the takeover. It shows:
+  - `MARSHALS · SOS · SENT 0:04 AGO` (the time ticks up);
+  - a big lowercase **`sos`** with a ripple ring, then the sender (`Aina #07`) and `RUNNER · FREE · GPS ±12 M`;
+  - **What's happening:** a black panel showing `Waiting for Aina to say…`, which pops to the reason when the runner taps a chip (§6.2), e.g. `Catch dispute with Ben #K2`;
+  - **an arrow and distance** from the marshal to the SOS (`180 m · NORTH-EAST`), plus a landmark name if the arena has one nearby. This works without reading a map;
+  - who's responding: `NOBODY'S GOING YET` / `HAFIZ IS GOING`;
+  - **`I'm going`** (primary) and `See the map first`.
+- **`I'm going`** marks the marshal as responding, so every other marshal (and the organiser) sees `Hafiz is going` on the alert and doesn't also run. A second marshal can still tap it to go too.
+- **On the way:** the map shows a dashed line from the marshal to the SOS, and a card with the sender, reason and a live distance counting down (`You're there` on arrival). **While an SOS is open, the sender's position updates every few seconds,** not just at pings. That's visible to marshals only, and it stops when the SOS closes.
+- **Closing:** one outcome chip, **Sorted, all good · First aid given · Player left the game · False alarm**, then `Close SOS`. The outcome and who closed it go into the safety record. The sender sees `A marshal closed your SOS`.
+- **The inbox** (the marshal's alert list) has two tabs:
+  - **Live:** open SOS alerts are always pinned on top in lime, showing who's going and how far. Below them, under `NEEDS A LOOK`, are the other alerts (boundary, flagged catch, check-ins). Closed ones fade under `CLOSED`, with who closed them and the outcome.
+  - **After game:** post-game reports (§6.4), each linked to any SOS from the same player during the game, plus the `How fun was it?` average and the comments.
+- **Colour:** lime means "needs you now", consistent with check-ins. There's no red.
+- **New server work** (**left to the builder**): a `respondToSos` action ("I'm going"), an outcome on closing an alert (extending today's `handleAlert`), and the SOS sender's live position while the SOS is open.
+
+### 6.6 Running an event with two people (owner's decision, 2026-10-30)
+
+The goal is the smallest safe crew: **two people**.
+- **The organiser is the roaming marshal.** That's already true in the code: the organiser's live view has the marshal role and tools, and gets SOS push.
+- **One helper, invited as a marshal,** is stationed at Penjara (playing Pak Pulis) and is the backup for any SOS.
+- **Why two, not one:** Penjara can run with nobody there (jailbreaks are QR scans, and dares don't decide who gets out), and Dato Seri's stash mode needs nobody (jail design §4b). So one person is technically possible, but if the only marshal is busy with someone who's hurt, nobody is covering everyone else. `I'm going` lets one marshal respond while the other keeps watch.
+- **Bigger events can add people** (more marshals, or a quest-giver for Dato Seri's quest-giver mode), but nothing requires more than two.
 
 ## 7. The lucky dip: claiming a power-up
 
