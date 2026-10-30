@@ -18,7 +18,7 @@ Rules:
 
 **Roles.** Dikejar (runners, about 3 in 4 players), Kejar (chasers, about 1 in 4) and marshals. The organiser is also a marshal. Roles are assigned or shuffled in the lobby, and the app refuses lopsided teams.
 
-**Kit.** Runners wear an armband with a velcro tag that has a QR code and a number (e.g. #07). Chasers wear lime vests, and marshals wear vests marked MARSHAL.
+**Kit** (§5a). Runners wear their own clothes plus a **dark velcro arm strap** carrying a rip-off tag (a QR code and a number, e.g. #07). Chasers wear a **hi-vis yellow vest** and no armband. Marshals wear an **orange vest** and a MARSHAL lanyard card.
 
 **Flow.**
 1. **Join:** open the link, enter a name, accept the code of conduct and waiver, and scan your tag to link it.
@@ -90,7 +90,49 @@ Rules:
 - **Printed kit:**
   - **Both modes:** runner tags (armbands), chaser and marshal vests, station QR cards, the Penjara QR card.
   - **Full adds** the Dato Seri stash card (or the coin, in quest-giver mode).
-- The organiser setup screen should turn this into an **event-day checklist** (next design).
+- The organiser setup screen turns this into an **event-day checklist** (organiser setup design §3).
+
+## 5a. The physical kit (owner's decision, 2026-10-30)
+
+Designed to be cheap, reusable and bought in one trip, mostly from MR.DIY.
+
+**The runner tag.** It has to rip off with one tug, stay on while running, stay flat and scannable after being grabbed, be reused every event, and go back on in seconds. It's built in layers:
+1. **A printed card** with the tag's QR code (`KEJAR:TAG:<n>`) and its number, sized for an ID holder (about 54 × 85 mm, QR at least 35 mm).
+2. **A clear rigid ID card holder** around the card, to keep it flat and dry (MR.DIY transparent ID card holder, 6 pcs).
+3. **A patch of sticky hook velcro, about 2 × 3 cm,** on the back of the holder. **Its size is the rip-force dial:** test once, then fix it for every tag.
+4. **A black hook-and-loop arm strap,** about 3–5 cm wide, with the soft loop side facing out, so the tag sticks anywhere on it. It's adjustable for any arm, and dark so runners can hide.
+
+The chaser rips the **whole holder** off and scans it. At Penjara the marshal presses it back onto the runner's strap. Nothing is sewn and nothing is single-use; only the paper card is ever reprinted.
+
+**Who wears what:**
+
+| Who | Wears |
+|---|---|
+| Dikejar | Own clothes plus the dark arm strap and tag on the upper arm |
+| Kejar | A **hi-vis yellow vest** (MR.DIY safety vest; fluorescent yellow sits close to Volt lime). No armband. |
+| Marshals | An **orange vest** (MR.DIY reflective vest) plus a lanyard with a `MARSHAL` card in an ID holder. **Changed from the base design's black or white vests:** orange can't be confused with the chasers' yellow, and reads as "safety" to the public. |
+
+**Cards around the park.** Station cards, the Penjara card and the Full-mode Dato Seri stash card use the **same clear ID holders**, fixed with **painter's tape** so nothing marks park property. Bring a zip bag for the stash card in case of rain.
+
+**Shopping list for about 20 players** (15 runners, 5 chasers, 2 marshals), approximate:
+
+| Item | Qty | Where | Approx. |
+|---|---|---|---|
+| Transparent ID card holders (6 pcs) | 4 packs | MR.DIY, RM2.10 a pack | RM8.40 |
+| Black velcro arm straps | 15 | MR.DIY if stocked, else Shopee | RM15–30 |
+| Sticky hook velcro (dots or strip) | 1 roll | MR.DIY if stocked, else Shopee | RM5–10 |
+| Safety vests (yellow) | 5 | MR.DIY, RM4.40–9.30 | RM22–47 |
+| Orange reflective vests | 2 | MR.DIY, RM5.90 | RM12 |
+| Neck lanyards | 2 | MR.DIY, RM0.90–1.60 | RM3 |
+| Painter's tape | 1 | MR.DIY | about RM5 |
+| Printing | — | — | about RM3 |
+| **Total** | | | **about RM70–110, reusable** |
+
+Prices are from MR.DIY's online listings on 2026-10-30 and may change. Velcro straps and sticky velcro weren't found in MR.DIY's online catalogue, so check in store first. Some vests showed as sold out online.
+
+**Before the first event:**
+- Test the velcro patch size on two or three tags: it should survive a sprint and come off with one firm tug.
+- Test-scan a ripped tag through the holder in bright sun, since glare can slow scanning.
 
 ## 6. Words
 
@@ -141,6 +183,7 @@ Rules:
 | HANDOFF: "stations stay random-on-claim", "Abang Grab claims a station remotely", "slang applies to power-ups only" | Shared deck; Abang Grab picks 1 of the top 3 (sealed); English messages, local names (§6) |
 | Base §4.7: one scan at Penjara frees everyone at once | A **10-second hold** after the scan (§9a) |
 | Jail §4b and motion §8.2: everyone sees a yellow Dato Seri zone; the feed says `Dato Seri has been found` | **Dato Seri is a secret** (§9b): an unlabelled `?` zone, and the feed says `Something legendary was found.` |
+| Base §3: marshals in black or white vests | **Orange vests** plus a MARSHAL lanyard card (§5a) |
 | Dato Seri stash: what if the finder's slot is full? | **Not said before. Claude's call:** the scan is refused with `Use or lose your power-up first`, and the stash stays claimable |
 
 ## 9a. The 10-second rescue (owner's decision, 2026-10-30)
