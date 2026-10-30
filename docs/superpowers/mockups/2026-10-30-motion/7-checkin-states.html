@@ -1,0 +1,66 @@
+<h2>Check-in, version B: the other situations</h2>
+<p class="subtitle">Same map-first design. Use the buttons to switch between what a runner can see when they open Kejar around a ping.</p>
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  .wrap { display: flex; gap: 28px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+  .kj-phone { width: 260px; height: 500px; border-radius: 30px; background: #0A0A0B; border: 2px solid #2a2a2a; position: relative; overflow: hidden;
+    color: #F5F5F3; font-family: 'Geist', system-ui, sans-serif; padding: 16px 12px; box-sizing: border-box; }
+  .eb { font: 500 9px 'Geist Mono', monospace; letter-spacing: .2em; color: rgba(245,245,243,.55); }
+  .banner { display: flex; align-items: center; gap: 10px; border-radius: 16px; padding: 10px 12px; animation: bannerin .5s cubic-bezier(.2,1.4,.4,1); }
+  @keyframes bannerin { from { transform: translateY(-80px) } to { transform: none } }
+  .banner .tk { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; flex: none; }
+  .banner b { display: block; font-size: 15px; letter-spacing: -0.02em; }
+  .banner span { font-size: 11px; font-weight: 600; }
+  .ok { background: #C6FF3D; color: #0A0A0B; } .ok .tk { background: #0A0A0B; color: #C6FF3D; }
+  .wait { background: #141614; color: #F5F5F3; border: 1px solid rgba(255,255,255,.18); } .wait .tk { border: 2px solid #C6FF3D; color: #C6FF3D; }
+  .miss { background: #F5F5F3; color: #0A0A0B; } .miss .tk { background: #0A0A0B; color: #F5F5F3; }
+  .map { position: relative; height: 290px; margin-top: 10px; border-radius: 18px; background: #121412; border: 1px solid #262626; overflow: hidden; }
+  .map .edge { position: absolute; inset: 14px; border: 1px solid rgba(245,245,243,.35); border-radius: 44%; }
+  .me { position: absolute; left: 35%; top: 62%; width: 12px; height: 12px; border-radius: 50%; background: #F5F5F3; border: 2px solid #0A0A0B; transform: translate(-50%, -50%); }
+  .ch { position: absolute; width: 56px; height: 56px; border-radius: 50%; border: 1.5px solid #C6FF3D; background: rgba(198,255,61,.1); transform: translate(-50%, -50%); animation: chin .55s cubic-bezier(.2,1.4,.4,1) both; }
+  .ch:nth-of-type(2) { animation-delay: .15s } .ch:nth-of-type(3) { animation-delay: .3s }
+  .ch.old { border-style: dashed; opacity: .55; animation: none; }
+  .ch b { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); font: 600 9px 'Geist', sans-serif; white-space: nowrap; color: #C6FF3D; margin-top: 2px; }
+  @keyframes chin { from { transform: translate(-50%, -50%) scale(1.6); opacity: 0 } to { transform: translate(-50%, -50%) scale(1); opacity: 1 } }
+  .pen { position: absolute; left: 52%; top: 48%; transform: translate(-50%, -50%); font: 700 8px 'Geist', sans-serif; letter-spacing: .08em; text-align: center; }
+  .pen i { display: block; width: 12px; height: 12px; border-radius: 50%; background: #0A0A0B; border: 2px solid #F5F5F3; margin: 0 auto 2px; }
+  .note { font-size: 12px; opacity: .75; margin: 8px 0 0; }
+  .strikes { display: flex; gap: 6px; align-items: center; margin-top: 8px; font: 500 10px 'Geist Mono', monospace; letter-spacing: .1em; }
+  .strikes i { width: 18px; height: 6px; border-radius: 3px; background: #333; display: inline-block; }
+  .strikes i.on { background: #F5F5F3; }
+  .tabs { display: flex; flex-direction: column; gap: 8px; max-width: 280px; }
+  .tabs button { text-align: left; background: transparent; color: #F5F5F3; border: 1px solid #444; border-radius: 14px; padding: 10px 12px; font: 600 13px 'Geist', sans-serif; cursor: pointer; }
+  .tabs button.on { border-color: #C6FF3D; box-shadow: 0 0 0 1px #C6FF3D inset; }
+  .tabs button small { display: block; font-weight: 400; opacity: .7; margin-top: 3px; }
+</style>
+
+<div class="wrap">
+  <div class="kj-phone" id="ph"></div>
+  <div class="tabs" id="tabs">
+    <button data-s="ok" class="on">1. Checked in on time<small>The happy path you picked, with the chaser snapshot.</small></button>
+    <button data-s="noswitch">2. Checked in, chaser view off<small>The organiser left "Dikejar can see Kejar" switched off: no circles, just the confirmation.</small></button>
+    <button data-s="early">3. Opened too early<small>Kejar was already open before the alert. It waits, then checks you in by itself when the window opens.</small></button>
+    <button data-s="missed">4. Opened too late<small>The window closed. You missed this one. Shows the strike count, since two in a row means Penjara.</small></button>
+  </div>
+</div>
+
+<script>
+  const MAP = (circles, old) => `<div class="map"><div class="edge"></div><div class="me"></div>
+    ${circles ? `<div class="ch${old ? ' old' : ''}" style="left:70%;top:30%"><b>Ben · ${old ? '4:10' : '4:15'}</b></div><div class="ch${old ? ' old' : ''}" style="left:28%;top:26%"><b>Siti · ${old ? '4:10' : '4:15'}</b></div><div class="ch${old ? ' old' : ''}" style="left:76%;top:76%"><b>Wei · ${old ? '4:10' : '4:15'}</b></div>` : ''}
+    <div class="pen"><i></i>PENJARA</div></div>`
+  const S = {
+    ok: `<div class="eb">DIKEJAR · #07</div><div class="banner ok" style="margin-top:8px"><div class="tk">✓</div><div><b>Checked in</b><span>Kejar see you in 0:44</span></div></div>
+      ${MAP(true)}<p class="eb" style="margin-top:8px">LIME CIRCLES · WHERE KEJAR WERE AT 4:15</p><p class="note">You can pocket your phone now.</p>`,
+    noswitch: `<div class="eb">DIKEJAR · #07</div><div class="banner ok" style="margin-top:8px"><div class="tk">✓</div><div><b>Checked in</b><span>Kejar see you in 0:44</span></div></div>
+      ${MAP(false)}<p class="note">You can pocket your phone now.</p>`,
+    early: `<div class="eb">DIKEJAR · #07</div><div class="banner wait" style="margin-top:8px"><div class="tk">…</div><div><b>Check-in opens in 1:12</b><span>Keep Kejar open and it checks you in by itself</span></div></div>
+      ${MAP(true, true)}<p class="eb" style="margin-top:8px">DASHED · LAST SNAPSHOT, FROM 4:10</p><p class="note">Ping at 5:00. The window is the last 45 s.</p>`,
+    missed: `<div class="eb">DIKEJAR · #07</div><div class="banner miss" style="margin-top:8px"><div class="tk">!</div><div><b>Missed this check-in</b><span>Kejar saw your last spot, marked "missed"</span></div></div>
+      ${MAP(true, true)}<div class="strikes">MISSED IN A ROW <i class="on"></i><i></i></div><p class="note">Miss the next one too and you're sent to Penjara. Next check-in buzzes at 5:15.</p>`,
+  }
+  const ph = document.getElementById('ph')
+  function show(s) { ph.innerHTML = S[s]; document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.s === s)) }
+  document.getElementById('tabs').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) show(b.dataset.s) })
+  show('ok')
+</script>

@@ -15,6 +15,7 @@
 - `3-sos.html`
 - `4-lucky-dip.html`: the left phone, "Pick a card", is the chosen one.
 - `5-later-moments.html`
+- `6-checkin.html` and `7-checkin-states.html`: the check-in moment (§7a); option B in `6-checkin.html` is the chosen one.
 
 ## 1. Why
 
@@ -156,6 +157,32 @@ Rules:
   - the plain-English effect line.
 - **Art is a separate task.** Until each character has its illustration, the art spot shows the initials (e.g. `D`, `AG`). All nine share one style: lime line art on black in the round frame, matching stroke weight. This also answers the power-ups design's open question on icons: brand colours, not emoji.
 - **One slot** (power-ups design §5a): the revealed card goes into the player's single power-up slot.
+
+## 7a. The check-in moment (added 2026-10-30)
+
+Mockups: `6-checkin.html` (option **B, map first**, chosen) and `7-checkin-states.html`. This dresses the check-in rules in `2026-10-30-kejar-checkins-counterping-penjara-design.md` §4–§5; it doesn't change them.
+
+**The alert** (push, 45 s before the ping):
+- title `Ping in 45s — check in!`;
+- body `Tap to check in. Kejar see you at 5:00.` (the ping's clock time).
+
+**Opening Kejar inside the window (map first):**
+- **A lime banner slides down from the top:** a black tick, `Checked in`, and a live countdown `Kejar see you in 0:44`.
+- **The map is the screen.** Your own dot gives two quick lime pulses to show your spot was sent.
+- **With the organiser's switch on,** the chasers' snapshot circles (lime, ~30 m, labelled `Ben · 4:15`) drop in one after another, with the caption `LIME CIRCLES · WHERE KEJAR WERE AT 4:15`.
+- **Penjara stays marked** on the map.
+- **The footer** reads `You can pocket your phone now.`
+- **A short buzz** confirms it.
+
+**The other situations:**
+
+| Situation | Banner | Rest of the screen |
+|---|---|---|
+| Switch off | the same lime `Checked in` banner and countdown | no chaser circles |
+| Opened too early (before the window) | **dark** banner with a lime outline: `Check-in opens in 1:12` and `Keep Kejar open and it checks you in by itself` | the previous snapshot shown **dashed and faded**, captioned `DASHED · LAST SNAPSHOT, FROM 4:10`, plus `Ping at 5:00. The window is the last 45 s.` When the window opens, it switches to the lime "Checked in" state without a tap, because the open page is already sending locations. |
+| Opened too late (after the window) | **white** banner: `Missed this check-in` and `Kejar saw your last spot, marked "missed"` | a strike counter `MISSED IN A ROW` with two bars (one filled); `Miss the next one too and you're sent to Penjara. Next check-in buzzes at 5:15.`; the old snapshot dashed |
+
+**Colour meaning across check-ins:** lime means you're fine, dark means wait, white means a warning. There's no red, since the brand doesn't use it.
 
 ## 8. Later: mocked up, not reviewed, not in the playtest build
 

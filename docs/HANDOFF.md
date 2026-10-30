@@ -92,14 +92,14 @@ Also floated: surprise missions, a bounty on the longest survivor. **Malaysian p
 - A slot stays busy while its effect runs.
 - Mat Rempit is one at a time, with a 3-minute team cooldown.
 
-**PLAYTEST BUILD (owner's decision, 2026-10-30): no new mechanics until a real game has been played.** Build only:
+**Playtest (updated 2026-10-30): the owner will not playtest until everything is in place**, so design work continues first. The first build, when it starts, is still:
 1. the check-in design (tight window, auto-jail, optional chaser view at check-in, Penjara);
 2. one power-up slot plus the Mat Rempit rule, on today's power-ups;
 3. motion design §4–§7: catch stamp, runner bars and Penjara guide, SOS bar with post-game report and feedback, lucky dip.
 
 Then playtest with friends, then a run club. Note catches per game, jailbreaks, on-time check-ins, and power-up usage.
 
-Suggested next: write the playtest build plan, then a real playtest in a park, then the endgame ideas above (the shrinking zone can reuse the Plan 4b play-area code); the owner hasn't chosen.
+Suggested next: keep designing the remaining screens (one power-up slot, jail dare wheel and Dato Seri, card art, the later motion moments), then plan and build., then the endgame ideas above (the shrinking zone can reuse the Plan 4b play-area code); the owner hasn't chosen.
 
 ## Setting up a new machine
 1. Install Node 20+ and Git, then clone: `git clone https://github.com/howbentan/kejar.git`

@@ -1,0 +1,140 @@
+<h2>The check-in moment</h2>
+<p class="subtitle">Aina is hiding. Her phone buzzes 45 s before the ping. <b>Tap the notification</b> on each phone to open Kejar and check in. Both show the chasers' snapshot (the organiser's switch is on). Click a card to pick one.</p>
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  .kj-phone { width: 250px; height: 500px; border-radius: 30px; background: #0A0A0B; border: 2px solid #2a2a2a; position: relative; overflow: hidden;
+    color: #F5F5F3; font-family: 'Geist', system-ui, sans-serif; margin: 0 auto; user-select: none; -webkit-user-select: none; }
+  .lock { position: absolute; inset: 0; background: linear-gradient(160deg, #1a1d18, #0A0A0B); padding: 18px 12px; transition: opacity .3s; }
+  .lock .time { text-align: center; font-weight: 300; font-size: 54px; letter-spacing: -0.04em; margin-top: 30px; }
+  .lock .date { text-align: center; font-size: 12px; opacity: .7; }
+  .noti { margin-top: 36px; background: rgba(245,245,243,.12); backdrop-filter: blur(8px); border-radius: 18px; padding: 10px 12px; cursor: pointer;
+    transform: translateY(-30px); opacity: 0; transition: all .45s cubic-bezier(.2,1.4,.4,1); }
+  .noti.on { transform: none; opacity: 1; }
+  .noti .app { display: flex; align-items: center; gap: 6px; font-size: 10px; opacity: .75; }
+  .noti .app b { width: 16px; height: 16px; border-radius: 5px; background: #0A0A0B; color: #C6FF3D; display: grid; place-items: center; font-size: 9px; font-weight: 800; }
+  .noti .t { font-weight: 700; font-size: 13px; margin-top: 4px; }
+  .noti .s { font-size: 12px; opacity: .8; }
+  .tapme { text-align: center; font: 500 9px 'Geist Mono', monospace; letter-spacing: .2em; color: #C6FF3D; margin-top: 10px; opacity: 0; transition: opacity .3s .4s; }
+  .noti.on + .tapme { opacity: 1; }
+  .app-screen { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity .25s; }
+  .opened .lock { opacity: 0; pointer-events: none; }
+  .opened .app-screen { opacity: 1; pointer-events: auto; }
+  .eb { font: 500 9px 'Geist Mono', monospace; letter-spacing: .2em; color: rgba(245,245,243,.55); }
+  .map { position: relative; border-radius: 18px; background: #121412; border: 1px solid #262626; overflow: hidden; }
+  .map .edge { position: absolute; inset: 14px; border: 1px solid rgba(245,245,243,.35); border-radius: 44%; }
+  .me { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: #F5F5F3; border: 2px solid #0A0A0B; transform: translate(-50%, -50%); }
+  .me::after { content: ''; position: absolute; inset: -8px; border-radius: 50%; border: 2px solid #C6FF3D; opacity: 0; }
+  .opened .me::after { animation: meping 1s ease-out .2s 2; }
+  @keyframes meping { 0% { transform: scale(.4); opacity: 1 } 100% { transform: scale(2.4); opacity: 0 } }
+  .ch { position: absolute; width: 56px; height: 56px; border-radius: 50%; border: 1.5px solid #C6FF3D; background: rgba(198,255,61,.1); transform: translate(-50%, -50%) scale(0); opacity: 0; }
+  .ch b { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); font: 600 9px 'Geist', sans-serif; white-space: nowrap; color: #C6FF3D; margin-top: 2px; }
+  .opened .ch { animation: chin .55s cubic-bezier(.2,1.4,.4,1) forwards; }
+  .opened .ch:nth-of-type(2) { animation-delay: .15s } .opened .ch:nth-of-type(3) { animation-delay: .3s }
+  @keyframes chin { from { transform: translate(-50%, -50%) scale(1.6); opacity: 0 } to { transform: translate(-50%, -50%) scale(1); opacity: 1 } }
+  .pen { position: absolute; transform: translate(-50%, -50%); font: 700 8px 'Geist', sans-serif; letter-spacing: .08em; color: #F5F5F3; text-align: center; }
+  .pen i { display: block; width: 12px; height: 12px; border-radius: 50%; background: #0A0A0B; border: 2px solid #F5F5F3; margin: 0 auto 2px; }
+  .cd { font: 500 34px 'Geist Mono', monospace; letter-spacing: -0.04em; color: #C6FF3D; }
+  .pocket { font-size: 12px; opacity: .7; }
+  .replay { display: block; margin: 10px auto 0; background: #C6FF3D; color: #0A0A0B; border: 0; border-radius: 999px; padding: 8px 18px; font: 700 13px 'Geist', sans-serif; cursor: pointer; }
+
+  /* A: confirmation first, then map */
+  .a .big { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; background: #0A0A0B; z-index: 2; }
+  .a .big .tick { width: 84px; height: 84px; border-radius: 50%; border: 3px solid #C6FF3D; display: grid; place-items: center; margin: 0 auto 12px; transform: scale(0); }
+  .a .big .tick svg { width: 40px; height: 40px; }
+  .a .big .tick path { stroke: #C6FF3D; stroke-width: 6; fill: none; stroke-dasharray: 60; stroke-dashoffset: 60; }
+  .a .big h4 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.05em; opacity: 0; }
+  .a .big h4 span { color: #C6FF3D; }
+  .a.opened .big .tick { animation: tick .45s cubic-bezier(.2,1.6,.4,1) .05s forwards; }
+  .a.opened .big .tick path { animation: draw .35s ease-out .35s forwards; }
+  .a.opened .big h4 { animation: fadein .3s ease-out .45s forwards; }
+  .a.opened .big { animation: fadeout .35s ease-in 1.4s forwards; }
+  .a.opened .ch { animation-delay: 1.7s } .a.opened .ch:nth-of-type(2) { animation-delay: 1.85s } .a.opened .ch:nth-of-type(3) { animation-delay: 2s }
+  .a.opened .me::after { animation-delay: 1.6s }
+  @keyframes tick { to { transform: scale(1) } }
+  @keyframes draw { to { stroke-dashoffset: 0 } }
+  @keyframes fadein { to { opacity: 1 } }
+  @keyframes fadeout { to { opacity: 0; visibility: hidden } }
+
+  /* B: map first with a banner */
+  .b .banner { display: flex; align-items: center; gap: 10px; background: #C6FF3D; color: #0A0A0B; border-radius: 16px; padding: 10px 12px; transform: translateY(-80px); }
+  .b.opened .banner { animation: bannerin .5s cubic-bezier(.2,1.4,.4,1) forwards; }
+  @keyframes bannerin { to { transform: none } }
+  .b .banner .tk { width: 28px; height: 28px; border-radius: 50%; background: #0A0A0B; color: #C6FF3D; display: grid; place-items: center; font-weight: 800; flex: none; }
+  .b .banner b { display: block; font-size: 15px; letter-spacing: -0.02em; }
+  .b .banner span { font-size: 11px; font-weight: 600; }
+</style>
+
+<div class="cards">
+  <div class="card" data-choice="confirm-first" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#000;padding:12px">
+      <div class="kj-phone a" id="pa">
+        <div class="lock"><div class="time">4:15</div><div class="date">Saturday · KLCC Park</div>
+          <div class="noti" onclick="event.stopPropagation(); openPhone('pa')"><div class="app"><b>k.</b> kejar. · now</div><div class="t">Ping in 45s — check in!</div><div class="s">Tap to check in. Kejar see you at 5:00.</div></div>
+          <div class="tapme">TAP THE NOTIFICATION</div></div>
+        <div class="app-screen" style="padding:16px 12px">
+          <div class="big"><div><div class="tick"><svg viewBox="0 0 40 40"><path d="M9 21 l8 8 l15 -17"/></svg></div><h4>Checked in<span>.</span></h4></div></div>
+          <div class="eb">DIKEJAR · #07</div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin:8px 0 6px"><div><div class="eb">KEJAR SEE YOU IN</div><div class="cd" id="cda">0:44</div></div><div class="eb" style="text-align:right">CHECKED IN ✓</div></div>
+          <div class="map" style="height:250px"><div class="edge"></div>
+            <div class="me" style="left:35%;top:62%"></div>
+            <div class="ch" style="left:70%;top:30%"><b>Ben · 4:15</b></div>
+            <div class="ch" style="left:28%;top:26%"><b>Siti · 4:15</b></div>
+            <div class="ch" style="left:76%;top:76%"><b>Wei · 4:15</b></div>
+            <div class="pen" style="left:52%;top:48%"><i></i>PENJARA</div></div>
+          <p class="eb" style="margin-top:8px">LIME CIRCLES · WHERE KEJAR WERE AT 4:15</p>
+          <p class="pocket">You can pocket your phone now.</p>
+        </div>
+      </div>
+      <button class="replay" onclick="event.stopPropagation(); reset('pa')">Replay</button>
+    </div>
+    <div class="card-body"><h3>A. Confirmation first</h3><p>A big lime tick and "Checked in." for a second, then it fades to the map, where the chasers' circles drop in, with the countdown to the ping.</p></div>
+  </div>
+
+  <div class="card" data-choice="map-first" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#000;padding:12px">
+      <div class="kj-phone b" id="pb">
+        <div class="lock"><div class="time">4:15</div><div class="date">Saturday · KLCC Park</div>
+          <div class="noti" onclick="event.stopPropagation(); openPhone('pb')"><div class="app"><b>k.</b> kejar. · now</div><div class="t">Ping in 45s — check in!</div><div class="s">Tap to check in. Kejar see you at 5:00.</div></div>
+          <div class="tapme">TAP THE NOTIFICATION</div></div>
+        <div class="app-screen" style="padding:16px 12px">
+          <div class="banner"><div class="tk">✓</div><div><b>Checked in</b><span>Kejar see you in <span id="cdb">0:44</span></span></div></div>
+          <div class="map" style="height:300px;margin-top:10px"><div class="edge"></div>
+            <div class="me" style="left:35%;top:62%"></div>
+            <div class="ch" style="left:70%;top:30%"><b>Ben · 4:15</b></div>
+            <div class="ch" style="left:28%;top:26%"><b>Siti · 4:15</b></div>
+            <div class="ch" style="left:76%;top:76%"><b>Wei · 4:15</b></div>
+            <div class="pen" style="left:52%;top:48%"><i></i>PENJARA</div></div>
+          <p class="eb" style="margin-top:8px">LIME CIRCLES · WHERE KEJAR WERE AT 4:15</p>
+          <p class="pocket">You can pocket your phone now.</p>
+        </div>
+      </div>
+      <button class="replay" onclick="event.stopPropagation(); reset('pb')">Replay</button>
+    </div>
+    <div class="card-body"><h3>B. Map first</h3><p>The map opens straight away with a lime "Checked in" banner and the countdown sliding down from the top, and the chasers' circles drop in at once. Faster to read when you're nervous.</p></div>
+  </div>
+</div>
+
+<script>
+  const timers = {}
+  function openPhone(id) {
+    const ph = document.getElementById(id)
+    if (ph.classList.contains('opened')) return
+    ph.classList.add('opened')
+    if (navigator.vibrate) navigator.vibrate(60)
+    let left = 44
+    const el = document.getElementById(id === 'pa' ? 'cda' : 'cdb')
+    clearInterval(timers[id])
+    timers[id] = setInterval(() => { left = Math.max(0, left - 1); el.textContent = `0:${String(left).padStart(2, '0')}` }, 1000)
+  }
+  function reset(id) {
+    const ph = document.getElementById(id)
+    clearInterval(timers[id])
+    ph.classList.remove('opened')
+    const n = ph.querySelector('.noti'); n.classList.remove('on')
+    document.getElementById(id === 'pa' ? 'cda' : 'cdb').textContent = '0:44'
+    void ph.offsetWidth
+    setTimeout(() => { n.classList.add('on'); if (navigator.vibrate) navigator.vibrate([120, 60, 120]) }, 600)
+  }
+  setTimeout(() => { reset('pa'); reset('pb') }, 300)
+</script>
