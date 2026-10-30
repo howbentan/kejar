@@ -74,6 +74,12 @@ Also floated: surprise missions, a bounty on the longest survivor. **Malaysian p
 
 **A legendary power-up for chasers, to mirror Dato Seri (brainstorm in progress, 2026-10-30 — not finished).** `docs/superpowers/specs/2026-10-30-kejar-chaser-legendary-design.md`. The character (Bomoh vs Pontianak, or a safer backup) is the one open blocker, deliberately left for the owner to sanity-check with actual Malaysian people first; everything else about the mechanic (rarity, hand cost, discovery, effect duration, staffing) is already pinned down in that file. Pick up there on a new device.
 
+**Check-in and jail fixes (designed 2026-10-30, not built).** `docs/superpowers/specs/2026-10-30-kejar-checkins-counterping-penjara-design.md`.
+- Two missed check-ins in a row send a runner to Penjara automatically (one miss is free).
+- Runners get a quiet "counter-ping" showing chasers 60 s after each ping.
+- "Jail" becomes "Penjara" for players.
+- **Build this first, before the playtest and before the other two designs.**
+
 Suggested next: a real playtest in a park, then the endgame ideas above (the shrinking zone can reuse the Plan 4b play-area code); the owner hasn't chosen.
 
 ## Setting up a new machine
