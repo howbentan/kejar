@@ -128,6 +128,10 @@ The organiser picks a **Dato Seri mode** when creating the game. Both end in the
   - The organiser can move the stash before the game starts.
 - **The mockup in §4a shows quest-giver mode.** In stash mode the map phone is the same, and the grant moment is the normal scan reveal with the legendary card.
 
+## 4c. Kept secret (owner's decision, 2026-10-30)
+
+Players are never told about Dato Seri. The hint zone is an unlabelled `?`, the feed says `Something legendary was found.`, and nothing in the how-to-play story mentions it (rules doc §9b).
+
 ## 5. Non-goals
 
 - No random chance of failure for Settle.

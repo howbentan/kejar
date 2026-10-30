@@ -284,11 +284,12 @@ Replaces the earlier unreviewed list. ~~The power-up hand~~ is superseded by the
   | Jailbreak | `Hafiz freed 2 Dikejar from Penjara.` | Penjara is empty again. | 2 more Dikejar are loose near Penjara. |
   | Pak Guard | `A Kejar used Pak Guard.` | **At the next ping, anyone within 75 m of that Kejar shows exactly. Move away.** | Next ping shows Dikejar near them exactly. |
   | Ah Long | `A Kejar used Ah Long.` | A free Dikejar just lost their power-up. Check your slot. | One Dikejar's power-up is gone. |
-  | Dato Seri found | `Dato Seri has been found.` | One of you holds the legendary: they can free themselves and a friend from Penjara. | A Dikejar can now break out of Penjara with a friend. |
+  | Legendary found (Full, stash) | `Something legendary was found.` | The yellow ? zone is gone. | The yellow ? zone is gone. |
+  | Rescue starting | `Rescue starting at Penjara!` | **Hafiz is breaking them out. 10 s.** | **Catch them in 10 s and nobody gets out.** |
   | Auto-jail | `#22 missed 2 check-ins in a row.` | #22 went to Penjara. Check in when your phone buzzes, or you're next. | One less to find. #22 is in Penjara. |
   | 5 minutes left | `5 minutes left.` | **Survive 5 more minutes and Dikejar win.** | **Catch every free Dikejar in 5 minutes to win.** |
 
-  Bold `→` lines are the ones in a lime box. `Dato Seri has been found` is **Claude's call**: in stash mode the hint zone disappears for everyone when it's claimed, so the feed says why. Claiming it in quest-giver mode stays secret, so that line is stash mode only.
+  Bold `→` lines are the ones in a lime box. **Dato Seri is never named to players** (rules doc §9b), so the stash line is `Something legendary was found.` The rescue line comes from the 10-second rescue (rules doc §9a).
 
 ### 8.3 Phase changes
 - **`Kejar released.`:** a lime wipe sweeps across, holds and sweeps off.

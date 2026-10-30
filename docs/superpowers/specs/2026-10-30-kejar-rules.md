@@ -31,7 +31,7 @@ Rules:
 4. **Catching:** the chaser rips the tag off the upper arm with one hand (no grabbing or tackling), the runner stops, and the chaser scans the tag. The app checks the chaser was close enough. Disputes go through SOS to a marshal, never settled physically.
 5. **Penjara:** caught runners walk to Penjara.
    - They watch a spectator map delayed by 2 minutes, and get **one pull of the dare reel** per stay: a silly dare, or rarely "You're free".
-   - **A free runner who scans the Penjara QR** (within 30 m) frees everyone inside.
+   - **The rescue:** a free runner scans the Penjara QR, then **stays within 30 m for 10 seconds** (owner's decision, 2026-10-30). Chasers are warned the moment it starts. If the rescuer is caught or leaves the 30 m in that time, nobody gets out (§9a).
    - **Each runner can only be freed once per game,** however it happens, so games end.
 6. **Power-ups:** printed **stations** around the park. Scanning one within 30 m during the chase draws the **top card of your side's shared deck**, revealed with the lucky dip.
    - You hold **one power-up at a time**, and the slot stays busy while its effect runs.
@@ -76,7 +76,7 @@ Rules:
 | Gostan | next ping shows you 120–180 m away | power-ups §6.1 |
 | Mat Rempit | extra ping in 30 s, one at a time, 3 min team cooldown | power-ups §5a |
 | Station claim | within 30 m, once per player per station, station locks 60 s | base §4.8.1 |
-| Penjara rescue | free runner scans the Penjara QR within 30 m | base §4.7 |
+| Penjara rescue | scan the Penjara QR, then stay within 30 m for 10 s; frees everyone inside | this doc §9a |
 | Freed | once per runner per game, by any route | base §4.7 |
 | Dato Seri hint | fuzzy zone 100–200 m | jail design §4 |
 | Spectator delay in Penjara | 2 min | base §4.3 |
@@ -139,7 +139,34 @@ Rules:
 | Chaser legendary notes: "fills all 3 hand slots"; a staff of 5 | One slot; it must fit the crew of two, so a hidden-stash style grant unless volunteers exist (open, §11) |
 | Endgame notes: "Last call" and other ideas | Only `5 minutes left` (a warning, the feed line and the lime clock) is agreed. The rest stays unapproved (§11) |
 | HANDOFF: "stations stay random-on-claim", "Abang Grab claims a station remotely", "slang applies to power-ups only" | Shared deck; Abang Grab picks 1 of the top 3 (sealed); English messages, local names (§6) |
+| Base §4.7: one scan at Penjara frees everyone at once | A **10-second hold** after the scan (§9a) |
+| Jail §4b and motion §8.2: everyone sees a yellow Dato Seri zone; the feed says `Dato Seri has been found` | **Dato Seri is a secret** (§9b): an unlabelled `?` zone, and the feed says `Something legendary was found.` |
 | Dato Seri stash: what if the finder's slot is full? | **Not said before. Claude's call:** the scan is refused with `Use or lose your power-up first`, and the stash stays claimable |
+
+## 9a. The 10-second rescue (owner's decision, 2026-10-30)
+
+Freeing everyone with one quick scan was judged too swingy: one runner could undo 20 minutes of chaser work in 5 seconds. Instead of capping how many get out, the owner chose to keep "frees everyone" and make the rescue a risk.
+
+- **Start:** a free runner scans the Penjara QR within 30 m (as today). The rescue doesn't happen yet.
+- **Hold:** the rescuer keeps Kejar open and **stays within 30 m of Penjara for 10 seconds.** Their screen shows a lime ring filling and `Stay close · 7 s`. The phone sends its location every 1–2 s during the hold (**Claude's call**).
+- **Everyone hears about it at once:**
+  - **chasers:** a lime-box ticker line and a buzz, `Rescue starting at Penjara!` → `Catch them in 10 s and nobody gets out.`;
+  - **jailed runners:** `Hafiz is breaking you out · 7 s`;
+  - **the Penjara marshal:** the same line.
+- **Success:** after 10 s, everyone inside who hasn't already been freed once is freed, as today.
+- **Fail:** if the rescuer is **caught** (their tag is scanned) or a location puts them **more than 30 m away** (plus GPS error, as with station claims), the rescue fails. Nobody gets out, and the rescuer can try again if they're still free.
+- **Only one rescue at a time.** A second runner's scan during a hold just joins it, and the hold continues.
+- **GPS leniency** (**Claude's call**): one missing or poor-accuracy fix during the hold doesn't fail it. Only a clear "outside 30 m" does.
+- **Why:** chasers get a real chance to stop a rescue without camping on Penjara all game, and a successful rescue is earned. It's the best "hero moment" in the game.
+- **Dato Seri's Settle and the dare reel's free card are unchanged.** They free in the moment, because their cost is already the rare card.
+
+## 9b. Dato Seri is a secret (owner's decision, 2026-10-30)
+
+- **Players are never told about Dato Seri.** It's not in the how-to-play story, the lobby, the rules on the card, or the feed's wording.
+- **Stash mode keeps a mystery zone:** an unlabelled yellow `?` on every player's map, with no explanation. Players who go and look find the card and discover Dato Seri themselves.
+- **When it's claimed,** the zone disappears and the feed says `Something legendary was found.` (it never names the card).
+- **Settle is still visible** when it happens at Penjara. That's the moment everyone learns about it, which is part of the fun.
+- **Organisers do see it,** in the mode step, settings and kit list (organiser setup design).
 
 ## 10. Still to design before building
 
