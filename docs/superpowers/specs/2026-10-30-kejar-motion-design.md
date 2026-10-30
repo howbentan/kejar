@@ -27,6 +27,7 @@
 - `16-organiser-setup.html`: organiser setup, walking the park and the lobby (`2026-10-30-kejar-organiser-setup-design.md`).
 - `17-chase-screen.html`: the chase screen before and after (§8.6).
 - `18-how-to-play.html`: the briefing story per side and mode, with the doodle style (§8.8).
+- `19-auto-jailed.html`: the auto-jailed runner, "out for good", and the marshal undo (§5a–§5b).
 
 ## 1. Why
 
@@ -94,6 +95,31 @@ The moment a chaser's scan is accepted:
    - **within 30 m of Penjara,** it switches to today's spectator view.
 
 **Today's jail screen** says "Walk to jail" but shows Penjara only as an unlabelled dot on a 2-minute-delayed map. The guide fixes that.
+
+### 5a. Auto-jailed: the runner's screen (agreed 2026-10-30)
+
+Mockup: `19-auto-jailed.html`. This is the version of §5 for when a runner is sent to Penjara for missing two check-ins in a row (check-ins design §4), with no chaser involved.
+
+1. **The moment:** the **same five bars drop** as for a catch, with a buzz (`300-100-300`). Instead of the `dikejar!` stamp, a black plate shows a lime **`2× MISSED`**. After about 1.5 s it fades into the screen below.
+2. **The screen:**
+   - `PENJARA · AUTO` eyebrow and a big **`Missed two check-ins.`** with a lime full stop;
+   - **one random line,** gentler than the catch lines because it may not be the runner's fault: `Your phone went ponteng, bro.` · `Signal hilang, bossku?` · `Kena check in lah, boss.` · `Phone in your pocket too deep.`;
+   - **the last three scheduled check-ins as a row of dots** with their clock times (e.g. `3:25 ✓ · 3:30 · 3:35`). **The marker crosses out the two misses** (§8.5), so the reason is obvious;
+   - **the walk-to-Penjara guide** exactly as in §5, drawn with the marker route and X, plus `160 M · WALK, DON'T RUN`;
+   - at the bottom, **`Phone died or no buzz? Tell a marshal →`**, which opens the SOS details with `Something else` preselected.
+3. **Already freed once** (so they stay in Penjara for good): no walk guide and no dare reel pull. The screen shows **`That's the game for you.`** with `You were already freed once, so you stay in Penjara until the end. Watch the chase from here.`, then the spectator map. The `Tell a marshal` link stays.
+
+### 5b. The marshal can undo an auto-jail (owner's decision, 2026-10-30)
+
+A dead phone or a push alert that never arrived can auto-jail someone unfairly.
+- The existing auto-jail alert (`#07 missed 2 check-ins — sent to Penjara`, check-ins design §4.5) gains two buttons:
+  - **`Phone problem: undo`** sets the runner free straight away, **without using up their once-only escape** (`freed_once` stays as it was), and restarts their missed-check-in count. The feed says `#07 is back in the game (marshal).`
+  - **`It stands`** closes the alert, and the runner stays in Penjara.
+- The alert shows the runner's **last location age** to help the marshal judge.
+- **Auto-jail only.** There's no undo for a chaser's catch; disputes go through SOS (§6).
+- **Results:** an undone auto-jail doesn't end the runner's survival time for `Longest survivor`.
+- Logged in the safety records with which marshal undid it.
+- **Server work** (left to the builder): an `undoAutoJail` action for marshals and the organiser, valid only while that runner is in Penjara from that auto-jail.
 
 ## 6. SOS: one bar, hold to send, then say what's happening
 

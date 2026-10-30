@@ -183,6 +183,7 @@ Prices are from MR.DIY's online listings on 2026-10-30 and may change. Velcro st
 | HANDOFF: "stations stay random-on-claim", "Abang Grab claims a station remotely", "slang applies to power-ups only" | Shared deck; Abang Grab picks 1 of the top 3 (sealed); English messages, local names (§6) |
 | Base §4.7: one scan at Penjara frees everyone at once | A **10-second hold** after the scan (§9a) |
 | Jail §4b and motion §8.2: everyone sees a yellow Dato Seri zone; the feed says `Dato Seri has been found` | **Dato Seri is a secret** (§9b): an unlabelled `?` zone, and the feed says `Something legendary was found.` |
+| Check-ins design §4.5: auto-jail is final like a catch | A marshal can **undo** an auto-jail for a phone fault, without using the runner's one escape (motion §5b) |
 | Base §3: marshals in black or white vests | **Orange vests** plus a MARSHAL lanyard card (§5a) |
 | Dato Seri stash: what if the finder's slot is full? | **Not said before. Claude's call:** the scan is refused with `Use or lose your power-up first`, and the stash stays claimable |
 
@@ -216,7 +217,9 @@ Freeing everyone with one quick scan was judged too swingy: one runner could und
 1. ~~**Organiser setup**~~ **designed 2026-10-30:** `2026-10-30-kejar-organiser-setup-design.md` covers five setup steps, the kit checklist, walking the park, the stash drop and lobby checks.
 2. ~~**The chase screen audit**~~ **designed 2026-10-30:** motion design §8.6 (one screen, map as the hero, a dock with the slot, one Scan button, a ticker and SOS) and §8.7 (the lock-screen status notification with clock times).
 3. ~~**The how-to-play card**~~ **designed 2026-10-30:** motion design §8.8, a briefing story per side and mode with self-drawing doodle scenes.
-4. **The auto-jailed runner** variant of the Penjara screen (`You missed 2 check-ins`).
+4. ~~**The auto-jailed runner**~~ **designed 2026-10-30:** motion design §5a–§5b, with a `2× MISSED` moment, the missed check-ins crossed out, and a **marshal undo for phone faults** (auto-jail only, doesn't use the once-only escape).
+
+**All screens are now designed. Next: build plans (§12).**
 
 ## 11. Still open (owner's decisions)
 
