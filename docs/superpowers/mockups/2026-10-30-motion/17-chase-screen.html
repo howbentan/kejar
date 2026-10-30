@@ -1,0 +1,326 @@
+<h2>Chase screen audit: before and after</h2>
+<p class="subtitle">Left: today's runner screen with this week's additions stacked in, so it scrolls. Right: the proposal, one screen with no scrolling: a thin top bar, the map as the hero, and a bottom dock (slot, one Scan button, a one-line ticker, SOS). Use the buttons under each phone to switch states. Click the cards you like.</p>
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  .kj-phone { width: 250px; height: 520px; border-radius: 28px; background: #0A0A0B; border: 2px solid #2a2a2a; position: relative; overflow: hidden;
+    color: #F5F5F3; font-family: 'Geist', system-ui, sans-serif; margin: 0 auto; flex: none; }
+  .eb { font: 500 9px 'Geist Mono', monospace; letter-spacing: .2em; color: rgba(245,245,243,.55); }
+  .mono { font-family: 'Geist Mono', monospace; }
+  .card-image { flex-direction: column !important; align-items: center; }
+  .btns { max-width: 260px; display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 10px; }
+  .btns button { background: transparent; color: #F5F5F3; border: 1px solid #444; border-radius: 999px; padding: 6px 11px; font: 600 11.5px 'Geist', sans-serif; cursor: pointer; }
+  .btns button.on { background: #C6FF3D; color: #0A0A0B; border-color: #C6FF3D; }
+  .stk svg, svg.stk { width: 100%; height: 100%; }
+
+  /* BEFORE: scrolling stack */
+  .old { position: absolute; inset: 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 12px; }
+  .old .card2 { border: 1px solid #262626; border-radius: 12px; padding: 8px; }
+  .old .ban { background: #C6FF3D; color: #0A0A0B; border-radius: 14px; padding: 10px; text-align: center; }
+  .scrollhint { position: absolute; bottom: 52px; left: 0; right: 0; text-align: center; font: 500 9px 'Geist Mono', monospace; letter-spacing: .14em; color: #C6FF3D; pointer-events: none; }
+  .oldsos { position: absolute; left: 10px; right: 10px; bottom: 10px; height: 36px; border-radius: 999px; background: #C6FF3D; color: #0A0A0B; display: grid; place-items: center; font-weight: 800; }
+  .redline { position: absolute; left: 0; right: 0; height: 0; border-top: 1px dashed rgba(245,245,243,.5); }
+
+  /* AFTER: fixed layout */
+  .top { position: absolute; left: 0; right: 0; top: 0; height: 40px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; z-index: 3; background: linear-gradient(#0A0A0B 70%, transparent); }
+  .top .clk { font: 500 17px 'Geist Mono', monospace; letter-spacing: -0.03em; }
+  .top .clk.hot { color: #C6FF3D; animation: tick 1s steps(2) infinite; } @keyframes tick { 50% { opacity: .55 } }
+  .map { position: absolute; left: 0; right: 0; top: 0; bottom: 150px; background: #121412; overflow: hidden; }
+  .map svg.park { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .me { position: absolute; width: 13px; height: 13px; border-radius: 50%; background: #C6FF3D; border: 2px solid #0A0A0B; transform: translate(-50%, -50%); box-shadow: 0 0 0 4px rgba(198,255,61,.25); }
+  .mate { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: #F5F5F3; transform: translate(-50%, -50%); opacity: .8; }
+  .stn { position: absolute; width: 16px; height: 16px; border: 1.5px solid #C6FF3D; border-radius: 4px; transform: translate(-50%, -50%); font: 600 8px 'Geist Mono', monospace; color: #C6FF3D; display: grid; place-items: center; background: #0A0A0B; }
+  .pen { position: absolute; transform: translate(-50%, -50%); font: 500 7px 'Geist Mono', monospace; letter-spacing: .1em; border: 1px solid #F5F5F3; border-radius: 4px; padding: 1px 3px; background: #0A0A0B; }
+  .fz { position: absolute; width: 40px; height: 40px; border-radius: 50%; border: 1.2px solid #F5F5F3; background: rgba(245,245,243,.1); transform: translate(-50%, -50%); }
+  .kz { position: absolute; width: 50px; height: 50px; border-radius: 50%; border: 1.5px dashed #C6FF3D; background: rgba(198,255,61,.08); transform: translate(-50%, -50%); font: 600 8px 'Geist', sans-serif; display: grid; place-items: center; color: #C6FF3D; }
+  .chip { position: absolute; z-index: 3; border-radius: 999px; padding: 5px 9px; font: 600 10.5px 'Geist', sans-serif; background: rgba(10,10,11,.85); border: 1px solid #333; }
+  .chip.warn { border-color: #C6FF3D; color: #C6FF3D; box-shadow: 0 0 10px rgba(198,255,61,.35); }
+  .chip .mono { font-size: 10.5px; }
+  .ci { position: absolute; left: 8px; right: 8px; top: 44px; z-index: 4; background: #C6FF3D; color: #0A0A0B; border-radius: 16px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; transform: translateY(calc(-100% - 60px)); transition: transform .45s cubic-bezier(.2,1.3,.4,1); }
+  .ci.on { transform: none; }
+  .ci b { font-size: 16px; letter-spacing: -0.03em; display: block; } .ci small { font-size: 10.5px; font-weight: 600; }
+  .ci .t { font: 500 26px 'Geist Mono', monospace; margin-left: auto; letter-spacing: -0.05em; }
+  .dock { position: absolute; left: 0; right: 0; bottom: 0; height: 150px; background: #0A0A0B; border-top: 1px solid #1e1e1e; padding: 8px 10px 10px; display: flex; flex-direction: column; gap: 7px; z-index: 5; }
+  .row1 { display: flex; gap: 8px; height: 50px; }
+  .slot { flex: 1; border: 1.5px solid #C6FF3D; border-radius: 14px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 4px; cursor: pointer; min-width: 0; }
+  .slot .s { width: 40px; height: 40px; flex: none; }
+  .slot b { font-size: 13px; letter-spacing: -0.02em; display: block; } .slot small { font: 500 8px 'Geist Mono', monospace; letter-spacing: .1em; color: #C6FF3D; }
+  .slot.empty { border-style: dashed; border-color: #444; justify-content: center; font-size: 11px; opacity: .6; }
+  .slot.live { background: rgba(198,255,61,.1); }
+  .scan { width: 74px; border-radius: 14px; background: #F5F5F3; color: #0A0A0B; display: grid; place-items: center; font-weight: 800; font-size: 13px; cursor: pointer; text-align: center; line-height: 1.1; }
+  .scan small { display: block; font: 500 7.5px 'Geist Mono', monospace; letter-spacing: .08em; opacity: .6; }
+  .scan.big { flex: 1; width: auto; background: #C6FF3D; font-size: 16px; }
+  .tick2 { height: 28px; border-radius: 10px; background: #141614; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 3px; font-size: 11px; cursor: pointer; overflow: hidden; white-space: nowrap; }
+  .tick2 .s { width: 24px; height: 24px; flex: none; }
+  .tick2 .ic { font: 500 7.5px 'Geist Mono', monospace; border: 1px solid #555; border-radius: 6px; padding: 2px 4px; flex: none; margin-left: 4px; }
+  .tick2 .tx { overflow: hidden; text-overflow: ellipsis; flex: 1; } .tick2 .tx em { color: #C6FF3D; font-style: normal; }
+  .tick2 .n { font: 500 8px 'Geist Mono', monospace; background: #C6FF3D; color: #0A0A0B; border-radius: 999px; padding: 1px 5px; }
+  .tick2.new { animation: tin .4s cubic-bezier(.32,.72,0,1); } @keyframes tin { from { transform: translateY(10px); opacity: 0 } }
+  .sos { height: 36px; border-radius: 999px; background: #C6FF3D; color: #0A0A0B; display: grid; place-items: center; font-weight: 800; font-size: 15px; letter-spacing: -0.02em; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 56px; height: 300px; background: #0F100F; border-radius: 20px 20px 0 0; border-top: 1px solid #2a2a2a; z-index: 8; transform: translateY(calc(100% + 70px)); transition: transform .45s cubic-bezier(.32,.72,0,1); padding: 8px 12px; }
+  .sheet.on { transform: none; }
+  .sheet .grab { width: 36px; height: 4px; border-radius: 2px; background: #444; margin: 0 auto 10px; }
+  .fi { display: flex; gap: 8px; padding: 7px 0; border-bottom: 1px solid #1d1d1d; font-size: 11.5px; } .fi .s { width: 26px; height: 26px; flex: none; }
+  .fi .m { color: #C6FF3D; font-size: 10.5px; margin-top: 2px; } .fi .ic { font: 500 7.5px 'Geist Mono', monospace; border: 1px solid #555; border-radius: 6px; padding: 2px 3px; height: fit-content; }
+  .note { font-size: 12px; opacity: .8; line-height: 1.45; }
+</style>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <!-- hand-drawn wobble -->
+    <filter id="wob" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="3.2"/>
+    </filter>
+    <!-- sticker: thick white edge plus a drop shadow -->
+    <filter id="stk" x="-25%" y="-25%" width="150%" height="150%">
+      <feMorphology in="SourceAlpha" operator="dilate" radius="4.5" result="d"/>
+      <feFlood flood-color="#F5F5F3"/><feComposite in2="d" operator="in" result="w"/>
+      <feOffset in="w" dy="3.5" result="o"/><feFlood flood-color="#000" flood-opacity=".55"/><feComposite in2="o" operator="in" result="sh"/>
+      <feMerge><feMergeNode in="sh"/><feMergeNode in="w"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+</svg>
+
+<div class="cards">
+  <div class="card" data-choice="before" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#000;padding:12px">
+      <div class="kj-phone"><div class="old" id="old"></div><div class="scrollhint">↓ 2 SCREENS OF SCROLLING ↓</div><div class="oldsos">SOS</div></div>
+    </div>
+    <div class="card-body"><h3>Before: today, plus this week's additions</h3><p>Clock row, ping ripple, check-in banner, "Kejar within 100 m" card, a 260 px map, the slot, a separate "Break them out" scanner, 6 feed lines, then SOS. With the slot, snapshot, Dato Seri hint and 5-minute card, the map is pushed half off-screen and the feed needs scrolling. A pocketed runner gets about 10 seconds of attention, so this is too much.</p></div>
+  </div>
+
+  <div class="card" data-choice="after-runner" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#000;padding:12px">
+      <div class="kj-phone" id="rp"></div>
+      <div class="btns" id="rbtns">
+        <button class="on" onclick="event.stopPropagation(); rstate('calm', this)">Calm</button>
+        <button onclick="event.stopPropagation(); rstate('checkin', this)">Check-in</button>
+        <button onclick="event.stopPropagation(); rstate('near', this)">Kejar near</button>
+        <button onclick="event.stopPropagation(); rstate('live', this)">Durian on</button>
+        <button onclick="event.stopPropagation(); rstate('last', this)">Last 5 min</button>
+        <button onclick="event.stopPropagation(); rstate('feed', this)">Tap ticker</button>
+        <button onclick="event.stopPropagation(); rnew()">New event</button>
+      </div>
+    </div>
+    <div class="card-body"><h3>After: Dikejar</h3><p><b>Top bar:</b> who you are, the clock, how many are free. <b>Map</b> fills the middle, with small chips on top for the next check-in and "Kejar near". <b>Dock:</b> your slot (tap to use), one <b>Scan</b> for stations, Penjara rescues and the Dato Seri stash (the QR decides which), a <b>one-line ticker</b> (tap for the full feed), and SOS. The check-in banner drops over the top of the map, so the map is still visible below it.</p></div>
+  </div>
+
+  <div class="card" data-choice="after-chaser" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#000;padding:12px">
+      <div class="kj-phone" id="cp"></div>
+      <div class="btns"><button onclick="event.stopPropagation(); cnew()">New event</button></div>
+    </div>
+    <div class="card-body"><h3>After: Kejar</h3><p>The same layout, so both sides learn one screen. Chasers keep the page open, so their top chip is "Next ping 1:42" with last-ping age. The big lime button is <b>Scan tag</b>, since catching is the main action. Station claims also go through it. Their slot sits on the left.</p></div>
+  </div>
+
+  <div class="card" data-choice="rules" onclick="toggleSelect(this)">
+    <div class="card-body"><h3>The rules behind it (my suggestion)</h3><p class="note">
+      <b>No scrolling during the chase.</b> Everything fits one screen, on a small Android too (about 360 × 640).<br><br>
+      <b>The map is the hero.</b> At least half the screen, always visible, even under the check-in banner.<br><br>
+      <b>One Scan button.</b> Stations, Penjara rescue and the Dato Seri stash are all QR codes, and the code says which, so runners don't need three buttons.<br><br>
+      <b>Ticker, not a feed list.</b> One line, the newest event. Lines that need you (lime box events) also buzz once. Tap for the full feed in a sheet.<br><br>
+      <b>Chips, not cards.</b> Next check-in, "Kejar within 100 m" and the snapshot age are small chips on the map's top edge.<br><br>
+      <b>SOS always last and always visible.</b> Nothing ever covers it, the feed sheet included.<br><br>
+      <b>One loud thing at a time.</b> If a check-in lands while a sticker pops, the pop waits.</p></div>
+  </div>
+</div>
+
+<script>
+  const INK = 'stroke="#141414" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"'
+  const spiky = (cx, cy, rx, ry, n) => {
+    const p = []
+    for (let k = 0; k < n; k++) { const a = (k / n) * Math.PI * 2, r = k % 2 ? 1 : 1.16; p.push(`${(cx + Math.cos(a) * rx * r).toFixed(1)} ${(cy + Math.sin(a) * ry * r).toFixed(1)}`) }
+    return 'M' + p.join(' L') + ' Z'
+  }
+  const star = (cx, cy, R, r) => {
+    const p = []
+    for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + (k * Math.PI) / 5, rr = k % 2 ? r : R; p.push(`${(cx + Math.cos(a) * rr).toFixed(1)} ${(cy + Math.sin(a) * rr).toFixed(1)}`) }
+    return 'M' + p.join(' L') + ' Z'
+  }
+
+  const ART = {
+    gostan: `
+      <path d="M78 24 Q52 6 26 22" fill="none" stroke="#141414" stroke-width="9" stroke-linecap="round"/>
+      <path d="M78 24 Q52 6 26 22" fill="none" stroke="#FFD60A" stroke-width="5" stroke-linecap="round"/>
+      <path d="M16 26 L30 12 L34 30 Z" fill="#FFD60A" ${INK}/>
+      <path d="M12 62 Q12 50 22 48 L33 36 Q37 32 45 32 L62 32 Q70 32 74 40 L81 48 Q90 50 90 59 L90 66 Q90 70 85 70 L16 70 Q12 70 12 66 Z" fill="#E63946" ${INK}/>
+      <path d="M36 47 L43 38 L55 38 L55 47 Z" fill="#A8DADC" ${INK}/>
+      <path d="M59 38 L66 38 Q70 40 73 47 L59 47 Z" fill="#A8DADC" ${INK}/>
+      <path d="M48 54 h8" ${INK}/>
+      <circle cx="29" cy="70" r="9" fill="#2a2a2a" ${INK}/><circle cx="29" cy="70" r="3.2" fill="#ccc"/>
+      <circle cx="73" cy="70" r="9" fill="#2a2a2a" ${INK}/><circle cx="73" cy="70" r="3.2" fill="#ccc"/>
+      <circle cx="86" cy="56" r="2.6" fill="#FFF3B0" ${INK}/><rect x="11" y="54" width="5" height="6" fill="#FFFFFF" ${INK}/>
+      <path d="M92 76 h6 M90 82 h8" ${INK}/>`,
+    durian: `
+      <path d="M50 26 Q47 14 55 7" fill="none" stroke="#141414" stroke-width="8" stroke-linecap="round"/>
+      <path d="M50 26 Q47 14 55 7" fill="none" stroke="#7A5230" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="${spiky(50, 58, 29, 31, 30)}" fill="#8DA33B" ${INK}/>
+      <path d="M50 36 Q66 50 60 80 Q44 62 50 36 Z" fill="#F7D154" ${INK}/>
+      <path d="M53 50 q4 3 3 8 M55 64 q3 3 2 7" fill="none" stroke="#D9A92B" stroke-width="2.5" stroke-linecap="round"/>
+      <path d="M30 48 l4 4 M28 64 l5 2 M38 76 l3 -3 M72 56 l-4 3 M70 72 l-4 -2" ${INK}/>
+      <path d="M14 36 q-5 -6 0 -12 q5 -6 0 -12 M86 36 q5 -6 0 -12 q-5 -6 0 -12" fill="none" stroke="#9BC53D" stroke-width="3.2" stroke-linecap="round"/>`,
+    ponteng: `
+      <path d="M16 72 Q6 58 18 48 Q16 32 34 32 Q42 16 60 26 Q80 22 82 40 Q96 48 88 66 Q86 76 70 74 L28 76 Q14 78 16 72 Z" fill="#4CAF50" ${INK}/>
+      <path d="M26 46 q4 -3 7 1 M66 36 q4 -3 7 1 M74 60 q4 -3 7 1 M30 64 q4 -3 7 1" fill="none" stroke="#2E7D32" stroke-width="2.6" stroke-linecap="round"/>
+      <ellipse cx="44" cy="50" rx="6.5" ry="7.5" fill="#fff" ${INK}/><ellipse cx="59" cy="50" rx="6.5" ry="7.5" fill="#fff" ${INK}/>
+      <circle cx="41.5" cy="51" r="2.8" fill="#141414"/><circle cx="56.5" cy="51" r="2.8" fill="#141414"/>
+      <path d="M38 40 l9 2 M53 42 l9 -2" ${INK}/>
+      <path d="M60 70 L72 66 Q80 70 92 72 Q100 74 98 84 L62 86 Q56 82 60 70 Z" fill="#E4E4E4" ${INK}/>
+      <path d="M58 80 L99 79 L98 86 L62 88 Z" fill="#1D3557" ${INK}/>
+      <path d="M68 70 l4 -4 M74 72 l4 -4 M80 73 l3 -4" ${INK}/>`,
+    toyol: `
+      <path d="M31 40 L12 24 L32 54 Z" fill="#8DBE7A" ${INK}/><path d="M69 40 L88 24 L68 54 Z" fill="#8DBE7A" ${INK}/>
+      <path d="M36 64 Q50 96 64 64 Q50 58 36 64 Z" fill="#8DBE7A" ${INK}/>
+      <path d="M38 76 Q50 84 62 76 L60 70 Q50 74 40 70 Z" fill="#F5F5F3" ${INK}/>
+      <circle cx="50" cy="42" r="22" fill="#8DBE7A" ${INK}/>
+      <path d="M50 20 q-3 -7 4 -10" fill="none" ${INK}/>
+      <circle cx="41" cy="40" r="7" fill="#fff" ${INK}/><circle cx="59" cy="40" r="7" fill="#fff" ${INK}/>
+      <circle cx="42" cy="41" r="3.6" fill="#E63946"/><circle cx="58" cy="41" r="3.6" fill="#E63946"/>
+      <circle cx="42" cy="41" r="1.4" fill="#141414"/><circle cx="58" cy="41" r="1.4" fill="#141414"/>
+      <path d="M39 53 Q50 62 61 53" fill="none" ${INK}/><path d="M47 56 v4 h5 v-4" fill="#fff" ${INK}/>
+      <path d="M62 70 L78 64" ${INK}/>
+      <circle cx="83" cy="62" r="8" fill="#FFD60A" ${INK}/><path d="M83 57 v10" stroke="#B8860B" stroke-width="2.4" stroke-linecap="round"/>`,
+    grab: `
+      <rect x="56" y="26" width="34" height="34" rx="4" fill="#1FA855" ${INK}/>
+      <path d="M56 36 h34" ${INK}/><path d="M66 46 q7 6 14 0" fill="none" stroke="#F5F5F3" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="42" cy="60" r="17" fill="#C68B59" ${INK}/>
+      <path d="M16 54 Q16 24 42 24 Q68 24 68 54 Z" fill="#1FA855" ${INK}/>
+      <path d="M30 30 Q42 26 54 30" fill="none" stroke="#F5F5F3" stroke-width="3" stroke-linecap="round"/>
+      <path d="M18 46 Q42 38 66 46 L66 52 L18 52 Z" fill="#2a2a2a" ${INK}/>
+      <circle cx="36" cy="60" r="2.2" fill="#141414"/><circle cx="48" cy="60" r="2.2" fill="#141414"/>
+      <path d="M35 67 Q42 73 49 67" fill="none" ${INK}/>
+      <path d="M26 62 Q28 76 42 78 Q56 76 58 62" fill="none" ${INK}/>
+      <path d="M2 40 h9 M0 50 h9 M3 60 h8" ${INK}/>`,
+    rempit: `
+      <g transform="rotate(-16 50 62)">
+        <circle cx="16" cy="58" r="6" fill="#bbb" ${INK}/><circle cx="8" cy="50" r="5" fill="#ccc" ${INK}/><circle cx="4" cy="62" r="4" fill="#ddd" ${INK}/>
+        <path d="M30 60 Q18 56 12 62 Q20 64 14 70 Q24 68 30 64 Z" fill="#FF8C1A" ${INK}/>
+        <circle cx="34" cy="70" r="12" fill="#2a2a2a" ${INK}/><circle cx="34" cy="70" r="4" fill="#ccc"/>
+        <circle cx="78" cy="70" r="12" fill="#2a2a2a" ${INK}/><circle cx="78" cy="70" r="4" fill="#ccc"/>
+        <path d="M34 70 L48 56 M78 70 L72 50" ${INK}/>
+        <path d="M40 60 L52 46 L72 46 L80 54 L62 62 Z" fill="#E63946" ${INK}/>
+        <path d="M48 46 L64 44" stroke="#141414" stroke-width="6" stroke-linecap="round"/>
+        <path d="M72 46 L76 34 L84 32" fill="none" ${INK}/><circle cx="82" cy="44" r="3.4" fill="#FFF3B0" ${INK}/>
+        <path d="M54 54 h10" stroke="#F5F5F3" stroke-width="2.6" stroke-linecap="round"/>
+      </g>
+      <path d="M88 20 l8 -4 M86 30 l10 -2" ${INK}/>`,
+    guard: `
+      <path d="M78 66 L100 34 L100 78 Z" fill="#FFE66D" opacity=".85"/>
+      <circle cx="44" cy="56" r="21" fill="#C68B59" ${INK}/>
+      <path d="M22 44 Q22 22 44 22 Q66 22 66 44 Z" fill="#1D3557" ${INK}/>
+      <path d="M18 44 L74 44 Q80 49 70 51 L18 49 Z" fill="#14213D" ${INK}/>
+      <path d="${star(44, 33, 6, 2.6)}" fill="#FFD60A" stroke="#141414" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M33 54 h8" ${INK}/><circle cx="53" cy="55" r="2.6" fill="#141414"/><path d="M48 49 l9 -1" ${INK}/>
+      <path d="M32 64 Q38 58 44 63 Q50 58 56 64 Q50 68 44 65 Q38 68 32 64 Z" fill="#2a2a2a" ${INK}/>
+      <path d="M64 80 L78 64 L86 70 L72 86 Z" fill="#3a3a3a" ${INK}/><path d="M78 64 L86 70" stroke="#FFE66D" stroke-width="3"/>`,
+    along: `
+      <path d="M44 32 L54 8 L66 32 Z" fill="#8D99AE" ${INK}/>
+      <path d="M6 66 Q20 30 58 30 Q84 32 94 54 Q86 72 56 74 Q28 76 6 66 Z" fill="#8D99AE" ${INK}/>
+      <path d="M18 66 Q50 58 90 58 Q82 72 56 74 Q30 76 18 66 Z" fill="#EDF2F4" ${INK}/>
+      <path d="M56 42 h13 v4 q-6.5 5 -13 0 Z M72 42 h13 v4 q-6.5 5 -13 0 Z" fill="#141414" ${INK}/><path d="M69 43 h3" ${INK}/>
+      <path d="M62 62 l3 4 l3 -4 l3 4 l3 -4 l3 4 l3 -4" fill="none" stroke="#141414" stroke-width="2.4" stroke-linejoin="round"/>
+      <path d="M36 72 Q54 84 74 72" fill="none" stroke="#141414" stroke-width="7" stroke-linecap="round"/>
+      <path d="M36 72 Q54 84 74 72" fill="none" stroke="#FFD60A" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 3"/>
+      <circle cx="55" cy="81" r="5" fill="#FFD60A" ${INK}/>
+      <path d="M8 36 L26 26 L32 40 L14 50 Z" fill="#6FBF73" ${INK}/><path d="M14 30 L32 22 L36 34 L20 42 Z" fill="#A3D9A5" ${INK}/>
+      <circle cx="26" cy="32" r="3" fill="none" stroke="#2E7D32" stroke-width="2"/>`,
+    dato: `
+      <path d="M14 100 Q16 76 50 76 Q84 76 86 100 Z" fill="#7B1E3A" ${INK}/>
+      <path d="M28 78 L74 100" stroke="#141414" stroke-width="11" stroke-linecap="round"/><path d="M28 78 L74 100" stroke="#FFD60A" stroke-width="7" stroke-linecap="round"/>
+      <path d="${star(64, 88, 7, 3)}" fill="#FFD60A" ${INK}/>
+      <circle cx="50" cy="56" r="21" fill="#B9784F" ${INK}/>
+      <path d="M29 44 L29 24 Q50 17 71 24 L71 44 Z" fill="#1b1b1b" ${INK}/>
+      <path d="M30 40 L70 40" stroke="#E8B92E" stroke-width="3.2"/>
+      <path d="M39 54 q3.5 -3.5 7 0 M54 54 q3.5 -3.5 7 0" fill="none" ${INK}/>
+      <path d="M36 66 Q43 59 50 64 Q57 59 64 66 Q60 63 58 68 Q50 65 42 68 Q40 63 36 66 Z" fill="#2a2a2a" ${INK}/>
+      <path d="M84 30 l4 -8 M90 38 l8 -2 M12 30 l-4 -8 M10 40 l-8 -2" stroke="#141414" stroke-width="3" stroke-linecap="round"/>`,
+  }
+
+  const sticker = (k) => `<svg viewBox="-8 -6 116 116"><g filter="url(#stk)"><g filter="url(#wob)">${ART[k]}</g></g></svg>`
+  const $ = (id) => document.getElementById(id)
+  const PARK = `<svg class="park" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M8 14 Q30 2 62 8 T94 36 Q98 70 74 92 T22 90 Q2 64 8 14Z" fill="none" stroke="#3a3a3a" stroke-width=".7"/><ellipse cx="62" cy="50" rx="13" ry="8" fill="#14202a"/></svg>`
+
+  // BEFORE
+  $('old').innerHTML = `
+    <div class="eb">DIKEJAR · #07</div>
+    <div style="display:flex;justify-content:space-between"><span class="mono">23:41</span><span style="opacity:.6">9 Dikejar free</span></div>
+    <div class="ban"><div class="eb" style="color:#0A0A0B">PING INCOMING — CHECK IN</div><div class="mono" style="font-size:30px">0:38</div><div style="font-size:10px">Keep this page open until the ping</div></div>
+    <div class="card2" style="color:#C6FF3D">● Kejar within 100 m</div>
+    <div class="card2">Kejar at check-in · 0:42 ago</div>
+    <div style="height:180px;border-radius:12px;background:#121412;border:1px solid #262626;position:relative"><div class="eb" style="position:absolute;left:8px;top:8px">MAP</div></div>
+    <div class="card2" style="display:flex;gap:6px;align-items:center"><div style="width:30px;height:30px">${sticker('durian')}</div>Durian · Use</div>
+    <div class="card2">Break them out · Scan Penjara</div>
+    <div class="card2">Scan a station</div>
+    <div class="card2">5 minutes left</div>
+    <div class="eb">FEED</div>
+    ${['Ping: 5 seen', 'A Kejar used Mat Rempit', 'Ben caught #14', '#07 blocked a catch', 'Hafiz freed 2', 'Pak Guard…'].map((t) => `<div style="opacity:.75">${t}</div>`).join('')}
+    <div style="height:50px"></div>`
+
+  // AFTER: shared builder
+  function screen(role) {
+    const runner = role === 'r'
+    return `
+      <div class="map">${PARK}
+        <div class="stn" style="left:28%;top:30%">1</div><div class="stn" style="left:80%;top:24%">2</div><div class="stn" style="left:40%;top:78%">3</div>
+        <div class="pen" style="left:82%;top:76%">PENJARA</div>
+        ${runner ? `<div class="mate" style="left:35%;top:45%"></div><div class="mate" style="left:66%;top:28%"></div><div class="me" style="left:52%;top:62%"></div><div class="kz" id="${role}kz" style="left:70%;top:48%;display:none">BEN</div>`
+                 : `<div class="fz" style="left:30%;top:42%"></div><div class="fz" style="left:70%;top:30%"></div><div class="fz" style="left:56%;top:74%;border-style:dashed;background:none"></div><div class="me" style="left:46%;top:58%"></div><div class="mate" style="left:20%;top:66%"></div>`}
+      </div>
+      <div class="top"><span class="eb" style="color:#F5F5F3">${runner ? 'DIKEJAR · #07' : 'KEJAR · BEN'}</span><span class="clk" id="${role}clk">23:41</span><span style="font-size:10.5px;opacity:.7">9 free</span></div>
+      <div class="chip" id="${role}chip1" style="left:8px;top:46px">${runner ? 'Check in <span class="mono">in 2:14</span>' : 'Next ping <span class="mono">1:42</span> · last <span class="mono">3:18</span> ago'}</div>
+      ${runner ? `<div class="chip warn" id="rnear" style="right:8px;top:46px;display:none">● Kejar within 100 m</div>` : ''}
+      ${runner ? `<div class="ci" id="rci"><div><b>Check in now</b><small>Kejar see you at the ping</small></div><div class="t">0:38</div></div>` : ''}
+      <div class="dock">
+        <div class="row1">
+          ${runner ? `<div class="slot" id="rslot"><div class="s">${sticker('durian')}</div><div style="min-width:0"><b>Durian</b><small id="rslotsub">TAP TO USE</small></div></div>
+                      <div class="scan">Scan<small>STATION · PENJARA</small></div>`
+                   : `<div class="slot" style="flex:0 0 96px"><div class="s">${sticker('rempit')}</div><div style="min-width:0"><b style="font-size:11px">Mat Rempit</b><small>USE</small></div></div>
+                      <div class="scan big">Scan tag<small style="color:#0A0A0B">CATCH OR STATION</small></div>`}
+        </div>
+        <div class="tick2" id="${role}tick"></div>
+        <div class="sos">SOS</div>
+      </div>
+      ${runner ? `<div class="sheet" id="rsheet" onclick="event.stopPropagation(); this.classList.remove('on')"><div class="grab"></div><div class="eb" style="margin-bottom:4px">FEED · TAP TO CLOSE</div><div id="rfeed"></div></div>` : ''}`
+  }
+  $('rp').innerHTML = screen('r'); $('cp').innerHTML = screen('c')
+
+  const EV = [
+    { k: 'rempit', h: 'A Kejar used Mat Rempit.', r: 'Check in now. Extra ping in 30 s.', c: 'Extra ping in 30 s.', act: true },
+    { ic: 'CATCH', h: 'Ben caught #14.', r: '#14 is walking to Penjara.', c: '9 Dikejar left.' },
+    { k: 'durian', h: '#03 blocked a catch with Durian.', r: '#03 is still free.', c: "That catch didn't count." },
+    { ic: 'FREE', h: 'Hafiz freed 2 from Penjara.', r: 'Penjara is empty again.', c: '2 more are loose.' },
+    { k: 'guard', h: 'A Kejar used Pak Guard.', r: 'Move away from Kejar before the ping.', c: 'Next ping shows nearby Dikejar exactly.', act: true },
+    { ic: 'PING', h: 'Ping: 5 seen, 1 missed.', r: 'Kejar know roughly where you were.', c: 'Fresh circles on your map.' },
+  ]
+  const hist = { r: [], c: [] }
+  let unread = { r: 0, c: 0 }, ei = 0
+  function push(role) {
+    const e = EV[ei++ % EV.length]; hist[role].unshift(e); unread[role]++
+    const t = $(role + 'tick'), side = role === 'r' ? e.r : e.c
+    t.className = 'tick2 new'; t.style.outline = e.act && role === 'r' ? '1.5px solid #C6FF3D' : 'none'
+    t.innerHTML = `${e.k ? `<div class="s">${sticker(e.k)}</div>` : `<span class="ic">${e.ic}</span>`}<span class="tx">${e.h} <em>→ ${side}</em></span>${unread[role] > 1 ? `<span class="n">+${unread[role] - 1}</span>` : ''}`
+    t.onclick = (ev) => { ev.stopPropagation(); if (role === 'r') openFeed() }
+    void t.offsetWidth
+  }
+  function openFeed() {
+    unread.r = 0
+    $('rfeed').innerHTML = hist.r.map((e) => `<div class="fi">${e.k ? `<div class="s">${sticker(e.k)}</div>` : `<span class="ic">${e.ic}</span>`}<div><b>${e.h}</b><div class="m">→ ${e.r}</div></div></div>`).join('')
+    $('rsheet').classList.add('on')
+  }
+  const rnew = () => push('r'), cnew = () => push('c')
+  ;[0, 1, 2].forEach(() => { push('r'); push('c') })
+  unread = { r: 1, c: 1 }
+
+  function rstate(s, btn) {
+    document.querySelectorAll('#rbtns button').forEach((b) => b.classList.remove('on')); btn.classList.add('on')
+    $('rci').classList.toggle('on', s === 'checkin')
+    $('rnear').style.display = s === 'near' ? '' : 'none'
+    $('rkz').style.display = s === 'checkin' ? 'grid' : 'none'
+    $('rslot').classList.toggle('live', s === 'live'); $('rslotsub').textContent = s === 'live' ? 'ON · 8:12 LEFT' : 'TAP TO USE'
+    const c = $('rclk'); c.classList.toggle('hot', s === 'last'); c.textContent = s === 'last' ? '4:51' : '23:41'
+    $('rchip1').style.display = s === 'checkin' ? 'none' : ''
+    $('rchip1').innerHTML = s === 'last' ? '<span style="color:#C6FF3D">5 min left · survive</span>' : 'Check in <span class="mono">in 2:14</span>'
+    if (s === 'feed') openFeed(); else $('rsheet').classList.remove('on')
+  }
+</script>

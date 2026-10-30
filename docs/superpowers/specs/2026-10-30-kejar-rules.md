@@ -107,7 +107,7 @@ Rules:
 - **Motion:** short moments that come and go (the catch stamp, lucky dip, ripple ping, phase wipes, victory lap). Motion design §4–§8.
 - **The lime marker scribble** is the hype and wayfinding layer, never on safety screens, with one moment per screen. Motion §8.5.
 - **One loud thing at a time** (**Claude's call**, from the clutter review): a screen never plays two big effects at once (for example a sticker pop during a scribble). Queue them.
-- **Watch the runner's chase screen.** It carries the map, the check-in banner, the clock, the slot, the feed and the SOS bar. Before building, mock it with the feed shrunk to a **one-line ticker** that opens when tapped, so the map stays the hero (§10).
+- **The chase screen** is one screen with no scrolling: a top bar, the map as the hero, and a dock with the slot, one Scan button, a one-line ticker and SOS (motion §8.6). A lock-screen notification shows the next check-in and the end as clock times (motion §8.7).
 
 ## 8. Which doc owns what
 
@@ -144,7 +144,7 @@ Rules:
 ## 10. Still to design before building
 
 1. ~~**Organiser setup**~~ **designed 2026-10-30:** `2026-10-30-kejar-organiser-setup-design.md` covers five setup steps, the kit checklist, walking the park, the stash drop and lobby checks.
-2. **The runner's chase screen audit,** with the feed as a one-line ticker (§7).
+2. ~~**The chase screen audit**~~ **designed 2026-10-30:** motion design §8.6 (one screen, map as the hero, a dock with the slot, one Scan button, a ticker and SOS) and §8.7 (the lock-screen status notification with clock times).
 3. **The lobby's how-to-play card,** one per mode: what you are, how to check in, how you get caught, and the power-ups in this mode's deck.
 4. **The auto-jailed runner** variant of the Penjara screen (`You missed 2 check-ins`).
 

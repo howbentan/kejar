@@ -25,6 +25,7 @@
 - `14-ping-feed-celebrations.html`: the ripple ping (§8.1), the feed (§8.2) and six celebration options. The owner chose D (scribble) mixed with E (victory lap).
 - `15-marker-scribble.html`: the marker scribble across the app (§8.5), including the chosen results celebration.
 - `16-organiser-setup.html`: organiser setup, walking the park and the lobby (`2026-10-30-kejar-organiser-setup-design.md`).
+- `17-chase-screen.html`: the chase screen before and after (§8.6).
 
 ## 1. Why
 
@@ -323,6 +324,54 @@ A hand-drawn lime marker that draws itself over the screen, used for hype and wa
   - **One scribble moment per screen,** drawn in under 2 s (each stroke about 0.4 s), then it stays still.
   - **Reduced motion:** the marks appear already drawn.
 - **Build note** (left to the builder): draw each stroke by animating its dash offset from the path's real length. The wobble is an SVG displacement filter. In testing, applying it to an inner group hid the strokes in Chrome, while applying it to the whole overlay SVG worked.
+
+### 8.6 The chase screen: one screen, no scrolling (agreed 2026-10-30)
+
+Mockup: `17-chase-screen.html`. This replaces today's scrolling stack in `RunnerChase` and `ChaserChase`. **Both sides use the same layout.**
+
+- **Top bar** (about 40 px):
+  - who you are (`DIKEJAR · #07` / `KEJAR · BEN`);
+  - the game clock, which turns lime and pulses in the last 5 minutes (§8.3);
+  - how many are free.
+- **The map fills the middle,** at least half the screen and always visible, even under the check-in banner.
+  - **Chips,** not cards, sit along the map's top edge: `Check in in 2:14` (runners) or `Next ping 1:42 · last 3:18 ago` (chasers), plus `● Kejar within 100 m` (glowing lime) and `5 min left · survive`.
+  - **The check-in banner** (§7a) drops down over the top of the map, not the whole screen. In Full with the switch on, the chaser snapshot circles show on the map below it.
+- **The bottom dock** (about 150 px), top to bottom:
+  1. **The slot** (§7b): sticker, name and `TAP TO USE`. While running, it reads `ON · 8:12 LEFT` with a lime tint.
+  2. **One Scan button:**
+     - **runners:** `Scan`, for stations, a Penjara rescue and the Dato Seri stash. The QR's contents decide which, which replaces today's separate `Break them out` scanner;
+     - **chasers:** a big lime `Scan tag`, for catches and stations.
+  3. **A one-line ticker:** the newest feed event with its sticker or label, the bold line and the `→` line (§8.2), truncated to one line, plus a `+N` unread count. Lines that need you to act get a lime outline and **one buzz**. **Tapping it opens the full feed** as a sheet that stops above the SOS bar.
+  4. **SOS** (§6), always last and always visible. **Nothing ever covers it,** the feed sheet included.
+- **Rules:**
+  - no scrolling during the chase, including on a small Android (about 360 × 640);
+  - one loud thing at a time (rules doc §7);
+  - the `Kejar within 100 m` warning, the Dato Seri hint zone and the stations stay on the map, not in the dock.
+- **Penjara, hide phase and pause** keep their own screens. This layout is for the chase phase only.
+
+### 8.7 The lock-screen status notification (agreed 2026-10-30)
+
+The owner asked for a countdown on the phone's lock screen. **A live ticking timer needs a native app** (iPhone Live Activities, Android ongoing notifications), and Kejar stays a web app. Instead:
+
+- **One Kejar notification stays on the lock screen and is replaced in place,** using the same notification `tag`, so they never pile up. It shows **clock times, not countdowns**, so it never goes stale:
+
+  ```
+  kejar. · Dikejar #07
+  Next check-in 3:42 PM · Game ends 4:15 PM
+  9 Dikejar free · 2 in Penjara
+  ```
+  Chasers get `Next ping 3:42 PM · Game ends 4:15 PM` and the counts.
+- **When it updates:**
+  - **every check-in alert** (§7a), which buzzes as today;
+  - **`10 minutes left` and `5 minutes left`,** which buzz;
+  - **pause and resume,** which buzz. A pause shows `Game paused`; a resume shows the new times (`Resumed · now ends 4:21 PM`).
+  - Other refreshes, e.g. counts after a ping, are **silent** (`renotify: false`).
+- **Who gets it:** every player and marshal who has push alerts on, from the start of the chase until the results. Marshals keep their separate SOS alerts (§6.5).
+- **Times use the phone's own time format and time zone,** computed from the server's times.
+- **Caveats:**
+  - On iPhone, web push only works when Kejar is added to the home screen (iOS 16.4+), and iPhones are still untested (`docs/superpowers/spike-results.md`).
+  - Some Android battery savers delay pushes, which is another reason to show times rather than countdowns.
+- **Server work** (left to the builder): the existing push sender gains the status payload and the `tag`. Each update is one push per subscribed player, at most about one a minute, so it stays within free-tier limits.
 
 ## 9. Constraints
 
