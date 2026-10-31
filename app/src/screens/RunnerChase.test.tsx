@@ -9,12 +9,14 @@ import { testView } from './testView'
 afterEach(cleanup)
 
 describe('RunnerChase', () => {
-  it('shows the check-in card only in the last 30 s before a reveal', () => {
-    const { unmount } = render(<RunnerChase code="ABC234" view={testView({ nextRevealAt: 100_000 + 20_000 })} />)
+  it('shows the check-in card only once the alert has gone out', () => {
+    const { unmount } = render(
+      <RunnerChase code="ABC234" view={testView({ nextRevealAt: 100_000 + 20_000, nextAlertAt: 100_000 })} />,
+    )
     expect(screen.getByText(/check in/i)).toBeInTheDocument()
     expect(screen.getByText('0:20')).toBeInTheDocument()
     unmount()
-    render(<RunnerChase code="ABC234" view={testView({ nextRevealAt: 100_000 + 60_000 })} />)
+    render(<RunnerChase code="ABC234" view={testView({ nextRevealAt: 100_000 + 60_000, nextAlertAt: 100_000 + 15_000 })} />)
     expect(screen.queryByText(/check in/i)).toBeNull()
   })
 

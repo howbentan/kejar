@@ -1,5 +1,4 @@
 import type { View } from '../../shared/views.js'
-import { ALERT_LEAD_MS } from '../../shared/clock.js'
 import GameMap from '../game/Map'
 import PingRipple from '../game/PingRipple'
 import PowerUpHand from '../game/PowerUpHand'
@@ -34,7 +33,8 @@ export function GameClock({ view }: { view: View }) {
 export default function RunnerChase({ code, view }: { code: string; view: View }) {
   const now = useServerNow(view.now)
   const toReveal = view.nextRevealAt === null ? null : view.nextRevealAt - now
-  const checkInNow = toReveal !== null && toReveal <= ALERT_LEAD_MS
+  const toAlert = view.nextAlertAt === null ? null : view.nextAlertAt - now
+  const checkInNow = toAlert !== null && toAlert <= 0
 
   return (
     <Screen eyebrow={`Dikejar · ${view.me.tag_id ? `#${String(view.me.tag_id).padStart(2, '0')}` : view.me.name}`}>
@@ -53,9 +53,9 @@ export default function RunnerChase({ code, view }: { code: string; view: View }
           <p style={{ fontSize: 12, fontWeight: 500 }}>Keep this page open until the ping</p>
         </div>
       ) : (
-        toReveal !== null && (
+        toAlert !== null && (
           <p className="muted">
-            Next check-in in <span className="mono">{clock(toReveal - ALERT_LEAD_MS)}</span>
+            Next check-in in <span className="mono">{clock(toAlert)}</span>
           </p>
         )
       )}
