@@ -118,7 +118,8 @@ Replaces "a random roll with equal odds on every scan".
 
   The drawings are in `docs/superpowers/mockups/2026-10-30-motion/13-card-art.html`. Mine (Claude's) set the direction and can be redrawn by an illustrator later in the same style.
 - **The same drawing is used everywhere,** from the full card in the lucky dip down to the power-up slot and the feed. At small sizes the characters are recognised by colour and shape.
-- **Dato Seri is the one legendary card,** and the only one that isn't lime: a yellow face (`#FFF27A` → `#FFD60A` → `#F5B800`) with dark text, an iridescent foil and a glow (jail design §4a, motion design §8.9). Gold was mocked up and rejected for yellow (owner's decision).
+- **Dato Seri is a legendary card,** and legendaries are the only cards that aren't lime: a yellow face (`#FFF27A` → `#FFD60A` → `#F5B800`) with dark text, an iridescent foil and a glow (jail design §4a, motion design §8.9). Gold was mocked up and rejected for yellow (owner's decision).
+  - **Updated 2026-10-31 (Claude's call):** yellow is the **legendary tier's** look, not a Dato-Seri-exclusive colour — it's the same class of card (`.leg` in the mockups), reusable for the chaser legendary once designed (`2026-10-30-kejar-chaser-legendary-design.md`), so a second legendary doesn't need a third brand exception. If both exist in the same Full-mode game, nothing here tells a player apart two unlabelled yellow `?` zones on the map — flagged, not solved, in the chaser legendary doc §3.
 - **Rejected: blue "rare" and purple "epic" tiers** (mockup `11-rarity-tiers.html`, now superseded). Claude's reasons, which the owner agreed with:
   - every deck card is situational, not "better", so tiers would make most draws feel like a letdown;
   - there are only 8 kinds, which players learn in one game;

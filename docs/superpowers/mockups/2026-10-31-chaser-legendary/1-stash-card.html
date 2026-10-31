@@ -1,0 +1,104 @@
+<h2>Chaser legendary (name TBD): the hidden-stash card</h2>
+<p class="subtitle">Two phones, two people. Play it in order with the buttons under each phone: <b>1</b> a chaser scans the hidden card and claims it, <b>2</b> a runner can see the same mystery zone but can't claim it. Reuses the exact legendary card CSS from <code>10-dato-seri.html</code> so the two stay visually consistent — only the name, art and copy differ, both still placeholders until the character is chosen.</p>
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  .wrap { display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 250px; }
+  .cap { font-size: 12px; opacity: .75; text-align: center; }
+  .kj-phone { width: 240px; height: 480px; border-radius: 30px; background: #0A0A0B; border: 2px solid #2a2a2a; position: relative; overflow: hidden;
+    color: #F5F5F3; font-family: 'Geist', system-ui, sans-serif; }
+  .pad { position: absolute; inset: 0; padding: 16px 12px; overflow: hidden; }
+  .eb { font: 500 9px 'Geist Mono', monospace; letter-spacing: .2em; color: rgba(245,245,243,.55); }
+  h4 { margin: 8px 0 4px; font-size: 22px; font-weight: 800; letter-spacing: -0.05em; }
+  h4 span { color: #C6FF3D; }
+  .sub { font-size: 12px; opacity: .7; margin: 0 0 8px; }
+  .map { position: relative; height: 190px; border-radius: 16px; background: #121412; border: 1px solid #262626; overflow: hidden; }
+  .map .edge { position: absolute; inset: 12px; border: 1px solid rgba(245,245,243,.3); border-radius: 44%; }
+  .me { position: absolute; left: 36%; top: 62%; width: 11px; height: 11px; border-radius: 50%; background: #F5F5F3; border: 2px solid #0A0A0B; transform: translate(-50%, -50%); }
+  .hintzone { position: absolute; left: 58%; top: 38%; width: 118px; height: 118px; border-radius: 50%; transform: translate(-50%, -50%);
+    background: radial-gradient(circle, rgba(255,214,10,.28), rgba(255,214,10,.04) 70%); border: 1.5px dashed #FFD60A; }
+  .hintzone b { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 30px; height: 30px; border-radius: 50%; background: #0A0A0B; border: 2px solid #FFD60A;
+    display: grid; place-items: center; color: #FFD60A; font-weight: 800; font-size: 13px; box-shadow: 0 0 12px rgba(255,214,10,.7); animation: twinkle 1.6s ease-in-out infinite; }
+  @keyframes twinkle { 50% { box-shadow: 0 0 22px rgba(255,236,90,.95) } }
+  .hintzone::after { content: ''; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid #FFD60A; opacity: 0; animation: hz 2.4s ease-out infinite; }
+  @keyframes hz { 0% { transform: scale(.7); opacity: .7 } 100% { transform: scale(1.25); opacity: 0 } }
+  .note { font-size: 11px; opacity: .7; margin-top: 8px; }
+  /* the legendary card: same treatment as Dato Seri, placeholder name/art */
+  .legend { border-radius: 16px; background: linear-gradient(135deg, #FFF27A 0%, #FFD60A 35%, #F5B800 70%, #FFE95C 100%); color: #1a1600; padding: 12px; display: flex; gap: 10px; align-items: center;
+    position: relative; overflow: hidden; box-shadow: 0 0 0 1px #FFE95C, 0 0 18px rgba(255,214,10,.55); animation: glow 2.2s ease-in-out infinite; }
+  @keyframes glow { 50% { box-shadow: 0 0 0 1px #FFF27A, 0 0 30px rgba(255,236,90,.85) } }
+  .legend::after { content: ''; position: absolute; top: -40%; bottom: -40%; width: 40px; left: -60px; transform: rotate(20deg);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.75), transparent); animation: sheen 2.6s ease-in-out infinite; }
+  @keyframes sheen { 0% { left: -60px } 55%, 100% { left: 120% } }
+  .legend::before { content: ''; position: absolute; inset: 4px; border: 1px solid rgba(10,10,11,.35); border-radius: 12px; pointer-events: none; }
+  .legend .art { width: 50px; height: 50px; border-radius: 50%; background: #0A0A0B; color: #FFD60A; display: grid; place-items: center; font-weight: 800; flex: none; font-size: 19px; box-shadow: 0 0 0 2px #1a1600; }
+  .legend .nm { font-weight: 800; font-size: 19px; letter-spacing: -0.04em; }
+  .legend .fx { font-size: 10.5px; opacity: .8; }
+  .legend .tag { font: 500 8px 'Geist Mono', monospace; letter-spacing: .2em; }
+  .legend.in { animation: lin .9s cubic-bezier(.2,1.5,.4,1), glow 2.2s ease-in-out .9s infinite; }
+  @keyframes lin { 0% { transform: scale(.4) rotate(-12deg); opacity: 0; filter: brightness(3) } 60% { transform: scale(1.08) rotate(2deg); opacity: 1; filter: brightness(1.6) } 100% { transform: none; filter: none } }
+  .spark { position: absolute; width: 6px; height: 6px; background: #FFF27A; pointer-events: none; z-index: 6;
+    clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: spark 1s ease-out forwards; }
+  @keyframes spark { 0% { transform: translate(0,0) scale(.4) rotate(0); opacity: 1 } 100% { transform: translate(var(--x), var(--y)) scale(1.4) rotate(160deg); opacity: 0 } }
+  .slotempty { border: 1.5px dashed rgba(245,245,243,.25); border-radius: 16px; padding: 14px; font-size: 12px; opacity: .7; }
+  .b { width: 100%; border-radius: 999px; padding: 11px; font: 800 14px 'Geist', sans-serif; border: 0; cursor: pointer; background: #C6FF3D; color: #0A0A0B; }
+  .b.ghost { background: transparent; color: #F5F5F3; border: 1px solid #444; font-weight: 600; }
+  .b:disabled { opacity: .4; cursor: default; }
+  .b.gold { background: linear-gradient(135deg, #FFF27A, #FFD60A 45%, #F5B800); color: #1a1600; box-shadow: 0 0 14px rgba(255,214,10,.45); }
+  .refuse { border: 2px solid #3a3a3a; border-radius: 16px; padding: 12px; text-align: center; margin-top: 10px; }
+  .refuse b { color: #F5F5F3; display: block; font-size: 15px; margin-bottom: 4px; }
+  .refuse.flash { animation: shake .4s; border-color: #666; }
+  @keyframes shake { 20%, 60% { transform: translateX(-4px) } 40%, 80% { transform: translateX(4px) } }
+</style>
+
+<div class="wrap">
+  <div class="col">
+    <div class="kj-phone"><div class="pad" id="p1"></div></div>
+    <div class="b ghost" style="width:auto;padding:8px 14px" onclick="reset()">Reset</div>
+    <p class="cap"><b>1. A chaser's map.</b> A fixed yellow zone (same 100–200&nbsp;m fuzziness as Dato Seri's stash, not yet confirmed for this card), visible all game until claimed.</p>
+  </div>
+  <div class="col">
+    <div class="kj-phone"><div class="pad" id="p2"></div></div>
+    <p class="cap"><b>2. A runner's map, same moment.</b> They see the exact same zone, and can walk over and try — but the scan refuses them. They can still loiter and guard it.</p>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id)
+  let claimed = false, attempted = false
+  const LEGEND = (extra = '') => `<div class="legend ${extra}"><div class="art">?</div><div><div class="tag">★ LEGENDARY · ONE PER GAME</div><div class="nm">??? <span style="opacity:.6;font-size:11px;font-weight:600">(name TBD)</span></div><div class="fx">Reveals every free Dikejar's exact, live position for a while. Character not yet chosen.</div></div></div>`
+  const ZONE = `<div class="hintzone"><b>?</b></div>`
+
+  function p1() {
+    $('p1').innerHTML = `<div class="eb">KEJAR · #03</div><h4>Something's out there<span>.</span></h4><p class="sub">A legendary is hidden in the park. Find the card and scan it.</p>
+      <div class="map"><div class="edge"></div><div class="me"></div>${claimed ? '' : ZONE}</div>
+      <p class="note">${claimed ? 'Claimed. The card stops working for anyone else.' : 'YELLOW ZONE · SOMETHING LEGENDARY IS HIDDEN IN HERE · FIXED ALL GAME'}</p>
+      <div class="eb" style="margin-top:10px">YOUR POWER-UP</div><div style="margin-top:6px">${claimed ? LEGEND('in') : '<div class="slotempty">No power-up. Your slot must be empty to claim it.</div>'}</div>
+      ${claimed ? '' : '<button class="b gold" style="margin-top:10px" onclick="claim()">Scan the hidden card</button>'}`
+  }
+  function claim() {
+    claimed = true; p1(); p2()
+    sparkle($('p1').parentElement, 20, 50, 60)
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100, 50, 250])
+  }
+  function sparkle(host, n = 18, cx = 50, cy = 50) {
+    for (let k = 0; k < n; k++) {
+      const s = document.createElement('i'); s.className = 'spark'
+      const a = (k / n) * Math.PI * 2, d = 50 + Math.random() * 70
+      s.style.left = `${cx}%`; s.style.top = `${cy}%`; s.style.setProperty('--x', `${Math.cos(a) * d}px`); s.style.setProperty('--y', `${Math.sin(a) * d}px`)
+      s.style.animationDelay = `${Math.random() * 0.15}s`
+      host.appendChild(s); setTimeout(() => s.remove(), 1300)
+    }
+  }
+  function p2() {
+    $('p2').innerHTML = `<div class="eb">DIKEJAR · #11</div><h4>Something's out there<span>.</span></h4><p class="sub">${claimed ? 'Too late — someone already found it.' : 'You can see where it is. You just can’t take it.'}</p>
+      <div class="map"><div class="edge"></div><div class="me"></div>${claimed ? '' : ZONE}</div>
+      <p class="note">${claimed ? 'The zone is gone. It’s been claimed.' : 'YELLOW ZONE · SAME SPOT YOUR CHASERS SEE'}</p>
+      ${claimed ? '' : `<button class="b ghost" style="margin-top:10px" onclick="tryScan()">Try to scan it anyway</button>
+      <div class="refuse ${attempted ? 'flash' : ''}" style="${attempted ? '' : 'display:none'}" id="ref"><b>Not for your side.</b>This card is for Kejar only. You can still stand here and slow them down.</div>`}`
+  }
+  function tryScan() { attempted = true; p2(); const r = $('ref'); if (r) { void r.offsetWidth } }
+  function reset() { claimed = false; attempted = false; p1(); p2() }
+  p1(); p2()
+</script>
