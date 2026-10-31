@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BONUS_SEQ_BASE, chaseStartOf, dueWork, nextReveal, phaseAt, pingTimes, toWall } from './clock.js'
+import { BONUS_SEQ_BASE, chaseStartOf, dueWork, nextReveal, phaseAt, pingTimes, SCHEDULED_ALERT_LEAD_MS, toWall } from './clock.js'
 import { game, iso, MIN, ping, T0 } from './fixtures.js'
 
 const g = game() // hide 5, length 45, ping 5
@@ -23,8 +23,9 @@ describe('pingTimes', () => {
   it('reveals every ping interval during the chase, never at the end', () => {
     expect(pingTimes(g).map((p) => p.revealAt)).toEqual([10, 15, 20, 25, 30, 35, 40, 45].map((m) => T0 + m * MIN))
   })
-  it('alerts 30 s before each reveal', () => {
-    expect(pingTimes(g)[0]).toEqual({ seq: 1, alertAt: T0 + 10 * MIN - 30_000, revealAt: T0 + 10 * MIN })
+  it('alerts 45 s before each reveal', () => {
+    expect(pingTimes(g)[0]).toEqual({ seq: 1, alertAt: T0 + 10 * MIN - SCHEDULED_ALERT_LEAD_MS, revealAt: T0 + 10 * MIN })
+    expect(SCHEDULED_ALERT_LEAD_MS).toBe(45_000)
   })
 })
 
@@ -75,7 +76,7 @@ describe('bonus pings (Flare)', () => {
   it('nextReveal picks a bonus ping that comes before the next scheduled one', () => {
     expect(nextReveal(g, [flare], T0 + 11 * MIN)).toEqual({ alertAt: T0 + 12 * MIN - 30_000, revealAt: T0 + 12 * MIN })
     expect(nextReveal(g, [{ ...flare, revealed: true }], T0 + 12.5 * MIN)).toEqual({
-      alertAt: T0 + 15 * MIN - 30_000,
+      alertAt: T0 + 15 * MIN - SCHEDULED_ALERT_LEAD_MS,
       revealAt: T0 + 15 * MIN,
     })
   })

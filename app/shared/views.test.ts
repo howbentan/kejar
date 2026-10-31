@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { event, game, MIN, ping, player, pos, T0 } from './fixtures.js'
 import { distanceM } from './geo.js'
 import type { Player, Position, PowerUp } from './types.js'
-import { BONUS_SEQ_BASE } from './clock.js'
+import { BONUS_SEQ_BASE, SCHEDULED_ALERT_LEAD_MS } from './clock.js'
 import { viewFor } from './views.js'
 
 const g = game()
@@ -102,7 +102,7 @@ describe('timers and counts', () => {
   it('gives the next alert and reveal during the chase', () => {
     const v = view(aina)
     expect(v.nextRevealAt).toBe(T0 + 20 * MIN)
-    expect(v.nextAlertAt).toBe(T0 + 20 * MIN - 30_000)
+    expect(v.nextAlertAt).toBe(T0 + 20 * MIN - SCHEDULED_ALERT_LEAD_MS)
   })
   it('counts free and jailed runners', () => {
     const v = view(chaser, { players: [chaser, { ...aina, jailed: true }, hafiz, wei, siti] })

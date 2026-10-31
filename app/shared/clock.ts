@@ -1,8 +1,10 @@
 import type { Game, Phase, Ping } from './types.js'
 
 export const MINUTE_MS = 60_000
-/** Spec §4.5: the check-in alert goes out 30 s before each ping. */
+/** Bonus pings (Mat Rempit/Flare) keep a 30 s alert lead. */
 export const ALERT_LEAD_MS = 30_000
+/** Check-ins design §4.2: scheduled pings alert 45 s before they reveal, so a late push still leaves time to check in. */
+export const SCHEDULED_ALERT_LEAD_MS = 45_000
 
 /**
  * Maps a schedule time (as if the game had never been paused) to wall time: each pause that began
@@ -49,7 +51,7 @@ export function pingTimes(game: Game, now?: number): { seq: number; alertAt: num
   const out: { seq: number; alertAt: number; revealAt: number }[] = []
   for (let seq = 1, t = hideEnd + step; t < end; seq++, t += step) {
     const revealAt = toWall(game, t, now)
-    out.push({ seq, alertAt: revealAt - ALERT_LEAD_MS, revealAt })
+    out.push({ seq, alertAt: revealAt - SCHEDULED_ALERT_LEAD_MS, revealAt })
   }
   return out
 }
