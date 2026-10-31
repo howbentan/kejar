@@ -1,0 +1,72 @@
+<h2>Bomoh: the doodle sticker, in purple</h2>
+<p class="subtitle">Same technique as the rest of the deck (<code>13-card-art.html</code>'s <code>ART</code> object and filters): a hand-drawn wobbly ink outline, flat real-life-colour fills, a thick white sticker edge. The card frame is purple — Bomoh's own legendary colour, not Dato Seri's yellow — but the character art itself stays in the same skin/cloth/coconut palette as the rest of the cast. Holding the ritual object (the coconut), not posed in any stereotyped gesture, the same dignified treatment the deck's other human figure (Dato Seri's <code>dato</code> card) already gets. Bottom row: at power-up slot size, to check it still reads when small.</p>
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  .board { background: #0A0A0B; border-radius: 14px; padding: 16px 10px; font-family: 'Geist', sans-serif; color: #F5F5F3; }
+  .grp { font: 500 9px 'Geist Mono', monospace; letter-spacing: .2em; opacity: .55; margin: 4px 6px 8px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 14px; }
+  .tc { width: 130px; height: 196px; border-radius: 12px; position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; padding: 8px 6px; box-sizing: border-box; }
+  .tc .eb { font: 500 6.5px 'Geist Mono', monospace; letter-spacing: .16em; }
+  .tc .nm { font-weight: 800; letter-spacing: -0.04em; font-size: 15px; margin-top: auto; }
+  .tc .fx { font-size: 8px; opacity: .78; text-align: center; line-height: 1.25; margin-top: 2px; min-height: 20px; }
+  .tc svg { width: 104px; height: 104px; margin-top: 2px; }
+  .tc:hover svg { animation: wig .5s ease-in-out; }
+  @keyframes wig { 25% { transform: rotate(-6deg) scale(1.05) } 75% { transform: rotate(5deg) scale(1.05) } }
+  .leg { background: linear-gradient(150deg, #F0E0FF, #C9A4FF 50%, #9B5DE5); color: #2B0B45; box-shadow: 0 0 16px rgba(155,93,229,.55); position: relative; }
+  .leg .eb { color: #2B0B45; opacity: .75; }
+  .leg::after { content: ''; position: absolute; top: -40%; bottom: -40%; width: 30px; left: -50px; transform: rotate(20deg);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.7), transparent); animation: sheen 2.8s ease-in-out infinite; }
+  @keyframes sheen { 0% { left: -50px } 55%, 100% { left: 130% } }
+  .slots { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .slot { display: flex; align-items: center; gap: 6px; border-radius: 12px; padding: 5px 9px 5px 5px; font-size: 11px; font-weight: 700; border: 1px solid #333; background: #141614; color: #F5F5F3; }
+  .slot svg { width: 40px; height: 40px; }
+</style>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <filter id="wob" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="3.2"/>
+    </filter>
+    <filter id="stk" x="-25%" y="-25%" width="150%" height="150%">
+      <feMorphology in="SourceAlpha" operator="dilate" radius="4.5" result="d"/>
+      <feFlood flood-color="#F5F5F3"/><feComposite in2="d" operator="in" result="w"/>
+      <feOffset in="w" dy="3.5" result="o"/><feFlood flood-color="#000" flood-opacity=".55"/><feComposite in2="o" operator="in" result="sh"/>
+      <feMerge><feMergeNode in="sh"/><feMergeNode in="w"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+</svg>
+
+<div class="board">
+  <div class="grp">LEGENDARY · CHASER</div><div class="grid" id="leg"></div>
+  <div class="grp">AT SLOT SIZE</div><div class="slots" id="slots"></div>
+</div>
+
+<script>
+  const INK = 'stroke="#141414" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"'
+  const star = (cx, cy, R, r) => {
+    const p = []
+    for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + (k * Math.PI) / 5, rr = k % 2 ? r : R; p.push(`${(cx + Math.cos(a) * rr).toFixed(1)} ${(cy + Math.sin(a) * rr).toFixed(1)}`) }
+    return 'M' + p.join(' L') + ' Z'
+  }
+  const ART = {
+    bomoh: `
+      <path d="M16 100 Q18 68 50 68 Q82 68 84 100 Z" fill="#EDE3CC" ${INK}/>
+      <path d="M30 70 L70 96" stroke="#6B4423" stroke-width="6" stroke-linecap="round"/>
+      <path d="M30 70 L70 96" stroke="#C9A876" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 4"/>
+      <circle cx="50" cy="48" r="20" fill="#B9784F" ${INK}/>
+      <path d="M28 42 Q28 20 50 18 Q72 20 72 42 Q64 34 50 34 Q36 34 28 42 Z" fill="#8B5E3C" ${INK}/>
+      <path d="M68 26 Q82 22 78 36 Q72 32 66 30 Z" fill="#8B5E3C" ${INK}/>
+      <path d="M40 48 q3 3 6 0 M54 48 q3 3 6 0" fill="none" ${INK}/>
+      <path d="M42 58 Q50 62 58 58" fill="none" ${INK}/>
+      <ellipse cx="33" cy="80" rx="7.5" ry="9.5" fill="#B9784F" ${INK}/><ellipse cx="67" cy="80" rx="7.5" ry="9.5" fill="#B9784F" ${INK}/>
+      <circle cx="50" cy="78" r="13" fill="#7A5230" ${INK}/>
+      <path d="M40 76 Q50 70 60 76 Q58 84 50 86 Q42 84 40 76 Z" fill="#F7D154" ${INK}/>
+      <path d="${star(78, 58, 6, 2.6)}" fill="#C9A4FF" ${INK}/>`,
+  }
+  const sticker = (k, rot = 0) => `<svg viewBox="-8 -6 116 116"><g filter="url(#stk)"><g filter="url(#wob)" transform="rotate(${rot} 50 55)">${ART[k]}</g></g></svg>`
+
+  document.getElementById('leg').innerHTML = `<div class="tc leg"><div class="eb">★ LEGENDARY</div>${sticker('bomoh', -4)}<div class="nm">Bomoh</div><div class="fx">Chasers: reveals every free Dikejar's exact, live position.</div></div>`
+  document.getElementById('slots').innerHTML = `<div class="slot">${sticker('bomoh')}Bomoh</div>`
+</script>

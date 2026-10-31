@@ -50,7 +50,7 @@ Rules:
 | **Chasers' deck** | **Mat Rempit, Pak Guard** | Mat Rempit, Pak Guard, Ah Long, Abang Grab |
 | Dato Seri (runner legendary) | – | ✓ hidden stash, or the quest-giver if there are volunteers |
 | "Dikejar can see Kejar at check-in" switch | – (always off) | ✓ organiser's choice, default off |
-| Chaser legendary | – | Later, when designed (§11) |
+| **Bomoh** (chaser legendary, updated 2026-10-31) | – | ✓ hidden stash, or the ritual if there are volunteers |
 
 **Core's deck counts** (**Claude's call**, tune after playtests):
 - runners, per 10 runners: Durian ×3, Ponteng ×3 (6 cards);
@@ -80,6 +80,8 @@ Rules:
 | Freed | once per runner per game, by any route | base §4.7 |
 | Dato Seri hint | fuzzy zone 100–200 m | jail design §4 |
 | Dato Seri Settle | frees the holder plus up to 2 jailed Dikejar (freed-once rule applies) | this doc §9c |
+| Bomoh hint | fuzzy zone 100–200 m (same default, not yet separately confirmed) | chaser legendary design §2a |
+| Bomoh reveal | every free Dikejar's exact live position; 1 min, or until the game ends if triggered in the last 5 min | chaser legendary design §2 |
 | Spectator delay in Penjara | 2 min | base §4.3 |
 | SOS | hold 1 s; details card closes after 20 s | motion design §6 |
 
@@ -165,7 +167,7 @@ Prices are from MR.DIY's online listings on 2026-10-30 and may change. Velcro st
 | Creating a game (five steps), the kit checklist, walking the park, lobby checks | `2026-10-30-kejar-organiser-setup-design.md` |
 | Organiser accounts; real parks and saved arenas | `2026-10-26-kejar-plan4a-organiser-accounts-design.md`, `2026-10-27-kejar-plan4b-arenas-design.md` |
 | Endgame ideas (not approved) | `2026-10-26-kejar-endgame-intensity-design.md` |
-| Chaser legendary (unfinished) | `2026-10-30-kejar-chaser-legendary-design.md` |
+| Bomoh (chaser legendary) | `2026-10-30-kejar-chaser-legendary-design.md` |
 
 ## 9. Conflicts settled in this pass
 
@@ -188,6 +190,7 @@ Prices are from MR.DIY's online listings on 2026-10-30 and may change. Velcro st
 | Jail design §4: Settle frees the holder plus one other | **Plus up to 2 others**, the holder's choice (§9c) |
 | Base §3: marshals in black or white vests | **Orange vests** plus a MARSHAL lanyard card (§5a) |
 | Dato Seri stash: what if the finder's slot is full? | **Not said before. Claude's call:** the scan is refused with `Use or lose your power-up first`, and the stash stays claimable |
+| Chaser legendary notes: character undecided (Bomoh/Pontianak/others); shared "legendary yellow" | **Named Bomoh (owner's decision, 2026-10-31).** Grant mirrors Dato Seri exactly: hidden stash by default, the ritual as an optional staffed mode. Gets its own colour, **purple**, rather than sharing Dato Seri's yellow (§5c) |
 
 ## 9a. The 10-second rescue (owner's decision, 2026-10-30)
 
@@ -233,7 +236,6 @@ Dato Seri is the one legendary, so its Settle is now bigger: it frees **the hold
 
 ## 11. Still open (owner's decisions)
 
-- **Chaser legendary:** the character (Bomoh, Pontianak, Hantu Rimba or Cikgu Jejak), and how it's granted with a crew of two. It's Full mode only.
 - **Endgame intensity:** faster pings near the end, a shrinking play area, "Last call", and the other ideas in the endgame notes. Not approved.
 - **Core and Full deck counts and the chaser snapshot's 30 m:** first things to tune after playtests.
 

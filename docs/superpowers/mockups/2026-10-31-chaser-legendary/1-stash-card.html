@@ -1,5 +1,5 @@
-<h2>Chaser legendary (name TBD): the hidden-stash card</h2>
-<p class="subtitle">Two phones, two people. Play it in order with the buttons under each phone: <b>1</b> a chaser scans the hidden card and claims it, <b>2</b> a runner can see the same mystery zone but can't claim it. Reuses the exact legendary card CSS from <code>10-dato-seri.html</code> so the two stay visually consistent — only the name, art and copy differ, both still placeholders until the character is chosen.</p>
+<h2>Bomoh: the hidden-stash card</h2>
+<p class="subtitle">Two phones, two people. Play it in order with the buttons under each phone: <b>1</b> a chaser scans the hidden card and claims it, <b>2</b> a runner can see the same mystery zone but can't claim it. Structure reused from <code>10-dato-seri.html</code>, recoloured purple — Bomoh's own legendary colour — with the real doodle sticker from <code>2-bomoh-card-art.html</code>.</p>
 
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
 <style>
@@ -17,46 +17,62 @@
   .map .edge { position: absolute; inset: 12px; border: 1px solid rgba(245,245,243,.3); border-radius: 44%; }
   .me { position: absolute; left: 36%; top: 62%; width: 11px; height: 11px; border-radius: 50%; background: #F5F5F3; border: 2px solid #0A0A0B; transform: translate(-50%, -50%); }
   .hintzone { position: absolute; left: 58%; top: 38%; width: 118px; height: 118px; border-radius: 50%; transform: translate(-50%, -50%);
-    background: radial-gradient(circle, rgba(255,214,10,.28), rgba(255,214,10,.04) 70%); border: 1.5px dashed #FFD60A; }
-  .hintzone b { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 30px; height: 30px; border-radius: 50%; background: #0A0A0B; border: 2px solid #FFD60A;
-    display: grid; place-items: center; color: #FFD60A; font-weight: 800; font-size: 13px; box-shadow: 0 0 12px rgba(255,214,10,.7); animation: twinkle 1.6s ease-in-out infinite; }
-  @keyframes twinkle { 50% { box-shadow: 0 0 22px rgba(255,236,90,.95) } }
-  .hintzone::after { content: ''; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid #FFD60A; opacity: 0; animation: hz 2.4s ease-out infinite; }
+    background: radial-gradient(circle, rgba(155,93,229,.30), rgba(155,93,229,.05) 70%); border: 1.5px dashed #9B5DE5; }
+  .hintzone b { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 30px; height: 30px; border-radius: 50%; background: #0A0A0B; border: 2px solid #9B5DE5;
+    display: grid; place-items: center; color: #C9A4FF; font-weight: 800; font-size: 13px; box-shadow: 0 0 12px rgba(155,93,229,.7); animation: twinkle 1.6s ease-in-out infinite; }
+  @keyframes twinkle { 50% { box-shadow: 0 0 22px rgba(201,164,255,.95) } }
+  .hintzone::after { content: ''; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid #9B5DE5; opacity: 0; animation: hz 2.4s ease-out infinite; }
   @keyframes hz { 0% { transform: scale(.7); opacity: .7 } 100% { transform: scale(1.25); opacity: 0 } }
   .note { font-size: 11px; opacity: .7; margin-top: 8px; }
-  /* the legendary card: same treatment as Dato Seri, placeholder name/art */
-  .legend { border-radius: 16px; background: linear-gradient(135deg, #FFF27A 0%, #FFD60A 35%, #F5B800 70%, #FFE95C 100%); color: #1a1600; padding: 12px; display: flex; gap: 10px; align-items: center;
-    position: relative; overflow: hidden; box-shadow: 0 0 0 1px #FFE95C, 0 0 18px rgba(255,214,10,.55); animation: glow 2.2s ease-in-out infinite; }
-  @keyframes glow { 50% { box-shadow: 0 0 0 1px #FFF27A, 0 0 30px rgba(255,236,90,.85) } }
+  /* the legendary card: Bomoh, purple */
+  .legend { border-radius: 16px; background: linear-gradient(135deg, #F0E0FF 0%, #C9A4FF 35%, #9B5DE5 70%, #DCC2FF 100%); color: #2B0B45; padding: 12px; display: flex; gap: 10px; align-items: center;
+    position: relative; overflow: hidden; box-shadow: 0 0 0 1px #DCC2FF, 0 0 18px rgba(155,93,229,.55); animation: glow 2.2s ease-in-out infinite; }
+  @keyframes glow { 50% { box-shadow: 0 0 0 1px #F0E0FF, 0 0 30px rgba(201,164,255,.85) } }
   .legend::after { content: ''; position: absolute; top: -40%; bottom: -40%; width: 40px; left: -60px; transform: rotate(20deg);
     background: linear-gradient(90deg, transparent, rgba(255,255,255,.75), transparent); animation: sheen 2.6s ease-in-out infinite; }
   @keyframes sheen { 0% { left: -60px } 55%, 100% { left: 120% } }
-  .legend::before { content: ''; position: absolute; inset: 4px; border: 1px solid rgba(10,10,11,.35); border-radius: 12px; pointer-events: none; }
-  .legend .art { width: 50px; height: 50px; border-radius: 50%; background: #0A0A0B; color: #FFD60A; display: grid; place-items: center; font-weight: 800; flex: none; font-size: 19px; box-shadow: 0 0 0 2px #1a1600; }
+  .legend::before { content: ''; position: absolute; inset: 4px; border: 1px solid rgba(43,11,69,.35); border-radius: 12px; pointer-events: none; }
+  .legend .art { width: 50px; height: 50px; flex: none; }
+  .legend .art svg { width: 50px; height: 50px; }
   .legend .nm { font-weight: 800; font-size: 19px; letter-spacing: -0.04em; }
   .legend .fx { font-size: 10.5px; opacity: .8; }
   .legend .tag { font: 500 8px 'Geist Mono', monospace; letter-spacing: .2em; }
   .legend.in { animation: lin .9s cubic-bezier(.2,1.5,.4,1), glow 2.2s ease-in-out .9s infinite; }
   @keyframes lin { 0% { transform: scale(.4) rotate(-12deg); opacity: 0; filter: brightness(3) } 60% { transform: scale(1.08) rotate(2deg); opacity: 1; filter: brightness(1.6) } 100% { transform: none; filter: none } }
-  .spark { position: absolute; width: 6px; height: 6px; background: #FFF27A; pointer-events: none; z-index: 6;
+  .spark { position: absolute; width: 6px; height: 6px; background: #F0E0FF; pointer-events: none; z-index: 6;
     clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); animation: spark 1s ease-out forwards; }
   @keyframes spark { 0% { transform: translate(0,0) scale(.4) rotate(0); opacity: 1 } 100% { transform: translate(var(--x), var(--y)) scale(1.4) rotate(160deg); opacity: 0 } }
   .slotempty { border: 1.5px dashed rgba(245,245,243,.25); border-radius: 16px; padding: 14px; font-size: 12px; opacity: .7; }
   .b { width: 100%; border-radius: 999px; padding: 11px; font: 800 14px 'Geist', sans-serif; border: 0; cursor: pointer; background: #C6FF3D; color: #0A0A0B; }
   .b.ghost { background: transparent; color: #F5F5F3; border: 1px solid #444; font-weight: 600; }
   .b:disabled { opacity: .4; cursor: default; }
-  .b.gold { background: linear-gradient(135deg, #FFF27A, #FFD60A 45%, #F5B800); color: #1a1600; box-shadow: 0 0 14px rgba(255,214,10,.45); }
+  .b.gold { background: linear-gradient(135deg, #F0E0FF, #C9A4FF 45%, #9B5DE5); color: #2B0B45; box-shadow: 0 0 14px rgba(155,93,229,.45); }
   .refuse { border: 2px solid #3a3a3a; border-radius: 16px; padding: 12px; text-align: center; margin-top: 10px; }
   .refuse b { color: #F5F5F3; display: block; font-size: 15px; margin-bottom: 4px; }
   .refuse.flash { animation: shake .4s; border-color: #666; }
   @keyframes shake { 20%, 60% { transform: translateX(-4px) } 40%, 80% { transform: translateX(4px) } }
 </style>
 
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <filter id="wob" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="3.2"/>
+    </filter>
+    <filter id="stk" x="-25%" y="-25%" width="150%" height="150%">
+      <feMorphology in="SourceAlpha" operator="dilate" radius="4.5" result="d"/>
+      <feFlood flood-color="#F5F5F3"/><feComposite in2="d" operator="in" result="w"/>
+      <feOffset in="w" dy="3.5" result="o"/><feFlood flood-color="#000" flood-opacity=".55"/><feComposite in2="o" operator="in" result="sh"/>
+      <feMerge><feMergeNode in="sh"/><feMergeNode in="w"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+</svg>
+
 <div class="wrap">
   <div class="col">
     <div class="kj-phone"><div class="pad" id="p1"></div></div>
     <div class="b ghost" style="width:auto;padding:8px 14px" onclick="reset()">Reset</div>
-    <p class="cap"><b>1. A chaser's map.</b> A fixed yellow zone (same 100–200&nbsp;m fuzziness as Dato Seri's stash, not yet confirmed for this card), visible all game until claimed.</p>
+    <p class="cap"><b>1. A chaser's map.</b> A fixed purple zone (same 100–200&nbsp;m fuzziness as Dato Seri's stash, not yet confirmed for this card), visible all game until claimed.</p>
   </div>
   <div class="col">
     <div class="kj-phone"><div class="pad" id="p2"></div></div>
@@ -67,7 +83,27 @@
 <script>
   const $ = (id) => document.getElementById(id)
   let claimed = false, attempted = false
-  const LEGEND = (extra = '') => `<div class="legend ${extra}"><div class="art">?</div><div><div class="tag">★ LEGENDARY · ONE PER GAME</div><div class="nm">??? <span style="opacity:.6;font-size:11px;font-weight:600">(name TBD)</span></div><div class="fx">Reveals every free Dikejar's exact, live position for a while. Character not yet chosen.</div></div></div>`
+  const INK = 'stroke="#141414" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"'
+  const star = (cx, cy, R, r) => {
+    const p = []
+    for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + (k * Math.PI) / 5, rr = k % 2 ? r : R; p.push(`${(cx + Math.cos(a) * rr).toFixed(1)} ${(cy + Math.sin(a) * rr).toFixed(1)}`) }
+    return 'M' + p.join(' L') + ' Z'
+  }
+  const BOMOH_ART = `
+    <path d="M16 100 Q18 68 50 68 Q82 68 84 100 Z" fill="#EDE3CC" ${INK}/>
+    <path d="M30 70 L70 96" stroke="#6B4423" stroke-width="6" stroke-linecap="round"/>
+    <path d="M30 70 L70 96" stroke="#C9A876" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 4"/>
+    <circle cx="50" cy="48" r="20" fill="#B9784F" ${INK}/>
+    <path d="M28 42 Q28 20 50 18 Q72 20 72 42 Q64 34 50 34 Q36 34 28 42 Z" fill="#8B5E3C" ${INK}/>
+    <path d="M68 26 Q82 22 78 36 Q72 32 66 30 Z" fill="#8B5E3C" ${INK}/>
+    <path d="M40 48 q3 3 6 0 M54 48 q3 3 6 0" fill="none" ${INK}/>
+    <path d="M42 58 Q50 62 58 58" fill="none" ${INK}/>
+    <ellipse cx="33" cy="80" rx="7.5" ry="9.5" fill="#B9784F" ${INK}/><ellipse cx="67" cy="80" rx="7.5" ry="9.5" fill="#B9784F" ${INK}/>
+    <circle cx="50" cy="78" r="13" fill="#7A5230" ${INK}/>
+    <path d="M40 76 Q50 70 60 76 Q58 84 50 86 Q42 84 40 76 Z" fill="#F7D154" ${INK}/>
+    <path d="${star(78, 58, 6, 2.6)}" fill="#C9A4FF" ${INK}/>`
+  const BOMOH_STICKER = `<svg viewBox="-8 -6 116 116"><g filter="url(#stk)"><g filter="url(#wob)">${BOMOH_ART}</g></g></svg>`
+  const LEGEND = (extra = '') => `<div class="legend ${extra}"><div class="art">${BOMOH_STICKER}</div><div><div class="tag">★ LEGENDARY · ONE PER GAME</div><div class="nm">Bomoh</div><div class="fx">Reveals every free Dikejar's exact, live position for a while. In Full mode, hidden stash by default.</div></div></div>`
   const ZONE = `<div class="hintzone"><b>?</b></div>`
 
   function p1() {
