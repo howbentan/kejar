@@ -147,9 +147,26 @@ const SLIDES = [
       <div class="eb">A PARK HAS BAD SIGNAL. THE GAME SHOULD KNOW THAT.</div>
       <h1>It stays honest <i>when things break.</i></h1>
       <p class="lede">A dropped signal is treated as a normal, visible part of playing outdoors, not hidden behind a generic spinner — and it always says plainly what happens to your check-in.</p>
-      <div class="frame"><iframe src="../2026-10-31-more-scribble/2-connection-states.html"></iframe></div>
+      <div class="frame"><iframe id="resilience-frame" src="../2026-10-31-more-scribble/2-connection-states.html"></iframe></div>
       <div class="cap">live mockup — buffering, lost signal, reconnected, two kinds of "no"</div>
     `,
+    onenter: () => {
+      const f = document.getElementById('resilience-frame')
+      if (!f) return
+      const inject = () => {
+        try {
+          const doc = f.contentDocument
+          if (!doc || doc.getElementById('deck-override')) return
+          const style = doc.createElement('style')
+          style.id = 'deck-override'
+          // keep every phone the same height in this deck view; the standalone mockup keeps its own taller panel E
+          style.textContent = '#ph-e { height: 460px !important } #e-gif { height: 70px !important } #e-gifwrap { margin-top: 10px !important } .refuse { padding: 10px !important; margin-top: 8px !important } #pe button.b { margin-top: 10px !important }'
+          doc.head.appendChild(style)
+        } catch (e) {}
+      }
+      if (f.contentDocument && f.contentDocument.readyState === 'complete') inject()
+      else f.addEventListener('load', inject, { once: true })
+    },
   },
   {
     id: 'motion',
