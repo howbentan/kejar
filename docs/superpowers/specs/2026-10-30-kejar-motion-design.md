@@ -30,6 +30,7 @@
 - `19-auto-jailed.html`: the auto-jailed runner, "out for good", and the marshal undo (§5a–§5b).
 - `20-kitchen-fits.html`: role scramble, lobby and share tickets, Dato Seri foil, hold to confirm, and the loader (§8.9).
 - `21-station-claim.html`: the polished station claim, Dato Seri's yellow marker, and refusals (§7).
+- `2026-10-31-more-scribble/2-connection-states.html`: buffering, lost signal, reconnected, a generic failed action, and a station claim lost to someone else (§8.10).
 
 ## 1. Why
 
@@ -471,6 +472,30 @@ Mockup: `20-kitchen-fits.html`. Inspired by experiments at `https://www.dqnamo.c
 6. **Loading:** the marker traces the outline of `kejar` (with line boil), the letters fill white, then the lime full stop pops in. It loops gently if loading takes longer, and replaces the spinner on first open and when joining a game.
 
 Not used: receipt printer (maybe later for paid events), cassette player, magnetic drop zone, model selector, animated signature (the marker already does this), tactile button and scroll fade list (small details for the builder).
+
+### 8.10 Connection states: buffering, lost signal, reconnected, failed (agreed 2026-10-31)
+
+Mockup: `2026-10-31-more-scribble/2-connection-states.html`. Kejar is a web app used outdoors in a park, so a dropped signal is a likely, ordinary event, not an edge case the app can skip designing for. Grounded in two outside ideas (not previously used elsewhere in this doc):
+
+- **"Seamful design":** treat a dropped signal as a visible, honest part of the experience rather than hiding it behind a generic error. ([Calvium, *Design for Coincidence*](https://calvium.com/calvium/wp-content/uploads/2015/06/Calvium_Research_DesignForCoincidence.pdf))
+- **Standard offline UX practice:** don't block the whole screen, keep showing the last known state, keep the indicator small, never blame the player, and say plainly when it's back. ([web.dev offline UX guidelines](https://web.dev/articles/offline-ux-design-guidelines); [Google, *Offline design*](https://design.google/library/offline-design))
+
+**Five states, each reusing an existing visual pattern rather than inventing a new one:**
+
+1. **Buffering** (a scan or check-in in flight): a hand-drawn pencil loop traces itself, then resolves into a bigger moment — not just a tick, but a doodled **checkbox being ticked**: a rounded-square box draws first, then a thick checkmark whose ends deliberately overshoot the box's corners (the "sketchy, slightly too big" look of someone happily ticking a list). Centred in the space below the header text, not hugging the top. Copy: `Maxis skill issue, bossku` while waiting, `got it, bossku.` once done. Short and bounded — it only plays for as long as the real request takes, unlike the ambient effects rejected in the superseded radar-and-buttons pass below.
+2. **Lost signal** (seamful, not hidden): a small banner, not a full-screen blocker. The screen under it stays up, dimmed, showing the last-known state. Copy names the one thing a player would actually worry about — missing a check-in — and points straight at the existing escape hatch: `Signal's gone missing, bossku. Showing your last spot from 0:38 ago. If you miss a check-in, Pak Pulis can undo the auto-jail once you're back.` (The marshal-undo-for-phone-faults mechanic already exists, §5b — this is the first place the player-facing copy actually tells them about it.)
+3. **Reconnected:** the same banner flips lime, draws a quick scribble tick, and says what synced: `Back online, bossku! · Check-ins synced`. Clears itself after a few seconds, per "notify on reconnect."
+4. **A generic failed action** (e.g. the server couldn't be reached): reuses the shake-and-refuse card already built for a wrong-side scan (jail design §4b), recoloured for this reason: `Tak jadi lah, bossku. Couldn't reach the server — nothing happened yet, try the scan again.` Button: `cuba lagi`.
+5. **A station claimed by someone else first:** the same shake-and-refuse family, with a tease rather than a plain refusal: `Kepala bapak kau! this station has been claimed bro, skill issue :( wait for it to reset`, a short looping video clip in a loose, hand-drawn scribbled frame (two overlapping passes, per the "sketchy double line" style, §8.8), then an `ok lah` button below it.
+
+**Both buttons are solid Volt lime** (`.b`, not the muted "ghost" style used for Replay/Reset controls elsewhere in these mockups) — these are real primary actions, not secondary ones.
+
+**A further, deliberate widening of §6's "plain English for everything players read" rule.** This is bigger than the earlier widening for "Pak Pulis" (one name): whole lines here are Manglish/Malay (`bossku`, `tak jadi lah`, `cuba lagi`, `kepala bapak kau`), not just a character name. Two things worth the owner's eyes before this ships, flagged plainly rather than quietly built around:
+
+- **`kepala bapak kau`** sits a notch cheekier than the rest of the game's "cheeky uncle" register (§6 of the jail design) — it jabs at someone's father, closer to mild profanity-adjacent banter than anything else in the copy so far. Owner's explicit call, not Claude's.
+- **The reaction clip is a placeholder, not a shippable asset.** It's presently a well-known meme clip of real, identifiable people. Fine as a stand-in for the mockup's tone; a real build needs either a licensed clip or an original replacement, not someone else's video, regardless of the owner's joke permission in chat.
+
+**Superseded:** an earlier pass this same day added an ambient radar sweep to the legendary hint zones, a continuous proximity ping on the chase map, and a general "any button gets a tick" pattern. The owner judged it too much and it was reverted (commit `f748244`) — noted here so it isn't quietly reproposed. The buffering checkbox-tick in this section is a one-shot moment bound to a real request, not an ambient effect, which is why it survived that judgement call.
 
 ## 9. Constraints
 

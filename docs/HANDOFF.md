@@ -90,6 +90,7 @@ Also floated: surprise missions, a bounty on the longest survivor. **Malaysian p
 - A press-and-hold SOS bar with "What's happening?" reasons; disputes go through SOS.
 - Report and feedback move to the results screen.
 - A pick-a-card lucky dip for power-ups.
+- **Connection states added 2026-10-31** (§8.10): buffering, lost signal (ties to the marshal auto-jail undo), reconnected, and two failed-action variants, one of them a tease ("Kepala bapak kau!"). Widens the plain-English-on-screen rule further than "Pak Pulis" did; flagged, owner's call. An earlier ambient-radar pass the same day was judged too much and reverted — see §8.10's note.
 
 **Locked 2026-10-30: power-ups are one slot per player** (Malaysian power-ups design §5a).
 - A slot stays busy while its effect runs.
