@@ -30,6 +30,7 @@
 - `19-auto-jailed.html`: the auto-jailed runner, "out for good", and the marshal undo (§5a–§5b).
 - `20-kitchen-fits.html`: role scramble, lobby and share tickets, Dato Seri foil, hold to confirm, and the loader (§8.9).
 - `21-station-claim.html`: the polished station claim, Dato Seri's yellow marker, and refusals (§7).
+- `2026-10-31-more-scribble/1-radar-and-buttons.html`: the radar sweep, the proximity ping, the general button tick, and the Penjara rescue scribble (§8.10).
 
 ## 1. Why
 
@@ -471,6 +472,17 @@ Mockup: `20-kitchen-fits.html`. Inspired by experiments at `https://www.dqnamo.c
 6. **Loading:** the marker traces the outline of `kejar` (with line boil), the letters fill white, then the lime full stop pops in. It loops gently if loading takes longer, and replaces the spinner on first open and when joining a game.
 
 Not used: receipt printer (maybe later for paid events), cassette player, magnetic drop zone, model selector, animated signature (the marker already does this), tactile button and scroll fade list (small details for the builder).
+
+### 8.10 More marker scribble: radar and buttons (owner's request, 2026-10-31)
+
+Extends §8.5 into three more places, each still bound by that section's rules (hype/wayfinding only, never on safety screens, reduced motion skips the animation). Mockup: `2026-10-31-more-scribble/1-radar-and-buttons.html`.
+
+**Two of these are ambient, not "moments."** §8.5's "one scribble moment per screen" budget is for the one-shot hype draws (circle, underline, stars). A slow, continuous, low-key loop — like the game clock already pulsing lime in the last 5 minutes (§8.3) — is a different category and doesn't compete with that budget, as long as it stays quiet enough to respect "one loud thing at a time" (rules doc §7).
+
+1. **Legendary hint zones get a hand-drawn radar sweep, replacing the plain ripple (ambient).** Dato Seri's and Bomoh's hint zone (jail design §4a; chaser legendary design §2b) currently just ripples. Add a sketchy line sweeping slowly around the zone's circle, in the zone's own colour (yellow or purple), drawn with the same double-line-plus-wobble technique as the rest of the marker language (§8.8's "sketchy double line" and "line boil"). It's a full rotation every 6 s (**Claude's call**), stops the instant the card is claimed, and reinforces "something is being searched for" — tying the hunt mechanic to the marker's existing "wayfinding" job.
+2. **A proximity radar ping on the chase map, runners only (ambient).** When the `● Kejar within 100 m` chip (§8.6) is live, draw one or two faint scribbled rings pulsing outward from the player's own dot, in the chip's warning colour. It sits on the map, well clear of the SOS bar, so SOS stays "clean and calm" as §8.5 requires. Stops the moment no chaser is within range.
+3. **The button tick becomes a general pattern, not just check-in's.** §8.5 already draws a black tick across the check-in button on confirm. The same small, quick tick now plays on **any** primary lime button's own success, not as a new "moment" but as instant tactile feedback — the chase screen's Scan button, the organiser's `Drop [legendary] here`, and so on. It's deliberately smaller and faster (under 0.3 s, one stroke) than a full scribble moment, so it can't collide with whatever bigger moment follows it (a lucky-dip reveal, a claim pop).
+4. **New scribble moment: a successful Penjara rescue.** Unlike the screens in §8.5's table, the rescue (rules doc §9a) has no marker moment today — only the lime ring and ticker during the 10-second hold. Once it succeeds, circle the `You're free!` line and add two stars, the same shape of treatment as the lucky dip's card reveal, on every phone that was shown the rescue (the freed runners', the rescuer's, and the Penjara marshal's). This is a genuinely new moment, not an addition to an existing one, so it doesn't break the one-per-screen rule.
 
 ## 9. Constraints
 
