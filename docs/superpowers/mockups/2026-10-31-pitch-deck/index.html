@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>kejar. — the pitch</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root { --lime: #C6FF3D; --ink: #0A0A0B; --paper: #F5F5F3; --yellow: #FFD60A; --purple: #9B5DE5; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--ink); color: var(--paper); font-family: 'Geist', system-ui, sans-serif; overflow: hidden; }
+  .eb { font: 600 11px 'Geist Mono', monospace; letter-spacing: .25em; color: rgba(245,245,243,.5); text-transform: uppercase; }
+
+  /* progress bar, same convention as the in-game briefing story */
+  .progress { position: fixed; top: 0; left: 0; right: 0; display: flex; gap: 5px; padding: 14px 18px 0; z-index: 20; }
+  .progress i { flex: 1; height: 3px; border-radius: 2px; background: rgba(245,245,243,.18); overflow: hidden; }
+  .progress i b { display: block; height: 100%; width: 0%; background: var(--lime); transition: width .25s; }
+  .progress i.done b { width: 100%; }
+
+  .deckname { position: fixed; top: 24px; left: 18px; z-index: 20; font-weight: 800; letter-spacing: -0.04em; font-size: 15px; }
+  .deckname span { color: var(--lime); }
+
+  /* tap zones, same left/right convention as the briefing story */
+  .tap { position: fixed; top: 0; bottom: 0; width: 35%; z-index: 15; cursor: pointer; }
+  .tap.left { left: 0; } .tap.right { right: 0; }
+
+  .slides { position: relative; width: 100%; height: 100%; }
+  .slide { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 70px 8vw 40px; opacity: 0; transform: translateX(24px); transition: opacity .4s, transform .4s; pointer-events: none; text-align: center; }
+  .slide.active { opacity: 1; transform: none; pointer-events: auto; }
+  .slide h1 { font-size: clamp(30px, 5vw, 56px); font-weight: 900; letter-spacing: -0.04em; margin: 10px 0 14px; line-height: 1.05; }
+  .slide h1 i { font-style: normal; color: var(--lime); }
+  .slide p.lede { max-width: 640px; font-size: clamp(14px, 1.6vw, 18px); opacity: .8; line-height: 1.5; margin: 0 0 22px; }
+  .frame { width: min(92vw, 1000px); flex: 1; min-height: 0; border-radius: 18px; overflow: hidden; border: 1px solid #2a2a2a; background: #000; box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+  .frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .cap { margin-top: 14px; font-size: 12px; opacity: .55; font-family: 'Geist Mono', monospace; }
+
+  .dots { position: fixed; bottom: 16px; left: 0; right: 0; display: flex; gap: 8px; justify-content: center; z-index: 20; }
+  .dots b { width: 7px; height: 7px; border-radius: 50%; background: rgba(245,245,243,.25); cursor: pointer; }
+  .dots b.on { background: var(--lime); }
+
+  /* cover */
+  .logo { font-size: clamp(48px, 10vw, 100px); font-weight: 900; letter-spacing: -0.06em; }
+  .logo span { color: var(--lime); }
+  .scribble-under { width: 220px; height: 14px; margin: 6px auto 0; }
+
+  /* side-by-side cards */
+  .duo { display: flex; gap: 28px; justify-content: center; flex-wrap: wrap; margin-top: 6px; }
+  .legcard { width: 230px; border-radius: 18px; padding: 20px 16px; text-align: left; position: relative; overflow: hidden; }
+  .legcard .tag { font: 700 9px 'Geist Mono', monospace; letter-spacing: .2em; opacity: .75; }
+  .legcard .nm { font-size: 24px; font-weight: 800; letter-spacing: -0.04em; margin: 6px 0 8px; }
+  .legcard .fx { font-size: 13px; line-height: 1.45; opacity: .9; }
+  .legcard.dato { background: linear-gradient(150deg, #FFF27A, #FFD60A 50%, #F5B800); color: #1a1600; }
+  .legcard.bomoh { background: linear-gradient(150deg, #F0E0FF, #C9A4FF 50%, #9B5DE5); color: #2B0B45; }
+
+  .pillrow { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 18px; }
+  .pill { border: 1px solid #333; border-radius: 999px; padding: 8px 16px; font-size: 12px; font-weight: 600; }
+  .pill.on { background: var(--lime); color: var(--ink); border-color: var(--lime); }
+  .pill.todo { opacity: .55; }
+
+  .status-grid { display: grid; grid-template-columns: repeat(2, minmax(220px, 280px)); gap: 14px; margin-top: 10px; text-align: left; }
+  .srow { border: 1px solid #262626; border-radius: 12px; padding: 12px 14px; }
+  .srow .l { font: 600 9px 'Geist Mono', monospace; letter-spacing: .15em; opacity: .55; }
+  .srow .v { font-size: 13px; margin-top: 4px; }
+  .srow.live .l { color: var(--lime); } .srow.plan .l { color: var(--yellow); } .srow.idea .l { color: var(--purple); }
+
+  .close-btn { margin-top: 26px; display: inline-flex; align-items: center; gap: 8px; background: var(--lime); color: var(--ink); font-weight: 800; padding: 14px 26px; border-radius: 999px; font-size: 15px; }
+
+  @media (max-width: 720px) {
+    .status-grid { grid-template-columns: 1fr; }
+    .frame { width: 94vw; }
+  }
+</style>
+</head>
+<body>
+
+<div class="deckname">kejar<span>.</span> <span style="opacity:.4;font-weight:500">— the pitch</span></div>
+<div class="progress" id="progress"></div>
+<div class="tap left" onclick="go(-1)"></div>
+<div class="tap right" onclick="go(1)"></div>
+
+<div class="slides" id="slides"></div>
+<div class="dots" id="dots"></div>
+
+<svg width="0" height="0"><defs><filter id="wob" x="-10%" y="-10%" width="120%" height="120%">
+  <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="7"/><feDisplacementMap in="SourceGraphic" scale="2.6"/>
+</filter></defs></svg>
+
+<script>
+const SLIDES = [
+  {
+    id: 'cover',
+    html: `
+      <div class="eb">A MALAYSIAN CHASE GAME FOR REAL PARKS</div>
+      <div class="logo">kejar<span>.</span></div>
+      <svg class="scribble-under" viewBox="0 0 220 14"><path id="covers" d="M4 7 Q60 -2 110 7 T216 7" fill="none" stroke="#C6FF3D" stroke-width="3" stroke-linecap="round" filter="url(#wob)"/></svg>
+      <p class="lede" style="margin-top:22px">Kejar (chasers) hunt Dikejar (runners) around a real park, phones only. Everything from here is what's been designed since the last build — some shipped, most not yet. Tap right to go, or tap a dot below.</p>
+    `,
+    onenter: () => { const p = document.getElementById('covers'); if (!p) return; const L = p.getTotalLength(); p.style.strokeDasharray = L; p.style.strokeDashoffset = L; p.animate([{strokeDashoffset:L},{strokeDashoffset:0}], {duration:700, delay:200, easing:'ease-in-out', fill:'both'}) },
+  },
+  {
+    id: 'loop',
+    html: `
+      <div class="eb">THE CORE LOOP</div>
+      <h1>Hide. Check in. <i>Don't get caught.</i></h1>
+      <p class="lede">Dikejar hide, then keep moving. Every few minutes a ping buzzes every phone: check in within the window or you're marked missed. Kejar scan a tag to catch, Dikejar scan the QR at Penjara to rescue. The chase screen is one view, no scrolling, map as the hero.</p>
+      <div class="frame"><iframe src="../2026-10-30-motion/17-chase-screen.html"></iframe></div>
+      <div class="cap">live mockup — the redesigned chase screen, before and after</div>
+    `,
+  },
+  {
+    id: 'powerups',
+    html: `
+      <div class="eb">MALAYSIAN, HEAD TO TOE</div>
+      <h1>Not Decoy and Shield. <i>Gostan and Durian.</i></h1>
+      <p class="lede">Every power-up renamed and redrawn as a hand-drawn sticker in its own real-life colours, on one shared brand card. One legendary breaks the pattern on purpose — more on that next.</p>
+      <div class="frame"><iframe src="../2026-10-30-motion/13-card-art.html"></iframe></div>
+      <div class="cap">live mockup — the full doodle set, deck size and slot size</div>
+    `,
+  },
+  {
+    id: 'legendaries',
+    html: `
+      <div class="eb">TWO LEGENDARIES, ONE EACH SIDE</div>
+      <h1>Dato Seri <i>&amp;</i> Bomoh</h1>
+      <p class="lede">Exactly one of each, per game. Hidden. Found, not given — a fuzzy zone narrows the search, and the card is a genuine discovery. Both default to a hidden stash so a two-person crew can still run them; a staffed ritual is optional, for events with a spare volunteer.</p>
+      <div class="duo">
+        <div class="legcard dato"><div class="tag">★ LEGENDARY · RUNNERS</div><div class="nm">Dato Seri</div><div class="fx">In Penjara: Settle frees the holder plus up to two others. Found by secret quest or hidden stash.</div></div>
+        <div class="legcard bomoh"><div class="tag">★ LEGENDARY · CHASERS</div><div class="nm">Bomoh</div><div class="fx">Reveals every free Dikejar's exact, live position for a while — longer if triggered in the last 5 minutes.</div></div>
+      </div>
+      <div class="cap" style="margin-top:18px">both kept secret from players — no name, just a mystery zone on the map</div>
+    `,
+  },
+  {
+    id: 'penjara',
+    html: `
+      <div class="eb">GETTING CAUGHT SHOULDN'T BE DEAD TIME</div>
+      <h1>Penjara isn't a waiting room <i>anymore.</i></h1>
+      <p class="lede">Every stay gets one pull of the dare reel: a silly dare, or rarely, straight out. Still a real cost — most ways out involve risk, luck, or something properly earned, never a free pass.</p>
+      <div class="frame"><iframe src="../2026-10-30-motion/9-penjara-dare-reel.html"></iframe></div>
+      <div class="cap">live mockup — the dare reel and lever</div>
+    `,
+  },
+  {
+    id: 'resilience',
+    html: `
+      <div class="eb">A PARK HAS BAD SIGNAL. THE GAME SHOULD KNOW THAT.</div>
+      <h1>It stays honest <i>when things break.</i></h1>
+      <p class="lede">A dropped signal is treated as a normal, visible part of playing outdoors, not hidden behind a generic spinner — and it always says plainly what happens to your check-in.</p>
+      <div class="frame"><iframe src="../2026-10-31-more-scribble/2-connection-states.html"></iframe></div>
+      <div class="cap">live mockup — buffering, lost signal, reconnected, two kinds of "no"</div>
+    `,
+  },
+  {
+    id: 'motion',
+    html: `
+      <div class="eb">KEJAR'S OWN HANDWRITING</div>
+      <h1>One lime marker, <i>drawn live.</i></h1>
+      <p class="lede">A hand-drawn marker circles, underlines and draws arrows across the big moments — your side, a win, the way to Penjara — never on a safety screen, never more than once a screen.</p>
+      <div class="frame"><iframe src="../2026-10-30-motion/15-marker-scribble.html"></iframe></div>
+      <div class="cap">live mockup — six screens, the same marker language throughout</div>
+    `,
+  },
+  {
+    id: 'status',
+    html: `
+      <div class="eb">WHERE THIS ACTUALLY STANDS</div>
+      <h1>Designed and mocked up. <i>Nothing here is built yet.</i></h1>
+      <div class="status-grid">
+        <div class="srow live"><div class="l">ALREADY LIVE</div><div class="v">Core game, power-up stations, safety tools, organiser accounts, real parks</div></div>
+        <div class="srow plan"><div class="l">PLANNED, BUILDING NEXT</div><div class="v">Check-ins tightened to 45s, auto-jail on 2 misses, "Penjara" rename</div></div>
+        <div class="srow idea"><div class="l">DESIGNED, NOT YET PLANNED</div><div class="v">Malaysian power-ups, Core/Full modes, Dato Seri, Bomoh, all the motion in this deck</div></div>
+        <div class="srow idea"><div class="l">STILL OPEN</div><div class="v">Which legendary character for Bomoh felt right culturally; endgame intensity</div></div>
+      </div>
+      <div class="pillrow">
+        <div class="pill on">1. check-ins + auto-jail + Penjara</div>
+        <div class="pill todo">2. one slot + Core deck</div>
+        <div class="pill todo">3. motion + scribble</div>
+        <div class="pill todo">4. Full mode + legendaries</div>
+        <div class="pill todo">5. playtest</div>
+      </div>
+    `,
+  },
+  {
+    id: 'close',
+    html: `
+      <div class="logo" style="font-size:clamp(34px,7vw,64px)">Let's build it<span>.</span></div>
+      <p class="lede" style="margin-top:14px">Build order and the first implementation plan are already written. First real test is a playtest with friends, then a run club.</p>
+      <div class="close-btn">docs/superpowers/plans/2026-10-31-kejar-checkins-autojail-penjara.md</div>
+    `,
+  },
+]
+
+let i = 0
+function render() {
+  document.getElementById('slides').innerHTML = SLIDES.map((s, k) => `<div class="slide" data-k="${k}">${s.html}</div>`).join('')
+  document.getElementById('progress').innerHTML = SLIDES.map(() => `<i><b></b></i>`).join('')
+  document.getElementById('dots').innerHTML = SLIDES.map((s, k) => `<b data-k="${k}" onclick="jump(${k})" title="${s.id}"></b>`).join('')
+  show(0)
+}
+function show(k) {
+  i = Math.max(0, Math.min(SLIDES.length - 1, k))
+  document.querySelectorAll('.slide').forEach((el) => el.classList.toggle('active', +el.dataset.k === i))
+  document.querySelectorAll('.progress i').forEach((el, idx) => el.classList.toggle('done', idx < i))
+  document.querySelectorAll('.progress i b').forEach((el, idx) => el.style.width = idx === i ? '100%' : (idx < i ? '100%' : '0%'))
+  document.querySelectorAll('.dots b').forEach((el, idx) => el.classList.toggle('on', idx === i))
+  const enter = SLIDES[i].onenter
+  if (enter) setTimeout(enter, 50)
+}
+function go(d) { show(i + d) }
+function jump(k) { show(k) }
+document.addEventListener('keydown', (e) => { if (e.key === 'ArrowRight' || e.key === ' ') go(1); if (e.key === 'ArrowLeft') go(-1) })
+render()
+</script>
+</body>
+</html>
