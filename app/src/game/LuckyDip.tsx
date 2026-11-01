@@ -74,7 +74,8 @@ export default function LuckyDip({ kind, station, deckLeft, onDone }: { kind: Po
 
   return (
     <div className="moment dip" role="status">
-      {deckLeft !== null && <span className="dip-deck">{`DECK · ${deckLeft} LEFT`}</span>}
+      {/* The deck count goes with the claim stamp; the reveal's marker needs the space above the title. */}
+      {stage === 'stamp' && deckLeft !== null && <span className="dip-deck">{`DECK · ${deckLeft} LEFT`}</span>}
       {stage === 'stamp' && <Stamp text={`CLAIMED · Station ${station} ✓`} small />}
 
       {stage === 'reveal' && (

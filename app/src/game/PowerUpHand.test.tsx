@@ -69,7 +69,7 @@ describe('PowerUpHand', () => {
 
   it("Mat Rempit waits out the team cooldown, and can't be used until then", () => {
     render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'flare' }], flareReadyAt: 100_000 + 134_000 })} />)
-    expect(screen.getByText('TEAM COOLDOWN · 2:14')).toBeInTheDocument()
+    expect(screen.getByText('COOLDOWN · 2:14')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /mat rempit/i })).toBeDisabled()
   })
 

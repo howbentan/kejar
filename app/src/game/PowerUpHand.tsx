@@ -115,9 +115,10 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
               <Sticker kind={u.kind} size={40} tilt={-4} />
               <span>
                 <b>{INFO[u.kind].name}</b>
-                <span>{cooling ? `TEAM COOLDOWN · ${clock(view.flareReadyAt! - now)}` : INFO[u.kind].effect}</span>
+                <span>{cooling ? `COOLDOWN · ${clock(view.flareReadyAt! - now)}` : INFO[u.kind].effect}</span>
               </span>
-              {cooling ? deck : <small className="slot-deck">READY</small>}
+              {/* While cooling down, the name and countdown need the room more than the deck count. */}
+              {!cooling && <small className="slot-deck">READY</small>}
             </m.button>
           )
         })
