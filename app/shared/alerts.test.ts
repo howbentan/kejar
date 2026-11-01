@@ -63,6 +63,23 @@ describe('alertsFrom', () => {
   })
 })
 
+describe('SOS details', () => {
+  const sos = event('sos', T0 + MIN, { actor_id: 'r1', data: { who: 'Aina #07', lat: 3, lng: 101 } })
+  const details = (data: Record<string, unknown>, atMs = T0 + 1.2 * MIN) =>
+    event('sos-details', atMs, { actor_id: 'r1', data: { sosId: sos.id, ...data } })
+
+  it('folds the reason and who into the SOS text', () => {
+    expect(alertsFrom([sos, details({ reason: 'dispute', withName: 'Ben' })]).map((a) => a.text)).toEqual(['SOS from Aina #07: Catch dispute with Ben'])
+  })
+  it('leaves out "with" when there is no one', () => {
+    expect(alertsFrom([sos, details({ reason: 'hurt', withName: null })]).map((a) => a.text)).toEqual(['SOS from Aina #07: Hurt'])
+  })
+  it('uses the latest details for that SOS', () => {
+    const texts = alertsFrom([sos, details({ reason: 'lost' }), details({ reason: 'hurt' }, T0 + 1.5 * MIN)]).map((a) => a.text)
+    expect(texts).toEqual(['SOS from Aina #07: Hurt'])
+  })
+})
+
 describe('auto-jail alert', () => {
   it('has its own kind and names the runner it is about', () => {
     const [a] = alertsFrom([event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2', data: { who: 'Hafiz #03' } })])

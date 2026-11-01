@@ -181,7 +181,7 @@ describe('pings and check-ins', () => {
     await run('state', { code: g.code, token: g.ben.token })
     await run('state', { code: g.code, token: g.aina.token })
     expect(pushes.map((p) => p.endpoint).sort()).toEqual(['https://push/Aina', 'https://push/Hafiz'])
-    expect(pushes[0].payload).toEqual({ type: 'checkin', code: g.code, seq: 1 })
+    expect(pushes[0].payload).toEqual({ type: 'checkin', code: g.code, seq: 1, revealAt: T0 + 10 * MIN })
   })
 
   it('schedule mode never pushes', async () => {
@@ -226,7 +226,7 @@ describe('catching and jail', () => {
     })
     const v = await run<View>('state', { code: g.code, token: g.aina.token })
     expect(v.me.jailed).toBe(true)
-    expect(v.feed[0].text).toBe('#07 caught by Ben')
+    expect(v.feed[0].text).toBe('Ben caught #07.')
     expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toEqual({
       ok: false,
       reason: 'already-caught',
@@ -490,17 +490,33 @@ describe('power-up stations', () => {
     })
   })
 
+  it("a Mat Rempit bonus reveal doesn't make an on-time check-in look missed", async () => {
+    const g = await chasingWithStation()
+    now = T0 + 9 * MIN + 40_000 // inside ping 1's window (alert 9:15, reveal 10:00)
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    now = T0 + 10 * MIN + 5_000
+    await run('state', { code: g.code, token: g.ben.token })
+    const flare = await give(g.gameId, g.ben.playerId, 'flare')
+    now = T0 + 10 * MIN + 10_000
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: flare.id })).toMatchObject({ ok: true })
+    now = T0 + 10 * MIN + 20_000 // "Check in now": Aina sends a fresh fix for the bonus ping
+    await run('location', { code: g.code, token: g.aina.token, ...at(25) })
+    now = T0 + 13 * MIN
+    const v = await run<View>('state', { code: g.code, token: g.aina.token })
+    expect(v.checkin).toMatchObject({ state: 'early', missedInRow: 0 })
+  })
+
   it('flare adds a bonus ping that pushes now and reveals in 30 s', async () => {
     const g = await chasingWithStation()
     const flare = await give(g.gameId, g.ben.playerId, 'flare')
     pushes = []
     expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: flare.id })).toEqual({ ok: true, kind: 'flare' })
     await run('state', { code: g.code, token: g.ben.token })
-    expect(pushes.map((p) => p.payload)).toContainEqual({ type: 'checkin', code: g.code, seq: BONUS_SEQ_BASE })
+    expect(pushes.map((p) => p.payload)).toContainEqual({ type: 'checkin', code: g.code, seq: BONUS_SEQ_BASE, revealAt: now + 30_000 })
     now += 30_000
     const v = await run<View>('state', { code: g.code, token: g.ben.token })
     expect(v.lastRevealAt).toBe(now)
-    expect(v.feed.map((f) => f.text)).toContain('A Kejar used Mat Rempit — extra ping in 30 s')
+    expect(v.feed.map((f) => f.text)).toContain('A Kejar used Mat Rempit.')
   })
 
   it('flare with under 30 s left is too-late and not spent', async () => {
@@ -523,7 +539,7 @@ describe('power-up stations', () => {
     await run('location', { code: g.code, token: g.aina.token, ...at(10) })
     expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toEqual({ ok: false, reason: 'shielded' })
     const v = await run<View>('state', { code: g.code, token: g.ben.token })
-    expect(v.feed[0].text).toBe('#07 blocked a catch with Durian')
+    expect(v.feed[0].text).toBe('#07 blocked a catch with Durian.')
     expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toMatchObject({ ok: true })
   })
 })
@@ -654,7 +670,8 @@ describe('cloak secrecy at the ping', () => {
     await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: cloak.id })
     now = T0 + 10 * MIN
     const v = await run<View>('state', { code: g.code, token: g.ben.token })
-    expect(v.feed.map((f) => f.text)).toContain('Ping — 1 runner seen')
+    expect(v.feed.map((f) => f.text)).toContain('Ping: 1 Dikejar seen, 1 missed check-in.')
+    expect((await store.events(gameId)).find((e) => e.type === 'ping')?.data).toMatchObject({ seen: 1, missed: 1 })
   })
 })
 
@@ -751,7 +768,7 @@ describe('pause and resume', () => {
 describe('SOS and reports', () => {
   it('SOS pushes every subscribed marshal and writes a safety record', async () => {
     const g = await safetyGame()
-    expect(await run('sos', { code: g.code, token: g.aina.token, ...at(30) })).toEqual({ ok: true, notified: 1 })
+    expect(await run('sos', { code: g.code, token: g.aina.token, ...at(30) })).toMatchObject({ ok: true, notified: 1 })
     expect(pushes).toEqual([{ endpoint: 'https://push/Siti', payload: { type: 'alert', code: g.code, text: 'SOS from Aina #07' } }])
     expect(store.safetyRows).toEqual([
       expect.objectContaining({ type: 'sos', player_id: g.aina.playerId, lat: at(30).lat, lng: at(30).lng }),
@@ -770,6 +787,52 @@ describe('SOS and reports', () => {
     await run('sos', { code: g.code, token: g.aina.token })
     expect((await store.events(g.gameId)).filter((e) => e.type === 'sos')).toHaveLength(2)
     expect(pushes).toHaveLength(2)
+  })
+
+  it('SOS returns its id, and the same one on a repeat', async () => {
+    const g = await safetyGame()
+    const first = await run<{ sosId: string }>('sos', { code: g.code, token: g.aina.token })
+    const sosEvent = (await store.events(g.gameId)).find((e) => e.type === 'sos')!
+    expect(first).toEqual({ ok: true, notified: 1, sosId: sosEvent.id })
+    now += 10_000
+    expect(await run('sos', { code: g.code, token: g.aina.token })).toMatchObject({ ok: true, repeat: true, sosId: sosEvent.id })
+  })
+
+  it('SOS details on your own recent SOS update the alert and add one safety record, with no new push', async () => {
+    const g = await safetyGame()
+    const { sosId } = await run<{ sosId: string }>('sos', { code: g.code, token: g.aina.token })
+    pushes = []
+    expect(await run('sosDetails', { code: g.code, token: g.aina.token, sosId, reason: 'dispute', withId: g.ben.playerId })).toEqual({ ok: true })
+    const v = await run<View>('state', { code: g.code, token: g.siti.token })
+    expect(v.alerts.map((a) => a.text)).toContain('SOS from Aina #07: Catch dispute with Ben')
+    expect(store.safetyRows).toHaveLength(2)
+    expect(store.safetyRows[1]).toMatchObject({ type: 'sos', player_id: g.aina.playerId, target_id: g.ben.playerId, data: expect.objectContaining({ follows: sosId, reason: 'dispute', with_name: 'Ben' }) })
+    expect(pushes).toEqual([])
+  })
+
+  it('the same SOS details twice write once', async () => {
+    const g = await safetyGame()
+    const { sosId } = await run<{ sosId: string }>('sos', { code: g.code, token: g.aina.token })
+    const details = { code: g.code, token: g.aina.token, sosId, reason: 'hurt' }
+    expect(await run('sosDetails', details)).toEqual({ ok: true })
+    expect(await run('sosDetails', details)).toEqual({ ok: true })
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'sos-details')).toHaveLength(1)
+    expect(store.safetyRows).toHaveLength(2)
+  })
+
+  it("SOS details refuse someone else's SOS and one older than 5 minutes", async () => {
+    const g = await safetyGame()
+    const { sosId } = await run<{ sosId: string }>('sos', { code: g.code, token: g.aina.token })
+    expect(await run('sosDetails', { code: g.code, token: g.hafiz.token, sosId, reason: 'hurt' })).toEqual({ ok: false, reason: 'not-yours' })
+    now += 6 * MIN
+    expect(await run('sosDetails', { code: g.code, token: g.aina.token, sosId, reason: 'hurt' })).toEqual({ ok: false, reason: 'not-yours' })
+  })
+
+  it('SOS details reject an unknown reason or a stranger', async () => {
+    const g = await safetyGame()
+    const { sosId } = await run<{ sosId: string }>('sos', { code: g.code, token: g.aina.token })
+    await rejects(run('sosDetails', { code: g.code, token: g.aina.token, sosId, reason: 'bored' }), 400)
+    await rejects(run('sosDetails', { code: g.code, token: g.aina.token, sosId, reason: 'unsafe', withId: 'nobody' }), 400)
   })
 
   it('SOS works while paused and from jail, but not in the lobby', async () => {
@@ -1281,7 +1344,7 @@ describe('review fixes: safety', () => {
     const g = await safetyGame()
     await run('subscribe', { code: g.code, organiserToken: g.organiserToken, subscription: { endpoint: 'https://push/organiser' } })
     const r = await run('sos', { code: g.code, token: g.aina.token })
-    expect(r).toEqual({ ok: true, notified: 2 })
+    expect(r).toMatchObject({ ok: true, notified: 2 })
     expect(pushes.map((p) => p.endpoint).sort()).toEqual(['https://push/Siti', 'https://push/organiser'])
     expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).me.push).toEqual({ endpoint: 'https://push/organiser' })
   })
@@ -1289,7 +1352,7 @@ describe('review fixes: safety', () => {
   it('SOS says when no marshal could be reached', async () => {
     const g = await safetyGame()
     await store.updatePlayers([{ id: g.siti.playerId, patch: { push: null } }])
-    expect(await run('sos', { code: g.code, token: g.aina.token })).toEqual({ ok: true, notified: 0 })
+    expect(await run('sos', { code: g.code, token: g.aina.token })).toMatchObject({ ok: true, notified: 0 })
   })
 
   it('safety records keep the game code and names, so they make sense after the game is wiped', async () => {

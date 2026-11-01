@@ -3,10 +3,13 @@ import {
   NOTE_MAX,
   OUTSIDE_MARGIN_M,
   REASON_LABEL,
+  SOS_DETAILS_MS,
+  SOS_REASON_LABEL,
   SOS_REPEAT_MS,
   START_RADIUS_M,
   who,
   type ReportReason,
+  type SosReason,
 } from '../../shared/alerts.js'
 import { autoJailDue } from '../../shared/checkins.js'
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
@@ -158,7 +161,7 @@ function settingsFrom(input: unknown): Settings {
   return s
 }
 
-/** The moments a view looks at: now, the spectator delay, and the last revealed ping. */
+/** The moments a view looks at: now, the spectator delay, the last revealed ping, and the last scheduled one. */
 function viewTimes(game: Game, pings: { seq: number; revealed: boolean; reveal_at: string }[], now: number): string[] {
   const times = [iso(now), iso(now - game.settings.spectatorDelayMin * 60_000)]
   // Latest reveal by time: bonus (Flare) pings have high numbers but can come before scheduled ones.
@@ -166,6 +169,11 @@ function viewTimes(game: Game, pings: { seq: number; revealed: boolean; reveal_a
     .filter((p) => p.revealed && p.seq > 0)
     .sort((a, b) => Date.parse(b.reveal_at) - Date.parse(a.reveal_at))[0]
   if (last) times.push(last.reveal_at)
+  // The check-in banner judges the last scheduled ping too, which a later bonus reveal would hide.
+  const scheduled = pingTimes(game, now)
+    .filter((t) => t.revealAt <= now)
+    .at(-1)
+  if (scheduled && iso(scheduled.revealAt) !== last?.reveal_at) times.push(iso(scheduled.revealAt))
   return times
 }
 
@@ -201,7 +209,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     // Skip stale alerts when catching up after a gap: only alert pings still in the future.
     if (game.settings.checkinMode !== 'push' || now >= (times.get(seq)?.revealAt ?? 0)) continue
     const runners = (await store.players(game.id)).filter((p) => p.role === 'runner' && !p.jailed)
-    await pushTo(ctx, runners, { type: 'checkin', code: game.code, seq })
+    await pushTo(ctx, runners, { type: 'checkin', code: game.code, seq, revealAt: times.get(seq)?.revealAt })
   }
 
   for (const seq of work.reveal) {
@@ -220,7 +228,8 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
         .map((u) => u.player_id),
     )
     const seen = free.filter((p) => !cloaked.has(p.id) && (positions[p.id] ?? []).length > 0).length
-    await store.addEvent({ game_id: game.id, type: 'ping', actor_id: null, target_id: null, data: { seq, seen } })
+    // Cloaked runners count as missed, matching what chasers see on the map.
+    await store.addEvent({ game_id: game.id, type: 'ping', actor_id: null, target_id: null, data: { seq, seen, missed: free.length - seen } })
     if (seq < BONUS_SEQ_BASE) {
       // Flares give only 30 s notice, so only scheduled pings count towards a missed streak.
       const lastTwo = pingTimes(game, now).filter((t) => t.seq <= seq).slice(-2)
@@ -749,13 +758,13 @@ const sos: Action = async (ctx, body) => {
   requireRunning(game, ctx.now)
   await recordScanLocation(ctx, game, me, body)
   // A panicked double-tap raises one alert, not several.
-  const recent = (await ctx.store.events(game.id)).some(
+  const recent = (await ctx.store.events(game.id)).find(
     (e) => e.type === 'sos' && e.actor_id === me.id && ctx.now - Date.parse(e.at) < SOS_REPEAT_MS,
   )
-  if (recent) return { ok: true, repeat: true }
+  if (recent) return { ok: true, repeat: true, sosId: recent.id }
   const where = coordsOf(body)
   const data = { who: who(me), lat: where?.lat ?? null, lng: where?.lng ?? null }
-  await ctx.store.addEvent({ game_id: game.id, type: 'sos', actor_id: me.id, target_id: null, data })
+  const e = await ctx.store.addEvent({ game_id: game.id, type: 'sos', actor_id: me.id, target_id: null, data })
   await ctx.store.addSafetyRecord({
     game_id: game.id,
     type: 'sos',
@@ -765,7 +774,39 @@ const sos: Action = async (ctx, body) => {
     lng: data.lng,
     data: { game_code: game.code, name: data.who },
   })
-  return { ok: true, notified: await alertMarshals(ctx, game, `SOS from ${data.who}`) }
+  return { ok: true, notified: await alertMarshals(ctx, game, `SOS from ${data.who}`), sosId: e.id }
+}
+
+/** "What's happening?" after an SOS: folds into the marshals' alert, no second push (motion design §6.0). */
+const sosDetails: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  const reason = str(body.reason) as SosReason
+  if (!Object.hasOwn(SOS_REASON_LABEL, reason)) throw new ActionError(400, 'Pick what is happening')
+  const sosId = str(body.sosId)
+  const events = await ctx.store.events(game.id)
+  const mine = events.find((e) => e.id === sosId && e.type === 'sos' && e.actor_id === me.id)
+  if (!mine || ctx.now - Date.parse(mine.at) > SOS_DETAILS_MS) return { ok: false, reason: 'not-yours' }
+  let withPlayer: Player | undefined
+  if ((reason === 'unsafe' || reason === 'dispute') && str(body.withId)) {
+    withPlayer = (await ctx.store.players(game.id)).find((p) => p.id === str(body.withId) && p.id !== me.id)
+    if (!withPlayer) throw new ActionError(400, 'Pick another player in this game')
+  }
+  const withName = withPlayer ? who(withPlayer) : null
+  // A repeated tap of the same chip changes nothing: don't write it again.
+  const latest = events.filter((e) => e.type === 'sos-details' && e.data.sosId === sosId).at(-1)
+  if (latest && latest.data.reason === reason && (latest.target_id ?? null) === (withPlayer?.id ?? null)) return { ok: true }
+  await ctx.store.addEvent({ game_id: game.id, type: 'sos-details', actor_id: me.id, target_id: withPlayer?.id ?? null, data: { sosId, reason, withName } })
+  await ctx.store.addSafetyRecord({
+    game_id: game.id,
+    type: 'sos',
+    player_id: me.id,
+    target_id: withPlayer?.id ?? null,
+    lat: null,
+    lng: null,
+    data: { game_code: game.code, follows: sosId, reason, with_name: withName },
+  })
+  return { ok: true }
 }
 
 const report: Action = async (ctx, body) => {
@@ -1024,6 +1065,7 @@ export const actions = {
   pause,
   resume,
   sos,
+  sosDetails,
   report,
   handleAlert,
   undoAutoJail,

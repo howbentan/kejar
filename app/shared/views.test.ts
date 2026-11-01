@@ -141,6 +141,104 @@ describe('ping moment', () => {
   })
 })
 
+describe('two-part feed', () => {
+  const line = (me: Player, e: Parameters<typeof event>[2], type: Parameters<typeof event>[0]) =>
+    view(me, { events: [event(type, T0 + 15.5 * MIN, e)] }).feed[0]
+  const both = (type: Parameters<typeof event>[0], e: Parameters<typeof event>[2] = {}) => ({ runner: line(aina, e, type), chaser: line(chaser, e, type) })
+
+  it('ping', () => {
+    const { runner, chaser: c } = both('ping', { data: { seen: 5, missed: 1 } })
+    expect(runner).toMatchObject({ text: 'Ping: 5 Dikejar seen, 1 missed check-in.', means: 'Kejar now know roughly where you were.', act: false, label: 'PING' })
+    expect(c).toMatchObject({ means: 'Fresh circles are on your map.', act: false })
+    expect(line(aina, { data: { seen: 5, missed: 0 } }, 'ping').text).toBe('Ping: 5 Dikejar seen.')
+    expect(line(aina, { data: { seen: 3, missed: 2 } }, 'ping').text).toBe('Ping: 3 Dikejar seen, 2 missed check-ins.')
+  })
+  it('Mat Rempit', () => {
+    const { runner, chaser: c } = both('used', { actor_id: 'c1', data: { kind: 'flare' } })
+    expect(runner).toMatchObject({ text: 'A Kejar used Mat Rempit.', means: 'Check in now. An extra ping lands in 30 s.', act: true, label: 'Mat Rempit' })
+    expect(c).toMatchObject({ means: 'Extra ping in 30 s. Get close to the circles.', act: false })
+  })
+  it('Pak Guard', () => {
+    const { runner, chaser: c } = both('used', { actor_id: 'c1', data: { kind: 'focus' } })
+    expect(runner).toMatchObject({
+      text: 'A Kejar used Pak Guard.',
+      means: 'At the next ping, anyone within 75 m of that Kejar shows exactly. Move away.',
+      act: true,
+      label: 'Pak Guard',
+    })
+    expect(c).toMatchObject({ means: 'Next ping shows Dikejar near them exactly.', act: false })
+  })
+  it('catch', () => {
+    const { runner, chaser: c } = both('caught', { actor_id: 'c1', target_id: 'r1' })
+    expect(runner).toMatchObject({ text: 'Ben caught #07.', means: '#07 is walking to Penjara. 3 Dikejar still free.', label: 'CATCH' })
+    expect(c).toMatchObject({ means: 'Nice. 3 Dikejar left to find.' })
+  })
+  it('Durian', () => {
+    const { runner, chaser: c } = both('shielded', { target_id: 'r1' })
+    expect(runner).toMatchObject({ text: '#07 blocked a catch with Durian.', means: '#07 is still free. Their Durian is used up.', label: 'Durian' })
+    expect(c).toMatchObject({ means: "That catch didn't count. #07 has no Durian now." })
+  })
+  it('jailbreak', () => {
+    const { runner, chaser: c } = both('jailbreak', { actor_id: 'r3', data: { freed: 2 } })
+    expect(runner).toMatchObject({ text: 'Wei freed 2 Dikejar from Penjara.', means: 'Penjara is empty again.', label: 'FREE' })
+    expect(c).toMatchObject({ means: '2 more Dikejar are loose near Penjara.' })
+  })
+  it('auto-jail', () => {
+    const { runner, chaser: c } = both('auto-jailed', { target_id: 'r2' })
+    expect(runner).toMatchObject({
+      text: '#03 missed 2 check-ins in a row.',
+      means: "#03 went to Penjara. Check in when your phone buzzes, or you're next.",
+      label: '2×',
+    })
+    expect(c).toMatchObject({ means: 'One less to find. #03 is in Penjara.' })
+  })
+  it('marshals get the line without a meaning', () => {
+    expect(line(siti, { actor_id: 'c1', data: { kind: 'flare' } }, 'used')).toMatchObject({ text: 'A Kejar used Mat Rempit.', means: null, act: false })
+  })
+  it('runner power-ups stay secret', () => {
+    const feed = view(chaser, { events: [event('used', T0 + 15.5 * MIN, { actor_id: 'r1', data: { kind: 'cloak' } })] }).feed
+    expect(feed.some((f) => /Ponteng|used/i.test(f.text))).toBe(false)
+  })
+})
+
+describe('check-in state', () => {
+  // Next scheduled ping reveals at +20, its window opens at +19:15.
+  const ALERT = T0 + 20 * MIN - SCHEDULED_ALERT_LEAD_MS
+  const REVEAL = T0 + 20 * MIN
+  const checkin = (me: Player, over: Partial<Parameters<typeof viewFor>[0]> = {}) => view(me, over).checkin
+
+  it('is early before the window opens', () => {
+    expect(checkin(aina, { now: REVEAL - 2 * MIN })).toEqual({ state: 'early', alertAt: ALERT, revealAt: REVEAL, missedInRow: 0 })
+  })
+  it('is open once the window opens and no fresh location has come in', () => {
+    expect(checkin(aina, { now: REVEAL - 30_000 })?.state).toBe('open')
+  })
+  it('is in with a location inside the window', () => {
+    const at = { ...positions, r1: [...positions.r1, pos(A.lat, A.lng, REVEAL - 20_000)] }
+    expect(checkin(aina, { now: REVEAL - 15_000, positions: at })?.state).toBe('in')
+  })
+  it('is missed after a revealed ping with no check-in, until the next window', () => {
+    expect(checkin(hafiz, { now: T0 + 16 * MIN })).toEqual({ state: 'missed', alertAt: ALERT, revealAt: REVEAL, missedInRow: 1 })
+  })
+  it("doesn't count a ping whose alert came before the runner was freed", () => {
+    const freed = { ...hafiz, freed_at: new Date(T0 + 14.5 * MIN).toISOString() }
+    expect(checkin(freed, { now: T0 + 16 * MIN, players: [chaser, aina, freed, wei, siti] })?.state).toBe('early')
+  })
+  it('is null for a chaser, a jailed runner, and during hiding', () => {
+    expect(checkin(chaser)).toBeNull()
+    const jailed = { ...aina, jailed: true }
+    expect(checkin(jailed, { players: [chaser, jailed, hafiz, wei, siti] })).toBeNull()
+    expect(checkin(aina, { now: T0 + 3 * MIN, pings: [] })).toBeNull()
+  })
+  it('a pause inside the window keeps a check-in sent before it', () => {
+    const paused = game({ paused_at: new Date(T0 + 19.5 * MIN).toISOString() })
+    const at = { ...positions, r1: [...positions.r1, pos(A.lat, A.lng, T0 + 19.4 * MIN)] }
+    const c = checkin(aina, { game: paused, now: T0 + 20.2 * MIN, positions: at })
+    expect(c?.state).toBe('in')
+    expect(c?.revealAt).toBe(T0 + 20.7 * MIN)
+  })
+})
+
 describe('deck and slot', () => {
   it("shows how many cards are left in my side's deck", () => {
     const v = view(aina, { game: { ...g, runner_sets: 1, runner_draws: 2 } })
@@ -174,13 +272,13 @@ describe('jail reason', () => {
 
 describe('feed wording', () => {
   const feedOf = (events: Parameters<typeof viewFor>[0]['events']) => view(siti, { events }).feed.map((f) => f.text)
-  it('uses the singular for one runner', () => {
+  it('says one Dikejar for one', () => {
     expect(
       feedOf([
         event('ping', T0 + 10 * MIN, { data: { seen: 1 } }),
         event('jailbreak', T0 + 11 * MIN, { actor_id: 'r3', data: { freed: 1 } }),
       ]),
-    ).toEqual(['Wei broke 1 runner out of Penjara', 'Ping — 1 runner seen'])
+    ).toEqual(['Wei freed 1 Dikejar from Penjara.', 'Ping: 1 Dikejar seen.'])
   })
   it('announces pauses and resumes', () => {
     expect(feedOf([event('paused', T0 + 10 * MIN), event('resumed', T0 + 11 * MIN)])).toEqual([
@@ -192,10 +290,10 @@ describe('feed wording', () => {
     expect(feedOf([event('auto-jail-undone', T0 + 16 * MIN, { target_id: 'r2' })])).toEqual(['#03 is back in the game (marshal)'])
   })
   it('announces an auto-jail', () => {
-    expect(feedOf([event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2' })])).toEqual(['#03 missed 2 check-ins — sent to Penjara'])
+    expect(feedOf([event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2' })])).toEqual(['#03 missed 2 check-ins in a row.'])
   })
-  it('uses the plural otherwise', () => {
-    expect(feedOf([event('ping', T0 + 10 * MIN, { data: { seen: 0 } })])).toEqual(['Ping — 0 runners seen'])
+  it('says how many Dikejar a ping saw', () => {
+    expect(feedOf([event('ping', T0 + 10 * MIN, { data: { seen: 0 } })])).toEqual(['Ping: 0 Dikejar seen.'])
   })
 })
 
@@ -277,9 +375,9 @@ describe('power-up effects', () => {
       ],
     }).feed.map((f) => f.text)
     expect(feed).toEqual([
-      '#07 blocked a catch with Durian',
-      'A Kejar used Pak Guard',
-      'A Kejar used Mat Rempit — extra ping in 30 s',
+      '#07 blocked a catch with Durian.',
+      'A Kejar used Pak Guard.',
+      'A Kejar used Mat Rempit.',
       'Aina picked up a power-up',
     ])
   })

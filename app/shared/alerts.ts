@@ -8,6 +8,17 @@ export const NOTE_MAX = 140
 
 export type AlertKind = 'sos' | 'report' | 'outside' | 'missed' | 'auto-jail' | 'left-start' | 'flagged-catch'
 export type ReportReason = 'unsafe' | 'dispute' | 'other'
+export type SosReason = 'hurt' | 'lost' | 'unsafe' | 'dispute' | 'other'
+/** How long after an SOS its sender can still add what's happening (motion design §6.0). */
+export const SOS_DETAILS_MS = 5 * 60_000
+
+export const SOS_REASON_LABEL: Record<SosReason, string> = {
+  hurt: 'Hurt',
+  lost: 'Lost',
+  unsafe: 'Unsafe player',
+  dispute: 'Catch dispute',
+  other: 'Something else',
+}
 
 export const REASON_LABEL: Record<ReportReason, string> = {
   unsafe: 'Unsafe play',
@@ -38,12 +49,16 @@ function place(data: Record<string, unknown>): LatLng | null {
   return typeof data.lat === 'number' && typeof data.lng === 'number' ? { lat: data.lat, lng: data.lng } : null
 }
 
-function toAlert(e: GameEvent): Omit<Alert, 'handled'> | null {
+function toAlert(e: GameEvent, details: Map<string, GameEvent>): Omit<Alert, 'handled'> | null {
   const d = e.data
   const base = { id: e.id, at: e.at, where: null as LatLng | null, targetId: null as string | null }
   switch (e.type) {
-    case 'sos':
-      return { ...base, kind: 'sos', text: `SOS from ${s(d.who)}`, where: place(d) }
+    case 'sos': {
+      const more = details.get(e.id)?.data
+      const label = more ? SOS_REASON_LABEL[more.reason as SosReason] : undefined
+      const withWho = more && s(more.withName) ? ` with ${s(more.withName)}` : ''
+      return { ...base, kind: 'sos', text: `SOS from ${s(d.who)}${label ? `: ${label}${withWho}` : ''}`, where: place(d) }
+    }
     case 'report': {
       const label = REASON_LABEL[d.reason as ReportReason] ?? REASON_LABEL.other
       const note = s(d.note) ? ` — ${s(d.note)}` : ''
@@ -68,8 +83,11 @@ function toAlert(e: GameEvent): Omit<Alert, 'handled'> | null {
 /** Marshal alerts from the game's events: open ones newest first, then handled ones newest first. */
 export function alertsFrom(events: GameEvent[]): Alert[] {
   const handled = new Set(events.filter((e) => e.type === 'handled').map((e) => s(e.data.eventId)))
+  // The latest "What's happening?" for each SOS (events arrive oldest first).
+  const details = new Map<string, GameEvent>()
+  for (const e of events) if (e.type === 'sos-details') details.set(s(e.data.sosId), e)
   const all = events.flatMap((e) => {
-    const a = toAlert(e)
+    const a = toAlert(e, details)
     return a ? [{ ...a, handled: handled.has(a.id) }] : []
   })
   const newest = (x: Alert, y: Alert) => Date.parse(y.at) - Date.parse(x.at)

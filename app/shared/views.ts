@@ -58,7 +58,9 @@ export interface View {
   caughtBy: string | null
   /** Why I'm in Penjara: caught by a chaser, or auto-jailed for missing two check-ins. */
   jailReason: 'caught' | 'missed-checkins' | null
-  feed: { at: string; text: string }[]
+  /** A free runner's standing for the next scheduled ping during the chase; null otherwise. */
+  checkin: Checkin | null
+  feed: FeedItem[]
   counts: { runnersFree: number; runnersJailed: number; chasers: number }
   /** Everyone in the game: shown in the lobby and to marshals; empty for players mid-game. */
   roster: RosterEntry[]
@@ -87,6 +89,26 @@ export interface ViewInput {
 }
 
 /** '1 runner', '3 runners'. */
+/**
+ * A feed line (motion design §8.2): what happened, then what it means for the viewer's side, whether it
+ * needs them to act now, and a short label for the ticker. Marshals and the organiser get no meaning.
+ */
+export interface FeedItem {
+  at: string
+  text: string
+  means: string | null
+  act: boolean
+  label: string | null
+}
+
+export interface Checkin {
+  state: 'early' | 'open' | 'in' | 'missed'
+  alertAt: number
+  revealAt: number
+  /** 1 when the last scheduled ping that counted for me was missed. A second miss auto-jails, so never 2. */
+  missedInRow: 0 | 1
+}
+
 export const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 const tagLabel = (p: Player) => (p.tag_id === null ? p.name : `#${String(p.tag_id).padStart(2, '0')}`)
@@ -216,6 +238,33 @@ function deckLeftFor(i: ViewInput): number | null {
   return cardsLeft(deckFor(i.game.settings.mode ?? 'core', side, sets).length, draws)
 }
 
+/**
+ * Same window and since-release rule as auto-jail (checkedIn, pingTimes, freed_at), so the banner never
+ * says "Checked in" for a ping the server will count as missed.
+ */
+function checkinFor(i: ViewInput, phase: Phase): Checkin | null {
+  if (i.me.role !== 'runner' || i.me.jailed || phase !== 'chasing') return null
+  const times = pingTimes(i.game, i.now)
+  const next = times.find((t) => t.revealAt > i.now)
+  if (!next) return null
+  const mine = i.positions[i.me.id]
+  const lastAt = (t: number) => {
+    const at = latestAtOrBefore(mine, t)
+    return at ? Date.parse(at.at) : null
+  }
+  const prev = times.filter((t) => t.revealAt <= i.now).at(-1)
+  const since = Math.max(chaseStartOf(i.game, i.now)!, i.me.freed_at ? Date.parse(i.me.freed_at) : -Infinity)
+  const missedInRow = prev && prev.alertAt >= since && !checkedIn(prev.alertAt, prev.revealAt, lastAt(prev.revealAt)) ? 1 : 0
+  const state = checkedIn(next.alertAt, next.revealAt, lastAt(i.now))
+    ? 'in'
+    : i.now >= next.alertAt
+      ? 'open'
+      : missedInRow
+        ? 'missed'
+        : 'early'
+  return { state, alertAt: next.alertAt, revealAt: next.revealAt, missedInRow }
+}
+
 function jailReasonFor(i: ViewInput): View['jailReason'] {
   if (!i.me.jailed) return null
   if (i.me.caught_by) return 'caught'
@@ -223,6 +272,73 @@ function jailReasonFor(i: ViewInput): View['jailReason'] {
     .filter((e) => (e.type === 'caught' || e.type === 'auto-jailed') && e.target_id === i.me.id)
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0]
   return latest?.type === 'auto-jailed' ? 'missed-checkins' : 'caught'
+}
+
+interface FeedContext {
+  side: 'runner' | 'chaser' | null
+  freeNow: number
+  jailedNow: number
+}
+
+type Line = Omit<FeedItem, 'at'>
+const plain = (text: string): Line => ({ text, means: null, act: false, label: null })
+
+/** The two-part lines (motion §8.2). Runner power-up uses never appear, so nothing secret leaks. */
+function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Line | null {
+  const actor = e.actor_id ? byId.get(e.actor_id) : undefined
+  const target = e.target_id ? byId.get(e.target_id) : undefined
+  const tag = target ? tagLabel(target) : 'A Dikejar'
+  const two = (text: string, label: string, dikejar: string, kejar: string, actFor: 'runner' | null = null): Line => ({
+    text,
+    label,
+    means: ctx.side === 'runner' ? dikejar : ctx.side === 'chaser' ? kejar : null,
+    act: actFor !== null && ctx.side === actFor,
+  })
+  switch (e.type) {
+    case 'ping': {
+      const seen = Number(e.data.seen ?? 0)
+      const missed = Number(e.data.missed ?? 0)
+      const tail = missed > 0 ? `, ${missed} missed check-in${missed === 1 ? '' : 's'}` : ''
+      return two(`Ping: ${seen} Dikejar seen${tail}.`, 'PING', 'Kejar now know roughly where you were.', 'Fresh circles are on your map.')
+    }
+    case 'used':
+      if (e.data.kind === 'flare')
+        return two('A Kejar used Mat Rempit.', 'Mat Rempit', 'Check in now. An extra ping lands in 30 s.', 'Extra ping in 30 s. Get close to the circles.', 'runner')
+      if (e.data.kind === 'focus')
+        return two(
+          'A Kejar used Pak Guard.',
+          'Pak Guard',
+          'At the next ping, anyone within 75 m of that Kejar shows exactly. Move away.',
+          'Next ping shows Dikejar near them exactly.',
+          'runner',
+        )
+      return null
+    case 'caught':
+      if (!actor || !target) return plain('A Dikejar was caught.')
+      return two(`${actor.name} caught ${tag}.`, 'CATCH', `${tag} is walking to Penjara. ${ctx.freeNow} Dikejar still free.`, `Nice. ${ctx.freeNow} Dikejar left to find.`)
+    case 'shielded':
+      return two(`${tag} blocked a catch with Durian.`, 'Durian', `${tag} is still free. Their Durian is used up.`, `That catch didn't count. ${tag} has no Durian now.`)
+    case 'jailbreak': {
+      const n = Number(e.data.freed ?? 0)
+      return two(
+        `${actor?.name ?? 'A Dikejar'} freed ${n} Dikejar from Penjara.`,
+        'FREE',
+        ctx.jailedNow === 0 ? 'Penjara is empty again.' : `${ctx.jailedNow} still inside.`,
+        `${n} more Dikejar ${n === 1 ? 'is' : 'are'} loose near Penjara.`,
+      )
+    }
+    case 'auto-jailed':
+      return two(
+        `${tag} missed 2 check-ins in a row.`,
+        '2×',
+        `${tag} went to Penjara. Check in when your phone buzzes, or you're next.`,
+        `One less to find. ${tag} is in Penjara.`,
+      )
+    default: {
+      const text = feedText(e, byId)
+      return text ? plain(text) : null
+    }
+  }
 }
 
 function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
@@ -273,7 +389,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, deckLeft: null, activePowerUp: null }
+    return { ...v, dots: [], feed: [], alerts: [], roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, checkin: null, deckLeft: null, activePowerUp: null }
   }
   return v
 }
@@ -306,13 +422,19 @@ function fullView(i: ViewInput): View {
   const lastReveal = revealedPings(i.pings).at(-1)
   const upcoming = phase === 'hiding' || phase === 'chasing' ? nextReveal(i.game, i.pings, i.now) : null
 
+  const runnersNow = i.players.filter((p) => p.role === 'runner')
+  const feedContext: FeedContext = {
+    side: i.me.role === 'runner' || i.me.role === 'chaser' ? i.me.role : null,
+    freeNow: runnersNow.filter((p) => !p.jailed).length,
+    jailedNow: runnersNow.filter((p) => p.jailed).length,
+  }
   // Newest first; events recorded in the same millisecond keep their recorded order (later first).
   const feed = [
     ...i.events.flatMap((e) => {
-      const text = feedText(e, byId)
-      return text ? [{ at: e.at, text }] : []
+      const line = feedLine(e, byId, feedContext)
+      return line ? [{ at: e.at, ...line }] : []
     }),
-    ...notes,
+    ...notes.map((n) => ({ ...n, means: null, act: false, label: null })),
   ]
     .map((entry, order) => ({ entry, order }))
     .sort((a, b) => Date.parse(b.entry.at) - Date.parse(a.entry.at) || b.order - a.order)
@@ -339,6 +461,7 @@ function fullView(i: ViewInput): View {
     chaserNearby,
     caughtBy: i.me.jailed && i.me.caught_by ? (byId.get(i.me.caught_by)?.name ?? null) : null,
     jailReason: jailReasonFor(i),
+    checkin: checkinFor(i, phase),
     feed,
     counts: {
       runnersFree: runners.filter((p) => !p.jailed).length,

@@ -77,13 +77,34 @@ describe('service worker game check-in alerts', () => {
     await Promise.all(pending)
   }
 
-  it('shows the check-in alert for a game ping', async () => {
+  it('shows the check-in alert for a game ping, with when Kejar see you, opening the check-in', async () => {
+    vi.useFakeTimers({ now: new Date(2026, 10, 1, 14, 4, 15) })
     const { self, listeners } = loadWorker([])
-    await push(listeners, { type: 'checkin', code: 'ABC234', seq: 2 })
+    await push(listeners, { type: 'checkin', code: 'ABC234', seq: 2, revealAt: new Date(2026, 10, 1, 14, 5).getTime() })
     expect(self.registration.showNotification).toHaveBeenCalledWith(
-      'kejar.',
-      expect.objectContaining({ body: 'Ping in 30s — check in!', tag: 'kejar-ping', data: { url: '/g/ABC234' } }),
+      'Ping in 45s — check in!',
+      expect.objectContaining({ body: 'Tap to check in. Kejar see you at 2:05.', tag: 'kejar-ping', data: { url: '/g/ABC234?checkin=1' } }),
     )
+    vi.useRealTimers()
+  })
+
+  it('a late push says the time actually left', async () => {
+    vi.useFakeTimers({ now: new Date(2026, 10, 1, 14, 4, 40) })
+    const { self, listeners } = loadWorker([])
+    await push(listeners, { type: 'checkin', code: 'ABC234', seq: 2, revealAt: new Date(2026, 10, 1, 14, 5).getTime() })
+    expect(self.registration.showNotification).toHaveBeenCalledWith('Ping in 20s — check in!', expect.anything())
+    vi.useRealTimers()
+  })
+
+  it('a Mat Rempit bonus ping says 30 s and just opens the game', async () => {
+    vi.useFakeTimers({ now: new Date(2026, 10, 1, 9, 39, 30) })
+    const { self, listeners } = loadWorker([])
+    await push(listeners, { type: 'checkin', code: 'ABC234', seq: 1000, revealAt: new Date(2026, 10, 1, 9, 40).getTime() })
+    expect(self.registration.showNotification).toHaveBeenCalledWith(
+      'Ping in 30s — check in!',
+      expect.objectContaining({ body: 'Tap to check in. Kejar see you at 9:40.', data: { url: '/g/ABC234' } }),
+    )
+    vi.useRealTimers()
   })
 
   it('opens the game when a check-in alert is tapped', async () => {

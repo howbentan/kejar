@@ -78,9 +78,10 @@ describe('PowerUpHand', () => {
     expect(await screen.findByText('Mat Rempit is ready again in 2:13.')).toBeInTheDocument()
   })
 
-  it('offers a station scan button', () => {
+  it('is the slot only: an empty slot says so, and there is no scan button of its own', () => {
     render(<PowerUpHand code="ABC234" view={testView()} />)
-    expect(screen.getByRole('button', { name: /scan station/i })).toBeInTheDocument()
+    expect(screen.getByText(/empty slot/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /scan/i })).toBeNull()
   })
 })
 

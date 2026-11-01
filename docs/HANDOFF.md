@@ -96,6 +96,14 @@ Also floated: surprise missions, a bounty on the longest survivor. **Malaysian p
 - A slot stays busy while its effect runs.
 - Mat Rempit is one at a time, with a 3-minute team cooldown.
 
+**Plan C1 (branch `plan-c1-chase`, 2026-11-01): the one-screen chase, the SOS icon, the two-part feed and the check-in banner.** **No migration is needed.**
+- Motion for React at the app root (honours the phone's reduced-motion setting).
+- Every feed line says what happened, then what it means for your side (`→ …` in lime). Lines that need a runner to act get a lime outline and one buzz.
+- `View.checkin` tells a free runner whether they're early, open, checked in or missed for the next ping, using the same window and since-release rule as auto-jail.
+- SOS is a small Volt "!" on the status row of every player screen. Tapping opens a sheet; only a 1 s hold on its bar sends. Afterwards, "What's happening?" chips (and "With who?") fold into the marshals' alert. Report a player lives in the sheet until the post-game report (C3).
+- Runner and chaser chase screens fit one phone screen: top bar, status row, the map, then a dock with the slot, one Scan button (stations, Penjara or tags) and the ticker.
+- The check-in push now says `Ping in 45s — check in!` with when Kejar see you, and opens `/g/{code}?checkin=1`. Check this notification by hand on a phone at the next playtest.
+
 **Plan B (branch `plan-b-slot-deck`, 2026-11-01): one power-up slot, the shared deck per side, Mat Rempit one at a time with a 3-minute team cooldown, Malaysian power-up names with plain-English copy, `DECK · N LEFT`, and the Core/Full switch with a lobby badge.** Before merging to `main`: **run `supabase/migrations/0010_deck.sql` in Supabase first** — claims call its `draw_card` function, so every station claim fails without it. Full's deck is Core plus Gostan until Plan D adds Toyol, Ah Long and Abang Grab.
 
 **Check-ins follow-up (branch `plan-checkins-followup`, 2026-11-01): strict 45 s check-in window, release-aware counting, marshal "Phone problem: undo", and the auto-jailed Penjara screen are built.** Before merging to `main`: **run `supabase/migrations/0009_auto_jail_undo.sql` in Supabase first** (it widens `safety_records.type` so an undo can be logged; without it, the undo fails). Once merged, auto-jail is ready for players.

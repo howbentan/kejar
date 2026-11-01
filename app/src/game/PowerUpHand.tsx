@@ -1,10 +1,8 @@
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import type { ClaimJudgement } from '../../shared/powerups.js'
 import type { PowerUp, PowerUpKind } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
-import { currentCoords } from './here'
-import Scanner from './Scanner'
 import { loadSession } from './session'
 import { clock } from './time'
 import { ErrorText } from './ui'
@@ -17,7 +15,7 @@ const INFO: Record<PowerUpKind, { name: string; effect: string; used: string }> 
   focus: { name: 'Pak Guard', effect: 'Dikejar within 75 m show exactly', used: 'Pak Guard on for the next ping' },
 }
 
-type ClaimResult = ({ ok: true; kind: PowerUpKind } | Exclude<ClaimJudgement, { ok: true }>)
+export type ClaimResult = ({ ok: true; kind: PowerUpKind } | Exclude<ClaimJudgement, { ok: true }>)
 type UseResult = { ok: true; kind: PowerUpKind } | { ok: false; reason: string; readyInMs?: number }
 
 const CLAIM_REJECTIONS: Record<string, string> = {
@@ -48,27 +46,12 @@ export function claimMessage(r: ClaimResult): string {
   return CLAIM_REJECTIONS[r.reason] ?? 'Nothing claimed'
 }
 
-/** The player's power-ups, plus the button for scanning a station. */
+/** The one power-up slot in the dock (Plan B). Stations are scanned with the dock's Scan button. */
 export default function PowerUpHand({ code, view }: { code: string; view: View }) {
-  const [scanning, setScanning] = useState(false)
   const [confirm, setConfirm] = useState<PowerUp | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const token = () => loadSession(localStorage, code).token
-
-  const onScan = useCallback(
-    async (qr: string) => {
-      setScanning(false)
-      setError('')
-      try {
-        const here = await currentCoords()
-        setMessage(claimMessage(await call<ClaimResult>('claim', { code, token: loadSession(localStorage, code).token, qr, ...here })))
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e))
-      }
-    },
-    [code],
-  )
 
   async function use(u: PowerUp) {
     setConfirm(null)
@@ -89,48 +72,52 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
     }
   }
 
+  const deck = view.deckLeft !== null && <small className="slot-deck">{`DECK · ${view.deckLeft} LEFT`}</small>
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <p className="eyebrow">Power-ups</p>
-        {view.deckLeft !== null && <span className="eyebrow">{`DECK · ${view.deckLeft} LEFT`}</span>}
-      </div>
-      {view.activePowerUp && view.hand.length === 0 && (
-        <p className="pill pill-on" style={{ alignSelf: 'flex-start' }}>{`${INFO[view.activePowerUp].name} is working`}</p>
+    <div className="slot-wrap">
+      {(confirm || message || error) && (
+        <div className="dock-pop">
+          {confirm ? (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ flex: 1 }}>{`Use ${INFO[confirm.kind].name}?`}</span>
+              <button type="button" className="btn" style={{ padding: '10px 16px' }} onClick={() => use(confirm)}>
+                {`Use ${INFO[confirm.kind].name}`}
+              </button>
+              <button type="button" className="btn btn-ghost" style={{ padding: '10px 16px' }} onClick={() => setConfirm(null)}>
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="dock-pop-text" onClick={() => (setMessage(''), setError(''))}>
+              {message && <span role="status">{message}</span>}
+              <ErrorText>{error}</ErrorText>
+            </button>
+          )}
+        </div>
       )}
-      {view.hand.length > 0 && (
-        <div className="hand">
-          {view.hand.map((u) => (
-            <button key={u.id} type="button" className="hand-card" onClick={() => setConfirm(u)}>
+      {view.hand.length > 0 ? (
+        view.hand.map((u) => (
+          <button key={u.id} type="button" className="slot" onClick={() => setConfirm(u)}>
+            <span>
               <b>{INFO[u.kind].name}</b>
               <span>{INFO[u.kind].effect}</span>
-            </button>
-          ))}
-        </div>
-      )}
-      {confirm && (
-        <div className="card" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ flex: 1 }}>{`Use ${INFO[confirm.kind].name}?`}</span>
-          <button type="button" className="btn" style={{ padding: '10px 16px' }} onClick={() => use(confirm)}>
-            {`Use ${INFO[confirm.kind].name}`}
+            </span>
+            {deck}
           </button>
-          <button type="button" className="btn btn-ghost" style={{ padding: '10px 16px' }} onClick={() => setConfirm(null)}>
-            Cancel
-          </button>
+        ))
+      ) : view.activePowerUp ? (
+        <div className="slot live">
+          <span>
+            <b>{`${INFO[view.activePowerUp].name} is working`}</b>
+          </span>
+          {deck}
         </div>
-      )}
-      {message && (
-        <p role="status" style={{ fontWeight: 600 }}>
-          {message}
-        </p>
-      )}
-      <ErrorText>{error}</ErrorText>
-      {scanning ? (
-        <Scanner onResult={onScan} onCancel={() => setScanning(false)} />
       ) : (
-        <button type="button" className="btn btn-ghost" onClick={() => setScanning(true)}>
-          Scan station
-        </button>
+        <div className="slot empty">
+          <span>Empty slot · scan a station</span>
+          {deck}
+        </div>
       )}
     </div>
   )
