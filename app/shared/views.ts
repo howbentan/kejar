@@ -2,8 +2,9 @@ import { alertLeadFor, checkedIn } from './checkins.js'
 import { alertsFrom, type Alert } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
 import { distanceM, fuzz } from './geo.js'
-import { activeShield, decoySpot } from './powerups.js'
-import type { Arena, Game, GameEvent, Phase, Ping, Player, Position, PowerUp, Results, Role, Settings } from './types.js'
+import { cardsLeft, deckFor, setsFor } from './deck.js'
+import { activeShield, decoySpot, slotBusy } from './powerups.js'
+import type { Arena, Game, GameEvent, Phase, Ping, Player, Position, PowerUp, PowerUpKind, Results, Role, Settings } from './types.js'
 
 /** Spec §4.5–4.6 constants. */
 export const FUZZ_RADIUS_M = 15
@@ -66,6 +67,10 @@ export interface View {
   /** My unused power-ups. */
   hand: PowerUp[]
   shieldActive: boolean
+  /** Cards left in my side's shared deck (power-ups §5b); null for marshals and the organiser. */
+  deckLeft: number | null
+  /** My power-up whose effect is still running, which keeps my one slot busy (§5a). */
+  activePowerUp: PowerUpKind | null
   results: Results | null
 }
 
@@ -202,6 +207,15 @@ function runnerDots(i: ViewInput): { dots: MapDot[]; nearby: boolean } {
   return { dots, nearby }
 }
 
+function deckLeftFor(i: ViewInput): number | null {
+  const side = i.me.role
+  if (side !== 'runner' && side !== 'chaser') return null
+  const stored = side === 'runner' ? i.game.runner_sets : i.game.chaser_sets
+  const sets = stored ?? setsFor(side, i.players.filter((p) => p.role === side).length)
+  const draws = (side === 'runner' ? i.game.runner_draws : i.game.chaser_draws) ?? 0
+  return cardsLeft(deckFor(i.game.settings.mode ?? 'core', side, sets).length, draws)
+}
+
 function jailReasonFor(i: ViewInput): View['jailReason'] {
   if (!i.me.jailed) return null
   if (i.me.caught_by) return 'caught'
@@ -235,11 +249,11 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       return actor ? `${actor.name} picked up a power-up` : null
     case 'used':
       // Runner power-ups stay secret; chasers' ones are announced.
-      if (e.data.kind === 'flare') return 'Flare! Ping in 30 s'
-      if (e.data.kind === 'focus') return 'A chaser used Focus'
+      if (e.data.kind === 'flare') return 'A Kejar used Mat Rempit — extra ping in 30 s'
+      if (e.data.kind === 'focus') return 'A Kejar used Pak Guard'
       return null
     case 'shielded':
-      return target ? `${tagLabel(target)} was shielded!` : 'A runner was shielded!'
+      return target ? `${tagLabel(target)} blocked a catch with Durian` : 'A Dikejar blocked a catch with Durian'
     case 'paused':
       return 'Game paused by a marshal'
     case 'resumed':
@@ -259,7 +273,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null }
+    return { ...v, dots: [], feed: [], alerts: [], roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, deckLeft: null, activePowerUp: null }
   }
   return v
 }
@@ -337,6 +351,11 @@ function fullView(i: ViewInput): View {
     stations: (i.game.arena.stations ?? []).map((s, k) => ({ n: k + 1, lat: s.lat, lng: s.lng })),
     hand: i.powerUps.filter((u) => u.player_id === i.me.id && u.used_at === null),
     shieldActive: activeShield(i.powerUps, i.me.id, i.now) !== null,
+    deckLeft: deckLeftFor(i),
+    activePowerUp: (() => {
+      const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now)
+      return busy?.running ? busy.kind : null
+    })(),
     results: i.results,
   }
 }

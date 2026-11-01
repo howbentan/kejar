@@ -20,7 +20,7 @@ const REJECTIONS: Record<string, string> = {
   'not-chasing': 'You can only catch during the chase',
   'not-a-chaser': 'Only chasers can catch',
   'no-location': 'Turn on location to catch',
-  shielded: 'Shielded! Hand the tag back — they get a 10 s head start',
+  shielded: "Durian! That catch doesn't count. Hand the tag back.",
   paused: 'Game is paused',
 }
 

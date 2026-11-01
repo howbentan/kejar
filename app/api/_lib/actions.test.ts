@@ -489,7 +489,7 @@ describe('power-up stations', () => {
     now += 30_000
     const v = await run<View>('state', { code: g.code, token: g.ben.token })
     expect(v.lastRevealAt).toBe(now)
-    expect(v.feed.map((f) => f.text)).toContain('Flare! Ping in 30 s')
+    expect(v.feed.map((f) => f.text)).toContain('A Kejar used Mat Rempit — extra ping in 30 s')
   })
 
   it('flare with under 30 s left is too-late and not spent', async () => {
@@ -512,7 +512,7 @@ describe('power-up stations', () => {
     await run('location', { code: g.code, token: g.aina.token, ...at(10) })
     expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toEqual({ ok: false, reason: 'shielded' })
     const v = await run<View>('state', { code: g.code, token: g.ben.token })
-    expect(v.feed[0].text).toBe('#07 was shielded!')
+    expect(v.feed[0].text).toBe('#07 blocked a catch with Durian')
     expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toMatchObject({ ok: true })
   })
 })
