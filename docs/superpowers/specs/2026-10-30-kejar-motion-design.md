@@ -30,6 +30,7 @@
 - `19-auto-jailed.html`: the auto-jailed runner, "out for good", and the marshal undo (§5a–§5b).
 - `20-kitchen-fits.html`: role scramble, lobby and share tickets, Dato Seri foil, hold to confirm, and the loader (§8.9).
 - `21-station-claim.html`: the polished station claim, Dato Seri's yellow marker, and refusals (§7).
+- `22-sos-icon.html`: the SOS icon on the status row, and its sheet (§6.0). Open it directly in a browser; it's a full page, not a companion fragment.
 - `2026-10-31-more-scribble/2-connection-states.html`: buffering, lost signal, reconnected, a generic failed action, and a station claim lost to someone else (§8.10).
 
 ## 1. Why
@@ -128,8 +129,20 @@ A dead phone or a push alert that never arrived can auto-jail someone unfairly.
 
 Replaces the in-game SOS and Report buttons (`SafetyBar`).
 
-### 6.1 The bar
-- **One full-width pill at the bottom** of runner and chaser screens, where the two buttons are today.
+### 6.0 The SOS icon (owner's decision, 2026-11-01; mockup `22-sos-icon.html`)
+
+SOS is no longer a full-width bar on the screen. It's a **small icon**, so players don't mistake it for a game feature.
+- **The icon:** a 28 px **Volt lime circle with a black "!"** (21 px glyph, bold stroke), with a thin dark ring so it reads over the map. Its accessible name is `Help and SOS`.
+- **Where:** on **every player screen** (chase, Penjara, hide phase, paused), always in the same spot: the **status row**, on the same line and at the same height as the first status chip (e.g. `Check in in 2:14`), **right-aligned on the 12 px side margin**. Status chips stack downwards on the left, so nothing ever moves the icon.
+- **The layout rule it sits in:** every player screen has the same two rows at the top:
+  - a **44 px top bar**: who you are on the left (`DIKEJAR #07`), the clock in the centre, a count on the right;
+  - the **status row** 8 px below it: chips on the left, SOS on the right.
+- **Tapping the icon opens the SOS sheet** (`Need help?` · `Hurt, lost, or something unsafe? Hold the bar for 1 second and every marshal is alerted with where you are.`). The sheet holds the hold-to-send bar described in §6.1, plus `Cancel`. Tapping outside the sheet closes it.
+- **Why tap, then hold:** a small corner icon is easy to hit by accident, so the hold inside the sheet keeps false alarms out.
+- **Accessibility (§6.3):** the tap-then-confirm fallback now lives inside the sheet.
+
+### 6.1 The bar (now inside the SOS sheet, §6.0)
+- ~~One full-width pill at the bottom of runner and chaser screens~~ **The bar sits inside the SOS sheet** (2026-11-01), with the same look and behaviour as below.
 - **At rest:** a solid Volt lime bar, with `SOS` in black capitals.
 - **Above it,** a small mono hint: `HOLD 1 S · MARSHALS COME TO YOU`.
 - **While held:**
@@ -394,8 +407,8 @@ Mockup: `17-chase-screen.html`. This replaces today's scrolling stack in `Runner
   2. **One Scan button:**
      - **runners:** `Scan`, for stations, a Penjara rescue and the Dato Seri stash. The QR's contents decide which, which replaces today's separate `Break them out` scanner;
      - **chasers:** a big lime `Scan tag`, for catches and stations.
-  3. **A one-line ticker:** the newest feed event with its sticker or label, the bold line and the `→` line (§8.2), truncated to one line, plus a `+N` unread count. Lines that need you to act get a lime outline and **one buzz**. **Tapping it opens the full feed** as a sheet that stops above the SOS bar.
-  4. **SOS** (§6), always last and always visible. **Nothing ever covers it,** the feed sheet included.
+  3. **A one-line ticker:** the newest feed event with its sticker or label, the bold line and the `→` line (§8.2), truncated to one line, plus a `+N` unread count. Lines that need you to act get a lime outline and **one buzz**. **Tapping it opens the full feed** as a sheet that stops above the dock.
+  4. ~~SOS~~ **Moved to the status row as a small icon** (§6.0, 2026-11-01). The dock is about 34 px shorter, so the map gains that room. The feed sheet stops at the dock's top edge. **Nothing ever covers the SOS icon.**
 - **Rules:**
   - no scrolling during the chase, including on a small Android (about 360 × 640);
   - one loud thing at a time (rules doc §7);
@@ -441,7 +454,7 @@ Mockup: `18-how-to-play.html`. When the organiser taps **Brief the players** in 
   4. Tag ripped? Stop. (Walk to Penjara; use SOS, never argue.)
   5. Break them out. (Scan the Penjara card, then stay within 30 m for 10 seconds.)
   6. Grab power-ups. (Scan a station; hold one at a time. Shows this mode's stickers.)
-  7. Anything wrong? SOS.
+  7. Anything wrong? SOS. (Updated 2026-11-01: `Tap the ! in the corner, then hold for 1 second.` A marshal comes to you.)
 - **Kejar (Core: 6 cards):** You're Kejar (wait at the start) · Pings show circles · Rip, then scan (one hand, upper arm, tag only) · Stop the rescue (you get 10 seconds) · Grab power-ups · SOS.
 - **Full adds** the Full deck's stickers on the power-up card, and for Kejar, "They can see you too" **only if** the organiser turned the snapshot switch on.
 - **Never mentioned: Dato Seri** (rules doc §9b).

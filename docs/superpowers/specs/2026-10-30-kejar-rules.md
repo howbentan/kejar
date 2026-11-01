@@ -38,7 +38,7 @@ Rules:
    - Each station can be claimed once per player, and locks for everyone for 60 s after a claim.
 7. **End:** time runs out (Dikejar win if anyone is still free) or every runner is in Penjara (Kejar win). There's a `5 minutes left` warning before the end. Then come the results: awards, a rating, and a post-game report.
 
-**Safety (both modes).** One **SOS** bar (hold for 1 s) on every player screen. Marshals get a full-screen takeover with an arrow and distance, plus `I'm going` so only one runs, and they close it with an outcome. Automatic alerts cover leaving the play area, auto-jail, a chaser leaving the start early and flagged catches. Marshals can pause and resume the game and remove a player. Reports happen after the game.
+**Safety (both modes).** A small lime **SOS icon** on every player screen (status row, top right): tap it, then hold for 1 s to send (motion §6.0). Marshals get a full-screen takeover with an arrow and distance, plus `I'm going` so only one runs, and they close it with an outcome. Automatic alerts cover leaving the play area, auto-jail, a chaser leaving the start early and flagged catches. Marshals can pause and resume the game and remove a player. Reports happen after the game.
 
 ## 3. What each mode includes
 
@@ -233,6 +233,14 @@ Dato Seri is the one legendary, so its Settle is now bigger: it frees **the hold
 4. ~~**The auto-jailed runner**~~ **designed 2026-10-30:** motion design §5a–§5b, with a `2× MISSED` moment, the missed check-ins crossed out, and a **marshal undo for phone faults** (auto-jail only, doesn't use the once-only escape).
 
 **All screens are now designed. Next: build plans (§12).**
+
+## 10a. Considered and rejected: catching by location alone (2026-11-01)
+
+The owner's partner suggested dropping the tag scan and catching a runner when a chaser stays within some distance for some time. Rejected, and the armband rip plus scan stays:
+- **A web app can't track a locked phone,** and runners keep phones in their pockets. Proximity would only be known at check-ins, unless every runner kept Kejar open with the screen on all game (battery, glowing screens giving away hiding spots, and a phone in hand while running).
+- **Phone GPS is often 5–30 m off,** worse under trees and near buildings, and both phones err. That means false catches through walls or across water, and missed real ones. Even a native app wouldn't fix this. Bluetooth distance was already rejected (unreliable, goes through walls, restricted on iPhones).
+- **The tag rip is instant, visible and hard to dispute.** An invisible location catch would feel unfair and cause disputes.
+- **Location stays for what it does well:** pings and check-ins, `Kejar within 100 m`, the anti-cheat distance check on catches, and power-ups like Pak Guard. A proximity effect could return later as a power-up, not as the catch.
 
 ## 11. Still open (owner's decisions)
 
