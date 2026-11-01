@@ -36,6 +36,7 @@ export function testView(over: Partial<View> = {}): View {
     chaserNearby: false,
     caughtBy: null,
     jailReason: null,
+    checkin: null,
     feed: [],
     counts: { runnersFree: 3, runnersJailed: 0, chasers: 1 },
     roster: [],

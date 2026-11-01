@@ -201,6 +201,44 @@ describe('two-part feed', () => {
   })
 })
 
+describe('check-in state', () => {
+  // Next scheduled ping reveals at +20, its window opens at +19:15.
+  const ALERT = T0 + 20 * MIN - SCHEDULED_ALERT_LEAD_MS
+  const REVEAL = T0 + 20 * MIN
+  const checkin = (me: Player, over: Partial<Parameters<typeof viewFor>[0]> = {}) => view(me, over).checkin
+
+  it('is early before the window opens', () => {
+    expect(checkin(aina, { now: REVEAL - 2 * MIN })).toEqual({ state: 'early', alertAt: ALERT, revealAt: REVEAL, missedInRow: 0 })
+  })
+  it('is open once the window opens and no fresh location has come in', () => {
+    expect(checkin(aina, { now: REVEAL - 30_000 })?.state).toBe('open')
+  })
+  it('is in with a location inside the window', () => {
+    const at = { ...positions, r1: [...positions.r1, pos(A.lat, A.lng, REVEAL - 20_000)] }
+    expect(checkin(aina, { now: REVEAL - 15_000, positions: at })?.state).toBe('in')
+  })
+  it('is missed after a revealed ping with no check-in, until the next window', () => {
+    expect(checkin(hafiz, { now: T0 + 16 * MIN })).toEqual({ state: 'missed', alertAt: ALERT, revealAt: REVEAL, missedInRow: 1 })
+  })
+  it("doesn't count a ping whose alert came before the runner was freed", () => {
+    const freed = { ...hafiz, freed_at: new Date(T0 + 14.5 * MIN).toISOString() }
+    expect(checkin(freed, { now: T0 + 16 * MIN, players: [chaser, aina, freed, wei, siti] })?.state).toBe('early')
+  })
+  it('is null for a chaser, a jailed runner, and during hiding', () => {
+    expect(checkin(chaser)).toBeNull()
+    const jailed = { ...aina, jailed: true }
+    expect(checkin(jailed, { players: [chaser, jailed, hafiz, wei, siti] })).toBeNull()
+    expect(checkin(aina, { now: T0 + 3 * MIN, pings: [] })).toBeNull()
+  })
+  it('a pause inside the window keeps a check-in sent before it', () => {
+    const paused = game({ paused_at: new Date(T0 + 19.5 * MIN).toISOString() })
+    const at = { ...positions, r1: [...positions.r1, pos(A.lat, A.lng, T0 + 19.4 * MIN)] }
+    const c = checkin(aina, { game: paused, now: T0 + 20.2 * MIN, positions: at })
+    expect(c?.state).toBe('in')
+    expect(c?.revealAt).toBe(T0 + 20.7 * MIN)
+  })
+})
+
 describe('deck and slot', () => {
   it("shows how many cards are left in my side's deck", () => {
     const v = view(aina, { game: { ...g, runner_sets: 1, runner_draws: 2 } })

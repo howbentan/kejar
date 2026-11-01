@@ -58,6 +58,8 @@ export interface View {
   caughtBy: string | null
   /** Why I'm in Penjara: caught by a chaser, or auto-jailed for missing two check-ins. */
   jailReason: 'caught' | 'missed-checkins' | null
+  /** A free runner's standing for the next scheduled ping during the chase; null otherwise. */
+  checkin: Checkin | null
   feed: FeedItem[]
   counts: { runnersFree: number; runnersJailed: number; chasers: number }
   /** Everyone in the game: shown in the lobby and to marshals; empty for players mid-game. */
@@ -97,6 +99,14 @@ export interface FeedItem {
   means: string | null
   act: boolean
   label: string | null
+}
+
+export interface Checkin {
+  state: 'early' | 'open' | 'in' | 'missed'
+  alertAt: number
+  revealAt: number
+  /** 1 when the last scheduled ping that counted for me was missed. A second miss auto-jails, so never 2. */
+  missedInRow: 0 | 1
 }
 
 export const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
@@ -228,6 +238,33 @@ function deckLeftFor(i: ViewInput): number | null {
   return cardsLeft(deckFor(i.game.settings.mode ?? 'core', side, sets).length, draws)
 }
 
+/**
+ * Same window and since-release rule as auto-jail (checkedIn, pingTimes, freed_at), so the banner never
+ * says "Checked in" for a ping the server will count as missed.
+ */
+function checkinFor(i: ViewInput, phase: Phase): Checkin | null {
+  if (i.me.role !== 'runner' || i.me.jailed || phase !== 'chasing') return null
+  const times = pingTimes(i.game, i.now)
+  const next = times.find((t) => t.revealAt > i.now)
+  if (!next) return null
+  const mine = i.positions[i.me.id]
+  const lastAt = (t: number) => {
+    const at = latestAtOrBefore(mine, t)
+    return at ? Date.parse(at.at) : null
+  }
+  const prev = times.filter((t) => t.revealAt <= i.now).at(-1)
+  const since = Math.max(chaseStartOf(i.game, i.now)!, i.me.freed_at ? Date.parse(i.me.freed_at) : -Infinity)
+  const missedInRow = prev && prev.alertAt >= since && !checkedIn(prev.alertAt, prev.revealAt, lastAt(prev.revealAt)) ? 1 : 0
+  const state = checkedIn(next.alertAt, next.revealAt, lastAt(i.now))
+    ? 'in'
+    : i.now >= next.alertAt
+      ? 'open'
+      : missedInRow
+        ? 'missed'
+        : 'early'
+  return { state, alertAt: next.alertAt, revealAt: next.revealAt, missedInRow }
+}
+
 function jailReasonFor(i: ViewInput): View['jailReason'] {
   if (!i.me.jailed) return null
   if (i.me.caught_by) return 'caught'
@@ -352,7 +389,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, deckLeft: null, activePowerUp: null }
+    return { ...v, dots: [], feed: [], alerts: [], roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, checkin: null, deckLeft: null, activePowerUp: null }
   }
   return v
 }
@@ -424,6 +461,7 @@ function fullView(i: ViewInput): View {
     chaserNearby,
     caughtBy: i.me.jailed && i.me.caught_by ? (byId.get(i.me.caught_by)?.name ?? null) : null,
     jailReason: jailReasonFor(i),
+    checkin: checkinFor(i, phase),
     feed,
     counts: {
       runnersFree: runners.filter((p) => !p.jailed).length,
