@@ -1,4 +1,4 @@
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, render } from '@testing-library/react'
 import { useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -93,6 +93,31 @@ describe('Marker', () => {
     // Mid-flip on a slow phone the on-screen box is half the size; the marks must not follow it.
     card.getBoundingClientRect = () => ({ left: 140, top: 270, width: 75, height: 117 }) as DOMRect
     expect(layoutBox(card, parent)).toEqual({ x: 105, y: 210, w: 150, h: 234 })
+  })
+
+  it('can mark its own parent (the tick across the Checked in banner)', async () => {
+    const w = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth')!
+    const h = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight')!
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get: () => 300 })
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get: () => 80 })
+    try {
+      function Banner() {
+        const self = useRef<HTMLDivElement>(null)
+        return (
+          <div ref={self} style={{ position: 'relative' }}>
+            Checked in
+            <Marker marks={[{ shape: 'tick', target: self }]} colour="black" />
+          </div>
+        )
+      }
+      const { container } = render(<Banner />)
+      await act(async () => {})
+      const d = container.querySelector('svg.marker path')!.getAttribute('d')!
+      expect(d).not.toMatch(/^M0\.0 0\.0 L0\.0 0\.0/)
+    } finally {
+      Object.defineProperty(HTMLElement.prototype, 'offsetWidth', w)
+      Object.defineProperty(HTMLElement.prototype, 'offsetHeight', h)
+    }
   })
 
   it('with reduced motion, the marks appear already drawn', () => {
