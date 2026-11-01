@@ -12,7 +12,7 @@ type Point = { x: number; y: number }
 type Box = { x: number; y: number; w: number; h: number }
 
 export type Mark = {
-  shape: 'circle' | 'underline' | 'star' | 'stars' | 'burst' | 'arrow' | 'x' | 'tick' | 'emphasis' | 'strike'
+  shape: 'circle' | 'frame' | 'underline' | 'star' | 'stars' | 'burst' | 'arrow' | 'x' | 'tick' | 'emphasis' | 'strike'
   /** The element the mark is sized from. */
   target?: RefObject<HTMLElement | null>
   /** Or a point in the parent's coordinates. */
@@ -42,6 +42,31 @@ export function markPath(mark: Pick<Mark, 'shape' | 'to'>, b: Box): string {
         pts.push({ x: cx + Math.cos(t) * rx * grow, y: cy + Math.sin(t) * ry * grow })
       }
       return line(pts)
+    }
+    case 'frame': {
+      // A hand-drawn box round a picture: four slightly wobbly sides that overshoot their corners, drawn as one
+      // stroke going round, always ROOM clear of the picture so it never covers it.
+      const l = b.x - ROOM
+      const t = b.y - ROOM
+      const r = b.x + b.w + ROOM
+      const bt = b.y + b.h + ROOM
+      const side = (x0: number, y0: number, x1: number, y1: number, out: Point) => {
+        const pts: Point[] = []
+        for (let k = 0; k <= 8; k++) {
+          const f = k / 8
+          // Wobble outwards only (`out` points away from the picture), so it never drifts inside.
+          const w = 2.5 * Math.abs(Math.sin(f * Math.PI * 3 + x0 * 0.01))
+          pts.push({ x: x0 + (x1 - x0) * f + out.x * w, y: y0 + (y1 - y0) * f + out.y * w })
+        }
+        return pts
+      }
+      const over = 8
+      return line([
+        ...side(l - over, t, r, t - 1, { x: 0, y: -1 }),
+        ...side(r, t - over, r + 1, bt, { x: 1, y: 0 }),
+        ...side(r + over, bt, l, bt + 1, { x: 0, y: 1 }),
+        ...side(l, bt + over, l - 1, t - over, { x: -1, y: 0 }),
+      ])
     }
     case 'underline':
       return `M${f(b.x - 4)} ${f(b.y + b.h + 5)} Q${f(cx)} ${f(b.y + b.h + 9)} ${f(b.x + b.w + 4)} ${f(b.y + b.h + 3)}`
