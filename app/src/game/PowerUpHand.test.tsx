@@ -60,11 +60,11 @@ describe('PowerUpHand', () => {
 
   it('a running Durian counts down; other effects wait for the next ping', () => {
     const { rerender } = render(<PowerUpHand code="ABC234" view={testView({ activePowerUp: 'shield', activeEndsAt: 100_000 + 582_000 })} />)
-    expect(screen.getByText('Durian · ACTIVE')).toBeInTheDocument()
-    expect(screen.getByText('9:42 LEFT')).toBeInTheDocument()
+    expect(screen.getByText('Durian')).toBeInTheDocument()
+    expect(screen.getByText('ACTIVE · 9:42 LEFT')).toBeInTheDocument()
     rerender(<PowerUpHand code="ABC234" view={testView({ activePowerUp: 'cloak', activeEndsAt: null })} />)
-    expect(screen.getByText('Ponteng · ACTIVE')).toBeInTheDocument()
-    expect(screen.getByText('UNTIL THE NEXT PING')).toBeInTheDocument()
+    expect(screen.getByText('Ponteng')).toBeInTheDocument()
+    expect(screen.getByText('ACTIVE · UNTIL THE NEXT PING')).toBeInTheDocument()
   })
 
   it("Mat Rempit waits out the team cooldown, and can't be used until then", () => {

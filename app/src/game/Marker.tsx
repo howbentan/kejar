@@ -1,6 +1,6 @@
 import { useReducedMotion } from 'motion/react'
 import * as m from 'motion/react-m'
-import { useId, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { useEffect, useId, useRef, useState, type RefObject } from 'react'
 
 /** Each stroke draws in about 0.4 s (motion design §8.5); a whole moment stays under 2 s. */
 export const MARK_STROKE_MS = 400
@@ -191,10 +191,12 @@ export default function Marker({ marks, colour = 'lime', delayMs = 0 }: { marks:
   const [paths, setPaths] = useState<string[]>([])
   const wob = `mk-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
 
-  useLayoutEffect(() => {
+  // Measured once when the moment starts, after every ref on the screen is attached (a layout effect runs before
+  // its parent's ref, so marking your own parent, like the Checked in tick, would measure nothing). The marks
+  // then stay still.
+  useEffect(() => {
     const parent = svg.current?.parentElement ?? null
     setPaths(marks.map((mk) => markPath(mk, boxOf(mk, parent))))
-    // Measured once when the moment starts; the marks then stay still.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

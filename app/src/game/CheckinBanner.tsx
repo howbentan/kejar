@@ -50,10 +50,9 @@ export default function CheckinBanner({ checkin, now, openedByPush }: { checkin:
 }
 
 function Banner(props: { tone: 'ok' | 'wait' | 'miss'; mark: string; title: string; sub: string; tick?: boolean; children?: ReactNode }) {
-  const self = useRef<HTMLDivElement>(null)
+  const tickSpot = useRef<HTMLSpanElement>(null)
   return (
     <m.div
-      ref={self}
       className={`checkin-banner ${props.tone}`}
       role="status"
       initial={{ y: -80, opacity: 0 }}
@@ -70,8 +69,9 @@ function Banner(props: { tone: 'ok' | 'wait' | 'miss'; mark: string; title: stri
         </div>
       </div>
       {props.children}
-      {/* Checked in: a big black marker tick across the lime banner (motion design §8.5). */}
-      {props.tick && <Marker marks={[{ shape: 'tick', target: self }]} colour="black" delayMs={300} />}
+      {/* Checked in: a big black marker tick on the banner's right side, clear of the words (motion design §8.5). */}
+      {props.tick && <span ref={tickSpot} className="banner-tickspot" aria-hidden="true" />}
+      {props.tick && <Marker marks={[{ shape: 'tick', target: tickSpot }]} colour="black" delayMs={300} />}
     </m.div>
   )
 }
