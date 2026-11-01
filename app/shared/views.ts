@@ -1,3 +1,4 @@
+import { alertLeadFor, checkedIn } from './checkins.js'
 import { alertsFrom, type Alert } from './alerts.js'
 import { chaseStartOf, MINUTE_MS, nextReveal, phaseAt } from './clock.js'
 import { distanceM, fuzz } from './geo.js'
@@ -83,7 +84,7 @@ export const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 
 
 const tagLabel = (p: Player) => (p.tag_id === null ? p.name : `#${String(p.tag_id).padStart(2, '0')}`)
 
-function latestAtOrBefore(list: Position[] | undefined, t: number): Position | undefined {
+export function latestAtOrBefore(list: Position[] | undefined, t: number): Position | undefined {
   if (!list) return undefined
   let found: Position | undefined
   for (const p of list) if (Date.parse(p.at) <= t) found = p
@@ -168,7 +169,8 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
     } else {
       dot = { ...dotFor(p, at, 'runner'), ...fuzz(at, FUZZ_RADIUS_M, seed), fuzzy: true }
     }
-    if (Date.parse(at.at) < prevAt) dot.missed = true
+    // Missed = no location inside this ping's check-in window (45 s scheduled, 30 s bonus).
+    if (!checkedIn(revealAt, Date.parse(at.at), alertLeadFor(last.seq))) dot.missed = true
     dots.push(dot)
   }
   return { dots, notes }

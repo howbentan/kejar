@@ -920,7 +920,7 @@ describe('automatic alerts', () => {
   it('a runner who skips pings 1 and 2 is auto-jailed at ping 2, and the last one out ends the game', async () => {
     const g = await safetyGame({ checkinMode: 'schedule' })
     // Aina checks in for ping 1 (reveal at +10), Hafiz never does.
-    now = T0 + 9 * MIN
+    now = T0 + 9.75 * MIN // inside ping 1's 45 s window
     await run('location', { code: g.code, token: g.aina.token, ...at(10) })
     now = T0 + 10 * MIN
     expect(await kinds(g.code, g.organiserToken)).toEqual([])
@@ -946,7 +946,7 @@ describe('automatic alerts', () => {
         .map((a) => a.text)
         .filter((t) => t.includes('missed'))
     // Hafiz never checks in. He is caught at +12 and freed by Aina at +13.
-    now = T0 + 9 * MIN
+    now = T0 + 9.75 * MIN // inside ping 1's 45 s window
     await run('location', { code: g.code, token: g.aina.token, ...at(10) })
     now = T0 + 12 * MIN
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })
@@ -954,6 +954,8 @@ describe('automatic alerts', () => {
     now = T0 + 13 * MIN
     await run('location', { code: g.code, token: g.aina.token, ...at(10) })
     expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR })).toMatchObject({ ok: true })
+    now = T0 + 14.75 * MIN // Aina checks in for ping 2
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
     // Ping 2 (+15): only one miss since his release, so nothing yet.
     now = T0 + 15 * MIN
     expect(await missedTexts()).toEqual([])
@@ -982,6 +984,50 @@ describe('automatic alerts', () => {
       await run('state', { code: g.code, organiserToken: g.organiserToken })
     }
     expect((await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!.jailed).toBe(false)
+  })
+
+  it('a location sent before the 45 s window does not count as a check-in', async () => {
+    const g = await safetyGame({ checkinMode: 'schedule' })
+    for (const m of [10, 15]) {
+      now = T0 + m * MIN - 50_000 // 50 s before each reveal: just outside the window
+      await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+      now = T0 + m * MIN - 20_000
+      await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    }
+    now = T0 + 15 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    const ps = await store.players(g.gameId)
+    expect(ps.find((p) => p.id === g.hafiz.playerId)!.jailed).toBe(true)
+    expect(ps.find((p) => p.id === g.aina.playerId)!.jailed).toBe(false)
+  })
+
+  it('a ping whose alert came before the release never counts towards auto-jail', async () => {
+    const g = await safetyGame({ checkinMode: 'schedule' })
+    const hafizJailed = async () => {
+      await run('state', { code: g.code, organiserToken: g.organiserToken })
+      return (await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!.jailed
+    }
+    const ainaChecksIn = async (m: number) => {
+      now = T0 + m * MIN - 20_000
+      await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    }
+    // Hafiz never checks in. He is caught at +12 and freed at +15 min - 10 s: after ping 2's alert.
+    await ainaChecksIn(10)
+    now = T0 + 12 * MIN
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })
+    await ainaChecksIn(15)
+    now = T0 + 15 * MIN - 10_000
+    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR })).toMatchObject({ ok: true })
+    now = T0 + 15 * MIN
+    expect(await hafizJailed()).toBe(false)
+    // Ping 2 doesn't count (its alert came before the release), so ping 3 is only his first miss.
+    await ainaChecksIn(20)
+    now = T0 + 20 * MIN
+    expect(await hafizJailed()).toBe(false)
+    await ainaChecksIn(25)
+    now = T0 + 25 * MIN
+    expect(await hafizJailed()).toBe(true)
   })
 
   it('no check-in is missed while the game is paused', async () => {

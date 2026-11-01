@@ -44,6 +44,12 @@ describe('chaser view', () => {
     expect(distanceM(dot, { lat: 3.003, lng: 101.003 })).toBeLessThanOrEqual(15)
   })
 
+  it('a location sent before the 45 s window shows as missed, one inside it does not', () => {
+    const at = (ms: number) => ({ ...positions, r2: [pos(3.003, 101.003, T0 + 15 * MIN - ms)] })
+    expect(view(chaser, { positions: at(46_000) }).dots.find((d) => d.id === 'r2')!.missed).toBe(true)
+    expect(view(chaser, { positions: at(30_000) }).dots.find((d) => d.id === 'r2')!.missed).toBeUndefined()
+  })
+
   it('runner with no position at reveal is listed as never checked in', () => {
     const v = view(chaser)
     expect(v.dots.find((d) => d.id === 'r3')).toBeUndefined()

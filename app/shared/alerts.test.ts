@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { alertsFrom, missedTwoInARow, who } from './alerts.js'
+import { alertsFrom, who } from './alerts.js'
 import { event, MIN, player, T0 } from './fixtures.js'
 
 describe('who', () => {
@@ -68,30 +68,5 @@ describe('auto-jail alert', () => {
     expect(alertsFrom([event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2', data: { who: 'Hafiz #03' } })]).map((a) => a.text)).toEqual([
       'Hafiz #03 missed 2 check-ins — sent to Penjara',
     ])
-  })
-})
-
-describe('missedTwoInARow', () => {
-  // chase start at 5, reveals at 10, 15, 20, 25 (minutes)
-  const w = (k: number) => [5, 10, 15, 20, 25].slice(0, k + 1).map((m) => T0 + m * MIN)
-  const at = (m: number) => T0 + m * MIN
-
-  it('alerts at the second miss, not the third', () => {
-    // checked in at 7 (window 1), then nothing
-    expect(missedTwoInARow(w(2), at(7))).toBe(false)
-    expect(missedTwoInARow(w(3), at(7))).toBe(true)
-    expect(missedTwoInARow(w(4), at(7))).toBe(false)
-  })
-  it('a check-in resets the streak', () => {
-    expect(missedTwoInARow(w(3), at(12))).toBe(false)
-    expect(missedTwoInARow(w(4), at(12))).toBe(true)
-  })
-  it('no check-in at all alerts at ping 2', () => {
-    expect(missedTwoInARow(w(1), null)).toBe(false)
-    expect(missedTwoInARow(w(2), null)).toBe(true)
-    expect(missedTwoInARow(w(3), null)).toBe(false)
-  })
-  it('a position from the hide phase is not a check-in', () => {
-    expect(missedTwoInARow(w(2), at(3))).toBe(true)
   })
 })

@@ -1,6 +1,5 @@
 import {
   alertsFrom,
-  missedTwoInARow,
   NOTE_MAX,
   OUTSIDE_MARGIN_M,
   REASON_LABEL,
@@ -9,6 +8,7 @@ import {
   who,
   type ReportReason,
 } from '../../shared/alerts.js'
+import { autoJailDue } from '../../shared/checkins.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
 import { judgeCatch, judgeJailbreak } from '../../shared/catch.js'
@@ -18,7 +18,7 @@ import { activeShield, judgeClaim, pickPowerUp, STATION_LOCK_MS } from '../../sh
 import { computeResults } from '../../shared/results.js'
 import { shuffleRoles, validateTeams } from '../../shared/teams.js'
 import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type Role, type Settings } from '../../shared/types.js'
-import { viewFor } from '../../shared/views.js'
+import { viewFor, latestAtOrBefore } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
 import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
 import { MARSHAL_INVITE_TTL_MS, ORGANISER_INVITE_TTL_MS } from '../../shared/invites.js'
@@ -221,14 +221,18 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     await store.addEvent({ game_id: game.id, type: 'ping', actor_id: null, target_id: null, data: { seq, seen } })
     if (seq < BONUS_SEQ_BASE) {
       // Flares give only 30 s notice, so only scheduled pings count towards a missed streak.
-      const schedule = pingTimes(game, now).filter((t) => t.seq <= seq)
-      for (const p of free) {
-        // The streak starts fresh at the runner's own last release (checkins design §4.4).
-        const anchor = Math.max(chaseStartOf(game, now)!, p.freed_at ? Date.parse(p.freed_at) : -Infinity)
-        const windows = [anchor, ...schedule.filter((t) => t.revealAt > anchor).map((t) => t.revealAt)]
-        const last = latest(positions[p.id])
+      const lastTwo = pingTimes(game, now).filter((t) => t.seq <= seq).slice(-2)
+      const atReveals = lastTwo.length === 2 ? await store.latestPositions(game.id, lastTwo.map((t) => iso(t.revealAt))) : {}
+      for (const p of lastTwo.length === 2 ? free : []) {
+        // The count starts fresh at the runner's own last release (checkins design §4.4), and only a
+        // location inside each ping's 45 s window counts as a check-in (§4.2).
+        const since = Math.max(chaseStartOf(game, now)!, p.freed_at ? Date.parse(p.freed_at) : -Infinity)
+        const pings = lastTwo.map((t) => {
+          const at = latestAtOrBefore(atReveals[p.id], t.revealAt)
+          return { alertAt: t.alertAt, revealAt: t.revealAt, lastAt: at ? Date.parse(at.at) : null }
+        })
         // Two missed scheduled check-ins in a row: sent to Penjara like a catch, with no chaser.
-        if (missedTwoInARow(windows, last ? Date.parse(last.at) : null) && (await store.catchRunner(p.id, null))) {
+        if (autoJailDue(pings, since) && (await store.catchRunner(p.id, null))) {
           await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: p.id, data: { who: who(p), seq } })
         }
       }
