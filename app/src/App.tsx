@@ -1,4 +1,5 @@
 import { routeFor } from './routes'
+import { MotionRoot } from './game/motion'
 import { Screen } from './game/ui'
 import GameScreen from './screens/GameScreen'
 import Home from './screens/Home'
@@ -13,6 +14,14 @@ import SpikeJoin from './spike/SpikeJoin'
 import SpikeReport from './spike/SpikeReport'
 
 export default function App() {
+  return (
+    <MotionRoot>
+      <Routed />
+    </MotionRoot>
+  )
+}
+
+function Routed() {
   const { route, code, token } = routeFor(window.location.pathname)
   switch (route) {
     case 'home':
