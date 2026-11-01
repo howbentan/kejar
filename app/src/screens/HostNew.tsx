@@ -275,7 +275,7 @@ export default function HostNew() {
                 value={mode}
                 options={[
                   { value: 'stations', text: 'Stations' },
-                  { value: 'jail', text: 'Jail' },
+                  { value: 'jail', text: 'Penjara' },
                   { value: 'start', text: 'Start' },
                 ]}
                 onChange={setMode}
@@ -342,7 +342,7 @@ export default function HostNew() {
         {busy ? 'Creating…' : 'Create game'}
       </button>
       <a className="muted" href="/print/tags">
-        Print runner tags and the jail code →
+        Print runner tags and the Penjara code →
       </a>
     </Screen>
   )

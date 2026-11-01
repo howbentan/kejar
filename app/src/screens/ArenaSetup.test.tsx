@@ -99,7 +99,7 @@ describe('ArenaSetup', () => {
     const onDone = vi.fn()
     render(<ArenaSetup onDone={onDone} />)
     await pickKlcc()
-    fireEvent.click(screen.getByRole('radio', { name: 'Place: Jail' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Place: Penjara' }))
     fireEvent.click(screen.getByRole('button', { name: 'tap land A' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Place: Start' }))
     fireEvent.click(screen.getByRole('button', { name: 'tap land B' }))
@@ -131,9 +131,9 @@ describe('ArenaSetup', () => {
   it('an error from the draft disables Save', async () => {
     render(<ArenaSetup onDone={vi.fn()} />)
     await pickKlcc()
-    fireEvent.click(screen.getByRole('radio', { name: 'Place: Jail' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Place: Penjara' }))
     fireEvent.click(screen.getByRole('button', { name: 'tap the lake' }))
-    expect(screen.getByText('Jail must be inside the play area')).toBeInTheDocument()
+    expect(screen.getByText('Penjara must be inside the play area')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save park' })).toBeDisabled()
   })
 

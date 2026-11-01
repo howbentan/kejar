@@ -211,7 +211,7 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
     case 'caught':
       return target && actor ? `${tagLabel(target)} caught by ${actor.name}` : 'A runner was caught'
     case 'jailbreak':
-      return `${actor?.name ?? 'A runner'} broke ${count(Number(e.data.freed ?? 0), 'runner')} out of jail`
+      return `${actor?.name ?? 'A runner'} broke ${count(Number(e.data.freed ?? 0), 'runner')} out of Penjara`
     case 'ended':
       return 'Game over'
     case 'powerup':

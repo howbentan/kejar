@@ -32,7 +32,7 @@ const outside = (what: string) => `${what} must be inside the play area`
 /** The places that aren't inside the play area (or are in a lake), in the order an organiser fixes them. */
 export function pointProblems(arena: Arena): string[] {
   const problems: string[] = []
-  if (!inPlayArea(arena.jail, arena)) problems.push(outside('Jail'))
+  if (!inPlayArea(arena.jail, arena)) problems.push(outside('Penjara'))
   if (!inPlayArea(arena.start, arena)) problems.push(outside('Start'))
   ;(arena.stations ?? []).forEach((s, k) => {
     if (!inPlayArea(s, arena)) problems.push(outside(`Station ${k + 1}`))

@@ -44,8 +44,8 @@ export default function PrintTags() {
         ))}
       </div>
       <div className="tag" style={{ marginTop: 24, border: '2px solid #0A0A0B', padding: 16, textAlign: 'center' }}>
-        {codes[JAIL_QR] && <img src={codes[JAIL_QR]} alt="Jail code" style={{ width: '90mm', height: '90mm' }} />}
-        <div style={{ fontWeight: 800, fontSize: 40 }}>JAIL</div>
+        {codes[JAIL_QR] && <img src={codes[JAIL_QR]} alt="Penjara code" style={{ width: '90mm', height: '90mm' }} />}
+        <div style={{ fontWeight: 800, fontSize: 40 }}>PENJARA</div>
         <div>Free runners: scan this to break everyone out (once each).</div>
       </div>
     </div>

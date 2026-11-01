@@ -143,7 +143,7 @@ describe('feed wording', () => {
         event('ping', T0 + 10 * MIN, { data: { seen: 1 } }),
         event('jailbreak', T0 + 11 * MIN, { actor_id: 'r3', data: { freed: 1 } }),
       ]),
-    ).toEqual(['Wei broke 1 runner out of jail', 'Ping — 1 runner seen'])
+    ).toEqual(['Wei broke 1 runner out of Penjara', 'Ping — 1 runner seen'])
   })
   it('announces pauses and resumes', () => {
     expect(feedOf([event('paused', T0 + 10 * MIN), event('resumed', T0 + 11 * MIN)])).toEqual([

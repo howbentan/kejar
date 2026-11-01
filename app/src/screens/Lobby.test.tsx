@@ -29,7 +29,7 @@ describe('Lobby setup map', () => {
     expect(screen.getByText('Setup: where things go')).toBeInTheDocument()
     expect(screen.getByText('Station 1')).toBeInTheDocument()
     expect(screen.getByText('Station 2')).toBeInTheDocument()
-    expect(screen.getByText('Jail')).toBeInTheDocument()
+    expect(screen.getByText('Penjara')).toBeInTheDocument()
     expect(screen.getByText('Start')).toBeInTheDocument()
     unmount()
     render(<Lobby code="ABC234" view={base} refresh={vi.fn()} />)

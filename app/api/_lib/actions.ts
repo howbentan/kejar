@@ -516,7 +516,7 @@ const catchAction: Action = async (ctx, body) => {
 const jailbreak: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
-  if (str(body.qr).trim() !== JAIL_QR) throw new ActionError(400, "That's not the jail code")
+  if (str(body.qr).trim() !== JAIL_QR) throw new ActionError(400, "That's not the Penjara code")
   await recordScanLocation(ctx, game, me, body)
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game

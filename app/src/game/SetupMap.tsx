@@ -12,7 +12,7 @@ export default function SetupMap({ view }: { view: View }) {
         {stations.map((s) => (
           <li key={s.n}>{`Station ${s.n}`}</li>
         ))}
-        <li>Jail</li>
+        <li>Penjara</li>
         <li>Start</li>
       </ul>
     </div>

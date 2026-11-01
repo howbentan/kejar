@@ -57,7 +57,7 @@ beforeEach(() => {
   call.mockImplementation(async (action: string) => {
     if (action === 'listArenas') return { arenas }
     if (action === 'createOrganiserInvite') return { inviteToken: 'tok1' }
-    if (action === 'recheckWater') return { waterChecked: true, problems: ['Jail must be inside the play area'] }
+    if (action === 'recheckWater') return { waterChecked: true, problems: ['Penjara must be inside the play area'] }
     return { code: 'ABC234', ok: true }
   })
   localStorage.setItem('kejar.organiser', JSON.stringify({ organiserToken: 'ot1', name: 'Owner' }))
@@ -80,10 +80,10 @@ describe('HostNew', () => {
     arenas = [klcc({ waterChecked: false })]
     render(<HostNew />)
     expect(await screen.findByText('Lakes not checked')).toBeInTheDocument()
-    arenas = [klcc({ problems: ['Jail must be inside the play area'] })]
+    arenas = [klcc({ problems: ['Penjara must be inside the play area'] })]
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('recheckWater', { organiserToken: 'ot1', arenaId: 'ar1' }))
-    expect(await screen.findByText('Jail must be inside the play area')).toBeInTheDocument()
+    expect(await screen.findByText('Penjara must be inside the play area')).toBeInTheDocument()
     expect(screen.queryByText('Lakes not checked')).toBeNull()
   })
 

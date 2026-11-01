@@ -15,4 +15,12 @@ describe('Jail', () => {
     expect(screen.getByText('Caught by Ben')).toBeInTheDocument()
     expect(screen.getByText('Spectator view · 3 min delayed')).toBeInTheDocument()
   })
+
+  it('calls it Penjara everywhere', () => {
+    const view = testView({ caughtBy: 'Ben' })
+    render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true, freed_once: true } }} />)
+    expect(screen.getByText('Penjara')).toBeInTheDocument()
+    expect(screen.getByText(/Walk to Penjara\./)).toBeInTheDocument()
+    expect(screen.getByText('You’ve already been broken out once, so you stay in Penjara this time.')).toBeInTheDocument()
+  })
 })

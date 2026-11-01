@@ -1122,7 +1122,7 @@ describe('saved arenas', () => {
     await rejects(
       run('create', { organiserToken, savedArenaId: arenaId, overrides: { jail: pt(0, 0) } }),
       400,
-      'Jail must be inside the play area',
+      'Penjara must be inside the play area',
     )
   })
 
@@ -1163,12 +1163,12 @@ describe('saved arenas', () => {
     osmReplies.push({ elements: [{ type: 'way', id: 5, tags: { natural: 'water' }, geometry: geometry(lake) }] })
     expect(await run('recheckWater', { organiserToken, arenaId })).toEqual({
       waterChecked: true,
-      problems: ['Jail must be inside the play area'],
+      problems: ['Penjara must be inside the play area'],
     })
     const [listed] = (await run('listArenas', { organiserToken })).arenas
-    expect(listed).toMatchObject({ waterChecked: true, problems: ['Jail must be inside the play area'] })
+    expect(listed).toMatchObject({ waterChecked: true, problems: ['Penjara must be inside the play area'] })
     expect(listed.arena.holes).toHaveLength(1)
-    await rejects(run('create', { organiserToken, savedArenaId: arenaId }), 400, 'Jail must be inside the play area')
+    await rejects(run('create', { organiserToken, savedArenaId: arenaId }), 400, 'Penjara must be inside the play area')
   })
 
   it('recheckWater keeps the flag when Overpass is still down', async () => {

@@ -40,7 +40,7 @@ describe('arenaFromDraft', () => {
   })
 
   it('rejects a jail or start outside the play area', () => {
-    expect(() => arenaFromDraft({ ...park, jail: at(0, 300) }, 'a1')).toThrow('Jail must be inside the play area')
+    expect(() => arenaFromDraft({ ...park, jail: at(0, 300) }, 'a1')).toThrow('Penjara must be inside the play area')
     expect(() => arenaFromDraft({ ...park, start: at(10, 10) }, 'a1')).toThrow('Start must be inside the play area')
   })
 
@@ -76,7 +76,7 @@ describe('pointProblems', () => {
     const dry = arenaFromDraft({ ...park, water: [], jail: at(0, 0), start: at(150, 0), stations: [at(0, 20)] }, 'a1')
     const area = buildPlayArea({ outline: park.outline, water: park.water, circle: null })
     expect(pointProblems({ ...dry, boundary: area.boundary, holes: area.holes })).toEqual([
-      'Jail must be inside the play area',
+      'Penjara must be inside the play area',
       'Station 1 must be inside the play area',
     ])
     expect(pointProblems(dry)).toEqual([])

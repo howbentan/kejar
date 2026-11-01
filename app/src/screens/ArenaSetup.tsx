@@ -167,7 +167,7 @@ export default function ArenaSetup({
   const placeOptions = [
     ...(circleOn ? [{ value: 'circle' as const, text: 'Circle' }] : []),
     { value: 'stations' as const, text: 'Stations' },
-    { value: 'jail' as const, text: 'Jail' },
+    { value: 'jail' as const, text: 'Penjara' },
     { value: 'start' as const, text: 'Start' },
   ]
   const showMap = source === 'circle' ? !!centre : !!park

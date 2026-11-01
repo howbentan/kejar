@@ -10,7 +10,7 @@ import { ErrorText, Screen } from '../game/ui'
 import { Feed } from './RunnerChase'
 
 const BREAK_REJECTIONS: Record<string, string> = {
-  'too-far-from-jail': 'Get within 30 m of the jail',
+  'too-far-from-jail': 'Get within 30 m of Penjara',
   'nobody-to-free': 'Nobody to free',
   'not-a-free-runner': 'Only free runners can break people out',
   'not-chasing': 'Jailbreaks only work during the chase',
@@ -51,7 +51,7 @@ export function BreakOut({ code, view }: { code: string; view: View }) {
         <Scanner onResult={onScan} onCancel={() => setScanning(false)} />
       ) : (
         <button className="btn btn-ghost" onClick={() => setScanning(true)}>
-          Break them out ({view.counts.runnersJailed} in jail)
+          Break them out ({view.counts.runnersJailed} in Penjara)
         </button>
       )}
     </div>
@@ -60,10 +60,10 @@ export function BreakOut({ code, view }: { code: string; view: View }) {
 
 export default function Jail({ view }: { code: string; view: View }) {
   return (
-    <Screen eyebrow="In jail">
+    <Screen eyebrow="Penjara">
       <p className="eyebrow">{view.caughtBy ? `Caught by ${view.caughtBy}` : 'Caught'}</p>
       <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.04em', lineHeight: 1.05 }}>
-        Walk to jail.
+        Walk to Penjara.
         <br />
         <span className="muted" style={{ fontSize: 22 }}>
           A marshal will give your tag back.
@@ -71,7 +71,7 @@ export default function Jail({ view }: { code: string; view: View }) {
       </h1>
       <p className="muted">
         {view.me.freed_once
-          ? 'You’ve already been broken out once, so you stay in jail this time.'
+          ? 'You’ve already been broken out once, so you stay in Penjara this time.'
           : 'A free runner can still break you out — once.'}
       </p>
       <GameMap arena={view.arena} dots={view.dots} height={240} />
