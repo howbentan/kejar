@@ -6,7 +6,7 @@ import { call } from '../game/api'
 import { loadSession } from '../game/session'
 import Scanner from '../game/Scanner'
 import SetupMap from '../game/SetupMap'
-import { ErrorText, Screen, tagText } from '../game/ui'
+import { ErrorText, ModeBadge, Screen, tagText } from '../game/ui'
 
 const ROLE_COPY = {
   runner: 'You’re a Dikejar. Hide when the game starts.',
@@ -76,7 +76,10 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
 
   return (
     <Screen eyebrow={`kejar. · game ${code}`}>
-      <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.04em' }}>Hi {view.me.name}</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.04em' }}>Hi {view.me.name}</h1>
+        <ModeBadge mode={view.settings.mode} />
+      </div>
       <p className="muted">{role ? ROLE_COPY[role] : 'Waiting for the organiser to give you a role…'}</p>
       {role === 'marshal' && <SetupMap view={view} />}
 

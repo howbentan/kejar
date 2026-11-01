@@ -301,6 +301,23 @@ export default function HostNew() {
 
       <p className="eyebrow">Settings</p>
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Game</span>
+          <Pills<Settings['mode']>
+            label="Game"
+            value={settings.mode}
+            options={[
+              { value: 'core', text: 'Core' },
+              { value: 'full', text: 'Full' },
+            ]}
+            onChange={(v) => set({ mode: v })}
+          />
+        </div>
+        <p className="muted" style={{ marginTop: -4 }}>
+          {settings.mode === 'full'
+            ? 'Everything in Core, plus Gostan and more power-ups as they arrive. For regulars.'
+            : 'The chase, check-ins and Penjara, plus 4 simple power-ups. Best for first-timers.'}
+        </p>
         <NumberField label="Game length (min)" value={settings.lengthMin} min={15} max={90} onChange={(n) => set({ lengthMin: n })} />
         <NumberField label="Hide time (min)" value={settings.hideMin} min={1} max={15} onChange={(n) => set({ hideMin: n })} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

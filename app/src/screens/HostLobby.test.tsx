@@ -66,6 +66,11 @@ afterEach(() => {
 })
 
 describe('HostLobby', () => {
+  it('shows the game mode next to the code', async () => {
+    render(<HostLobby code="ABC234" />)
+    expect(await screen.findByText('CORE')).toBeInTheDocument()
+  })
+
   it('lists the players with their tags', async () => {
     render(<HostLobby code="ABC234" />)
     expect(await screen.findByText('Aina')).toBeInTheDocument()

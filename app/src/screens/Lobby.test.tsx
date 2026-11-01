@@ -36,3 +36,16 @@ describe('Lobby setup map', () => {
     expect(screen.queryByText('Setup: where things go')).toBeNull()
   })
 })
+
+describe('Lobby mode badge', () => {
+  it('shows CORE or FULL, and CORE when an older game has no mode', () => {
+    const base = testView({ phase: 'lobby' })
+    const { unmount } = render(<Lobby code="ABC234" view={{ ...base, settings: { ...base.settings, mode: 'full' } }} refresh={vi.fn()} />)
+    expect(screen.getByText('FULL')).toBeInTheDocument()
+    unmount()
+    const old = { ...base.settings } as Partial<typeof base.settings>
+    delete old.mode
+    render(<Lobby code="ABC234" view={{ ...base, settings: old as typeof base.settings }} refresh={vi.fn()} />)
+    expect(screen.getByText('CORE')).toBeInTheDocument()
+  })
+})
