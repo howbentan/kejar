@@ -286,7 +286,9 @@ export default function GameMap({
   }, [dots])
 
   // The ping ripple: rings roll out from the origin, and each circle appears as the wave passes it.
-  const [rings, setRings] = useState<{ x: number; y: number; scale: number; key: number } | null>(null)
+  // Each ring is drawn at its final size and grows from nothing, so its outline stays thin (scaling a small
+  // ring up would scale its outline with it).
+  const [rings, setRings] = useState<{ x: number; y: number; r: number; key: number } | null>(null)
   const rippled = useRef<number | null>(null)
   const rippleAt = ripple?.at ?? null
   useEffect(() => {
@@ -306,7 +308,7 @@ export default function GameMap({
     ] as const
     const maxPx = Math.max(...corners.map(([x, y]) => Math.hypot(x - o.x, y - o.y)))
     const maxM = Math.max(...corners.map(([x, y]) => distanceM(ripple.origin, mp.unproject([x, y]))))
-    setRings({ x: o.x, y: o.y, scale: maxPx / 10, key: ripple.at })
+    setRings({ x: o.x, y: o.y, r: maxPx, key: ripple.at })
     ;(mp.getSource('fuzzy') as GeoJSONSource | undefined)?.setData(dotFeatures(latest.current, ripple.origin).fuzzy)
     const base: Record<string, unknown> = { 'fuzzy-fill': null, 'fuzzy-line': ['!', ['get', 'missed']], 'fuzzy-missed': ['get', 'missed'], labels: null }
     const start = performance.now()
@@ -356,9 +358,9 @@ export default function GameMap({
           {[0, 0.15, 0.3].map((d, k) => (
             <m.span
               key={`${rings.key}-${k}`}
-              style={{ left: rings.x - 10, top: rings.y - 10 }}
+              style={{ left: rings.x - rings.r, top: rings.y - rings.r, width: rings.r * 2, height: rings.r * 2 }}
               initial={{ scale: 0, opacity: k === 0 ? 0.9 : 0.45 }}
-              animate={{ scale: rings.scale, opacity: 0 }}
+              animate={{ scale: 1, opacity: 0 }}
               transition={{ duration: RIPPLE_MS / 1000, delay: d, ease: [0.33, 1, 0.68, 1] }}
             />
           ))}

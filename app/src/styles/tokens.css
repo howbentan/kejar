@@ -164,7 +164,7 @@ select.input option { background: #141614; color: var(--white); }
 .dip-timer { display: block; height: 3px; width: 100%; background: var(--volt); transform-origin: left; }
 @media (prefers-reduced-motion: reduce) { .vf-line { animation: none; top: 50%; } }
 .ripple-rings { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
-.ripple-rings span { position: absolute; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--volt); box-sizing: border-box; }
+.ripple-rings span { position: absolute; border-radius: 50%; border: 3px solid var(--volt); box-sizing: border-box; }
 /* Game paused: the time-out photo in a marker frame, the frozen clock under it. */
 .paused { display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
 .paused-title { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.05em; }

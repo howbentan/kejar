@@ -126,8 +126,8 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
         <div className="slot live">
           <Sticker kind={view.activePowerUp} size={40} tilt={-4} />
           <span>
-            <b>{`${INFO[view.activePowerUp].name} · ACTIVE`}</b>
-            <span>{view.activeEndsAt !== null ? `${clock(view.activeEndsAt - now)} LEFT` : 'UNTIL THE NEXT PING'}</span>
+            <b>{INFO[view.activePowerUp].name}</b>
+            <span>{view.activeEndsAt !== null ? `ACTIVE · ${clock(view.activeEndsAt - now)} LEFT` : 'ACTIVE · UNTIL THE NEXT PING'}</span>
           </span>
           {deck}
         </div>
