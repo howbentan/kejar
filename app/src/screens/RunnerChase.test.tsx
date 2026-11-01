@@ -78,6 +78,19 @@ describe('RunnerChase', () => {
     expect(screen.getByRole('button', { name: 'Scan' })).toBeDisabled()
   })
 
+  it('while a claim is still on its way, no second scan can start', async () => {
+    let finish: (v: unknown) => void = () => {}
+    call.mockImplementation(() => new Promise((r) => (finish = r)))
+    render(<RunnerChase code="ABC234" view={testView()} />)
+    await scan('KEJAR:STATION:2')
+    expect(screen.getByRole('button', { name: 'Scan' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Scan' }))
+    expect(screen.queryByRole('button', { name: 'fake camera' })).toBeNull()
+    expect(call).toHaveBeenCalledTimes(1)
+    await act(async () => finish({ ok: false, reason: 'too-far' }))
+    expect(screen.getByRole('button', { name: 'Scan' })).not.toBeDisabled()
+  })
+
   it('a refused claim names the station, with no dip', async () => {
     call.mockResolvedValue({ ok: false, reason: 'too-far' })
     render(<RunnerChase code="ABC234" view={testView()} />)

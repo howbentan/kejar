@@ -30,13 +30,15 @@ export function markPath(mark: Pick<Mark, 'shape' | 'to'>, b: Box): string {
   const cy = b.y + b.h / 2
   switch (mark.shape) {
     case 'circle': {
-      // An ellipse that goes round the padded box (√2 × its half-sizes), overshooting its start like a hand loop.
-      const rx = (b.w / 2 + ROOM) * Math.SQRT2
-      const ry = (b.h / 2 + ROOM) * Math.SQRT2
+      // An ellipse through the padded box's corners, only a little wider than the words (so a long title still
+      // fits the phone) and as tall as it needs to be, overshooting its start like a hand loop.
+      const a = b.w / 2 + ROOM
+      const rx = a + 2 * ROOM
+      const ry = (b.h / 2 + ROOM) / Math.sqrt(1 - (a / rx) ** 2)
       const pts: Point[] = []
       for (let a = -100; a <= 290; a += 10) {
         const t = (a * Math.PI) / 180
-        const grow = 1 + 0.04 * Math.sin(t * 3) ** 2
+        const grow = 1 + 0.02 * Math.sin(t * 3) ** 2
         pts.push({ x: cx + Math.cos(t) * rx * grow, y: cy + Math.sin(t) * ry * grow })
       }
       return line(pts)

@@ -16,6 +16,8 @@ export function WalkGuide({ jail, arena, onArrived, onLost }: { jail: LatLng; ar
   const [here, setHere] = useState<LatLng | null>(null)
   const [lost, setLost] = useState(false)
   const arrived = useRef(false)
+  // Once we've had a fix, a passing error (phones report "position unavailable" now and then) isn't "lost".
+  const hadFix = useRef(false)
 
   useEffect(() => {
     const geo = navigator.geolocation
@@ -23,14 +25,15 @@ export function WalkGuide({ jail, arena, onArrived, onLost }: { jail: LatLng; ar
       setLost(true)
       return
     }
-    const give = window.setTimeout(() => setLost(true), NO_FIX_MS)
+    const give = window.setTimeout(() => !hadFix.current && setLost(true), NO_FIX_MS)
     const id = geo.watchPosition(
       (p) => {
         window.clearTimeout(give)
+        hadFix.current = true
         setLost(false)
         setHere({ lat: p.coords.latitude, lng: p.coords.longitude })
       },
-      () => setLost(true),
+      () => !hadFix.current && setLost(true),
       { enableHighAccuracy: true, maximumAge: 5_000 },
     )
     return () => {

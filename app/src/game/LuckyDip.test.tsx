@@ -24,6 +24,8 @@ describe('LuckyDip', () => {
   it('stamps the claim first, then fans five face-down cards', () => {
     dip()
     expect(screen.getByText('CLAIMED · Station 3 ✓')).toBeInTheDocument()
+    // The long claim stamp uses the small size, so it fits a 360 px phone.
+    expect(screen.getByText('CLAIMED · Station 3 ✓')).toHaveClass('stamp-small')
     expect(screen.getByText('DECK · 7 LEFT')).toBeInTheDocument()
     expect(screen.queryAllByLabelText('Face-down card')).toHaveLength(0)
     wait(CLAIM_STAMP_MS)

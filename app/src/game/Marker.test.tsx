@@ -38,6 +38,12 @@ describe('markPath', () => {
     }
   })
 
+  it("a circle round a long title stays narrow enough for the phone (Got Mat Rempit!)", () => {
+    const box = { x: 56, y: 0, w: 248, h: 40 }
+    const xs = points(markPath({ shape: 'circle' }, box)).map((p) => p.x)
+    expect(Math.max(...xs) - Math.min(...xs)).toBeLessThanOrEqual(248 + 70)
+  })
+
   it('draws every shape as a path', () => {
     const box = { x: 10, y: 10, w: 80, h: 20 }
     for (const shape of ['circle', 'underline', 'star', 'arrow', 'x', 'tick', 'emphasis', 'strike'] as const) {

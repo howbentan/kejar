@@ -45,12 +45,15 @@ export default function ChaseLayout(props: {
   const [scanning, setScanning] = useState(false)
   const [result, setResult] = useState('')
   const [moment, setMoment] = useState<ReactNode | null>(null)
+  // A scan still on its way: no second scan until it answers (a slow claim mustn't let another through).
+  const [busy, setBusy] = useState(false)
 
   const onScan = useCallback(
     async (text: string) => {
       setScanning(false)
       const target = scanTarget(text, side)
       if ('error' in target) return setResult(target.error)
+      setBusy(true)
       try {
         const here = await currentCoords()
         const r = await call(target.action, { code, token: loadSession(localStorage, code).token, ...target.body, ...here })
@@ -60,6 +63,8 @@ export default function ChaseLayout(props: {
         onScanned?.()
       } catch (e) {
         setResult(e instanceof Error ? e.message : String(e))
+      } finally {
+        setBusy(false)
       }
     },
     [code, side, describe, momentFor, onScanned],
@@ -97,7 +102,7 @@ export default function ChaseLayout(props: {
         )}
         <div className="dock-row">
           {props.slot}
-          <button type="button" className={`scan ${props.scanClass}`} disabled={!!moment} onClick={() => setScanning(true)}>
+          <button type="button" className={`scan ${props.scanClass}`} disabled={!!moment || busy} onClick={() => setScanning(true)}>
             {props.scanLabel}
           </button>
         </div>

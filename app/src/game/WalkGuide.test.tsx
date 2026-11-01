@@ -49,6 +49,15 @@ describe('WalkGuide', () => {
     expect(screen.getByText('Walk to the PENJARA pin on the map.')).toBeInTheDocument()
   })
 
+  it('a blip after a good fix is not "lost": the guide keeps going', () => {
+    const onLost = vi.fn()
+    render(<WalkGuide jail={JAIL} onArrived={() => {}} onLost={onLost} />)
+    act(() => onFix!(north(160)))
+    act(() => onErr!({ code: 2 }))
+    expect(onLost).not.toHaveBeenCalled()
+    expect(screen.getByText("160 M · WALK, DON'T RUN")).toBeInTheDocument()
+  })
+
   it('stops watching when it goes away', () => {
     const { unmount } = render(<WalkGuide jail={JAIL} onArrived={() => {}} />)
     unmount()
