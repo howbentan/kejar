@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const reduce = vi.hoisted(() => ({ on: false }))
 vi.mock('motion/react', async (orig) => ({ ...(await orig<typeof import('motion/react')>()), useReducedMotion: () => reduce.on }))
 
-import Marker, { markPath, type Mark } from './Marker'
+import Marker, { layoutBox, markPath, type Mark } from './Marker'
 
 afterEach(() => {
   cleanup()
@@ -59,6 +59,19 @@ describe('Marker', () => {
     expect(svg).toHaveAttribute('aria-hidden', 'true')
     expect(svg.querySelectorAll('path')).toHaveLength(4)
     expect(svg).toHaveAttribute('data-drawn', 'animated')
+  })
+
+  it("measures the target's settled place, not where an animation has it right now", () => {
+    const parent = document.createElement('div')
+    const fan = document.createElement('div')
+    const card = document.createElement('div')
+    const geo = (el: HTMLElement, g: Record<string, unknown>) =>
+      Object.defineProperties(el, Object.fromEntries(Object.entries(g).map(([k, v]) => [k, { get: () => v }])))
+    geo(fan, { offsetParent: parent, offsetLeft: 0, offsetTop: 200 })
+    geo(card, { offsetParent: fan, offsetLeft: 105, offsetTop: 10, offsetWidth: 150, offsetHeight: 234 })
+    // Mid-flip on a slow phone the on-screen box is half the size; the marks must not follow it.
+    card.getBoundingClientRect = () => ({ left: 140, top: 270, width: 75, height: 117 }) as DOMRect
+    expect(layoutBox(card, parent)).toEqual({ x: 105, y: 210, w: 150, h: 234 })
   })
 
   it('with reduced motion, the marks appear already drawn', () => {

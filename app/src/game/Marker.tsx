@@ -88,9 +88,28 @@ export function markPath(mark: Pick<Mark, 'shape' | 'to'>, b: Box): string {
   }
 }
 
+/**
+ * Where `el` sits inside `parent` once laid out, ignoring transforms: a card still scaling or flipping on a slow
+ * phone is marked round its final edges, not round wherever the animation has it at that instant.
+ */
+export function layoutBox(el: HTMLElement, parent: HTMLElement): Box | null {
+  let x = 0
+  let y = 0
+  let node: HTMLElement | null = el
+  while (node && node !== parent) {
+    x += node.offsetLeft
+    y += node.offsetTop
+    node = node.offsetParent as HTMLElement | null
+  }
+  return node === parent ? { x, y, w: el.offsetWidth, h: el.offsetHeight } : null
+}
+
 function boxOf(mark: Mark, parent: HTMLElement | null): Box {
   const el = mark.target?.current
   if (el && parent) {
+    const laid = layoutBox(el, parent)
+    if (laid) return laid
+    // Not in the parent's offset chain (e.g. the parent isn't positioned): fall back to the on-screen box.
     const r = el.getBoundingClientRect()
     const p = parent.getBoundingClientRect()
     return { x: r.left - p.left, y: r.top - p.top, w: r.width, h: r.height }

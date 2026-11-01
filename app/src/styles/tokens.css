@@ -147,11 +147,11 @@ select.input option { background: #141614; color: var(--white); }
 .vf-hint { text-align: center; font: 600 11px var(--mono); letter-spacing: 0.1em; color: var(--volt); text-transform: uppercase; }
 .dip { gap: 28px; }
 .dip-deck { position: absolute; top: 16px; right: 16px; font: 500 10px var(--mono); letter-spacing: 0.12em; color: var(--volt); }
-.dip-title { position: relative; padding: 0 30px; }
+.dip-title { position: relative; padding: 0 30px; margin-bottom: 12px; }
 .dip-title h2 { margin: 0; font: 800 34px var(--font); letter-spacing: -0.05em; }
-.dip-fan { position: relative; display: flex; justify-content: center; align-items: flex-end; height: 214px; width: 100%; max-width: 420px; }
+.dip-fan { position: relative; display: flex; justify-content: center; align-items: flex-end; height: 250px; width: 100%; max-width: 420px; }
 .dip-card { appearance: none; border: 0; padding: 0; background: none; margin: 0 -22px; cursor: pointer; touch-action: none; transform-origin: 50% 120%; }
-.dip-card.picked { position: absolute; left: calc(50% - 48px); bottom: 6px; margin: 0; z-index: 2; cursor: default; transform-origin: 50% 100%; }
+.dip-card.picked { position: absolute; left: calc(50% - 75px); bottom: 6px; margin: 0; z-index: 2; cursor: default; transform-origin: 50% 100%; }
 .dip-spotlight { position: absolute; top: -10px; bottom: -10px; left: calc(50% - 50px); width: 100px; border-radius: 50%; background: radial-gradient(closest-side, rgba(198, 255, 61, 0.35), transparent); pointer-events: none; z-index: 1; }
 .dip-pick { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 160px; }
 .dip-pick p { margin: 0; font: 700 16px var(--font); }
@@ -239,6 +239,11 @@ select.input option { background: #141614; color: var(--white); }
 .power-card.front::before, .power-card.back::before {
   content: ''; position: absolute; inset: 4px; border: 1px solid rgba(198, 255, 61, 0.35); border-radius: 8px; pointer-events: none;
 }
+.power-card.big { width: 150px; height: 234px; padding: 12px 10px; border-radius: 16px; border-width: 3px; }
+.power-card.big .pc-eyebrow { font-size: 9px; }
+.power-card.big .pc-art { width: 116px; height: 116px; margin-top: 8px; }
+.power-card.big .pc-name { font-size: 22px; }
+.power-card.big .pc-effect { font-size: 12px; min-height: 30px; }
 .pc-eyebrow { font: 500 6.5px var(--mono); letter-spacing: 0.16em; color: var(--volt); }
 .pc-art { margin-top: 4px; width: 70px; height: 70px; border-radius: 50%; display: grid; place-items: center; background: rgba(198, 255, 61, 0.08); }
 .pc-name { margin-top: auto; font-size: 14px; font-weight: 800; letter-spacing: -0.04em; }

@@ -13,6 +13,12 @@ describe('PowerCard', () => {
     expect(screen.getByText('You skip the next ping')).toBeInTheDocument()
   })
 
+  it('big is a larger card with a larger sticker', () => {
+    const { container } = render(<PowerCard kind="shield" big />)
+    expect(container.querySelector('.power-card')).toHaveClass('big')
+    expect(screen.getByRole('img', { name: 'Durian' })).toHaveAttribute('width', '104')
+  })
+
   it('face down shows nothing of the power-up', () => {
     render(<PowerCard kind="cloak" faceDown />)
     expect(screen.getByLabelText('Face-down card')).toBeInTheDocument()

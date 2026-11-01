@@ -15,8 +15,6 @@ export const REVEAL_HOLD_MS = 1_600
 /** Moving a card up this far is a flick, and picks it (motion design §7). */
 const FLICK_PX = 40
 const FAN = [-12, -6, 0, 6, 12]
-/** The picked card grows from its base to this size, staying clear of `Got Durian!` on a 640 px phone. */
-const PICKED_SCALE = 1.35
 /** The flip's length: the marker measures the card only once it has landed. */
 const FLIP_MS = 450
 /** The spotlight settles on the middle card. */
@@ -96,11 +94,11 @@ export default function LuckyDip({ kind, station, deckLeft, onDone }: { kind: Po
                 key={i}
                 ref={card}
                 className="dip-card picked"
-                initial={{ rotate: rot, rotateY: 90, scale: 1 }}
-                animate={{ rotate: 0, rotateY: 0, scale: PICKED_SCALE }}
+                initial={{ rotate: rot, rotateY: 90 }}
+                animate={{ rotate: 0, rotateY: 0 }}
                 transition={{ duration: FLIP_MS / 1000, ease: [0.32, 0.72, 0, 1] }}
               >
-                <PowerCard kind={kind} wiggle />
+                <PowerCard kind={kind} wiggle big />
               </m.div>
             ) : (
               <m.button

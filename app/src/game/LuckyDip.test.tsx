@@ -39,6 +39,8 @@ describe('LuckyDip', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pick card 2' }))
     expect(screen.getByText('Got Durian!')).toBeInTheDocument()
     expect(screen.getAllByText('Durian')).toHaveLength(1)
+    // The revealed card is laid out big (not scaled up), so the marker can find its real edges.
+    expect(screen.getByText('Durian').closest('.power-card')).toHaveClass('big')
     expect(screen.queryByText('Ponteng')).toBeNull()
   })
 
