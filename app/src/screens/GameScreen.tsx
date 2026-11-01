@@ -1,7 +1,7 @@
 import { useEffect, type ReactNode } from 'react'
-import SafetyBar from '../game/SafetyBar'
 import { loadOrganiserSession } from '../game/organiserSession'
 import { loadSession } from '../game/session'
+import SosIcon from '../game/SosIcon'
 import { ErrorText, Screen } from '../game/ui'
 import { useGameState, type LocationMode } from '../game/useGameState'
 import ChaserChase from './ChaserChase'
@@ -47,7 +47,7 @@ export default function GameScreen({ code }: { code: string }) {
   if (current.phase === 'lobby') return <Lobby code={code} view={current} refresh={refresh} />
   if (current.me.role === 'marshal') return <MarshalLive code={code} view={current} refresh={refresh} />
 
-  // Runners and chasers: their screen, with SOS and Report always within reach.
+  // Runners and chasers: their screen, with the Help and SOS icon in the same corner on every one.
   let screen: ReactNode
   if (current.paused) screen = <Paused view={current} />
   else if (current.phase === 'hiding') screen = <Hide view={current} />
@@ -57,7 +57,7 @@ export default function GameScreen({ code }: { code: string }) {
   return (
     <>
       {screen}
-      <SafetyBar code={code} view={current} />
+      <SosIcon code={code} view={current} />
     </>
   )
 }

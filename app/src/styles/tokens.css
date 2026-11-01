@@ -102,18 +102,55 @@ select.input option { background: #141614; color: var(--white); }
 .hand-card b { color: var(--volt); font-size: 15px; letter-spacing: -0.02em; }
 .hand-card span { color: var(--dim); }
 
-/* SOS and Report: fixed to the bottom of runner and chaser screens. */
-.screen:has(+ .safety-bar) { padding-bottom: 96px; }
-.safety-bar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
-  display: flex; flex-direction: column; gap: 8px;
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
-  background: linear-gradient(to top, var(--black) 70%, rgba(10, 10, 11, 0));
+/* Help and SOS (motion design §6.0): a Volt "!" on the status row, same spot on every player screen. */
+.sos-icon {
+  position: fixed; top: 52px; right: 12px; z-index: 60;
+  width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  display: grid; place-items: center; background: var(--volt); color: var(--black);
+  box-shadow: 0 0 0 3px rgba(10, 10, 11, 0.88);
 }
-.safety-buttons { display: flex; gap: 8px; }
-.safety-buttons .btn { flex: 1; padding: 12px 16px; }
-.safety-sos { letter-spacing: 0.12em; }
-.safety-sheet { display: flex; flex-direction: column; gap: 10px; background: #111312; }
+.sos-icon svg { width: 21px; height: 21px; }
+.sos-shade { position: fixed; inset: 0; z-index: 50; background: rgba(10, 10, 11, 0.6); }
+.sos-sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 55; max-height: 88dvh; overflow-y: auto;
+  background: #121312; border-top: 1px solid #2a2a2a; border-radius: 22px 22px 0 0;
+  padding: 10px 16px calc(18px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 10px;
+}
+.sos-grip { width: 36px; height: 4px; border-radius: 2px; background: #333; margin: 0 auto 4px; }
+.sos-sheet h3 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.05em; }
+.sos-sheet p { margin: 0; font-size: 13px; line-height: 1.4; }
+.sos-hint { font: 600 10.5px var(--mono); letter-spacing: 0.08em; color: var(--volt); }
+.sos-hold { position: relative; }
+.sos-bar {
+  position: relative; width: 100%; height: 52px; border: 0; border-radius: 999px; overflow: hidden; cursor: pointer;
+  display: grid; place-items: center; background: var(--volt); touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.sos-bar.holding { background: #1c1f1c; }
+.sos-fill { position: absolute; inset: 0; background: var(--volt); transform-origin: left; transform: scaleX(0); }
+.sos-bar.holding .sos-fill { transform: scaleX(1); transition: transform 1000ms linear; }
+.sos-label { position: relative; font: 800 20px var(--font); letter-spacing: -0.04em; color: var(--black); }
+.sos-bar.holding .sos-label { color: var(--white); mix-blend-mode: difference; }
+.sos-ripple {
+  position: absolute; left: 50%; top: 50%; width: 60px; height: 60px; margin: -30px; border-radius: 50%;
+  border: 2px solid var(--volt); pointer-events: none; animation: sos-rip 1s ease-out infinite;
+}
+@keyframes sos-rip { from { transform: scale(0.6); opacity: 0.8; } to { transform: scale(4); opacity: 0; } }
+.sos-cancel, .sos-link { appearance: none; background: none; border: 0; color: var(--white); font: 600 14px var(--font); padding: 8px; cursor: pointer; }
+.sos-link { font-size: 12px; color: var(--dim); text-decoration: underline; padding-top: 0; }
+.sos-big { font-size: 34px; font-weight: 800; letter-spacing: -0.06em; color: var(--volt); }
+.sos-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sos-chips button {
+  appearance: none; cursor: pointer; border: 1px solid #444; border-radius: 999px; padding: 7px 11px;
+  background: none; color: var(--white); font: 500 13px var(--font);
+}
+.sos-chips button.on { background: var(--volt); border-color: var(--volt); color: var(--black); font-weight: 700; }
+.sos-drain { height: 2px; background: var(--volt); transform-origin: left; animation: sos-drain 20s linear forwards; }
+@keyframes sos-drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+@media (prefers-reduced-motion: reduce) {
+  .sos-ripple { display: none; }
+}
+.safety-sheet { display: flex; flex-direction: column; gap: 10px; }
 .safety-status { font-weight: 600; color: var(--volt); text-align: center; }
 
 /* Marshal alert list. */

@@ -21,7 +21,7 @@ describe('GameScreen safety routing', () => {
     state.view = testView({ paused: true })
     render(<GameScreen code="ABC234" />)
     expect(screen.getByText('Game paused')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'SOS' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Help and SOS' })).toBeInTheDocument()
   })
 
   it('shows the removed message to removed players, without SOS', () => {
@@ -29,12 +29,20 @@ describe('GameScreen safety routing', () => {
     state.view = testView({ me: { ...base.me, removed_at: '2026-10-25T09:10:00.000Z' } })
     render(<GameScreen code="ABC234" />)
     expect(screen.getByText('A marshal removed you from this game')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'SOS' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Help and SOS' })).toBeNull()
   })
 
-  it('gives runners and chasers the safety bar during the chase', () => {
-    state.view = testView()
+  it.each([
+    ['the runner chase', testView()],
+    ['the chaser chase', testView({ me: { ...testView().me, id: 'c1', role: 'chaser', tag_id: null } })],
+    ['Penjara', testView({ me: { ...testView().me, jailed: true } })],
+    ['hiding', testView({ phase: 'hiding' })],
+    ['paused', testView({ paused: true })],
+  ])('shows the SOS icon on %s, and no old safety bar', (_, v) => {
+    state.view = v
     render(<GameScreen code="ABC234" />)
-    expect(screen.getByRole('button', { name: 'Report' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Help and SOS' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Report' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'SOS' })).toBeNull()
   })
 })
