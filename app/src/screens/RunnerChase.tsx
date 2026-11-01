@@ -30,7 +30,7 @@ export function GameClock({ view }: { view: View }) {
   return <span className="mono">{clock((view.endsAt ?? now) - now)}</span>
 }
 
-export default function RunnerChase({ code, view }: { code: string; view: View }) {
+export default function RunnerChase({ code, view, locationOff = false }: { code: string; view: View; locationOff?: boolean }) {
   const now = useServerNow(view.now)
   const toReveal = view.nextRevealAt === null ? null : view.nextRevealAt - now
   const toAlert = view.nextAlertAt === null ? null : view.nextAlertAt - now
@@ -43,6 +43,13 @@ export default function RunnerChase({ code, view }: { code: string; view: View }
         <span className="muted">{view.counts.runnersFree} Dikejar free</span>
       </div>
       <PingRipple role={view.me.role} lastRevealAt={view.lastRevealAt} now={now} />
+
+      {locationOff && (
+        <div role="alert" className="card" style={{ border: '2px solid var(--white)' }}>
+          <p style={{ fontWeight: 700 }}>Location is off, so you'll miss check-ins and be sent to Penjara.</p>
+          <p className="muted">Turn on location for this site in your browser settings.</p>
+        </div>
+      )}
 
       {checkInNow ? (
         <div style={{ background: 'var(--volt)', color: 'var(--black)', borderRadius: 20, padding: 18, textAlign: 'center' }}>

@@ -28,7 +28,7 @@ export default function GameScreen({ code }: { code: string }) {
     if (!signedIn) window.location.assign(`/join/${code}`)
   }, [signedIn, code])
 
-  const { view: current, error, refresh } = useGameState(code, { sendLocation: locationMode })
+  const { view: current, error, refresh, locationOff } = useGameState(code, { sendLocation: locationMode })
   const hostInLobby = current?.phase === 'lobby' && current.me.id === 'host'
   useEffect(() => {
     if (hostInLobby) window.location.assign(`/host/${code}`)
@@ -53,7 +53,7 @@ export default function GameScreen({ code }: { code: string }) {
   else if (current.phase === 'hiding') screen = <Hide view={current} />
   else if (current.me.role === 'runner' && current.me.jailed) screen = <Jail code={code} view={current} />
   else if (current.me.role === 'chaser') screen = <ChaserChase code={code} view={current} refresh={refresh} />
-  else screen = <RunnerChase code={code} view={current} />
+  else screen = <RunnerChase code={code} view={current} locationOff={locationOff} />
   return (
     <>
       {screen}
