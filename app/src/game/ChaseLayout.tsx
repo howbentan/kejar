@@ -36,11 +36,14 @@ export default function ChaseLayout(props: {
   side: 'runner' | 'chaser'
   /** Turns a call's result into the line shown above the dock. */
   describe: (s: Scanned, text: string, result: unknown) => string
+  /** A full-screen moment for a good scan (the catch stamp, the lucky dip), or null for just the line. */
+  momentFor?: (s: Scanned, text: string, result: unknown, done: () => void) => ReactNode | null
   onScanned?: () => void
 }) {
-  const { code, view, side, describe, onScanned } = props
+  const { code, view, side, describe, momentFor, onScanned } = props
   const [scanning, setScanning] = useState(false)
   const [result, setResult] = useState('')
+  const [moment, setMoment] = useState<ReactNode | null>(null)
 
   const onScan = useCallback(
     async (text: string) => {
@@ -51,12 +54,14 @@ export default function ChaseLayout(props: {
         const here = await currentCoords()
         const r = await call(target.action, { code, token: loadSession(localStorage, code).token, ...target.body, ...here })
         setResult(describe(target, text, r))
+        const m = momentFor?.(target, text, r, () => setMoment(null))
+        if (m) setMoment(m)
         onScanned?.()
       } catch (e) {
         setResult(e instanceof Error ? e.message : String(e))
       }
     },
-    [code, side, describe, onScanned],
+    [code, side, describe, momentFor, onScanned],
   )
 
   return (
@@ -85,12 +90,13 @@ export default function ChaseLayout(props: {
         )}
         <div className="dock-row">
           {props.slot}
-          <button type="button" className={`scan ${props.scanClass}`} onClick={() => setScanning(true)}>
+          <button type="button" className={`scan ${props.scanClass}`} disabled={!!moment} onClick={() => setScanning(true)}>
             {props.scanLabel}
           </button>
         </div>
         <Ticker feed={view.feed} />
       </footer>
+      {moment}
       {scanning && (
         <div className="scan-overlay">
           <Scanner onResult={onScan} onCancel={() => setScanning(false)} />

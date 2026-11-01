@@ -49,12 +49,22 @@ describe('ChaserChase', () => {
     expect(screen.getByRole('button', { name: /feed/i })).toBeInTheDocument()
   })
 
-  it('Scan tag with a tag catches', async () => {
-    call.mockResolvedValue({ ok: true, flagged: false, runnerId: 'r1' })
+  it('Scan tag with a tag catches, with the stamp', async () => {
+    call.mockResolvedValue({ ok: true, flagged: false, runnerId: 'r1', label: '#07 Aina' })
     render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
     await scan('KEJAR:TAG:07')
     expect(call).toHaveBeenCalledWith('catch', { code: 'ABC234', token: 't1', tagQr: 'KEJAR:TAG:07' })
     expect(screen.getByText('Caught #07 ✓')).toBeInTheDocument()
+    expect(screen.getByText('dikejar!')).toBeInTheDocument()
+    expect(screen.getByText('#07 Aina → Penjara')).toBeInTheDocument()
+  })
+
+  it('a refused catch is a plain message, with no stamp', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'too-far' })
+    render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    await scan('KEJAR:TAG:07')
+    expect(screen.getByText('Too far — get within 50 m')).toBeInTheDocument()
+    expect(screen.queryByText('dikejar!')).toBeNull()
   })
 
   it('Scan tag with a station code claims', async () => {

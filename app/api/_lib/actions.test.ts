@@ -236,6 +236,7 @@ describe('catching and jail', () => {
       ok: true,
       flagged: false,
       runnerId: g.aina.playerId,
+      label: '#07 Aina',
     })
     const v = await run<View>('state', { code: g.code, token: g.aina.token })
     expect(v.me.jailed).toBe(true)

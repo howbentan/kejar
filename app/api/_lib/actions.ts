@@ -528,7 +528,9 @@ const catchAction: Action = async (ctx, body) => {
   })
   const after = await ctx.store.players(game.id)
   if (after.filter((p) => p.role === 'runner').every((p) => p.jailed)) await finish(ctx, fresh)
-  return verdict
+  const caught = players.find((p) => p.id === verdict.runnerId)
+  const label = caught?.tag_id ? `#${tag2(caught.tag_id)} ${caught.name}` : (caught?.name ?? '')
+  return { ...verdict, label }
 }
 
 const jailbreak: Action = async (ctx, body) => {

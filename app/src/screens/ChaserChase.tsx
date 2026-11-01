@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import type { CatchJudgement } from '../../shared/catch.js'
 import { tagIdFromQr } from '../../shared/ids.js'
 import type { View } from '../../shared/views.js'
+import CatchMoment from '../game/CatchMoment'
 import ChaseLayout from '../game/ChaseLayout'
 import PingRipple from '../game/PingRipple'
 import PowerUpHand, { claimMessage, type ClaimResult } from '../game/PowerUpHand'
@@ -44,6 +45,11 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
     [],
   )
 
+  const momentFor = useCallback((s: { action: string }, _text: string, r: unknown, done: () => void) => {
+    const c = r as CatchJudgement
+    return s.action === 'catch' && c.ok ? <CatchMoment label={c.label ?? ''} onDone={done} /> : null
+  }, [])
+
   return (
     <ChaseLayout
       code={code}
@@ -56,6 +62,7 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
       scanLabel="Scan tag"
       scanClass="scan-chaser"
       describe={describe}
+      momentFor={momentFor}
       onScanned={refresh}
     />
   )
