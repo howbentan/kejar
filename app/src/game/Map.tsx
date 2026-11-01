@@ -318,6 +318,7 @@ export default function GameMap({
         const reach = ['<=', ['get', 'dist'], r]
         mp.setFilter(id, (f ? ['all', f, reach] : reach) as maplibregl.FilterSpecification)
       }
+      if (map.current !== mp) return
       if (t < 1) frame = requestAnimationFrame(step)
       else {
         for (const [id, f] of Object.entries(base)) mp.setFilter(id, f as maplibregl.FilterSpecification | null)
@@ -327,6 +328,8 @@ export default function GameMap({
     frame = requestAnimationFrame(step)
     return () => {
       cancelAnimationFrame(frame)
+      // The screen may be going away mid-wave (caught right after a ping): a removed map has no style to reset.
+      if (map.current !== mp || !ready.current) return
       for (const [id, f] of Object.entries(base)) mp.setFilter(id, f as maplibregl.FilterSpecification | null)
     }
     // Once per ping.

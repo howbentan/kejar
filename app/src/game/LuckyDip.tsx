@@ -15,6 +15,10 @@ export const REVEAL_HOLD_MS = 1_600
 /** Moving a card up this far is a flick, and picks it (motion design §7). */
 const FLICK_PX = 40
 const FAN = [-12, -6, 0, 6, 12]
+/** The picked card grows from its base to this size, staying clear of `Got Durian!` on a 640 px phone. */
+const PICKED_SCALE = 1.35
+/** The flip's length: the marker measures the card only once it has landed. */
+const FLIP_MS = 450
 /** The spotlight settles on the middle card. */
 const SWEEP_PICK = 2
 
@@ -34,6 +38,7 @@ type Stage = 'stamp' | 'fan' | 'sweep' | 'reveal'
 export default function LuckyDip({ kind, station, deckLeft, onDone }: { kind: PowerUpKind; station: number; deckLeft: number | null; onDone: () => void }) {
   const [stage, setStage] = useState<Stage>('stamp')
   const [picked, setPicked] = useState<number | null>(null)
+  const [landed, setLanded] = useState(false)
   const title = useRef<HTMLHeadingElement>(null)
   const card = useRef<HTMLDivElement>(null)
   const flick = useRef<number | null>(null)
@@ -50,6 +55,11 @@ export default function LuckyDip({ kind, station, deckLeft, onDone }: { kind: Po
       reveal: [REVEAL_HOLD_MS, onDone],
     }
     const step = next[stage]
+    if (stage === 'reveal') {
+      const t = window.setTimeout(() => setLanded(true), FLIP_MS)
+      const done = window.setTimeout(step![1], step![0])
+      return () => (window.clearTimeout(t), window.clearTimeout(done))
+    }
     if (!step) return
     const t = window.setTimeout(step[1], step[0])
     return () => window.clearTimeout(t)
@@ -87,8 +97,8 @@ export default function LuckyDip({ kind, station, deckLeft, onDone }: { kind: Po
                 ref={card}
                 className="dip-card picked"
                 initial={{ rotate: rot, rotateY: 90, scale: 1 }}
-                animate={{ rotate: 0, rotateY: 0, scale: 1.6, y: -20 }}
-                transition={{ duration: 0.45, ease: [0.32, 0.72, 0, 1] }}
+                animate={{ rotate: 0, rotateY: 0, scale: PICKED_SCALE }}
+                transition={{ duration: FLIP_MS / 1000, ease: [0.32, 0.72, 0, 1] }}
               >
                 <PowerCard kind={kind} wiggle />
               </m.div>
@@ -123,7 +133,7 @@ export default function LuckyDip({ kind, station, deckLeft, onDone }: { kind: Po
         </div>
       )}
 
-      {stage === 'reveal' && (
+      {stage === 'reveal' && landed && (
         <Marker
           marks={[
             { shape: 'circle', target: title },
@@ -131,7 +141,7 @@ export default function LuckyDip({ kind, station, deckLeft, onDone }: { kind: Po
             { shape: 'emphasis', target: card },
             { shape: 'arrow', target: card },
           ]}
-          delayMs={450}
+          delayMs={0}
         />
       )}
     </div>

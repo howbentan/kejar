@@ -110,6 +110,20 @@ describe('Jail', () => {
     expect(screen.getByText('You were already freed once, so you stay in Penjara until the end. Watch the chase from here.')).toBeInTheDocument()
   })
 
+  it('with location denied, points at the pin and still gives the spectator view', () => {
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: { watchPosition: (_ok: unknown, err: (e: unknown) => void) => (err({ code: 1 }), 1), clearWatch: () => {} },
+    })
+    try {
+      render(<Jail code="ABC234" view={caught(60_000)} />)
+      expect(screen.getByText('Walk to the PENJARA pin on the map.')).toBeInTheDocument()
+      expect(screen.getByText(/Spectator view/)).toBeInTheDocument()
+    } finally {
+      Object.defineProperty(navigator, 'geolocation', { configurable: true, value: undefined })
+    }
+  })
+
   it('already broken out once: says they stay this time', () => {
     render(<Jail code="ABC234" view={caught(60_000, { freed_once: true })} />)
     expect(screen.getByText('You’ve already been broken out once, so you stay in Penjara this time.')).toBeInTheDocument()

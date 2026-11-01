@@ -133,6 +133,8 @@ select.input option { background: #141614; color: var(--white); }
 .stamp-plate { background: var(--black); box-shadow: 0 0 0 8px var(--black); }
 .bars { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .bars span { position: absolute; top: 0; bottom: 0; width: 5%; background: var(--white); border-radius: 0 0 4px 4px; }
+/* Penjara headlines keep clear of the SOS icon's corner (top 52 px, right 12 px). */
+.jail-title { position: relative; margin: 0; padding-right: 44px; font-size: 34px; font-weight: 800; letter-spacing: -0.05em; line-height: 1.05; }
 .checkin-row { position: relative; display: flex; gap: 18px; font: 500 15px var(--mono); }
 .checkin-row span { color: var(--dim); }
 .checkin-row span.ok { color: var(--volt); }
@@ -146,9 +148,9 @@ select.input option { background: #141614; color: var(--white); }
 .dip-deck { position: absolute; top: 16px; right: 16px; font: 500 10px var(--mono); letter-spacing: 0.12em; color: var(--volt); }
 .dip-title { position: relative; padding: 0 30px; }
 .dip-title h2 { margin: 0; font: 800 34px var(--font); letter-spacing: -0.05em; }
-.dip-fan { position: relative; display: flex; justify-content: center; align-items: flex-end; height: 200px; width: 100%; max-width: 420px; }
-.dip-card { appearance: none; border: 0; padding: 0; background: none; margin: 0 -14px; cursor: pointer; touch-action: none; transform-origin: 50% 120%; }
-.dip-card.picked { position: absolute; left: calc(50% - 48px); bottom: 40px; margin: 0; z-index: 2; cursor: default; }
+.dip-fan { position: relative; display: flex; justify-content: center; align-items: flex-end; height: 214px; width: 100%; max-width: 420px; }
+.dip-card { appearance: none; border: 0; padding: 0; background: none; margin: 0 -22px; cursor: pointer; touch-action: none; transform-origin: 50% 120%; }
+.dip-card.picked { position: absolute; left: calc(50% - 48px); bottom: 6px; margin: 0; z-index: 2; cursor: default; transform-origin: 50% 100%; }
 .dip-spotlight { position: absolute; top: -10px; bottom: -10px; left: calc(50% - 50px); width: 100px; border-radius: 50%; background: radial-gradient(closest-side, rgba(198, 255, 61, 0.35), transparent); pointer-events: none; z-index: 1; }
 .dip-pick { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 160px; }
 .dip-pick p { margin: 0; font: 700 16px var(--font); }

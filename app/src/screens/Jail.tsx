@@ -43,12 +43,14 @@ function AutoJailed({ view }: { view: View }) {
   const tellMarshal = () => window.dispatchEvent(new CustomEvent('kejar:sos', { detail: { reason: 'other' } }))
   return (
     <Screen eyebrow="PENJARA · AUTO">
-      <h1 style={{ fontSize: 34, fontWeight: 800, letterSpacing: '-0.05em', lineHeight: 1.05 }}>
+      <h1 className="jail-title">
         {outForGood ? (
           "That's the game for you."
         ) : (
           <>
-            Missed two check-ins<span style={{ color: 'var(--volt)' }}>.</span>
+            Missed two <span style={{ whiteSpace: 'nowrap' }}>
+              check-ins<span style={{ color: 'var(--volt)' }}>.</span>
+            </span>
           </>
         )}
       </h1>
@@ -84,11 +86,14 @@ const pick = (lines: string[], id: string) => lines[[...id].reduce((h, ch) => (h
 /** The walk to Penjara, then today's spectator view once there (or straight away with no GPS). */
 function WalkThenWatch({ view }: { view: View }) {
   const [arrived, setArrived] = useState(false)
+  const [lost, setLost] = useState(false)
   const onArrived = useCallback(() => setArrived(true), [])
+  const onLost = useCallback(() => setLost(true), [])
   return (
     <>
-      {!arrived && <WalkGuide jail={view.arena.jail} arena={view.arena} onArrived={onArrived} />}
-      {arrived || !navigator.geolocation ? (
+      {!arrived && <WalkGuide jail={view.arena.jail} arena={view.arena} onArrived={onArrived} onLost={onLost} />}
+      {/* No GPS fix (none, denied, or none in 10 s): the spectator view, with the Penjara pin on it. */}
+      {arrived || lost || !navigator.geolocation ? (
         <>
           <GameMap arena={view.arena} dots={view.dots} height={240} />
           <p className="eyebrow" style={{ textAlign: 'center' }}>
@@ -111,7 +116,7 @@ function Caught({ view }: { view: View }) {
   if (playing) return <PenjaraArrival plate={<Stamp text="dikejar!" plate />} onDone={() => setPlaying(false)} />
   return (
     <Screen eyebrow="PENJARA">
-      <h1 style={{ position: 'relative', fontSize: 34, fontWeight: 800, letterSpacing: '-0.05em', lineHeight: 1.05 }}>
+      <h1 className="jail-title">
         {view.caughtBy ? (
           <>
             <span ref={name}>{view.caughtBy}</span> got you<span style={{ color: 'var(--volt)' }}>.</span>

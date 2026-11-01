@@ -12,7 +12,7 @@ const NO_FIX_MS = 10_000
  * Walk to Penjara (motion design §5): worked out on this phone only. It watches the phone's own GPS and never
  * sends it, so a jailed runner still isn't tracked (base spec §6).
  */
-export function WalkGuide({ jail, arena, onArrived }: { jail: LatLng; arena?: Arena; onArrived: () => void }) {
+export function WalkGuide({ jail, arena, onArrived, onLost }: { jail: LatLng; arena?: Arena; onArrived: () => void; onLost?: () => void }) {
   const [here, setHere] = useState<LatLng | null>(null)
   const [lost, setLost] = useState(false)
   const arrived = useRef(false)
@@ -39,6 +39,10 @@ export function WalkGuide({ jail, arena, onArrived }: { jail: LatLng; arena?: Ar
     }
   }, [])
 
+  useEffect(() => {
+    if (lost) onLost?.()
+  }, [lost, onLost])
+
   const metres = here ? distanceM(here, jail) : null
   useEffect(() => {
     if (metres !== null && metres <= ARRIVED_M && !arrived.current) {
@@ -49,7 +53,7 @@ export function WalkGuide({ jail, arena, onArrived }: { jail: LatLng; arena?: Ar
 
   return (
     <div className="walk-guide">
-      {arena && (
+      {arena && here && !lost && (
         <GameMap
           arena={arena}
           dots={here ? [{ id: 'me', kind: 'me', lat: here.lat, lng: here.lng, at: new Date().toISOString() }] : []}
