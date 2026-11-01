@@ -55,6 +55,8 @@ export interface View {
   chaserNearby: boolean
   /** Name of the chaser who caught me, while I'm jailed. */
   caughtBy: string | null
+  /** Why I'm in Penjara: caught by a chaser, or auto-jailed for missing two check-ins. */
+  jailReason: 'caught' | 'missed-checkins' | null
   feed: { at: string; text: string }[]
   counts: { runnersFree: number; runnersJailed: number; chasers: number }
   /** Everyone in the game: shown in the lobby and to marshals; empty for players mid-game. */
@@ -196,6 +198,15 @@ function runnerDots(i: ViewInput): { dots: MapDot[]; nearby: boolean } {
   return { dots, nearby }
 }
 
+function jailReasonFor(i: ViewInput): View['jailReason'] {
+  if (!i.me.jailed) return null
+  if (i.me.caught_by) return 'caught'
+  const latest = i.events
+    .filter((e) => (e.type === 'caught' || e.type === 'auto-jailed') && e.target_id === i.me.id)
+    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0]
+  return latest?.type === 'auto-jailed' ? 'missed-checkins' : 'caught'
+}
+
 function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
   const actor = e.actor_id ? byId.get(e.actor_id) : undefined
   const target = e.target_id ? byId.get(e.target_id) : undefined
@@ -244,7 +255,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null }
+    return { ...v, dots: [], feed: [], alerts: [], roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null }
   }
   return v
 }
@@ -309,6 +320,7 @@ function fullView(i: ViewInput): View {
     lastRevealAt: lastReveal ? Date.parse(lastReveal.reveal_at) : null,
     chaserNearby,
     caughtBy: i.me.jailed && i.me.caught_by ? (byId.get(i.me.caught_by)?.name ?? null) : null,
+    jailReason: jailReasonFor(i),
     feed,
     counts: {
       runnersFree: runners.filter((p) => !p.jailed).length,

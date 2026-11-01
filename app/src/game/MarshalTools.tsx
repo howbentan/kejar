@@ -107,7 +107,17 @@ export default function MarshalTools({ code, view, refresh }: { code: string; vi
                 </p>
                 <p>{a.text}</p>
               </div>
-              {!a.handled && (
+              {!a.handled && a.kind === 'auto-jail' && (
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <button type="button" className="btn alert-btn" disabled={busy} onClick={() => act('undoAutoJail', { eventId: a.id })}>
+                    Phone problem: undo
+                  </button>
+                  <button type="button" className="btn btn-ghost alert-btn" disabled={busy} onClick={() => act('handleAlert', { eventId: a.id })}>
+                    It stands
+                  </button>
+                </span>
+              )}
+              {!a.handled && a.kind !== 'auto-jail' && (
                 <button type="button" className="btn btn-ghost alert-btn" disabled={busy} onClick={() => act('handleAlert', { eventId: a.id })}>
                   Handled
                 </button>

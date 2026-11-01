@@ -141,6 +141,22 @@ describe('ping moment', () => {
   })
 })
 
+describe('jail reason', () => {
+  const jailedHafiz = { ...hafiz, jailed: true }
+  it('says missed-checkins when my latest jailing was an auto-jail', () => {
+    const v = view(jailedHafiz, { players: [chaser, aina, jailedHafiz, wei, siti], events: [event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2' })] })
+    expect(v.jailReason).toBe('missed-checkins')
+  })
+  it('says caught when a chaser caught me', () => {
+    const caught = { ...hafiz, jailed: true, caught_by: 'c1' }
+    const v = view(caught, { players: [chaser, aina, caught, wei, siti], events: [event('caught', T0 + 12 * MIN, { actor_id: 'c1', target_id: 'r2' })] })
+    expect(v.jailReason).toBe('caught')
+  })
+  it('is null while free', () => {
+    expect(view(aina).jailReason).toBeNull()
+  })
+})
+
 describe('feed wording', () => {
   const feedOf = (events: Parameters<typeof viewFor>[0]['events']) => view(siti, { events }).feed.map((f) => f.text)
   it('uses the singular for one runner', () => {
