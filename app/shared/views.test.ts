@@ -151,6 +151,9 @@ describe('feed wording', () => {
       'Game paused by a marshal',
     ])
   })
+  it('announces an auto-jail', () => {
+    expect(feedOf([event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2' })])).toEqual(['#03 missed 2 check-ins — sent to Penjara'])
+  })
   it('uses the plural otherwise', () => {
     expect(feedOf([event('ping', T0 + 10 * MIN, { data: { seen: 0 } })])).toEqual(['Ping — 0 runners seen'])
   })

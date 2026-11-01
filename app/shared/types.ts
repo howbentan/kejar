@@ -109,6 +109,7 @@ export type EventType =
   | 'paused'
   | 'resumed'
   | 'removed'
+  | 'auto-jailed'
 
 export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus'
 

@@ -55,7 +55,7 @@ export interface GameStore {
   players(gameId: string): Promise<Player[]>
   updatePlayers(patches: { id: string; patch: Partial<Player> }[]): Promise<void>
   /** Marks a runner caught only if they are not already jailed; true for the first caller. */
-  catchRunner(id: string, by: string): Promise<boolean>
+  catchRunner(id: string, by: string | null): Promise<boolean>
   addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>): Promise<void>
   /**
    * Each player's latest position at or before each of the given times (deduplicated, ascending).
@@ -219,7 +219,7 @@ export class MemoryStore implements GameStore {
       if (p) Object.assign(p, patch)
     }
   }
-  async catchRunner(id: string, by: string) {
+  async catchRunner(id: string, by: string | null) {
     const p = this.playerRows.find((x) => x.id === id)
     if (!p || p.jailed) return false
     Object.assign(p, { jailed: true, caught_at: this.nowIso(), caught_by: by })

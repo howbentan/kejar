@@ -229,6 +229,8 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       return 'Game resumed'
     case 'removed':
       return `${String(e.data.name ?? 'A player')} left the game`
+    case 'auto-jailed':
+      return target ? `${tagLabel(target)} missed 2 check-ins — sent to Penjara` : 'A runner missed 2 check-ins — sent to Penjara'
     default:
       return null
   }

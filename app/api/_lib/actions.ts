@@ -227,10 +227,14 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
         const anchor = Math.max(chaseStartOf(game, now)!, p.freed_at ? Date.parse(p.freed_at) : -Infinity)
         const windows = [anchor, ...schedule.filter((t) => t.revealAt > anchor).map((t) => t.revealAt)]
         const last = latest(positions[p.id])
-        if (missedTwoInARow(windows, last ? Date.parse(last.at) : null)) {
-          await store.addEvent({ game_id: game.id, type: 'missed', actor_id: p.id, target_id: null, data: { who: who(p) } })
+        // Two missed scheduled check-ins in a row: sent to Penjara like a catch, with no chaser.
+        if (missedTwoInARow(windows, last ? Date.parse(last.at) : null) && (await store.catchRunner(p.id, null))) {
+          await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: p.id, data: { who: who(p), seq } })
         }
       }
+      // Auto-jailing the last free runner ends the game, the same as a catch.
+      const runners = (await store.players(game.id)).filter((p) => p.role === 'runner')
+      if (runners.length > 0 && runners.every((p) => p.jailed)) await finish(ctx, game)
     }
   }
 

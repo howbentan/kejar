@@ -50,7 +50,7 @@ export class SupabaseStore implements GameStore {
   async updatePlayers(patches: { id: string; patch: Partial<Player> }[]) {
     for (const { id, patch } of patches) check(await this.db.from('players').update(patch).eq('id', id))
   }
-  async catchRunner(id: string, by: string) {
+  async catchRunner(id: string, by: string | null) {
     const rows = check(
       await this.db
         .from('players')
