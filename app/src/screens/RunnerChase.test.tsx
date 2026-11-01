@@ -117,4 +117,13 @@ describe('RunnerChase', () => {
     expect(screen.getByText('Check-in opens in 0:30')).toBeInTheDocument()
     expect(window.location.search).toBe('')
   })
+
+  it('the push only explains its own ping: the next early period is a chip again', () => {
+    window.history.replaceState(null, '', '/g/ABC234?checkin=1')
+    const early = (alertAt: number) => testView({ checkin: { state: 'early', alertAt, revealAt: alertAt + 45_000, missedInRow: 0 } })
+    const { rerender } = render(<RunnerChase code="ABC234" view={early(130_000)} />)
+    rerender(<RunnerChase code="ABC234" view={early(130_000 + 300_000)} />)
+    expect(screen.queryByText(/^Check-in opens in/)).toBeNull()
+    expect(screen.getByText('Check in in 5:30')).toBeInTheDocument()
+  })
 })

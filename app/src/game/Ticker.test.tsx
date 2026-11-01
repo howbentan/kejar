@@ -53,6 +53,11 @@ describe('Ticker', () => {
     expect(sheet).toHaveTextContent('Line 1.')
   })
 
+  it('screen readers hear the newest line and what it means', () => {
+    render(<Ticker feed={[item(2), item(1)]} />)
+    expect(screen.getByRole('button', { name: 'Feed: Line 2. Means 2.' })).toBeInTheDocument()
+  })
+
   it('shows nothing to open before anything has happened', () => {
     render(<Ticker feed={[]} />)
     expect(screen.getByRole('button', { name: /feed/i })).toHaveTextContent('Nothing yet')

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BreakJudgement } from '../../shared/catch.js'
 import type { View } from '../../shared/views.js'
 import ChaseLayout from '../game/ChaseLayout'
@@ -50,8 +50,12 @@ function useOpenedByPush(): boolean {
 
 export default function RunnerChase({ code, view, locationOff = false }: { code: string; view: View; locationOff?: boolean }) {
   const now = useServerNow(view.now)
-  const openedByPush = useOpenedByPush()
+  const opened = useOpenedByPush()
   const checkin = view.checkin
+  // The push explains its own ping only: remember which one, so later early periods go back to the chip.
+  const pushedFor = useRef<number | null>(null)
+  if (opened && pushedFor.current === null && checkin) pushedFor.current = checkin.alertAt
+  const openedByPush = opened && checkin?.alertAt === pushedFor.current
   const banner = !!checkin && (checkin.state !== 'early' || openedByPush)
 
   const describe = useCallback((s: { action: string }, _text: string, r: unknown) => {

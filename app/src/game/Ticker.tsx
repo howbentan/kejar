@@ -58,7 +58,13 @@ export default function Ticker({ feed }: { feed: FeedItem[] }) {
           </ol>
         </m.div>
       )}
-      <button type="button" className={newest?.act ? 'ticker act' : 'ticker'} aria-label="Feed" aria-expanded={open} onClick={toggle}>
+      <button
+        type="button"
+        className={newest?.act ? 'ticker act' : 'ticker'}
+        aria-label={newest ? `Feed: ${newest.text}${newest.means ? ` ${newest.means}` : ''}` : 'Feed'}
+        aria-expanded={open}
+        onClick={toggle}
+      >
         {newest ? (
           <>
             {newest.label && <span className="ticker-label">{newest.label}</span>}

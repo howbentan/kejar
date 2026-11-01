@@ -18,6 +18,7 @@ const SENT_MS = 20_000
 
 const HINT = 'HOLD 1 S · MARSHALS COME TO YOU'
 const NOBODY = 'SOS saved, but no marshal has alerts on. Find a marshal or call for help.'
+const ALREADY = 'Marshals already have your SOS.'
 
 const SOS_REASONS = Object.keys(SOS_REASON_LABEL) as SosReason[]
 const REPORT_REASONS = (Object.keys(REASON_LABEL) as ReportReason[]).map((value) => ({ value, text: REASON_LABEL[value] }))
@@ -34,7 +35,8 @@ export default function SosIcon({ code, view }: { code: string; view: View }) {
   const [hint, setHint] = useState(HINT)
   const [holding, setHolding] = useState(false)
   const [error, setError] = useState('')
-  const [sos, setSos] = useState<{ id: string; notified: number } | null>(null)
+  /** `notified` is null for a repeat within 30 s: the server raised no new alert, so we don't know who has it. */
+  const [sos, setSos] = useState<{ id: string; notified: number | null } | null>(null)
   const [reason, setReason] = useState<SosReason | null>(null)
   const [withId, setWithId] = useState<string | null>(null)
   const [reported, setReported] = useState('')
@@ -47,14 +49,19 @@ export default function SosIcon({ code, view }: { code: string; view: View }) {
     setHolding(false)
   }
 
-  // The chips drain away after 20 s.
+  // The chips drain away 20 s after the last tap.
   useEffect(() => {
     if (!open || stage !== 'sent') return
     const t = window.setTimeout(close, SENT_MS)
     return () => window.clearTimeout(t)
-  }, [open, stage])
+  }, [open, stage, reason, withId])
+
+  // A hold still running when the screen goes away must never send.
+  useEffect(() => () => window.clearTimeout(hold.current?.timer), [])
 
   const show = () => {
+    // Already open: a second tap mustn't reset a send in flight or the chips already picked.
+    if (open) return
     setStage('ask')
     setHint(HINT)
     setError('')
@@ -73,7 +80,7 @@ export default function SosIcon({ code, view }: { code: string; view: View }) {
     try {
       const here = await currentCoords(SOS_FIX_MS)
       const r = await call<{ ok: boolean; notified?: number; sosId?: string }>('sos', { code, ...credentials(code), ...here })
-      setSos({ id: r?.sosId ?? '', notified: r?.notified ?? 1 })
+      setSos({ id: r?.sosId ?? '', notified: r?.notified ?? null })
       setStage('sent')
       navigator.vibrate?.([200, 100, 400])
     } catch (e) {
@@ -151,6 +158,7 @@ export default function SosIcon({ code, view }: { code: string; view: View }) {
                     onPointerUp={release}
                     onPointerLeave={release}
                     onPointerCancel={release}
+                    onBlur={release}
                     onContextMenu={(e) => e.preventDefault()}
                     onKeyDown={(e) => {
                       if (!isHoldKey(e)) return
@@ -172,16 +180,18 @@ export default function SosIcon({ code, view }: { code: string; view: View }) {
                 <button type="button" className="sos-cancel" onClick={close}>
                   Cancel
                 </button>
-                <button type="button" className="sos-link" onClick={() => setStage('report')}>
-                  Report a player
-                </button>
+                {stage === 'ask' && (
+                  <button type="button" className="sos-link" onClick={() => setStage('report')}>
+                    Report a player
+                  </button>
+                )}
               </>
             )}
             {stage === 'sent' && (
               <>
                 <div className="sos-big">sos sent</div>
                 <p className="muted">
-                  {sos?.notified === 0 ? NOBODY : 'Marshals alerted.'} What's happening? (optional, helps the marshal)
+                  {sos?.notified === 0 ? NOBODY : sos?.notified === null ? ALREADY : 'Marshals alerted.'} What's happening? (optional, helps the marshal)
                 </p>
                 <div className="sos-chips">
                   {SOS_REASONS.map((r) => (

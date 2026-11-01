@@ -127,6 +127,48 @@ describe('SosIcon', () => {
     expect(screen.queryByText(/Marshals alerted\./)).toBeNull()
   })
 
+  it('a keyboard hold that loses focus sends nothing', async () => {
+    await openSheet()
+    fireEvent.keyDown(bar(), { key: ' ' })
+    await wait(400)
+    fireEvent.blur(bar())
+    await wait(2_000)
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  it('unmounting mid-hold sends nothing', async () => {
+    await openSheet()
+    fireEvent.pointerDown(bar())
+    cleanup()
+    await wait(2_000)
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  it('tapping the icon again while the sheet is open keeps it as it is', async () => {
+    await sent()
+    fireEvent.click(screen.getByRole('button', { name: 'Hurt' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Help and SOS' }))
+    expect(screen.getByText('sos sent')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hurt' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('a repeat SOS says marshals already have it, without claiming a new alert', async () => {
+    call.mockImplementation(async () => ({ ok: true, repeat: true, sosId: 'e9' }))
+    await sent()
+    expect(screen.getByText(/Marshals already have your SOS\./)).toBeInTheDocument()
+    expect(screen.queryByText(/Marshals alerted\./)).toBeNull()
+  })
+
+  it('a chip tap gives another 20 s before the sheet closes', async () => {
+    await sent()
+    await wait(15_000)
+    fireEvent.click(screen.getByRole('button', { name: 'Catch dispute' }))
+    await wait(15_000)
+    expect(screen.getByText('With who?')).toBeInTheDocument()
+    await wait(6_000)
+    expect(screen.queryByText('sos sent')).toBeNull()
+  })
+
   it('Report a player still sends a report from inside the sheet', async () => {
     await openSheet()
     fireEvent.click(screen.getByRole('button', { name: 'Report a player' }))

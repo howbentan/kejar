@@ -490,6 +490,22 @@ describe('power-up stations', () => {
     })
   })
 
+  it("a Mat Rempit bonus reveal doesn't make an on-time check-in look missed", async () => {
+    const g = await chasingWithStation()
+    now = T0 + 9 * MIN + 40_000 // inside ping 1's window (alert 9:15, reveal 10:00)
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    now = T0 + 10 * MIN + 5_000
+    await run('state', { code: g.code, token: g.ben.token })
+    const flare = await give(g.gameId, g.ben.playerId, 'flare')
+    now = T0 + 10 * MIN + 10_000
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: flare.id })).toMatchObject({ ok: true })
+    now = T0 + 10 * MIN + 20_000 // "Check in now": Aina sends a fresh fix for the bonus ping
+    await run('location', { code: g.code, token: g.aina.token, ...at(25) })
+    now = T0 + 13 * MIN
+    const v = await run<View>('state', { code: g.code, token: g.aina.token })
+    expect(v.checkin).toMatchObject({ state: 'early', missedInRow: 0 })
+  })
+
   it('flare adds a bonus ping that pushes now and reveals in 30 s', async () => {
     const g = await chasingWithStation()
     const flare = await give(g.gameId, g.ben.playerId, 'flare')
@@ -792,6 +808,16 @@ describe('SOS and reports', () => {
     expect(store.safetyRows).toHaveLength(2)
     expect(store.safetyRows[1]).toMatchObject({ type: 'sos', player_id: g.aina.playerId, target_id: g.ben.playerId, data: expect.objectContaining({ follows: sosId, reason: 'dispute', with_name: 'Ben' }) })
     expect(pushes).toEqual([])
+  })
+
+  it('the same SOS details twice write once', async () => {
+    const g = await safetyGame()
+    const { sosId } = await run<{ sosId: string }>('sos', { code: g.code, token: g.aina.token })
+    const details = { code: g.code, token: g.aina.token, sosId, reason: 'hurt' }
+    expect(await run('sosDetails', details)).toEqual({ ok: true })
+    expect(await run('sosDetails', details)).toEqual({ ok: true })
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'sos-details')).toHaveLength(1)
+    expect(store.safetyRows).toHaveLength(2)
   })
 
   it("SOS details refuse someone else's SOS and one older than 5 minutes", async () => {

@@ -13,8 +13,11 @@ self.addEventListener('push', (event) => {
   }
   if (data.type === 'checkin' && data.code) {
     // Scheduled pings alert 45 s ahead; Mat Rempit bonus pings (seq 1000 and up) alert 30 s ahead (motion §7a).
-    const lead = Number(data.seq) >= 1000 ? 30 : 45
+    // A push can go out late (the server works on the next poll), so say the time actually left when we know it.
+    const bonus = Number(data.seq) >= 1000
     const at = typeof data.revealAt === 'number' ? new Date(data.revealAt) : null
+    const fixed = bonus ? 30 : 45
+    const lead = at ? Math.min(fixed, Math.max(5, Math.round((at.getTime() - Date.now()) / 5000) * 5)) : fixed
     const when = at ? ` Kejar see you at ${at.getHours() % 12 || 12}:${String(at.getMinutes()).padStart(2, '0')}.` : ''
     event.waitUntil(
       self.registration.showNotification(`Ping in ${lead}s — check in!`, {
@@ -24,7 +27,8 @@ self.addEventListener('push', (event) => {
         requireInteraction: true,
         icon: '/icon-192.png',
         badge: '/icon-192.png',
-        data: { url: `/g/${data.code}?checkin=1` },
+        // The banner explains scheduled pings; a bonus push just opens the game, where the banner shows `open`.
+        data: { url: bonus ? `/g/${data.code}` : `/g/${data.code}?checkin=1` },
       }),
     )
     return

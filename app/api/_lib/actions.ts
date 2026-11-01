@@ -161,7 +161,7 @@ function settingsFrom(input: unknown): Settings {
   return s
 }
 
-/** The moments a view looks at: now, the spectator delay, and the last revealed ping. */
+/** The moments a view looks at: now, the spectator delay, the last revealed ping, and the last scheduled one. */
 function viewTimes(game: Game, pings: { seq: number; revealed: boolean; reveal_at: string }[], now: number): string[] {
   const times = [iso(now), iso(now - game.settings.spectatorDelayMin * 60_000)]
   // Latest reveal by time: bonus (Flare) pings have high numbers but can come before scheduled ones.
@@ -169,6 +169,11 @@ function viewTimes(game: Game, pings: { seq: number; revealed: boolean; reveal_a
     .filter((p) => p.revealed && p.seq > 0)
     .sort((a, b) => Date.parse(b.reveal_at) - Date.parse(a.reveal_at))[0]
   if (last) times.push(last.reveal_at)
+  // The check-in banner judges the last scheduled ping too, which a later bonus reveal would hide.
+  const scheduled = pingTimes(game, now)
+    .filter((t) => t.revealAt <= now)
+    .at(-1)
+  if (scheduled && iso(scheduled.revealAt) !== last?.reveal_at) times.push(iso(scheduled.revealAt))
   return times
 }
 
@@ -779,7 +784,8 @@ const sosDetails: Action = async (ctx, body) => {
   const reason = str(body.reason) as SosReason
   if (!Object.hasOwn(SOS_REASON_LABEL, reason)) throw new ActionError(400, 'Pick what is happening')
   const sosId = str(body.sosId)
-  const mine = (await ctx.store.events(game.id)).find((e) => e.id === sosId && e.type === 'sos' && e.actor_id === me.id)
+  const events = await ctx.store.events(game.id)
+  const mine = events.find((e) => e.id === sosId && e.type === 'sos' && e.actor_id === me.id)
   if (!mine || ctx.now - Date.parse(mine.at) > SOS_DETAILS_MS) return { ok: false, reason: 'not-yours' }
   let withPlayer: Player | undefined
   if ((reason === 'unsafe' || reason === 'dispute') && str(body.withId)) {
@@ -787,6 +793,9 @@ const sosDetails: Action = async (ctx, body) => {
     if (!withPlayer) throw new ActionError(400, 'Pick another player in this game')
   }
   const withName = withPlayer ? who(withPlayer) : null
+  // A repeated tap of the same chip changes nothing: don't write it again.
+  const latest = events.filter((e) => e.type === 'sos-details' && e.data.sosId === sosId).at(-1)
+  if (latest && latest.data.reason === reason && (latest.target_id ?? null) === (withPlayer?.id ?? null)) return { ok: true }
   await ctx.store.addEvent({ game_id: game.id, type: 'sos-details', actor_id: me.id, target_id: withPlayer?.id ?? null, data: { sosId, reason, withName } })
   await ctx.store.addSafetyRecord({
     game_id: game.id,
