@@ -10,20 +10,19 @@ import { clock } from './time'
 import { ErrorText } from './ui'
 
 const INFO: Record<PowerUpKind, { name: string; effect: string; used: string }> = {
-  decoy: { name: 'Decoy', effect: 'Your next ping shows a fake spot', used: 'Decoy set for the next ping' },
-  shield: { name: 'Shield', effect: 'Blocks the next catch (10 min)', used: 'Shield up for 10 min' },
-  cloak: { name: 'Cloak', effect: 'You vanish from the next ping', used: 'Cloak on for the next ping' },
-  flare: { name: 'Flare', effect: 'Surprise ping in 30 s', used: 'Flare! Dikejar check in now' },
-  focus: { name: 'Focus', effect: 'Dikejar near you shown exactly', used: 'Focus on for the next ping' },
+  decoy: { name: 'Gostan', effect: 'Your next ping shows you somewhere else', used: 'Gostan set for your next ping' },
+  shield: { name: 'Durian', effect: 'Blocks the next catch, up to 10 min', used: 'Durian on for up to 10 min' },
+  cloak: { name: 'Ponteng', effect: 'You skip the next ping', used: "Ponteng: you'll skip the next ping" },
+  flare: { name: 'Mat Rempit', effect: 'Extra ping in 30 s', used: 'Mat Rempit! Dikejar check in now' },
+  focus: { name: 'Pak Guard', effect: 'Dikejar within 75 m show exactly', used: 'Pak Guard on for the next ping' },
 }
 
 type ClaimResult = ({ ok: true; kind: PowerUpKind } | Exclude<ClaimJudgement, { ok: true }>)
-type UseResult = { ok: true; kind: PowerUpKind } | { ok: false; reason: string }
+type UseResult = { ok: true; kind: PowerUpKind } | { ok: false; reason: string; readyInMs?: number }
 
 const CLAIM_REJECTIONS: Record<string, string> = {
-  'too-far': 'Get within 30 m of the station',
-  'already-claimed': "You've already used this station",
-  'hand-full': 'Your hand is full (3)',
+  'too-far': 'Get within 30 m of the station.',
+  'already-claimed': "You've used this station this game. Try another one.",
   'unknown-station': "That's not a station code",
   'not-chasing': 'Stations open when the chase starts',
   'cannot-claim': "You can't claim power-ups right now",
@@ -31,7 +30,7 @@ const CLAIM_REJECTIONS: Record<string, string> = {
 }
 
 const USE_REJECTIONS: Record<string, string> = {
-  'too-late': 'Too late for a Flare',
+  'too-late': 'Too late for Mat Rempit.',
   'already-used': 'Already used',
   'not-chasing': 'Power-ups work during the chase',
   'cannot-use': "You can't use power-ups in Penjara",
@@ -40,8 +39,12 @@ const USE_REJECTIONS: Record<string, string> = {
 }
 
 export function claimMessage(r: ClaimResult): string {
-  if (r.ok) return `Got ${INFO[r.kind].name.toUpperCase()} ✓`
-  if (r.reason === 'locked') return `Station recharging — ${clock(r.lockedForMs ?? 0)}`
+  if (r.ok) return `Got ${INFO[r.kind].name} ✓`
+  if (r.reason === 'locked') return `This station is cooling down. Ready in ${clock(r.lockedForMs ?? 0)}.`
+  if (r.reason === 'hand-full' && r.busyKind) {
+    const name = INFO[r.busyKind].name
+    return r.busyRunning ? `Your ${name} is still working. Come back when it's done.` : `Your slot is full. Use your ${name} first, then come back.`
+  }
   return CLAIM_REJECTIONS[r.reason] ?? 'Nothing claimed'
 }
 
@@ -72,7 +75,15 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
     setError('')
     try {
       const r = await call<UseResult>('usePowerup', { code, token: token(), powerupId: u.id })
-      setMessage(r.ok ? INFO[r.kind].used : (USE_REJECTIONS[r.reason] ?? 'Not used'))
+      setMessage(
+        r.ok
+          ? INFO[r.kind].used
+          : r.reason === 'flare-cooldown'
+            ? `Mat Rempit is ready again in ${clock(r.readyInMs ?? 0)}.`
+            : r.reason === 'flare-pending'
+              ? `Another Mat Rempit is already on its way. Ready again in ${clock(r.readyInMs ?? 0)}.`
+            : (USE_REJECTIONS[r.reason] ?? 'Not used'),
+      )
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -82,8 +93,11 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <p className="eyebrow">Power-ups</p>
-        {view.shieldActive && <span className="pill pill-on">Shield active</span>}
+        {view.deckLeft !== null && <span className="eyebrow">{`DECK · ${view.deckLeft} LEFT`}</span>}
       </div>
+      {view.activePowerUp && view.hand.length === 0 && (
+        <p className="pill pill-on" style={{ alignSelf: 'flex-start' }}>{`${INFO[view.activePowerUp].name} is working`}</p>
+      )}
       {view.hand.length > 0 && (
         <div className="hand">
           {view.hand.map((u) => (

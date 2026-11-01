@@ -16,7 +16,7 @@ describe('catchMessage', () => {
 describe('shielded catch', () => {
   it('explains a shielded catch', () => {
     expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'shielded' })).toBe(
-      'Shielded! Hand the tag back — they get a 10 s head start',
+      "Durian! That catch doesn't count. Hand the tag back.",
     )
   })
 })

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { arenaAroundPoint } from './arenas.js'
-import { iso, MIN, player, pos, T0 } from './fixtures.js'
+import { iso, MIN, ping, player, pos, T0 } from './fixtures.js'
 import { circlePolygon, distanceM, offset, pointInPolygon } from './geo.js'
 import { buildPlayArea, inPlayArea } from './playArea.js'
-import { activeShield, decoySpot, judgeClaim, pickPowerUp } from './powerups.js'
-import { seeded } from './testing.js'
-import type { PowerUp, PowerUpKind } from './types.js'
+import { activeShield, decoySpot, flareBlocked, judgeClaim, slotBusy } from './powerups.js'
+import { BONUS_SEQ_BASE } from './clock.js'
+import type { Ping, PowerUp } from './types.js'
 
 const NOW = T0 + 20 * MIN
 const C = { lat: 3.0, lng: 101.0 }
@@ -29,7 +29,7 @@ function pu(over: Partial<PowerUp> = {}): PowerUp {
   }
 }
 
-const base = { phase: 'chasing' as const, me: aina, station: 1, arena, myPos: atS1, powerUps: [] as PowerUp[], now: NOW }
+const base = { phase: 'chasing' as const, me: aina, station: 1, arena, myPos: atS1, powerUps: [] as PowerUp[], pings: [] as Ping[], now: NOW }
 
 describe('judgeClaim', () => {
   it('claim at the station succeeds', () => {
@@ -56,9 +56,9 @@ describe('judgeClaim', () => {
     expect(judgeClaim({ ...base, me: player('m1', 'marshal') })).toEqual({ ok: false, reason: 'cannot-claim' })
     expect(judgeClaim({ ...base, me: { ...aina, jailed: true } })).toEqual({ ok: false, reason: 'cannot-claim' })
   })
-  it('a fourth unused power-up is hand-full', () => {
-    const hand = [2, 3, 4].map((n) => pu({ id: `u${n}`, station: n }))
-    expect(judgeClaim({ ...base, powerUps: hand })).toEqual({ ok: false, reason: 'hand-full' })
+  it('a power-up still in the slot makes the slot full', () => {
+    const held = pu({ id: 'h1', station: 9, kind: 'shield' })
+    expect(judgeClaim({ ...base, powerUps: [held] })).toEqual({ ok: false, reason: 'hand-full', busyKind: 'shield', busyRunning: false })
   })
   it('only during the chase, and only real stations', () => {
     expect(judgeClaim({ ...base, phase: 'hiding' })).toEqual({ ok: false, reason: 'not-chasing' })
@@ -70,17 +70,31 @@ describe('judgeClaim', () => {
   })
 })
 
-describe('pickPowerUp', () => {
-  it('only gives runner kinds to runners and chaser kinds to chasers', () => {
-    const rng = seeded(5)
-    const runner = new Set<PowerUpKind>()
-    const chaser = new Set<PowerUpKind>()
-    for (let i = 0; i < 1000; i++) {
-      runner.add(pickPowerUp('runner', rng))
-      chaser.add(pickPowerUp('chaser', rng))
-    }
-    expect([...runner].sort()).toEqual(['cloak', 'decoy', 'shield'])
-    expect([...chaser].sort()).toEqual(['flare', 'focus'])
+describe('slotBusy', () => {
+  const T = NOW - 60_000
+  const used = (kind: PowerUp['kind'], over: Partial<PowerUp> = {}) => pu({ kind, used_at: iso(T), ...over })
+  const revealed = (seq: number, at: number, alertAt = at - 30_000): Ping => ({ ...ping(seq, at), alert_at: iso(alertAt), revealed: true })
+
+  it('an unused card is busy, not running', () => {
+    expect(slotBusy([pu({ kind: 'cloak' })], 'r1', [], NOW)).toEqual({ kind: 'cloak', running: false })
+  })
+  it('Ponteng is running until the next reveal after it was used', () => {
+    expect(slotBusy([used('cloak')], 'r1', [], NOW)).toEqual({ kind: 'cloak', running: true })
+    expect(slotBusy([used('cloak')], 'r1', [revealed(3, T + 5_000)], NOW)).toBeNull()
+  })
+  it('Durian is running until it blocks a catch or 10 minutes pass', () => {
+    expect(slotBusy([used('shield')], 'r1', [], NOW)).toEqual({ kind: 'shield', running: true })
+    expect(slotBusy([used('shield', { consumed_at: iso(T + 1_000) })], 'r1', [], NOW)).toBeNull()
+    expect(slotBusy([used('shield', { used_at: iso(NOW - 11 * MIN) })], 'r1', [], NOW)).toBeNull()
+  })
+  it("Mat Rempit is running until its own surprise ping is revealed, even if a scheduled one came first", () => {
+    const flare = pu({ player_id: 'c1', kind: 'flare', used_at: iso(T) })
+    const scheduled = revealed(3, T + 10_000)
+    expect(slotBusy([flare], 'c1', [scheduled], NOW)).toEqual({ kind: 'flare', running: true })
+    expect(slotBusy([flare], 'c1', [scheduled, revealed(BONUS_SEQ_BASE, T + 30_000, T)], NOW)).toBeNull()
+  })
+  it("someone else's card doesn't fill my slot", () => {
+    expect(slotBusy([pu({ player_id: 'r2' })], 'r1', [], NOW)).toBeNull()
   })
 })
 
@@ -118,5 +132,19 @@ describe('activeShield', () => {
     expect(activeShield([{ ...shield, consumed_at: iso(NOW) }], 'r1', NOW)).toBeNull()
     expect(activeShield([{ ...shield, used_at: null }], 'r1', NOW)).toBeNull()
     expect(activeShield([shield], 'r2', NOW)).toBeNull()
+  })
+})
+
+describe('flareBlocked', () => {
+  const bonus = (revealAt: number, revealed: boolean): Ping => ({ ...ping(BONUS_SEQ_BASE, revealAt), revealed })
+  it('blocks while another surprise ping is still on its way', () => {
+    expect(flareBlocked([bonus(NOW + 10_000, false)], NOW)).toEqual({ reason: 'flare-pending', readyInMs: 10_000 + 3 * MIN })
+  })
+  it('blocks for 3 minutes after a surprise ping is revealed', () => {
+    expect(flareBlocked([bonus(NOW - 60_000, true)], NOW)).toEqual({ reason: 'flare-cooldown', readyInMs: 120_000 })
+  })
+  it('is clear once 3 minutes have passed, or with no surprise pings', () => {
+    expect(flareBlocked([bonus(NOW - 3 * MIN, true)], NOW)).toBeNull()
+    expect(flareBlocked([], NOW)).toBeNull()
   })
 })

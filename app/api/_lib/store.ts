@@ -56,6 +56,8 @@ export interface GameStore {
   updatePlayers(patches: { id: string; patch: Partial<Player> }[]): Promise<void>
   /** Marks a runner caught only if they are not already jailed; true for the first caller. */
   catchRunner(id: string, by: string | null): Promise<boolean>
+  /** Atomically counts one more draw from a side's deck; returns the draw number (0 for the first). */
+  drawCard(gameId: string, side: 'runner' | 'chaser'): Promise<number>
   /** Frees an auto-jailed runner (jailed, no chaser) only if still in that state; true for the first caller. */
   releaseAutoJailed(id: string, atIso: string): Promise<boolean>
   addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>): Promise<void>
@@ -86,7 +88,8 @@ export interface GameStore {
   /** Consumes a shield only if it wasn't already; true for the first caller. */
   consumeShield(id: string): Promise<boolean>
   /** Adds a bonus (Flare) ping with the next free bonus number; safe when two happen at once. */
-  addBonusPing(gameId: string, alertAt: string, revealAt: string): Promise<number>
+  /** Adds surprise ping `seq` only if that number is free; false if another one took it first. */
+  addBonusPing(gameId: string, seq: number, alertAt: string, revealAt: string): Promise<boolean>
   /** Pauses a started, unfinished, unpaused game (paused_at = store clock); true for the first caller. */
   pauseGame(gameId: string): Promise<boolean>
   /**
@@ -221,6 +224,13 @@ export class MemoryStore implements GameStore {
       if (p) Object.assign(p, patch)
     }
   }
+  async drawCard(gameId: string, side: 'runner' | 'chaser') {
+    const g = this.games.find((x) => x.id === gameId)!
+    const key = side === 'runner' ? 'runner_draws' : 'chaser_draws'
+    const n = g[key] ?? 0
+    g[key] = n + 1
+    return n
+  }
   async releaseAutoJailed(id: string, atIso: string) {
     const p = this.playerRows.find((x) => x.id === id)
     if (!p || !p.jailed || p.caught_by !== null) return false
@@ -330,10 +340,10 @@ export class MemoryStore implements GameStore {
     u.consumed_at = this.nowIso()
     return true
   }
-  async addBonusPing(gameId: string, alertAt: string, revealAt: string) {
-    const seq = 1000 + this.pingRows.filter((p) => p.game_id === gameId && p.seq >= 1000).length
+  async addBonusPing(gameId: string, seq: number, alertAt: string, revealAt: string) {
+    if (this.pingRows.some((p) => p.game_id === gameId && p.seq === seq)) return false
     this.pingRows.push({ game_id: gameId, seq, alert_at: alertAt, reveal_at: revealAt, alerted: false, revealed: false })
-    return seq
+    return true
   }
   async pauseGame(gameId: string) {
     const g = this.games.find((x) => x.id === gameId)

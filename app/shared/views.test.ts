@@ -141,6 +141,21 @@ describe('ping moment', () => {
   })
 })
 
+describe('deck and slot', () => {
+  it("shows how many cards are left in my side's deck", () => {
+    const v = view(aina, { game: { ...g, runner_sets: 1, runner_draws: 2 } })
+    expect(v.deckLeft).toBe(4)
+  })
+  it('has no deck count for a marshal', () => {
+    expect(view(siti, { game: { ...g, runner_sets: 1, runner_draws: 2 } }).deckLeft).toBeNull()
+  })
+  it('names a power-up whose effect is still running', () => {
+    const durian: PowerUp = { id: 'u9', game_id: 'g1', player_id: 'r1', kind: 'shield', station: 1, claimed_at: '', used_at: new Date(NOW - MIN).toISOString(), consumed_at: null }
+    expect(view(aina, { powerUps: [durian] }).activePowerUp).toBe('shield')
+    expect(view(aina).activePowerUp).toBeNull()
+  })
+})
+
 describe('jail reason', () => {
   const jailedHafiz = { ...hafiz, jailed: true }
   it('says missed-checkins when my latest jailing was an auto-jail', () => {
@@ -262,9 +277,9 @@ describe('power-up effects', () => {
       ],
     }).feed.map((f) => f.text)
     expect(feed).toEqual([
-      '#07 was shielded!',
-      'A chaser used Focus',
-      'Flare! Ping in 30 s',
+      '#07 blocked a catch with Durian',
+      'A Kejar used Pak Guard',
+      'A Kejar used Mat Rempit — extra ping in 30 s',
       'Aina picked up a power-up',
     ])
   })

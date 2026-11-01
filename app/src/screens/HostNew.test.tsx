@@ -104,6 +104,22 @@ describe('HostNew', () => {
     )
   })
 
+  it('creates a Core game by default, and a Full one when picked', async () => {
+    const { unmount } = render(<HostNew />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Use KLCC' }))
+    expect(screen.getByText('The chase, check-ins and Penjara, plus 4 simple power-ups. Best for first-timers.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /create game/i }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ settings: expect.objectContaining({ mode: 'core' }) })))
+    unmount()
+    call.mockClear()
+    render(<HostNew />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Use KLCC' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Game: Full' }))
+    expect(screen.getByText('Everything in Core, plus Gostan and more power-ups as they arrive. For regulars.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /create game/i }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ settings: expect.objectContaining({ mode: 'full' }) })))
+  })
+
   it('creating from an untouched saved park sends no overrides', async () => {
     render(<HostNew />)
     fireEvent.click(await screen.findByRole('button', { name: 'Use KLCC' }))

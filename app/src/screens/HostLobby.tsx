@@ -5,7 +5,7 @@ import { AlertsOnPhone } from '../game/MarshalTools'
 import SetupMap from '../game/SetupMap'
 import { loadOrganiserSession } from '../game/organiserSession'
 import { qrDataUrl } from '../game/qr'
-import { ErrorText, Pills, Screen, tagText } from '../game/ui'
+import { ErrorText, ModeBadge, Pills, Screen, tagText } from '../game/ui'
 import { useGameState } from '../game/useGameState'
 
 export default function HostLobby({ code }: { code: string }) {
@@ -64,9 +64,12 @@ export default function HostLobby({ code }: { code: string }) {
 
   return (
     <Screen eyebrow={`kejar. · game ${code}`}>
-      <h1 className="mono" style={{ fontSize: 44, letterSpacing: '0.12em' }}>
-        {code}
-      </h1>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <h1 className="mono" style={{ fontSize: 44, letterSpacing: '0.12em' }}>
+          {code}
+        </h1>
+        {view && <ModeBadge mode={view.settings.mode} />}
+      </div>
       {view && <AlertsOnPhone code={code} view={view} refresh={refresh} />}
       {view && <SetupMap view={view} />}
       <div className="card" style={{ display: 'flex', gap: 14, alignItems: 'center' }}>

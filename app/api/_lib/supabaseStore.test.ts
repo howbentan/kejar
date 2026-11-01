@@ -44,6 +44,12 @@ describe('SupabaseStore', () => {
     expect(rpcs).toEqual([{ fn: 'resume_game', args: { p_game: 'g1', p_at: '2026-10-25T09:07:00.000Z' } }])
   })
 
+  it('draws a card through the draw_card function', async () => {
+    const { db, rpcs } = fakeDb()
+    expect(await new SupabaseStore(db, () => 0).drawCard('g1', 'chaser')).toBe(90000)
+    expect(rpcs).toEqual([{ fn: 'draw_card', args: { p_game: 'g1', p_side: 'chaser' } }])
+  })
+
   it('osmCachePut upserts on key with the store clock', async () => {
     const { db, upserts } = fakeDb()
     const now = Date.parse('2026-10-27T09:00:00.000Z')

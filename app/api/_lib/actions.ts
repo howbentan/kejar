@@ -9,12 +9,13 @@ import {
   type ReportReason,
 } from '../../shared/alerts.js'
 import { autoJailDue } from '../../shared/checkins.js'
+import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
 import { judgeCatch, judgeJailbreak } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
 import { JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
-import { activeShield, judgeClaim, pickPowerUp, STATION_LOCK_MS } from '../../shared/powerups.js'
+import { activeShield, flareBlocked, judgeClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { computeResults } from '../../shared/results.js'
 import { shuffleRoles, validateTeams } from '../../shared/teams.js'
 import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type Role, type Settings } from '../../shared/types.js'
@@ -153,6 +154,7 @@ function settingsFrom(input: unknown): Settings {
   if (![2, 3, 5].includes(s.pingMin)) throw new ActionError(400, 'Ping interval must be 2, 3 or 5 minutes')
   if (!inRange(s.spectatorDelayMin, 0, 5)) throw new ActionError(400, 'Spectator delay must be 0–5 minutes')
   if (s.checkinMode !== 'push' && s.checkinMode !== 'schedule') throw new ActionError(400, 'Unknown check-in mode')
+  if (s.mode !== 'core' && s.mode !== 'full') throw new ActionError(400, 'Unknown game mode')
   return s
 }
 
@@ -366,7 +368,13 @@ const start: Action = async (ctx, body) => {
   if (problems.length) throw new ActionError(409, problems.join(' · '))
   const startedAt = iso(ctx.now)
   const started = { ...game, started_at: startedAt }
-  await ctx.store.updateGame(game.id, { started_at: startedAt })
+  const count = (role: Role) => Object.values(roles).filter((r) => r === role).length
+  await ctx.store.updateGame(game.id, {
+    started_at: startedAt,
+    runner_sets: setsFor('runner', count('runner')),
+    deck_seed: newToken(),
+    chaser_sets: setsFor('chaser', count('chaser')),
+  })
   const chaseAt = iso(chaseStartOf(started)!)
   await ctx.store.addPings([
     { game_id: game.id, seq: 0, alert_at: chaseAt, reveal_at: chaseAt, alerted: true, revealed: false },
@@ -670,10 +678,18 @@ const claim: Action = async (ctx, body) => {
     arena: game.arena,
     myPos: latest(positions[me.id]),
     powerUps: await ctx.store.powerUps(game.id),
+    pings: await ctx.store.pings(game.id),
     now: ctx.now,
   })
   if (!verdict.ok) return verdict
-  const kind = pickPowerUp(me.role === 'chaser' ? 'chaser' : 'runner', ctx.rng)
+  // The top card of this side's shared deck (power-ups §5b). The draw number is taken atomically, so two
+  // claims at the same moment never get the same card. Games started before decks existed have no sets.
+  const side = me.role === 'chaser' ? 'chaser' : 'runner'
+  const stored = side === 'runner' ? fresh.runner_sets : fresh.chaser_sets
+  const sets = stored ?? setsFor(side, (await ctx.store.players(game.id)).filter((p) => p.role === side).length)
+  const deck = deckFor(fresh.settings.mode ?? 'core', side, sets)
+  // Seeded with a secret (not the game id players can see), so nobody can work out the next card.
+  const kind = cardAt(`${fresh.deck_seed ?? game.id}:${side}`, deck, await ctx.store.drawCard(game.id, side))
   // Re-checked atomically by the store, so double-taps and simultaneous scans can't both win.
   const claimed = await ctx.store.claimStation(
     { game_id: game.id, player_id: me.id, kind, station: station! },
@@ -700,14 +716,27 @@ const usePowerup: Action = async (ctx, body) => {
   // A Flare's reveal must land before the whistle.
   if (u.kind === 'flare' && (endsAt ?? 0) - ctx.now < ALERT_LEAD_MS) return { ok: false, reason: 'too-late' }
 
+  // Mat Rempit: one at a time, team-wide, then a 3-minute wait (power-ups §5a). A refusal isn't spent.
+  const pings = u.kind === 'flare' ? await ctx.store.pings(game.id) : []
+  if (u.kind === 'flare') {
+    const blocked = flareBlocked(pings, ctx.now)
+    if (blocked) return { ok: false, ...blocked }
+  }
   // markUsed is atomic: a double-tap uses the power-up once.
   if (!(await ctx.store.markUsed(u.id))) return { ok: false, reason: 'already-used' }
   if (u.kind === 'flare') {
+    // The next surprise-ping number is a claim: if two Mat Rempits land at once, only one gets it.
+    const seq = BONUS_SEQ_BASE + pings.filter((p) => p.seq >= BONUS_SEQ_BASE).length
+    let added: boolean
     try {
-      await ctx.store.addBonusPing(game.id, iso(ctx.now), iso(ctx.now + ALERT_LEAD_MS))
+      added = await ctx.store.addBonusPing(game.id, seq, iso(ctx.now), iso(ctx.now + ALERT_LEAD_MS))
     } catch (e) {
-      await ctx.store.updatePowerUp(u.id, { used_at: null }) // give the Flare back
+      await ctx.store.updatePowerUp(u.id, { used_at: null }) // give the Mat Rempit back
       throw e
+    }
+    if (!added) {
+      await ctx.store.updatePowerUp(u.id, { used_at: null })
+      return { ok: false, ...(flareBlocked(await ctx.store.pings(game.id), ctx.now) ?? { reason: 'flare-pending', readyInMs: 0 }) }
     }
   }
   await ctx.store.addEvent({ game_id: game.id, type: 'used', actor_id: me.id, target_id: null, data: { kind: u.kind } })

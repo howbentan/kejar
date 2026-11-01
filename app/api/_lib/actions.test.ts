@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { MIN, T0 } from '../../shared/fixtures.js'
 import { BONUS_SEQ_BASE } from '../../shared/clock.js'
+import { cardAt, deckFor } from '../../shared/deck.js'
 import { JAIL_QR, stationQr, tagQr } from '../../shared/ids.js'
 import { seeded } from '../../shared/testing.js'
 import type { PowerUpKind, Role } from '../../shared/types.js'
@@ -410,6 +411,55 @@ describe('power-up stations', () => {
     expect(v.feed[0].text).toBe('Aina picked up a power-up')
   })
 
+  it('a Core game only ever deals Durian and Ponteng to runners, in deck order', async () => {
+    const g = await chasingWithStation()
+    const r = await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    const seed = (await store.gameByCode(g.code))!.deck_seed
+    expect(r.kind).toBe(cardAt(`${seed}:runner`, deckFor('core', 'runner', 1), 0))
+    expect(['shield', 'cloak']).toContain(r.kind)
+  })
+
+  it("the deck's order comes from a secret seed that no player ever sees", async () => {
+    const g = await chasingWithStation()
+    const seed = (await store.gameByCode(g.code))!.deck_seed
+    expect(seed).toMatch(/^.{16,}$/)
+    expect(seed).not.toContain(g.gameId)
+    for (const token of [g.aina.token, g.ben.token]) {
+      expect(JSON.stringify(await run('state', { code: g.code, token }))).not.toContain(seed!)
+    }
+  })
+
+  it('a second claim while the slot is full is refused and draws nothing', async () => {
+    const g = await chasingWithStation()
+    await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'cloak', station: 9 })
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toEqual({
+      ok: false,
+      reason: 'hand-full',
+      busyKind: 'cloak',
+      busyRunning: false,
+    })
+    expect((await store.gameByCode(g.code))!.runner_draws ?? 0).toBe(0)
+  })
+
+  it('two runners claiming different stations at the same moment draw different cards', async () => {
+    const S2 = { lat: CENTER.lat - 100 / 111_195, lng: CENTER.lng }
+    const g = await readyGame({}, { stations: [S1, S2] })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await Promise.all([
+      run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 }),
+      run('claim', { code: g.code, token: g.hafiz.token, qr: stationQr(2), lat: S2.lat, lng: S2.lng, accuracy_m: 8 }),
+    ])
+    expect((await store.gameByCode(g.code))!.runner_draws).toBe(2)
+  })
+
+  it('a game started before decks existed still deals cards', async () => {
+    const g = await chasingWithStation()
+    await store.updateGame(g.gameId, { runner_sets: null, chaser_sets: null })
+    const r = await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    expect(r.ok).toBe(true)
+  })
+
   it('claim from far away is rejected and gives nothing', async () => {
     const g = await chasingWithStation()
     expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...at(0) })).toEqual({
@@ -450,7 +500,7 @@ describe('power-up stations', () => {
     now += 30_000
     const v = await run<View>('state', { code: g.code, token: g.ben.token })
     expect(v.lastRevealAt).toBe(now)
-    expect(v.feed.map((f) => f.text)).toContain('Flare! Ping in 30 s')
+    expect(v.feed.map((f) => f.text)).toContain('A Kejar used Mat Rempit — extra ping in 30 s')
   })
 
   it('flare with under 30 s left is too-late and not spent', async () => {
@@ -473,7 +523,7 @@ describe('power-up stations', () => {
     await run('location', { code: g.code, token: g.aina.token, ...at(10) })
     expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toEqual({ ok: false, reason: 'shielded' })
     const v = await run<View>('state', { code: g.code, token: g.ben.token })
-    expect(v.feed[0].text).toBe('#07 was shielded!')
+    expect(v.feed[0].text).toBe('#07 blocked a catch with Durian')
     expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toMatchObject({ ok: true })
   })
 })
@@ -522,21 +572,40 @@ describe('review fixes', () => {
     expect(events.filter((e) => e.type === 'used')).toHaveLength(1)
   })
 
-  it('two Flares at the same moment both work', async () => {
+  it('two Mat Rempits at the same moment: one works, the other is refused and not spent', async () => {
     const g = await chasingWithStation()
-    const lee = await run('join', { code: g.code, name: 'Lee', accepted: true }).catch(() => null)
-    expect(lee).toBeNull() // game already started; use two flares from one chaser instead
     const [f1, f2] = [await give(g.gameId, g.ben.playerId, 'flare'), await give(g.gameId, g.ben.playerId, 'flare')]
     const results = await Promise.all([
       run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f1.id }),
       run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f2.id }),
     ])
-    expect(results).toEqual([
-      { ok: true, kind: 'flare' },
-      { ok: true, kind: 'flare' },
-    ])
-    expect((await store.pings(g.gameId)).filter((p) => p.seq >= BONUS_SEQ_BASE)).toHaveLength(2)
+    expect(results.filter((r) => r.ok)).toHaveLength(1)
+    expect(results.find((r) => !r.ok)).toEqual({ ok: false, reason: 'flare-pending', readyInMs: 30_000 + 3 * MIN })
+    expect((await store.pings(g.gameId)).filter((p) => p.seq >= BONUS_SEQ_BASE)).toHaveLength(1)
+    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'flare' && u.used_at === null)).toHaveLength(1)
   })
+
+  it('a team waits for the surprise ping, then 3 minutes, before the next Mat Rempit', async () => {
+    const g = await chasingWithStation()
+    const [f1, f2] = [await give(g.gameId, g.ben.playerId, 'flare'), await give(g.gameId, g.ben.playerId, 'flare')]
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f1.id })).toEqual({ ok: true, kind: 'flare' })
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f2.id })).toEqual({
+      ok: false,
+      reason: 'flare-pending',
+      readyInMs: 30_000 + 3 * MIN,
+    })
+    now += 30_000 // the surprise ping reveals
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    now += 60_000
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f2.id })).toEqual({
+      ok: false,
+      reason: 'flare-cooldown',
+      readyInMs: 120_000,
+    })
+    now += 120_000
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f2.id })).toEqual({ ok: true, kind: 'flare' })
+  })
+
 
   it('two players scanning one station at the same moment: only one gets a power-up', async () => {
     const g = await chasingWithStation()
@@ -601,6 +670,26 @@ async function safetyGame(settings: object = {}) {
   const gameId = (await store.gameByCode(g.code))!.id
   return { ...g, siti, gameId }
 }
+
+describe('game mode', () => {
+  it('defaults to Core, and Full can be chosen', async () => {
+    const core = await readyGame()
+    expect((await store.gameByCode(core.code))!.settings.mode).toBe('core')
+    const full = await readyGame({ mode: 'full' })
+    expect((await store.gameByCode(full.code))!.settings.mode).toBe('full')
+  })
+
+  it('rejects an unknown mode', async () => {
+    const organiserToken = await createOrganiser()
+    await rejects(run('create', { arenaId: 'around-me', center: CENTER, settings: { mode: 'party' }, organiserToken }), 400, 'Unknown game mode')
+  })
+
+  it('start stores how many deck sets each side gets', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    expect(await store.gameByCode(g.code)).toMatchObject({ runner_sets: 1, chaser_sets: 1 })
+  })
+})
 
 describe('pause and resume', () => {
   it('organiser and marshal can pause; a runner gets 403 Marshals only', async () => {
@@ -974,8 +1063,8 @@ describe('automatic alerts', () => {
   it('a missed bonus (Mat Rempit) ping never counts towards auto-jail', async () => {
     const g = await safetyGame({ checkinMode: 'schedule' })
     // Two bonus pings land between the scheduled ones; Hafiz ignores both.
-    await store.addBonusPing(g.gameId, new Date(T0 + 11 * MIN).toISOString(), new Date(T0 + 11.5 * MIN).toISOString())
-    await store.addBonusPing(g.gameId, new Date(T0 + 16 * MIN).toISOString(), new Date(T0 + 16.5 * MIN).toISOString())
+    await store.addBonusPing(g.gameId, BONUS_SEQ_BASE, new Date(T0 + 11 * MIN).toISOString(), new Date(T0 + 11.5 * MIN).toISOString())
+    await store.addBonusPing(g.gameId, BONUS_SEQ_BASE + 1, new Date(T0 + 16 * MIN).toISOString(), new Date(T0 + 16.5 * MIN).toISOString())
     for (const m of [9.9, 14.9, 19.9]) {
       now = T0 + m * MIN
       await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })

@@ -10,6 +10,15 @@ export function Wordmark({ size = 64 }: { size?: number }) {
   )
 }
 
+/** The game mode next to a game code: CORE or FULL (rules doc §1). Older games without a mode are Core. */
+export function ModeBadge({ mode }: { mode?: 'core' | 'full' }) {
+  return (
+    <span className="mono" style={{ fontSize: 11, letterSpacing: '0.14em', color: 'var(--volt)', border: '1px solid var(--volt)', borderRadius: 6, padding: '3px 7px' }}>
+      {(mode ?? 'core').toUpperCase()}
+    </span>
+  )
+}
+
 export function Screen({ eyebrow, children }: { eyebrow?: string; children: ReactNode }) {
   return (
     <main className="screen">
