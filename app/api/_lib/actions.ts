@@ -3,10 +3,13 @@ import {
   NOTE_MAX,
   OUTSIDE_MARGIN_M,
   REASON_LABEL,
+  SOS_DETAILS_MS,
+  SOS_REASON_LABEL,
   SOS_REPEAT_MS,
   START_RADIUS_M,
   who,
   type ReportReason,
+  type SosReason,
 } from '../../shared/alerts.js'
 import { autoJailDue } from '../../shared/checkins.js'
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
@@ -750,13 +753,13 @@ const sos: Action = async (ctx, body) => {
   requireRunning(game, ctx.now)
   await recordScanLocation(ctx, game, me, body)
   // A panicked double-tap raises one alert, not several.
-  const recent = (await ctx.store.events(game.id)).some(
+  const recent = (await ctx.store.events(game.id)).find(
     (e) => e.type === 'sos' && e.actor_id === me.id && ctx.now - Date.parse(e.at) < SOS_REPEAT_MS,
   )
-  if (recent) return { ok: true, repeat: true }
+  if (recent) return { ok: true, repeat: true, sosId: recent.id }
   const where = coordsOf(body)
   const data = { who: who(me), lat: where?.lat ?? null, lng: where?.lng ?? null }
-  await ctx.store.addEvent({ game_id: game.id, type: 'sos', actor_id: me.id, target_id: null, data })
+  const e = await ctx.store.addEvent({ game_id: game.id, type: 'sos', actor_id: me.id, target_id: null, data })
   await ctx.store.addSafetyRecord({
     game_id: game.id,
     type: 'sos',
@@ -766,7 +769,35 @@ const sos: Action = async (ctx, body) => {
     lng: data.lng,
     data: { game_code: game.code, name: data.who },
   })
-  return { ok: true, notified: await alertMarshals(ctx, game, `SOS from ${data.who}`) }
+  return { ok: true, notified: await alertMarshals(ctx, game, `SOS from ${data.who}`), sosId: e.id }
+}
+
+/** "What's happening?" after an SOS: folds into the marshals' alert, no second push (motion design §6.0). */
+const sosDetails: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  const reason = str(body.reason) as SosReason
+  if (!Object.hasOwn(SOS_REASON_LABEL, reason)) throw new ActionError(400, 'Pick what is happening')
+  const sosId = str(body.sosId)
+  const mine = (await ctx.store.events(game.id)).find((e) => e.id === sosId && e.type === 'sos' && e.actor_id === me.id)
+  if (!mine || ctx.now - Date.parse(mine.at) > SOS_DETAILS_MS) return { ok: false, reason: 'not-yours' }
+  let withPlayer: Player | undefined
+  if ((reason === 'unsafe' || reason === 'dispute') && str(body.withId)) {
+    withPlayer = (await ctx.store.players(game.id)).find((p) => p.id === str(body.withId) && p.id !== me.id)
+    if (!withPlayer) throw new ActionError(400, 'Pick another player in this game')
+  }
+  const withName = withPlayer ? who(withPlayer) : null
+  await ctx.store.addEvent({ game_id: game.id, type: 'sos-details', actor_id: me.id, target_id: withPlayer?.id ?? null, data: { sosId, reason, withName } })
+  await ctx.store.addSafetyRecord({
+    game_id: game.id,
+    type: 'sos',
+    player_id: me.id,
+    target_id: withPlayer?.id ?? null,
+    lat: null,
+    lng: null,
+    data: { game_code: game.code, follows: sosId, reason, with_name: withName },
+  })
+  return { ok: true }
 }
 
 const report: Action = async (ctx, body) => {
@@ -1025,6 +1056,7 @@ export const actions = {
   pause,
   resume,
   sos,
+  sosDetails,
   report,
   handleAlert,
   undoAutoJail,

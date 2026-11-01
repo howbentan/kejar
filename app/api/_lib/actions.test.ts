@@ -752,7 +752,7 @@ describe('pause and resume', () => {
 describe('SOS and reports', () => {
   it('SOS pushes every subscribed marshal and writes a safety record', async () => {
     const g = await safetyGame()
-    expect(await run('sos', { code: g.code, token: g.aina.token, ...at(30) })).toEqual({ ok: true, notified: 1 })
+    expect(await run('sos', { code: g.code, token: g.aina.token, ...at(30) })).toMatchObject({ ok: true, notified: 1 })
     expect(pushes).toEqual([{ endpoint: 'https://push/Siti', payload: { type: 'alert', code: g.code, text: 'SOS from Aina #07' } }])
     expect(store.safetyRows).toEqual([
       expect.objectContaining({ type: 'sos', player_id: g.aina.playerId, lat: at(30).lat, lng: at(30).lng }),
@@ -771,6 +771,42 @@ describe('SOS and reports', () => {
     await run('sos', { code: g.code, token: g.aina.token })
     expect((await store.events(g.gameId)).filter((e) => e.type === 'sos')).toHaveLength(2)
     expect(pushes).toHaveLength(2)
+  })
+
+  it('SOS returns its id, and the same one on a repeat', async () => {
+    const g = await safetyGame()
+    const first = await run<{ sosId: string }>('sos', { code: g.code, token: g.aina.token })
+    const sosEvent = (await store.events(g.gameId)).find((e) => e.type === 'sos')!
+    expect(first).toEqual({ ok: true, notified: 1, sosId: sosEvent.id })
+    now += 10_000
+    expect(await run('sos', { code: g.code, token: g.aina.token })).toMatchObject({ ok: true, repeat: true, sosId: sosEvent.id })
+  })
+
+  it('SOS details on your own recent SOS update the alert and add one safety record, with no new push', async () => {
+    const g = await safetyGame()
+    const { sosId } = await run<{ sosId: string }>('sos', { code: g.code, token: g.aina.token })
+    pushes = []
+    expect(await run('sosDetails', { code: g.code, token: g.aina.token, sosId, reason: 'dispute', withId: g.ben.playerId })).toEqual({ ok: true })
+    const v = await run<View>('state', { code: g.code, token: g.siti.token })
+    expect(v.alerts.map((a) => a.text)).toContain('SOS from Aina #07: Catch dispute with Ben')
+    expect(store.safetyRows).toHaveLength(2)
+    expect(store.safetyRows[1]).toMatchObject({ type: 'sos', player_id: g.aina.playerId, target_id: g.ben.playerId, data: expect.objectContaining({ follows: sosId, reason: 'dispute', with_name: 'Ben' }) })
+    expect(pushes).toEqual([])
+  })
+
+  it("SOS details refuse someone else's SOS and one older than 5 minutes", async () => {
+    const g = await safetyGame()
+    const { sosId } = await run<{ sosId: string }>('sos', { code: g.code, token: g.aina.token })
+    expect(await run('sosDetails', { code: g.code, token: g.hafiz.token, sosId, reason: 'hurt' })).toEqual({ ok: false, reason: 'not-yours' })
+    now += 6 * MIN
+    expect(await run('sosDetails', { code: g.code, token: g.aina.token, sosId, reason: 'hurt' })).toEqual({ ok: false, reason: 'not-yours' })
+  })
+
+  it('SOS details reject an unknown reason or a stranger', async () => {
+    const g = await safetyGame()
+    const { sosId } = await run<{ sosId: string }>('sos', { code: g.code, token: g.aina.token })
+    await rejects(run('sosDetails', { code: g.code, token: g.aina.token, sosId, reason: 'bored' }), 400)
+    await rejects(run('sosDetails', { code: g.code, token: g.aina.token, sosId, reason: 'unsafe', withId: 'nobody' }), 400)
   })
 
   it('SOS works while paused and from jail, but not in the lobby', async () => {
@@ -1282,7 +1318,7 @@ describe('review fixes: safety', () => {
     const g = await safetyGame()
     await run('subscribe', { code: g.code, organiserToken: g.organiserToken, subscription: { endpoint: 'https://push/organiser' } })
     const r = await run('sos', { code: g.code, token: g.aina.token })
-    expect(r).toEqual({ ok: true, notified: 2 })
+    expect(r).toMatchObject({ ok: true, notified: 2 })
     expect(pushes.map((p) => p.endpoint).sort()).toEqual(['https://push/Siti', 'https://push/organiser'])
     expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).me.push).toEqual({ endpoint: 'https://push/organiser' })
   })
@@ -1290,7 +1326,7 @@ describe('review fixes: safety', () => {
   it('SOS says when no marshal could be reached', async () => {
     const g = await safetyGame()
     await store.updatePlayers([{ id: g.siti.playerId, patch: { push: null } }])
-    expect(await run('sos', { code: g.code, token: g.aina.token })).toEqual({ ok: true, notified: 0 })
+    expect(await run('sos', { code: g.code, token: g.aina.token })).toMatchObject({ ok: true, notified: 0 })
   })
 
   it('safety records keep the game code and names, so they make sense after the game is wiped', async () => {
