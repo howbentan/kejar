@@ -221,13 +221,20 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     await store.addEvent({ game_id: game.id, type: 'ping', actor_id: null, target_id: null, data: { seq, seen } })
     if (seq < BONUS_SEQ_BASE) {
       // Flares give only 30 s notice, so only scheduled pings count towards a missed streak.
-      const windows = [chaseStartOf(game, now)!, ...pingTimes(game, now).filter((t) => t.seq <= seq).map((t) => t.revealAt)]
+      const schedule = pingTimes(game, now).filter((t) => t.seq <= seq)
       for (const p of free) {
+        // The streak starts fresh at the runner's own last release (checkins design §4.4).
+        const anchor = Math.max(chaseStartOf(game, now)!, p.freed_at ? Date.parse(p.freed_at) : -Infinity)
+        const windows = [anchor, ...schedule.filter((t) => t.revealAt > anchor).map((t) => t.revealAt)]
         const last = latest(positions[p.id])
-        if (missedTwoInARow(windows, last ? Date.parse(last.at) : null)) {
-          await store.addEvent({ game_id: game.id, type: 'missed', actor_id: p.id, target_id: null, data: { who: who(p) } })
+        // Two missed scheduled check-ins in a row: sent to Penjara like a catch, with no chaser.
+        if (missedTwoInARow(windows, last ? Date.parse(last.at) : null) && (await store.catchRunner(p.id, null))) {
+          await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: p.id, data: { who: who(p), seq } })
         }
       }
+      // Auto-jailing the last free runner ends the game, the same as a catch.
+      const runners = (await store.players(game.id)).filter((p) => p.role === 'runner')
+      if (runners.length > 0 && runners.every((p) => p.jailed)) await finish(ctx, game)
     }
   }
 
@@ -304,6 +311,7 @@ const join: Action = async (ctx, body) => {
     caught_by: null,
     jailed: false,
     freed_once: false,
+    freed_at: null,
     push: null,
     removed_at: null,
     outside: false,
@@ -401,6 +409,7 @@ const state: Action = async (ctx, body) => {
       caught_by: null,
       jailed: false,
       freed_once: false,
+      freed_at: null,
       push: (game as GameRow).host_push ?? null,
       removed_at: null,
       outside: false,
@@ -507,7 +516,7 @@ const catchAction: Action = async (ctx, body) => {
 const jailbreak: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
-  if (str(body.qr).trim() !== JAIL_QR) throw new ActionError(400, "That's not the jail code")
+  if (str(body.qr).trim() !== JAIL_QR) throw new ActionError(400, "That's not the Penjara code")
   await recordScanLocation(ctx, game, me, body)
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
@@ -522,7 +531,7 @@ const jailbreak: Action = async (ctx, body) => {
     now: ctx.now,
   })
   if (!verdict.ok) return verdict
-  await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true } })))
+  await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now) } })))
   await ctx.store.addEvent({
     game_id: game.id,
     type: 'jailbreak',
@@ -630,6 +639,7 @@ const redeemMarshalInvite: Action = async (ctx, body) => {
     caught_by: null,
     jailed: false,
     freed_once: false,
+    freed_at: null,
     push: null,
     removed_at: null,
     outside: false,

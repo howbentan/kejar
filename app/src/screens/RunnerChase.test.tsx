@@ -20,6 +20,17 @@ describe('RunnerChase', () => {
     expect(screen.queryByText(/check in/i)).toBeNull()
   })
 
+  it('warns that check-ins will be missed when location is off', () => {
+    render(<RunnerChase code="ABC234" view={testView()} locationOff />)
+    expect(screen.getByText("Location is off, so you'll miss check-ins and be sent to Penjara.")).toBeInTheDocument()
+    expect(screen.getByText('Turn on location for this site in your browser settings.')).toBeInTheDocument()
+  })
+
+  it('shows no location warning when location is working', () => {
+    render(<RunnerChase code="ABC234" view={testView()} />)
+    expect(screen.queryByText(/Location is off/)).toBeNull()
+  })
+
   it('shows the chaser warning when chaserNearby', () => {
     render(<RunnerChase code="ABC234" view={testView({ chaserNearby: true })} />)
     expect(screen.getByText('Kejar within 100 m')).toBeInTheDocument()

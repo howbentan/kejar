@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Game, GameEvent, Ping, Player, Position, PowerUp } from '../../shared/types.js'
 import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, StationClaim } from './store.js'
 
-const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, push, removed_at, outside, left_start'
+const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, push, removed_at, outside, left_start'
 const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
@@ -50,7 +50,7 @@ export class SupabaseStore implements GameStore {
   async updatePlayers(patches: { id: string; patch: Partial<Player> }[]) {
     for (const { id, patch } of patches) check(await this.db.from('players').update(patch).eq('id', id))
   }
-  async catchRunner(id: string, by: string) {
+  async catchRunner(id: string, by: string | null) {
     const rows = check(
       await this.db
         .from('players')

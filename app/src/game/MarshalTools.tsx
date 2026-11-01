@@ -146,7 +146,7 @@ export default function MarshalTools({ code, view, refresh }: { code: string; vi
               <td>{p.name}</td>
               <td>{p.role}</td>
               <td className="mono">{p.role === 'runner' ? tagText(p.tag_id) : ''}</td>
-              <td>{p.jailed ? 'in jail' : ''}</td>
+              <td>{p.jailed ? 'in Penjara' : ''}</td>
               <td style={{ textAlign: 'right' }}>
                 <button
                   type="button"

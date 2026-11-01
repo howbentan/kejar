@@ -69,6 +69,8 @@ export interface Player {
   caught_by: string | null
   jailed: boolean
   freed_once: boolean
+  /** When this runner was last released from Penjara (ISO), or null if never. */
+  freed_at: string | null
   push: PushSubscriptionJSON | null
   /** Set when a marshal removed this player from the game. */
   removed_at: string | null
@@ -107,6 +109,7 @@ export type EventType =
   | 'paused'
   | 'resumed'
   | 'removed'
+  | 'auto-jailed'
 
 export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus'
 

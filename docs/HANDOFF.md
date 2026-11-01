@@ -96,6 +96,8 @@ Also floated: surprise missions, a bounty on the longest survivor. **Malaysian p
 - A slot stays busy while its effect runs.
 - Mat Rempit is one at a time, with a 3-minute team cooldown.
 
+**Check-ins build (branch `plan-checkins-autojail`, 2026-11-01): auto-jail after two missed check-ins, `freed_at`, results, and the Penjara rename are built and reviewed.** Before merging to `main`: **run `supabase/migrations/0008_freed_at.sql` in Supabase first**, because the app now reads `players.freed_at` and every game breaks without it. Players shouldn't use auto-jail until the follow-up plan (`docs/superpowers/plans/2026-11-01-kejar-checkins-followup.md`: strict 45 s window, marshal undo, auto-jailed screen) is built too. Runners whose location is off now get a warning on the chase screen.
+
 **Playtest (updated 2026-10-30): the owner will not playtest until everything is in place**, so design work continues first. The first build, when it starts, is still:
 1. the check-in design (tight window, auto-jail, optional chaser view at check-in, Penjara);
 2. one power-up slot plus the Mat Rempit rule, on today's power-ups;

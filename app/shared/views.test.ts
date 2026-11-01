@@ -143,13 +143,16 @@ describe('feed wording', () => {
         event('ping', T0 + 10 * MIN, { data: { seen: 1 } }),
         event('jailbreak', T0 + 11 * MIN, { actor_id: 'r3', data: { freed: 1 } }),
       ]),
-    ).toEqual(['Wei broke 1 runner out of jail', 'Ping — 1 runner seen'])
+    ).toEqual(['Wei broke 1 runner out of Penjara', 'Ping — 1 runner seen'])
   })
   it('announces pauses and resumes', () => {
     expect(feedOf([event('paused', T0 + 10 * MIN), event('resumed', T0 + 11 * MIN)])).toEqual([
       'Game resumed',
       'Game paused by a marshal',
     ])
+  })
+  it('announces an auto-jail', () => {
+    expect(feedOf([event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2' })])).toEqual(['#03 missed 2 check-ins — sent to Penjara'])
   })
   it('uses the plural otherwise', () => {
     expect(feedOf([event('ping', T0 + 10 * MIN, { data: { seen: 0 } })])).toEqual(['Ping — 0 runners seen'])

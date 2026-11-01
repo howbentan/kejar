@@ -63,6 +63,14 @@ describe('alertsFrom', () => {
   })
 })
 
+describe('auto-jail alert', () => {
+  it('reads as missed and sent to Penjara', () => {
+    expect(alertsFrom([event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2', data: { who: 'Hafiz #03' } })]).map((a) => a.text)).toEqual([
+      'Hafiz #03 missed 2 check-ins — sent to Penjara',
+    ])
+  })
+})
+
 describe('missedTwoInARow', () => {
   // chase start at 5, reveals at 10, 15, 20, 25 (minutes)
   const w = (k: number) => [5, 10, 15, 20, 25].slice(0, k + 1).map((m) => T0 + m * MIN)

@@ -51,6 +51,8 @@ function toAlert(e: GameEvent): Omit<Alert, 'handled'> | null {
       return { ...base, kind: 'outside', text: `${s(d.who)} left the play area` }
     case 'missed':
       return { ...base, kind: 'missed', text: `${s(d.who)} missed 2 check-ins` }
+    case 'auto-jailed':
+      return { ...base, kind: 'missed', text: `${s(d.who)} missed 2 check-ins — sent to Penjara` }
     case 'left-start':
       return { ...base, kind: 'left-start', text: `${s(d.name)} left the start early` }
     case 'caught':

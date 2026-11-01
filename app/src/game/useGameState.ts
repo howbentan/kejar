@@ -18,6 +18,8 @@ export function useGameState(
 ) {
   const [view, setView] = useState<View | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // True while the phone refuses or fails to give a position: with auto-jail, that means missed check-ins.
+  const [locationOff, setLocationOff] = useState(false)
   const lastSent = useRef(0)
   const samples = useRef<ClockSample[]>([])
   const session = loadSession(localStorage, code)
@@ -56,6 +58,7 @@ export function useGameState(
     if (mode === 'never' || !session.token || !('geolocation' in navigator)) return
     const minGap = mode === 'always' ? ALWAYS_EVERY_MS : WHEN_OPEN_EVERY_MS
     const send = (p: GeolocationPosition) => {
+      setLocationOff(false)
       if (document.visibilityState !== 'visible' || Date.now() - lastSent.current < minGap) return
       lastSent.current = Date.now()
       void call('location', {
@@ -66,12 +69,12 @@ export function useGameState(
         accuracy_m: p.coords.accuracy,
       }).catch(() => undefined)
     }
-    const watch = navigator.geolocation.watchPosition(send, () => undefined, {
+    const watch = navigator.geolocation.watchPosition(send, () => setLocationOff(true), {
       enableHighAccuracy: true,
       maximumAge: 5_000,
     })
     return () => navigator.geolocation.clearWatch(watch)
   }, [code, mode, session.token])
 
-  return { view, error, refresh }
+  return { view, error, refresh, locationOff }
 }

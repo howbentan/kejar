@@ -91,6 +91,15 @@ async function readyGame(settings: object = {}, extra: object = {}) {
 
 const at = (dLatM: number) => ({ lat: CENTER.lat + dLatM / 111_195, lng: CENTER.lng, accuracy_m: 8 })
 
+/** Both runners keep Kejar open (a location every minute), so they never miss a check-in. */
+async function keepCheckingIn(g: { code: string; aina: { token: string }; hafiz: { token: string } }, fromMin: number, toMin: number) {
+  for (let m = fromMin; m <= toMin; m++) {
+    now = T0 + m * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(30) })
+  }
+}
+
 describe('joining', () => {
   it('create then join returns a token and player', async () => {
     const organiserToken = await createOrganiser()
@@ -239,6 +248,17 @@ describe('catching and jail', () => {
     })
   })
 
+  it('jailbreak sets freed_at on everyone it frees', async () => {
+    const g = await chasing()
+    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+    await run('jailbreak', { code: g.code, token: g.hafiz.token, qr: JAIL_QR })
+    const game = await store.gameByCode(g.code)
+    const players = await store.players(game!.id)
+    expect(players.find((p) => p.id === g.aina.playerId)!.freed_at).toBe(new Date(now).toISOString())
+    expect(players.find((p) => p.id === g.hafiz.playerId)!.freed_at).toBeNull()
+  })
+
   it('rejects a jail scan of something that is not the jail code', async () => {
     const g = await chasing()
     await rejects(run('jailbreak', { code: g.code, token: g.hafiz.token, qr: tagQr(3) }), 400)
@@ -259,6 +279,7 @@ describe('catching and jail', () => {
 
   it('runners win when time runs out', async () => {
     const g = await chasing()
+    await keepCheckingIn(g, 8, 50)
     now = T0 + 51 * MIN
     const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     expect(v.phase).toBe('ended')
@@ -288,6 +309,11 @@ describe('long games', () => {
     for (let i = 0; i < 1200; i++) {
       now = T0 + 6 * MIN + i * 1000
       await run('location', { code: g.code, token: g.ben.token, ...at(i) })
+      // The runners check in every minute, so nobody is auto-jailed and the game keeps going.
+      if (i % 60 === 0) {
+        await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+        await run('location', { code: g.code, token: g.hafiz.token, ...at(30) })
+      }
     }
     const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     const ben = v.dots.find((d) => d.id === g.ben.playerId)!
@@ -430,6 +456,7 @@ describe('power-up stations', () => {
   it('flare with under 30 s left is too-late and not spent', async () => {
     const g = await chasingWithStation()
     const flare = await give(g.gameId, g.ben.playerId, 'flare')
+    await keepCheckingIn(g, 8, 49)
     now = T0 + 50 * MIN - 20_000
     expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: flare.id })).toEqual({
       ok: false,
@@ -890,7 +917,7 @@ describe('automatic alerts', () => {
     expect(await kinds(g.code, g.organiserToken)).toEqual(['left-start'])
   })
 
-  it('a runner who skips pings 1 and 2 raises one missed alert at ping 2', async () => {
+  it('a runner who skips pings 1 and 2 is auto-jailed at ping 2, and the last one out ends the game', async () => {
     const g = await safetyGame({ checkinMode: 'schedule' })
     // Aina checks in for ping 1 (reveal at +10), Hafiz never does.
     now = T0 + 9 * MIN
@@ -899,12 +926,79 @@ describe('automatic alerts', () => {
     expect(await kinds(g.code, g.organiserToken)).toEqual([])
     now = T0 + 15 * MIN
     const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
-    expect(v.alerts.map((a) => a.text)).toEqual(['Hafiz #03 missed 2 check-ins'])
+    expect(v.alerts.map((a) => a.text)).toEqual(['Hafiz #03 missed 2 check-ins — sent to Penjara'])
+    const hafiz = (await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!
+    expect(hafiz.jailed).toBe(true)
+    expect(hafiz.caught_by).toBeNull()
+    const events = await store.events(g.gameId)
+    expect(events.some((e) => e.type === 'auto-jailed' && e.target_id === g.hafiz.playerId)).toBe(true)
+    expect(events.some((e) => e.type === 'missed')).toBe(false)
+    // Ping 3 (+20): Aina has now missed 2 in a row too, and she was the last runner free.
     now = T0 + 20 * MIN
-    expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts.map((a) => a.text).sort()).toEqual([
-      'Aina #07 missed 2 check-ins',
-      'Hafiz #03 missed 2 check-ins',
-    ])
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    expect((await store.gameByCode(g.code))!.winner).toBe('chasers')
+  })
+
+  it('a runner freed just before a reveal does not inherit misses from before they were freed', async () => {
+    const g = await safetyGame({ checkinMode: 'schedule' })
+    const missedTexts = async () =>
+      (await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts
+        .map((a) => a.text)
+        .filter((t) => t.includes('missed'))
+    // Hafiz never checks in. He is caught at +12 and freed by Aina at +13.
+    now = T0 + 9 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    now = T0 + 12 * MIN
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })
+    now = T0 + 13 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR })).toMatchObject({ ok: true })
+    // Ping 2 (+15): only one miss since his release, so nothing yet.
+    now = T0 + 15 * MIN
+    expect(await missedTexts()).toEqual([])
+    // Ping 3 (+20): his second miss since release, so he is auto-jailed, and stays there:
+    // he has used his one escape.
+    now = T0 + 20 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    expect(await missedTexts()).toContain('Hafiz #03 missed 2 check-ins — sent to Penjara')
+    expect((await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!.jailed).toBe(true)
+    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR })).toEqual({
+      ok: false,
+      reason: 'nobody-to-free',
+    })
+  })
+
+  it('a missed bonus (Mat Rempit) ping never counts towards auto-jail', async () => {
+    const g = await safetyGame({ checkinMode: 'schedule' })
+    // Two bonus pings land between the scheduled ones; Hafiz ignores both.
+    await store.addBonusPing(g.gameId, new Date(T0 + 11 * MIN).toISOString(), new Date(T0 + 11.5 * MIN).toISOString())
+    await store.addBonusPing(g.gameId, new Date(T0 + 16 * MIN).toISOString(), new Date(T0 + 16.5 * MIN).toISOString())
+    for (const m of [9.9, 14.9, 19.9]) {
+      now = T0 + m * MIN
+      await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+      await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+      now = T0 + (m + 2) * MIN
+      await run('state', { code: g.code, organiserToken: g.organiserToken })
+    }
+    expect((await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!.jailed).toBe(false)
+  })
+
+  it('no check-in is missed while the game is paused', async () => {
+    const g = await safetyGame({ checkinMode: 'schedule' })
+    // Aina checks in for ping 1; Hafiz never checks in. Paused from +14 to +20, so ping 2 moves to +21.
+    now = T0 + 9 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    now = T0 + 14 * MIN
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 20 * MIN
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 21 * MIN - 1000
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    expect((await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!.jailed).toBe(false)
+    now = T0 + 21 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    expect((await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!.jailed).toBe(true)
   })
 
   it('a flagged catch shows as Check catch', async () => {
@@ -1028,7 +1122,7 @@ describe('saved arenas', () => {
     await rejects(
       run('create', { organiserToken, savedArenaId: arenaId, overrides: { jail: pt(0, 0) } }),
       400,
-      'Jail must be inside the play area',
+      'Penjara must be inside the play area',
     )
   })
 
@@ -1069,12 +1163,12 @@ describe('saved arenas', () => {
     osmReplies.push({ elements: [{ type: 'way', id: 5, tags: { natural: 'water' }, geometry: geometry(lake) }] })
     expect(await run('recheckWater', { organiserToken, arenaId })).toEqual({
       waterChecked: true,
-      problems: ['Jail must be inside the play area'],
+      problems: ['Penjara must be inside the play area'],
     })
     const [listed] = (await run('listArenas', { organiserToken })).arenas
-    expect(listed).toMatchObject({ waterChecked: true, problems: ['Jail must be inside the play area'] })
+    expect(listed).toMatchObject({ waterChecked: true, problems: ['Penjara must be inside the play area'] })
     expect(listed.arena.holes).toHaveLength(1)
-    await rejects(run('create', { organiserToken, savedArenaId: arenaId }), 400, 'Jail must be inside the play area')
+    await rejects(run('create', { organiserToken, savedArenaId: arenaId }), 400, 'Penjara must be inside the play area')
   })
 
   it('recheckWater keeps the flag when Overpass is still down', async () => {

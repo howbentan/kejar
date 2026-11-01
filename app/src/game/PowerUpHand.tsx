@@ -34,7 +34,7 @@ const USE_REJECTIONS: Record<string, string> = {
   'too-late': 'Too late for a Flare',
   'already-used': 'Already used',
   'not-chasing': 'Power-ups work during the chase',
-  'cannot-use': "You can't use power-ups in jail",
+  'cannot-use': "You can't use power-ups in Penjara",
   'not-yours': "That isn't yours",
   paused: 'Game is paused',
 }

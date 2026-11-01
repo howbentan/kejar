@@ -45,4 +45,27 @@ describe('useGameState', () => {
     })
     expect(stateCalls()).toHaveLength(1)
   })
+
+  it('reports location off when the phone refuses or fails to give a position, and clears it on a fix', async () => {
+    let onFix: (p: unknown) => void = () => {}
+    let onError: (e: unknown) => void = () => {}
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: {
+        watchPosition: (ok: (p: unknown) => void, bad: (e: unknown) => void) => {
+          onFix = ok
+          onError = bad
+          return 1
+        },
+        clearWatch: () => {},
+      },
+    })
+    const { result } = renderHook(() => useGameState('ABC234', { sendLocation: 'when-open' }))
+    await act(async () => {})
+    expect(result.current.locationOff).toBe(false)
+    act(() => onError({ code: 1, message: 'denied' }))
+    expect(result.current.locationOff).toBe(true)
+    act(() => onFix({ coords: { latitude: 3, longitude: 101, accuracy: 8 } }))
+    expect(result.current.locationOff).toBe(false)
+  })
 })
