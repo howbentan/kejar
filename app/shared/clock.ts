@@ -50,8 +50,8 @@ export function pingTimes(game: Game, now?: number): { seq: number; alertAt: num
   const step = game.settings.pingMin * MINUTE_MS
   const out: { seq: number; alertAt: number; revealAt: number }[] = []
   for (let seq = 1, t = hideEnd + step; t < end; seq++, t += step) {
-    const revealAt = toWall(game, t, now)
-    out.push({ seq, alertAt: revealAt - SCHEDULED_ALERT_LEAD_MS, revealAt })
+    // The alert is placed on the wall clock on its own, so a pause after it moves only the reveal.
+    out.push({ seq, alertAt: toWall(game, t - SCHEDULED_ALERT_LEAD_MS, now), revealAt: toWall(game, t, now) })
   }
   return out
 }

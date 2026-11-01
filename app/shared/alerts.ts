@@ -6,7 +6,7 @@ export const OUTSIDE_MARGIN_M = 20
 export const START_RADIUS_M = 50
 export const NOTE_MAX = 140
 
-export type AlertKind = 'sos' | 'report' | 'outside' | 'missed' | 'left-start' | 'flagged-catch'
+export type AlertKind = 'sos' | 'report' | 'outside' | 'missed' | 'auto-jail' | 'left-start' | 'flagged-catch'
 export type ReportReason = 'unsafe' | 'dispute' | 'other'
 
 export const REASON_LABEL: Record<ReportReason, string> = {
@@ -22,6 +22,8 @@ export interface Alert {
   kind: AlertKind
   text: string
   where: LatLng | null
+  /** The player the alert is about, when an action (like undoing an auto-jail) needs it. */
+  targetId: string | null
   handled: boolean
 }
 
@@ -38,7 +40,7 @@ function place(data: Record<string, unknown>): LatLng | null {
 
 function toAlert(e: GameEvent): Omit<Alert, 'handled'> | null {
   const d = e.data
-  const base = { id: e.id, at: e.at, where: null as LatLng | null }
+  const base = { id: e.id, at: e.at, where: null as LatLng | null, targetId: null as string | null }
   switch (e.type) {
     case 'sos':
       return { ...base, kind: 'sos', text: `SOS from ${s(d.who)}`, where: place(d) }
@@ -52,7 +54,7 @@ function toAlert(e: GameEvent): Omit<Alert, 'handled'> | null {
     case 'missed':
       return { ...base, kind: 'missed', text: `${s(d.who)} missed 2 check-ins` }
     case 'auto-jailed':
-      return { ...base, kind: 'missed', text: `${s(d.who)} missed 2 check-ins — sent to Penjara` }
+      return { ...base, kind: 'auto-jail', targetId: e.target_id, text: `${s(d.who)} missed 2 check-ins — sent to Penjara` }
     case 'left-start':
       return { ...base, kind: 'left-start', text: `${s(d.name)} left the start early` }
     case 'caught':
@@ -61,18 +63,6 @@ function toAlert(e: GameEvent): Omit<Alert, 'handled'> | null {
     default:
       return null
   }
-}
-
-/**
- * Whether a runner has just missed their second check-in in a row, so marshals hear once per streak.
- * `windows` is [chase start, reveal 1, …, reveal k] (scheduled pings only), ending at the reveal being
- * processed; `lastAt` is the runner's latest position at that reveal. A check-in for ping j is a
- * position after reveal j-1 (or the chase start) and no later than reveal j.
- */
-export function missedTwoInARow(windows: number[], lastAt: number | null): boolean {
-  const k = windows.length - 1
-  const L = lastAt ?? -Infinity
-  return k >= 2 && L <= windows[k - 2] && (k === 2 || L > windows[k - 3])
 }
 
 /** Marshal alerts from the game's events: open ones newest first, then handled ones newest first. */

@@ -31,6 +31,30 @@ describe('computeResults', () => {
     expect(r.mostCatches).toEqual({ id: 'c1', count: 1 })
   })
 
+  it('an auto-jail a marshal undid does not end survival', () => {
+    const players = [ben, player('r1', 'runner'), player('r2', 'runner', { jailed: true })]
+    const events = [
+      event('caught', T0 + 12 * MIN, { actor_id: 'c1', target_id: 'r2' }),
+      event('auto-jailed', T0 + 15 * MIN, { target_id: 'r1' }),
+      event('auto-jail-undone', T0 + 16 * MIN, { target_id: 'r1', data: { eventId: 'aj1' } }),
+    ]
+    events[1].id = 'aj1'
+    expect(computeResults(g, players, events).longestSurvivor).toEqual({ id: 'r1', ms: 45 * MIN })
+  })
+
+  it('undoing a later auto-jail does not cancel an earlier real one', () => {
+    const players = [ben, player('r1', 'runner'), player('r2', 'runner', { jailed: true })]
+    const a = event('auto-jailed', T0 + 15 * MIN, { target_id: 'r1' })
+    const b = event('auto-jailed', T0 + 27 * MIN, { target_id: 'r1' })
+    const events = [
+      event('caught', T0 + 12 * MIN, { actor_id: 'c1', target_id: 'r2' }),
+      a,
+      b,
+      event('auto-jail-undone', T0 + 28 * MIN, { target_id: 'r1', data: { eventId: b.id } }),
+    ]
+    expect(computeResults(g, players, events).longestSurvivor).toEqual({ id: 'r1', ms: 10 * MIN })
+  })
+
   it('an auto-jail alone never counts for Most catches', () => {
     const r = computeResults(g, [ben, player('r1', 'runner', { jailed: true })], [event('auto-jailed', T0 + 15 * MIN, { target_id: 'r1' })])
     expect(r.mostCatches).toBeNull()

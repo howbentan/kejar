@@ -21,6 +21,10 @@ export function useGameState(
   // True while the phone refuses or fails to give a position: with auto-jail, that means missed check-ins.
   const [locationOff, setLocationOff] = useState(false)
   const lastSent = useRef(0)
+  // The latest fix, and the check-in window it was last re-sent for (one send per window, even if the phone is still).
+  const lastFix = useRef<GeolocationPosition | null>(null)
+  const sentForAlert = useRef<number | null>(null)
+  const modeRef = useRef<LocationMode>('never')
   const samples = useRef<ClockSample[]>([])
   const session = loadSession(localStorage, code)
   const auth = credentials(code)
@@ -35,6 +39,15 @@ export function useGameState(
       // Re-express "now" on this phone's clock, corrected for network delay, so every device's timers agree.
       setView({ ...v, now: receivedAt + clockOffset(samples.current) })
       setError(null)
+      // A still phone may give no new fix inside the 45 s window, so re-send the last one once per window.
+      const fix = lastFix.current
+      if (modeRef.current !== 'never' && fix && session.token && v.nextAlertAt != null && v.now >= v.nextAlertAt && sentForAlert.current !== v.nextAlertAt) {
+        sentForAlert.current = v.nextAlertAt
+        lastSent.current = Date.now()
+        void call('location', { code, token: session.token, lat: fix.coords.latitude, lng: fix.coords.longitude, accuracy_m: fix.coords.accuracy }).catch(
+          () => undefined,
+        )
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     }
@@ -53,12 +66,14 @@ export function useGameState(
   }, [refresh])
 
   const mode = typeof opts.sendLocation === 'function' ? opts.sendLocation(view) : opts.sendLocation
+  modeRef.current = mode
 
   useEffect(() => {
     if (mode === 'never' || !session.token || !('geolocation' in navigator)) return
     const minGap = mode === 'always' ? ALWAYS_EVERY_MS : WHEN_OPEN_EVERY_MS
     const send = (p: GeolocationPosition) => {
       setLocationOff(false)
+      lastFix.current = p
       if (document.visibilityState !== 'visible' || Date.now() - lastSent.current < minGap) return
       lastSent.current = Date.now()
       void call('location', {

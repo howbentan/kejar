@@ -46,6 +46,30 @@ describe('useGameState', () => {
     expect(stateCalls()).toHaveLength(1)
   })
 
+  it('sends a location once when a check-in window opens, even if the phone gave no new fix', async () => {
+    let onFix: (p: unknown) => void = () => {}
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: { watchPosition: (ok: (p: unknown) => void) => ((onFix = ok), 1), clearWatch: () => {} },
+    })
+    const alertAt = Date.now() + 30_000
+    call.mockImplementation(async (action: string) => (action === 'state' ? { phase: 'chasing', now: Date.now(), nextAlertAt: alertAt } : { ok: true }))
+    renderHook(() => useGameState('ABC234', { sendLocation: 'when-open' }))
+    await act(async () => {})
+    act(() => onFix({ coords: { latitude: 3, longitude: 101, accuracy: 8 } }))
+    const locationCalls = () => call.mock.calls.filter(([a]) => a === 'location').length
+    expect(locationCalls()).toBe(1)
+    // The runner stays still: no more fixes. The window opens at +30 s.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(33_000)
+    })
+    expect(locationCalls()).toBe(2)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9_000)
+    })
+    expect(locationCalls()).toBe(2) // once per window
+  })
+
   it('reports location off when the phone refuses or fails to give a position, and clears it on a fix', async () => {
     let onFix: (p: unknown) => void = () => {}
     let onError: (e: unknown) => void = () => {}

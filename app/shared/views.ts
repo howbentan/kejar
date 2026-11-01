@@ -1,5 +1,6 @@
+import { alertLeadFor, checkedIn } from './checkins.js'
 import { alertsFrom, type Alert } from './alerts.js'
-import { chaseStartOf, MINUTE_MS, nextReveal, phaseAt } from './clock.js'
+import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
 import { distanceM, fuzz } from './geo.js'
 import { activeShield, decoySpot } from './powerups.js'
 import type { Arena, Game, GameEvent, Phase, Ping, Player, Position, PowerUp, Results, Role, Settings } from './types.js'
@@ -54,6 +55,8 @@ export interface View {
   chaserNearby: boolean
   /** Name of the chaser who caught me, while I'm jailed. */
   caughtBy: string | null
+  /** Why I'm in Penjara: caught by a chaser, or auto-jailed for missing two check-ins. */
+  jailReason: 'caught' | 'missed-checkins' | null
   feed: { at: string; text: string }[]
   counts: { runnersFree: number; runnersJailed: number; chasers: number }
   /** Everyone in the game: shown in the lobby and to marshals; empty for players mid-game. */
@@ -83,7 +86,7 @@ export const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 
 
 const tagLabel = (p: Player) => (p.tag_id === null ? p.name : `#${String(p.tag_id).padStart(2, '0')}`)
 
-function latestAtOrBefore(list: Position[] | undefined, t: number): Position | undefined {
+export function latestAtOrBefore(list: Position[] | undefined, t: number): Position | undefined {
   if (!list) return undefined
   let found: Position | undefined
   for (const p of list) if (Date.parse(p.at) <= t) found = p
@@ -139,6 +142,10 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
   const last = revealed[revealed.length - 1]
   if (!last) return { dots, notes }
   const revealAt = Date.parse(last.reveal_at)
+  const alertAt =
+    last.seq >= BONUS_SEQ_BASE
+      ? Date.parse(last.alert_at)
+      : (pingTimes(i.game, i.now).find((t) => t.seq === last.seq)?.alertAt ?? revealAt - alertLeadFor(last.seq))
   const prev = revealed[revealed.length - 2]
   const prevAt = prev ? Date.parse(prev.reveal_at) : (chaseStartOf(i.game, i.now) ?? revealAt)
 
@@ -168,7 +175,8 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
     } else {
       dot = { ...dotFor(p, at, 'runner'), ...fuzz(at, FUZZ_RADIUS_M, seed), fuzzy: true }
     }
-    if (Date.parse(at.at) < prevAt) dot.missed = true
+    // Missed = no location inside this ping's check-in window (45 s scheduled, 30 s bonus).
+    if (!checkedIn(alertAt, revealAt, Date.parse(at.at))) dot.missed = true
     dots.push(dot)
   }
   return { dots, notes }
@@ -192,6 +200,15 @@ function runnerDots(i: ViewInput): { dots: MapDot[]; nearby: boolean } {
       return !!c && fresh(c) && distanceM(c, mine) <= NEARBY_M
     })
   return { dots, nearby }
+}
+
+function jailReasonFor(i: ViewInput): View['jailReason'] {
+  if (!i.me.jailed) return null
+  if (i.me.caught_by) return 'caught'
+  const latest = i.events
+    .filter((e) => (e.type === 'caught' || e.type === 'auto-jailed') && e.target_id === i.me.id)
+    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0]
+  return latest?.type === 'auto-jailed' ? 'missed-checkins' : 'caught'
 }
 
 function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
@@ -229,6 +246,8 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       return 'Game resumed'
     case 'removed':
       return `${String(e.data.name ?? 'A player')} left the game`
+    case 'auto-jail-undone':
+      return target ? `${tagLabel(target)} is back in the game (marshal)` : 'A runner is back in the game (marshal)'
     case 'auto-jailed':
       return target ? `${tagLabel(target)} missed 2 check-ins — sent to Penjara` : 'A runner missed 2 check-ins — sent to Penjara'
     default:
@@ -240,7 +259,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null }
+    return { ...v, dots: [], feed: [], alerts: [], roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null }
   }
   return v
 }
@@ -305,6 +324,7 @@ function fullView(i: ViewInput): View {
     lastRevealAt: lastReveal ? Date.parse(lastReveal.reveal_at) : null,
     chaserNearby,
     caughtBy: i.me.jailed && i.me.caught_by ? (byId.get(i.me.caught_by)?.name ?? null) : null,
+    jailReason: jailReasonFor(i),
     feed,
     counts: {
       runnersFree: runners.filter((p) => !p.jailed).length,

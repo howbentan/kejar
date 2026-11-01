@@ -44,6 +44,12 @@ describe('chaser view', () => {
     expect(distanceM(dot, { lat: 3.003, lng: 101.003 })).toBeLessThanOrEqual(15)
   })
 
+  it('a location sent before the 45 s window shows as missed, one inside it does not', () => {
+    const at = (ms: number) => ({ ...positions, r2: [pos(3.003, 101.003, T0 + 15 * MIN - ms)] })
+    expect(view(chaser, { positions: at(46_000) }).dots.find((d) => d.id === 'r2')!.missed).toBe(true)
+    expect(view(chaser, { positions: at(30_000) }).dots.find((d) => d.id === 'r2')!.missed).toBeUndefined()
+  })
+
   it('runner with no position at reveal is listed as never checked in', () => {
     const v = view(chaser)
     expect(v.dots.find((d) => d.id === 'r3')).toBeUndefined()
@@ -135,6 +141,22 @@ describe('ping moment', () => {
   })
 })
 
+describe('jail reason', () => {
+  const jailedHafiz = { ...hafiz, jailed: true }
+  it('says missed-checkins when my latest jailing was an auto-jail', () => {
+    const v = view(jailedHafiz, { players: [chaser, aina, jailedHafiz, wei, siti], events: [event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2' })] })
+    expect(v.jailReason).toBe('missed-checkins')
+  })
+  it('says caught when a chaser caught me', () => {
+    const caught = { ...hafiz, jailed: true, caught_by: 'c1' }
+    const v = view(caught, { players: [chaser, aina, caught, wei, siti], events: [event('caught', T0 + 12 * MIN, { actor_id: 'c1', target_id: 'r2' })] })
+    expect(v.jailReason).toBe('caught')
+  })
+  it('is null while free', () => {
+    expect(view(aina).jailReason).toBeNull()
+  })
+})
+
 describe('feed wording', () => {
   const feedOf = (events: Parameters<typeof viewFor>[0]['events']) => view(siti, { events }).feed.map((f) => f.text)
   it('uses the singular for one runner', () => {
@@ -150,6 +172,9 @@ describe('feed wording', () => {
       'Game resumed',
       'Game paused by a marshal',
     ])
+  })
+  it('announces an undone auto-jail', () => {
+    expect(feedOf([event('auto-jail-undone', T0 + 16 * MIN, { target_id: 'r2' })])).toEqual(['#03 is back in the game (marshal)'])
   })
   it('announces an auto-jail', () => {
     expect(feedOf([event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2' })])).toEqual(['#03 missed 2 check-ins — sent to Penjara'])

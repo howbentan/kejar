@@ -15,12 +15,13 @@ vi.mock('../spike/push', () => ({
 
 import MarshalTools from './MarshalTools'
 
-const alert = (id: string, kind: Alert['kind'], text: string, handled = false): Alert => ({
+const alert = (id: string, kind: Alert['kind'], text: string, handled = false, targetId: string | null = null): Alert => ({
   id,
   at: new Date(100_000 - 60_000).toISOString(),
   kind,
   text,
   where: null,
+  targetId,
   handled,
 })
 
@@ -60,6 +61,23 @@ describe('MarshalTools', () => {
     render(<MarshalTools code="ABC234" view={testView({ alerts: [alert('e1', 'sos', 'SOS from Aina #07')] })} refresh={refresh} />)
     fireEvent.click(screen.getByRole('button', { name: 'Handled' }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('handleAlert', { code: 'ABC234', organiserToken: 'h1', eventId: 'e1' }))
+  })
+
+  it('an open auto-jail alert offers Phone problem: undo and It stands', async () => {
+    const a = alert('e5', 'auto-jail', 'Hafiz #03 missed 2 check-ins — sent to Penjara', false, 'r2')
+    render(<MarshalTools code="ABC234" view={testView({ alerts: [a] })} refresh={refresh} />)
+    expect(screen.queryByRole('button', { name: 'Handled' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Phone problem: undo' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('undoAutoJail', { code: 'ABC234', organiserToken: 'h1', eventId: 'e5' }))
+    fireEvent.click(screen.getByRole('button', { name: 'It stands' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('handleAlert', { code: 'ABC234', organiserToken: 'h1', eventId: 'e5' }))
+  })
+
+  it('a handled auto-jail alert has no buttons', () => {
+    const a = alert('e5', 'auto-jail', 'Hafiz #03 missed 2 check-ins — sent to Penjara', true, 'r2')
+    render(<MarshalTools code="ABC234" view={testView({ alerts: [a] })} refresh={refresh} />)
+    expect(screen.queryByRole('button', { name: 'Phone problem: undo' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'It stands' })).toBeNull()
   })
 
   it('Remove needs confirming before it calls removePlayer', async () => {
