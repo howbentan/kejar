@@ -82,6 +82,14 @@ select.input {
 select.input option { background: #141614; color: var(--white); }
 
 /* "Centre on me" map button */
+/* The map credit: required, but kept to one small dim line on a dark strip in the corner. */
+.maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib {
+  margin: 0 !important; padding: 1px 6px !important; border-radius: 6px 0 0 0;
+  background: rgba(10, 10, 11, 0.55) !important; color: rgba(245, 245, 243, 0.45);
+  font: 400 8.5px/1.4 var(--font); letter-spacing: 0.01em;
+}
+.maplibregl-ctrl-attrib a { color: rgba(245, 245, 243, 0.55) !important; text-decoration: none; }
+.maplibregl-ctrl-attrib-button { display: none !important; }
 .map-me {
   position: absolute; left: 10px; bottom: 10px; z-index: 2; appearance: none; cursor: pointer;
   display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px;

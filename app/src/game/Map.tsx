@@ -116,7 +116,9 @@ export default function GameMap({
       style: kejarMapStyle,
       center: [arena.start.lng, arena.start.lat],
       zoom: 16,
-      attributionControl: { compact: true },
+      // The map credit is required by OpenStreetMap, OpenMapTiles and OpenFreeMap; shown as one slim dark line
+      // (tokens.css) instead of MapLibre's white pop-out box.
+      attributionControl: { compact: false },
     })
     map.current = m
     m.on('load', () => {
