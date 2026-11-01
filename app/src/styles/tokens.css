@@ -119,7 +119,8 @@ select.input option { background: #141614; color: var(--white); }
 .chase-warning p { margin: 0; font-size: 13px; }
 
 /* Check-in banner: drops over the top of the map; the map stays visible underneath. */
-.checkin-banner { border-radius: 16px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.marker { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 2; }
+.checkin-banner { position: relative; border-radius: 16px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .checkin-banner.ok { background: var(--volt); color: var(--black); }
 .checkin-banner.wait { background: rgba(10, 10, 11, 0.94); border: 1.5px solid var(--volt); color: var(--white); }
 .checkin-banner.miss { background: var(--white); color: var(--black); }

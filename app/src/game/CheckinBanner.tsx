@@ -1,6 +1,7 @@
 import * as m from 'motion/react-m'
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import type { Checkin } from '../../shared/views.js'
+import Marker from './Marker'
 import { clock } from './time'
 
 /**
@@ -18,7 +19,7 @@ export default function CheckinBanner({ checkin, now, openedByPush }: { checkin:
   switch (checkin.state) {
     case 'in':
       return (
-        <Banner tone="ok" mark="✓" title="Checked in" sub={`Kejar see you in ${toReveal}`}>
+        <Banner tone="ok" mark="✓" title="Checked in" sub={`Kejar see you in ${toReveal}`} tick>
           <p className="banner-foot">You can pocket your phone now.</p>
         </Banner>
       )
@@ -48,9 +49,11 @@ export default function CheckinBanner({ checkin, now, openedByPush }: { checkin:
   }
 }
 
-function Banner(props: { tone: 'ok' | 'wait' | 'miss'; mark: string; title: string; sub: string; children?: ReactNode }) {
+function Banner(props: { tone: 'ok' | 'wait' | 'miss'; mark: string; title: string; sub: string; tick?: boolean; children?: ReactNode }) {
+  const self = useRef<HTMLDivElement>(null)
   return (
     <m.div
+      ref={self}
       className={`checkin-banner ${props.tone}`}
       role="status"
       initial={{ y: -80, opacity: 0 }}
@@ -67,6 +70,8 @@ function Banner(props: { tone: 'ok' | 'wait' | 'miss'; mark: string; title: stri
         </div>
       </div>
       {props.children}
+      {/* Checked in: a big black marker tick across the lime banner (motion design §8.5). */}
+      {props.tick && <Marker marks={[{ shape: 'tick', target: self }]} colour="black" delayMs={300} />}
     </m.div>
   )
 }

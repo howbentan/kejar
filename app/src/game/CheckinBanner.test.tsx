@@ -19,6 +19,17 @@ describe('CheckinBanner', () => {
     expect(vibrate).toHaveBeenCalledWith(80)
   })
 
+  it('only Checked in gets the marker tick', () => {
+    const { container, rerender } = render(<CheckinBanner checkin={c('in')} now={NOW} openedByPush={false} />)
+    expect(container.querySelector('.marker')).not.toBeNull()
+    for (const state of ['open', 'missed'] as const) {
+      rerender(<CheckinBanner checkin={c(state, 1)} now={NOW} openedByPush={false} />)
+      expect(container.querySelector('.marker')).toBeNull()
+    }
+    rerender(<CheckinBanner checkin={c('early')} now={NOW} openedByPush />)
+    expect(container.querySelector('.marker')).toBeNull()
+  })
+
   it('open: check in now', () => {
     render(<CheckinBanner checkin={c('open')} now={NOW} openedByPush={false} />)
     expect(screen.getByText('Check in now')).toBeInTheDocument()
