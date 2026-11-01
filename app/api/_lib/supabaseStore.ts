@@ -3,7 +3,7 @@ import type { Game, GameEvent, Ping, Player, Position, PowerUp } from '../../sha
 import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, StationClaim } from './store.js'
 
 const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, push, removed_at, outside, left_start'
-const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws'
+const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)

@@ -31,7 +31,6 @@ const CLAIM_REJECTIONS: Record<string, string> = {
 
 const USE_REJECTIONS: Record<string, string> = {
   'too-late': 'Too late for Mat Rempit.',
-  'flare-pending': 'Another Mat Rempit is already on its way.',
   'already-used': 'Already used',
   'not-chasing': 'Power-ups work during the chase',
   'cannot-use': "You can't use power-ups in Penjara",
@@ -81,6 +80,8 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
           ? INFO[r.kind].used
           : r.reason === 'flare-cooldown'
             ? `Mat Rempit is ready again in ${clock(r.readyInMs ?? 0)}.`
+            : r.reason === 'flare-pending'
+              ? `Another Mat Rempit is already on its way. Ready again in ${clock(r.readyInMs ?? 0)}.`
             : (USE_REJECTIONS[r.reason] ?? 'Not used'),
       )
     } catch (e) {

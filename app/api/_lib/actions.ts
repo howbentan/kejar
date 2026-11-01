@@ -372,6 +372,7 @@ const start: Action = async (ctx, body) => {
   await ctx.store.updateGame(game.id, {
     started_at: startedAt,
     runner_sets: setsFor('runner', count('runner')),
+    deck_seed: newToken(),
     chaser_sets: setsFor('chaser', count('chaser')),
   })
   const chaseAt = iso(chaseStartOf(started)!)
@@ -687,7 +688,8 @@ const claim: Action = async (ctx, body) => {
   const stored = side === 'runner' ? fresh.runner_sets : fresh.chaser_sets
   const sets = stored ?? setsFor(side, (await ctx.store.players(game.id)).filter((p) => p.role === side).length)
   const deck = deckFor(fresh.settings.mode ?? 'core', side, sets)
-  const kind = cardAt(`${game.id}:${side}`, deck, await ctx.store.drawCard(game.id, side))
+  // Seeded with a secret (not the game id players can see), so nobody can work out the next card.
+  const kind = cardAt(`${fresh.deck_seed ?? game.id}:${side}`, deck, await ctx.store.drawCard(game.id, side))
   // Re-checked atomically by the store, so double-taps and simultaneous scans can't both win.
   const claimed = await ctx.store.claimStation(
     { game_id: game.id, player_id: me.id, kind, station: station! },
@@ -734,7 +736,7 @@ const usePowerup: Action = async (ctx, body) => {
     }
     if (!added) {
       await ctx.store.updatePowerUp(u.id, { used_at: null })
-      return { ok: false, reason: 'flare-pending' }
+      return { ok: false, ...(flareBlocked(await ctx.store.pings(game.id), ctx.now) ?? { reason: 'flare-pending', readyInMs: 0 }) }
     }
   }
   await ctx.store.addEvent({ game_id: game.id, type: 'used', actor_id: me.id, target_id: null, data: { kind: u.kind } })

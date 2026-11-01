@@ -62,6 +62,14 @@ describe('PowerUpHand', () => {
     expect(screen.getByText('DECK · 4 LEFT')).toBeInTheDocument()
   })
 
+  it('says when Mat Rempit is ready if another is on its way', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'flare-pending', readyInMs: 210_000 })
+    render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'flare' }] })} />)
+    fireEvent.click(screen.getByRole('button', { name: /mat rempit/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use Mat Rempit' }))
+    expect(await screen.findByText('Another Mat Rempit is already on its way. Ready again in 3:30.')).toBeInTheDocument()
+  })
+
   it('explains a refused Mat Rempit', async () => {
     call.mockResolvedValue({ ok: false, reason: 'flare-cooldown', readyInMs: 133_000 })
     render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'flare' }] })} />)

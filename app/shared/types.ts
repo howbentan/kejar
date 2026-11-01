@@ -65,6 +65,8 @@ export interface Game {
   chaser_sets?: number | null
   runner_draws?: number
   chaser_draws?: number
+  /** Secret seed for the deck shuffle, set at start; never sent to players, so the next card can't be predicted. */
+  deck_seed?: string | null
 }
 
 export interface Player {

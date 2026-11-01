@@ -414,8 +414,19 @@ describe('power-up stations', () => {
   it('a Core game only ever deals Durian and Ponteng to runners, in deck order', async () => {
     const g = await chasingWithStation()
     const r = await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
-    expect(r.kind).toBe(cardAt(`${g.gameId}:runner`, deckFor('core', 'runner', 1), 0))
+    const seed = (await store.gameByCode(g.code))!.deck_seed
+    expect(r.kind).toBe(cardAt(`${seed}:runner`, deckFor('core', 'runner', 1), 0))
     expect(['shield', 'cloak']).toContain(r.kind)
+  })
+
+  it("the deck's order comes from a secret seed that no player ever sees", async () => {
+    const g = await chasingWithStation()
+    const seed = (await store.gameByCode(g.code))!.deck_seed
+    expect(seed).toMatch(/^.{16,}$/)
+    expect(seed).not.toContain(g.gameId)
+    for (const token of [g.aina.token, g.ben.token]) {
+      expect(JSON.stringify(await run('state', { code: g.code, token }))).not.toContain(seed!)
+    }
   })
 
   it('a second claim while the slot is full is refused and draws nothing', async () => {
@@ -569,7 +580,7 @@ describe('review fixes', () => {
       run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f2.id }),
     ])
     expect(results.filter((r) => r.ok)).toHaveLength(1)
-    expect(results.find((r) => !r.ok)).toEqual({ ok: false, reason: 'flare-pending' })
+    expect(results.find((r) => !r.ok)).toEqual({ ok: false, reason: 'flare-pending', readyInMs: 30_000 + 3 * MIN })
     expect((await store.pings(g.gameId)).filter((p) => p.seq >= BONUS_SEQ_BASE)).toHaveLength(1)
     expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'flare' && u.used_at === null)).toHaveLength(1)
   })
@@ -578,7 +589,11 @@ describe('review fixes', () => {
     const g = await chasingWithStation()
     const [f1, f2] = [await give(g.gameId, g.ben.playerId, 'flare'), await give(g.gameId, g.ben.playerId, 'flare')]
     expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f1.id })).toEqual({ ok: true, kind: 'flare' })
-    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f2.id })).toEqual({ ok: false, reason: 'flare-pending' })
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f2.id })).toEqual({
+      ok: false,
+      reason: 'flare-pending',
+      readyInMs: 30_000 + 3 * MIN,
+    })
     now += 30_000 // the surprise ping reveals
     await run('state', { code: g.code, organiserToken: g.organiserToken })
     now += 60_000

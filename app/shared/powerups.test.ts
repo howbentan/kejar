@@ -138,7 +138,7 @@ describe('activeShield', () => {
 describe('flareBlocked', () => {
   const bonus = (revealAt: number, revealed: boolean): Ping => ({ ...ping(BONUS_SEQ_BASE, revealAt), revealed })
   it('blocks while another surprise ping is still on its way', () => {
-    expect(flareBlocked([bonus(NOW + 10_000, false)], NOW)).toEqual({ reason: 'flare-pending' })
+    expect(flareBlocked([bonus(NOW + 10_000, false)], NOW)).toEqual({ reason: 'flare-pending', readyInMs: 10_000 + 3 * MIN })
   })
   it('blocks for 3 minutes after a surprise ping is revealed', () => {
     expect(flareBlocked([bonus(NOW - 60_000, true)], NOW)).toEqual({ reason: 'flare-cooldown', readyInMs: 120_000 })

@@ -82,9 +82,11 @@ export function slotBusy(powerUps: PowerUp[], playerId: string, pings: Ping[], n
 }
 
 /** Mat Rempit is one at a time, team-wide, with a 3-minute cooldown after each surprise ping (power-ups §5a). */
-export function flareBlocked(pings: Ping[], now: number): { reason: 'flare-pending' } | { reason: 'flare-cooldown'; readyInMs: number } | null {
+export function flareBlocked(pings: Ping[], now: number): { reason: 'flare-pending' | 'flare-cooldown'; readyInMs: number } | null {
   const bonus = pings.filter((p) => p.seq >= BONUS_SEQ_BASE)
-  if (bonus.some((p) => !p.revealed)) return { reason: 'flare-pending' }
+  const pending = bonus.filter((p) => !p.revealed)
+  // The player is told when it'll be ready either way: the pending ping's reveal plus the cooldown.
+  if (pending.length) return { reason: 'flare-pending', readyInMs: Math.max(...pending.map((p) => Date.parse(p.reveal_at))) + FLARE_COOLDOWN_MS - now }
   const last = Math.max(...bonus.map((p) => Date.parse(p.reveal_at)), -Infinity)
   const readyInMs = last + FLARE_COOLDOWN_MS - now
   return readyInMs > 0 ? { reason: 'flare-cooldown', readyInMs } : null
