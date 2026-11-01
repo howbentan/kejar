@@ -20,6 +20,22 @@ describe('computeResults', () => {
     expect(r.survivors).toEqual([])
   })
 
+  it("an auto-jailed runner's survival ends at the auto-jail, and it isn't a catch", () => {
+    const players = [ben, player('r1', 'runner', { jailed: true }), player('r2', 'runner', { jailed: true })]
+    const events = [
+      event('caught', T0 + 12 * MIN, { actor_id: 'c1', target_id: 'r2' }),
+      event('auto-jailed', T0 + 15 * MIN, { target_id: 'r1' }),
+    ]
+    const r = computeResults(g, players, events)
+    expect(r.longestSurvivor).toEqual({ id: 'r1', ms: 10 * MIN })
+    expect(r.mostCatches).toEqual({ id: 'c1', count: 1 })
+  })
+
+  it('an auto-jail alone never counts for Most catches', () => {
+    const r = computeResults(g, [ben, player('r1', 'runner', { jailed: true })], [event('auto-jailed', T0 + 15 * MIN, { target_id: 'r1' })])
+    expect(r.mostCatches).toBeNull()
+  })
+
   it('awards pick longest survivor, most catches, jailbreak hero', () => {
     const players = [ben, lee, player('r1', 'runner', { jailed: true }), player('r2', 'runner', { jailed: true }), player('r3', 'runner')]
     const events = [

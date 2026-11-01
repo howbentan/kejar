@@ -8,10 +8,11 @@ export function computeResults(game: Game, players: Player[], events: GameEvent[
   const end = phaseAt(game, Number.MAX_SAFE_INTEGER).endsAt ?? chaseStart
   const caught = events.filter((e) => e.type === 'caught').sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
 
-  // Survival runs until a runner's first catch (or the end of the game).
+  // Survival runs until a runner's first catch or auto-jail (or the end of the game).
+  const jailings = events.filter((e) => e.type === 'caught' || e.type === 'auto-jailed').sort((a, b) => Date.parse(a.at) - Date.parse(b.at))
   let longestSurvivor: Results['longestSurvivor'] = null
   for (const r of runners) {
-    const first = caught.find((e) => e.target_id === r.id)
+    const first = jailings.find((e) => e.target_id === r.id)
     const ms = (first ? Date.parse(first.at) : end) - chaseStart
     if (!longestSurvivor || ms > longestSurvivor.ms) longestSurvivor = { id: r.id, ms }
   }
