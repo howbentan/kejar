@@ -20,7 +20,7 @@ import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTime
 import { JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, flareBlocked, judgeClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { computeResults } from '../../shared/results.js'
-import { shuffleRoles, validateTeams } from '../../shared/teams.js'
+import { validateTeams } from '../../shared/teams.js'
 import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type Role, type Settings } from '../../shared/types.js'
 import { viewFor, latestAtOrBefore } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
@@ -341,24 +341,21 @@ const setRoles: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   await requireOrganiser(ctx, game, body)
   requireLobby(game, ctx.now)
+  // The organiser picks each player's side: kit (vests, armbands) goes on in the lobby, so it's never a
+  // random draw. Marshals only join through their invite link and are never a player's option.
+  if (body.shuffle !== undefined) throw new ActionError(400, "Pick each player's side")
   const players = await ctx.store.players(game.id)
-  const ids = players.map((p) => p.id)
-  let roles: Record<string, Role>
-  if (body.shuffle === true) {
-    const marshals = Array.isArray(body.marshalIds)
-      ? (body.marshalIds as string[])
-      : players.filter((p) => p.role === 'marshal').map((p) => p.id)
-    roles = shuffleRoles(ids, marshals, ctx.rng)
-  } else {
-    const given = (body.roles ?? {}) as Record<string, Role>
-    roles = Object.fromEntries(players.filter((p) => p.role).map((p) => [p.id, p.role!]))
-    for (const [id, role] of Object.entries(given)) {
-      if (ids.includes(id) && ['runner', 'chaser', 'marshal'].includes(role)) roles[id] = role
-    }
+  const given = (body.roles ?? {}) as Record<string, Role>
+  const roles: Record<string, Role> = Object.fromEntries(players.filter((p) => p.role).map((p) => [p.id, p.role!]))
+  const changes: { id: string; role: Role }[] = []
+  for (const [id, role] of Object.entries(given)) {
+    const p = players.find((x) => x.id === id)
+    if (!p || p.role === 'marshal') throw new ActionError(400, 'Pick a player in this game')
+    if (role !== 'runner' && role !== 'chaser') throw new ActionError(400, 'Players are Dikejar or Kejar')
+    roles[id] = role
+    changes.push({ id, role })
   }
-  await ctx.store.updatePlayers(
-    Object.entries(roles).map(([id, role]) => ({ id, patch: role === 'runner' ? { role } : { role, tag_id: null } })),
-  )
+  await ctx.store.updatePlayers(changes.map(({ id, role }) => ({ id, patch: role === 'runner' ? { role } : { role, tag_id: null } })))
   await ctx.store.addEvent({ game_id: game.id, type: 'roles', actor_id: null, target_id: null, data: {} })
   return { roles, problems: validateTeams(roles) }
 }

@@ -154,22 +154,35 @@ describe('organiser controls', () => {
 
   it('non-host cannot setRoles or start (403)', async () => {
     const g = await readyGame()
-    await rejects(run('setRoles', { code: g.code, organiserToken: 'wrong', shuffle: true }), 403)
+    await rejects(run('setRoles', { code: g.code, organiserToken: 'wrong', roles: { [g.aina.playerId]: 'chaser' } }), 403)
     await rejects(run('start', { code: g.code, organiserToken: g.aina.token }), 403)
   })
 
   it("another organiser's valid session cannot setRoles or start this game (403)", async () => {
     const gameA = await readyGame()
     const gameB = await readyGame()
-    await rejects(run('setRoles', { code: gameA.code, organiserToken: gameB.organiserToken, shuffle: true }), 403, 'Organiser only')
+    await rejects(run('setRoles', { code: gameA.code, organiserToken: gameB.organiserToken, roles: { [gameA.aina.playerId]: 'chaser' } }), 403, 'Organiser only')
     await rejects(run('start', { code: gameA.code, organiserToken: gameB.organiserToken }), 403, 'Organiser only')
   })
 
-  it('shuffle assigns everyone a role and reports problems', async () => {
+  it('the organiser picks each side, and hears about lopsided teams', async () => {
     const g = await readyGame()
-    const r = await run('setRoles', { code: g.code, organiserToken: g.organiserToken, shuffle: true })
-    expect(Object.keys(r.roles)).toHaveLength(3)
-    expect(r.problems).toEqual([])
+    const r = await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [g.hafiz.playerId]: 'chaser' } })
+    expect(r.roles).toMatchObject({ [g.hafiz.playerId]: 'chaser', [g.aina.playerId]: 'runner' })
+    expect(r.problems).toEqual(['Need at least 2 runners', 'More chasers than runners'])
+  })
+
+  it('a player can only be Dikejar or Kejar: marshals come from the invite link', async () => {
+    const g = await readyGame()
+    await rejects(run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [g.aina.playerId]: 'marshal' } }), 400)
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    await rejects(run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [siti.playerId]: 'runner' } }), 400)
+  })
+
+  it('there is no random shuffle any more', async () => {
+    const g = await readyGame()
+    await rejects(run('setRoles', { code: g.code, organiserToken: g.organiserToken, shuffle: true }), 400)
   })
 })
 
@@ -678,9 +691,9 @@ describe('cloak secrecy at the ping', () => {
 /** readyGame plus Siti as a subscribed marshal, started, 2 minutes into the chase. */
 async function safetyGame(settings: object = {}) {
   const g = await readyGame(settings)
-  const siti = await run('join', { code: g.code, name: 'Siti', accepted: true })
+  const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+  const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
   await run('subscribe', { code: g.code, token: siti.token, subscription: { endpoint: 'https://push/Siti' } })
-  await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [siti.playerId]: 'marshal' } })
   await run('start', { code: g.code, organiserToken: g.organiserToken })
   now = T0 + 7 * MIN
   pushes = []

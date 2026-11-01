@@ -8,6 +8,12 @@ import { qrDataUrl } from '../game/qr'
 import { ErrorText, ModeBadge, Pills, Screen, tagText } from '../game/ui'
 import { useGameState } from '../game/useGameState'
 
+type Side = Extract<Role, 'runner' | 'chaser'>
+const SIDES: { value: Side; text: string }[] = [
+  { value: 'runner', text: 'Dikejar' },
+  { value: 'chaser', text: 'Kejar' },
+]
+
 export default function HostLobby({ code }: { code: string }) {
   const organiser = loadOrganiserSession(localStorage)
   const { view, error: loadError, refresh } = useGameState(code, { sendLocation: 'never' })
@@ -54,6 +60,14 @@ export default function HostLobby({ code }: { code: string }) {
     }
   }
 
+  // Players are Dikejar or Kejar, picked here so kit goes on before the start; marshals come from invite links.
+  const roster = view?.roster ?? []
+  const players = roster.filter((p) => p.role !== 'marshal')
+  const marshals = roster.filter((p) => p.role === 'marshal')
+  const runners = players.filter((p) => p.role === 'runner').length
+  const chasers = players.filter((p) => p.role === 'chaser').length
+  const suggested = Math.max(1, Math.round(players.length / 4))
+
   if (!organiser) {
     return (
       <Screen eyebrow="kejar. · organise">
@@ -93,26 +107,36 @@ export default function HostLobby({ code }: { code: string }) {
         )}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <p className="eyebrow">Players ({view?.roster.length ?? 0})</p>
-        <button className="btn btn-ghost" style={{ padding: '8px 14px' }} disabled={busy} onClick={() => act('setRoles', { shuffle: true })}>
-          Shuffle roles
-        </button>
-      </div>
+      <p className="eyebrow">Players ({players.length})</p>
+      {players.length > 0 && (
+        <div>
+          <p className="mono">{`${runners} Dikejar · ${chasers} Kejar · ${players.length - runners - chasers} to pick`}</p>
+          <p className="muted">{`About 1 Kejar for every 4 players: ${suggested} for ${players.length} players.`}</p>
+        </div>
+      )}
       <table>
         <tbody>
-          {view?.roster.map((p) => (
+          {players.map((p) => (
             <tr key={p.id}>
               <td>{p.name}</td>
               <td className="mono">{p.role === 'runner' ? tagText(p.tag_id) : ''}</td>
               <td style={{ textAlign: 'right' }}>
-                <Pills<Role>
+                <Pills<Side>
                   label={p.name}
-                  value={p.role === 'marshal' ? 'marshal' : null}
+                  value={p.role === 'runner' || p.role === 'chaser' ? p.role : null}
                   disabled={busy}
-                  options={[{ value: 'marshal', text: 'Marshal' }]}
+                  options={SIDES}
                   onChange={(role) => act('setRoles', { roles: { [p.id]: role } })}
                 />
+              </td>
+            </tr>
+          ))}
+          {marshals.map((p) => (
+            <tr key={p.id}>
+              <td>{p.name}</td>
+              <td />
+              <td className="eyebrow" style={{ textAlign: 'right' }}>
+                Marshal
               </td>
             </tr>
           ))}
