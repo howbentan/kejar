@@ -5,15 +5,8 @@ import type { View } from '../../shared/views.js'
 import { call } from './api'
 import { loadSession } from './session'
 import { clock } from './time'
+import { INFO } from './powerInfo'
 import { ErrorText } from './ui'
-
-const INFO: Record<PowerUpKind, { name: string; effect: string; used: string }> = {
-  decoy: { name: 'Gostan', effect: 'Your next ping shows you somewhere else', used: 'Gostan set for your next ping' },
-  shield: { name: 'Durian', effect: 'Blocks the next catch, up to 10 min', used: 'Durian on for up to 10 min' },
-  cloak: { name: 'Ponteng', effect: 'You skip the next ping', used: "Ponteng: you'll skip the next ping" },
-  flare: { name: 'Mat Rempit', effect: 'Extra ping in 30 s', used: 'Mat Rempit! Dikejar check in now' },
-  focus: { name: 'Pak Guard', effect: 'Dikejar within 75 m show exactly', used: 'Pak Guard on for the next ping' },
-}
 
 export type ClaimResult = ({ ok: true; kind: PowerUpKind } | Exclude<ClaimJudgement, { ok: true }>)
 type UseResult = { ok: true; kind: PowerUpKind } | { ok: false; reason: string; readyInMs?: number }

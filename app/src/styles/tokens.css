@@ -187,6 +187,34 @@ select.input option { background: #141614; color: var(--white); }
 .feed-time { flex: none; font: 500 10px var(--mono); color: var(--dim); padding-top: 2px; }
 .feed-means { color: var(--volt); font-size: 12px; }
 
+/* Power-up cards (motion design §7): 96×150, the same lime frame for every deck card. */
+.power-card {
+  position: relative; width: 96px; height: 150px; flex: none; box-sizing: border-box; border-radius: 12px; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; padding: 8px 6px; color: var(--white);
+}
+.power-card.front { background: #141614; border: 2px solid var(--volt); }
+.power-card.front::before, .power-card.back::before {
+  content: ''; position: absolute; inset: 4px; border: 1px solid rgba(198, 255, 61, 0.35); border-radius: 8px; pointer-events: none;
+}
+.pc-eyebrow { font: 500 6.5px var(--mono); letter-spacing: 0.16em; color: var(--volt); }
+.pc-art { margin-top: 4px; width: 70px; height: 70px; border-radius: 50%; display: grid; place-items: center; background: rgba(198, 255, 61, 0.08); }
+.pc-name { margin-top: auto; font-size: 14px; font-weight: 800; letter-spacing: -0.04em; }
+.pc-effect { font-size: 8px; line-height: 1.25; text-align: center; opacity: 0.78; min-height: 20px; margin-top: 2px; }
+.power-card.back {
+  background-color: var(--black); border: 2px solid var(--volt); justify-content: center;
+  background-image: repeating-linear-gradient(45deg, rgba(198, 255, 61, 0.07) 0 1px, transparent 1px 10px),
+    repeating-linear-gradient(-45deg, rgba(198, 255, 61, 0.07) 0 1px, transparent 1px 10px);
+}
+.pc-corner { position: absolute; width: 10px; height: 10px; border: 0 solid var(--volt); }
+.pc-corner.tl { top: 8px; left: 8px; border-top-width: 2px; border-left-width: 2px; }
+.pc-corner.tr { top: 8px; right: 8px; border-top-width: 2px; border-right-width: 2px; }
+.pc-corner.bl { bottom: 8px; left: 8px; border-bottom-width: 2px; border-left-width: 2px; }
+.pc-corner.br { bottom: 8px; right: 8px; border-bottom-width: 2px; border-right-width: 2px; }
+.pc-seal {
+  width: 52px; height: 52px; border-radius: 50%; border: 2px solid var(--volt); display: grid; place-items: center;
+  font: 800 12px var(--font); letter-spacing: -0.06em; color: var(--volt); background: var(--black); position: relative;
+}
+
 /* Help and SOS (motion design §6.0): a Volt "!" on the status row, same spot on every player screen. */
 .sos-icon {
   position: fixed; top: 52px; right: 12px; z-index: 60;
