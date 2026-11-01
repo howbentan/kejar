@@ -918,6 +918,29 @@ describe('automatic alerts', () => {
     ])
   })
 
+  it('a runner freed just before a reveal does not inherit misses from before they were freed', async () => {
+    const g = await safetyGame({ checkinMode: 'schedule' })
+    const missedTexts = async () =>
+      (await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts
+        .map((a) => a.text)
+        .filter((t) => t.includes('missed'))
+    // Hafiz never checks in. He is caught at +12 and freed by Aina at +13.
+    now = T0 + 9 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    now = T0 + 12 * MIN
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })
+    now = T0 + 13 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR })).toMatchObject({ ok: true })
+    // Ping 2 (+15): only one miss since his release, so nothing yet.
+    now = T0 + 15 * MIN
+    expect(await missedTexts()).toEqual([])
+    // Ping 3 (+20): his second miss since release.
+    now = T0 + 20 * MIN
+    expect(await missedTexts()).toContain('Hafiz #03 missed 2 check-ins')
+  })
+
   it('a flagged catch shows as Check catch', async () => {
     const g = await safetyGame()
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })

@@ -221,8 +221,11 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     await store.addEvent({ game_id: game.id, type: 'ping', actor_id: null, target_id: null, data: { seq, seen } })
     if (seq < BONUS_SEQ_BASE) {
       // Flares give only 30 s notice, so only scheduled pings count towards a missed streak.
-      const windows = [chaseStartOf(game, now)!, ...pingTimes(game, now).filter((t) => t.seq <= seq).map((t) => t.revealAt)]
+      const schedule = pingTimes(game, now).filter((t) => t.seq <= seq)
       for (const p of free) {
+        // The streak starts fresh at the runner's own last release (checkins design §4.4).
+        const anchor = Math.max(chaseStartOf(game, now)!, p.freed_at ? Date.parse(p.freed_at) : -Infinity)
+        const windows = [anchor, ...schedule.filter((t) => t.revealAt > anchor).map((t) => t.revealAt)]
         const last = latest(positions[p.id])
         if (missedTwoInARow(windows, last ? Date.parse(last.at) : null)) {
           await store.addEvent({ game_id: game.id, type: 'missed', actor_id: p.id, target_id: null, data: { who: who(p) } })
