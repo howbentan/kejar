@@ -9,6 +9,7 @@ import {
   type ReportReason,
 } from '../../shared/alerts.js'
 import { autoJailDue } from '../../shared/checkins.js'
+import { setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
 import { judgeCatch, judgeJailbreak } from '../../shared/catch.js'
@@ -153,6 +154,7 @@ function settingsFrom(input: unknown): Settings {
   if (![2, 3, 5].includes(s.pingMin)) throw new ActionError(400, 'Ping interval must be 2, 3 or 5 minutes')
   if (!inRange(s.spectatorDelayMin, 0, 5)) throw new ActionError(400, 'Spectator delay must be 0–5 minutes')
   if (s.checkinMode !== 'push' && s.checkinMode !== 'schedule') throw new ActionError(400, 'Unknown check-in mode')
+  if (s.mode !== 'core' && s.mode !== 'full') throw new ActionError(400, 'Unknown game mode')
   return s
 }
 
@@ -366,7 +368,12 @@ const start: Action = async (ctx, body) => {
   if (problems.length) throw new ActionError(409, problems.join(' · '))
   const startedAt = iso(ctx.now)
   const started = { ...game, started_at: startedAt }
-  await ctx.store.updateGame(game.id, { started_at: startedAt })
+  const count = (role: Role) => Object.values(roles).filter((r) => r === role).length
+  await ctx.store.updateGame(game.id, {
+    started_at: startedAt,
+    runner_sets: setsFor('runner', count('runner')),
+    chaser_sets: setsFor('chaser', count('chaser')),
+  })
   const chaseAt = iso(chaseStartOf(started)!)
   await ctx.store.addPings([
     { game_id: game.id, seq: 0, alert_at: chaseAt, reveal_at: chaseAt, alerted: true, revealed: false },

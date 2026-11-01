@@ -1,6 +1,8 @@
 export type Role = 'runner' | 'chaser' | 'marshal'
 export type Phase = 'lobby' | 'hiding' | 'chasing' | 'ended'
 export type CheckinMode = 'push' | 'schedule'
+/** Core: the chase plus 4 simple power-ups. Full: everything (rules doc §1). */
+export type GameMode = 'core' | 'full'
 
 export interface LatLng {
   lat: number
@@ -19,6 +21,7 @@ export interface Settings {
   pingMin: 2 | 3 | 5
   spectatorDelayMin: number
   checkinMode: CheckinMode
+  mode: GameMode
 }
 
 /** Spec §4.3 defaults. */
@@ -28,6 +31,7 @@ export const DEFAULT_SETTINGS: Settings = {
   pingMin: 5,
   spectatorDelayMin: 2,
   checkinMode: 'push',
+  mode: 'core',
 }
 
 export interface Arena {
@@ -56,6 +60,11 @@ export interface Game {
   paused_at: string | null
   /** Finished pauses, oldest first. */
   pauses: { from: string; to: string }[]
+  /** Deck sets per side, fixed at start, and cards drawn so far (power-ups §5b). Older games have none. */
+  runner_sets?: number | null
+  chaser_sets?: number | null
+  runner_draws?: number
+  chaser_draws?: number
 }
 
 export interface Player {

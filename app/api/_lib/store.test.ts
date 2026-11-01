@@ -256,3 +256,18 @@ describe('saved arenas', () => {
     expect(await store.osmCacheGet('k', 60_000)).toEqual({ hits: 2 })
   })
 })
+
+describe('drawCard', () => {
+  it("counts each side's draws separately, starting at 0", async () => {
+    const g = await startedGame()
+    expect(await store.drawCard(g.id, 'runner')).toBe(0)
+    expect(await store.drawCard(g.id, 'runner')).toBe(1)
+    expect(await store.drawCard(g.id, 'chaser')).toBe(0)
+  })
+
+  it('never hands two simultaneous draws the same number', async () => {
+    const g = await startedGame()
+    const got = await Promise.all(Array.from({ length: 5 }, () => store.drawCard(g.id, 'runner')))
+    expect([...got].sort()).toEqual([0, 1, 2, 3, 4])
+  })
+})

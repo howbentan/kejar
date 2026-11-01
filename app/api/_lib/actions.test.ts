@@ -602,6 +602,26 @@ async function safetyGame(settings: object = {}) {
   return { ...g, siti, gameId }
 }
 
+describe('game mode', () => {
+  it('defaults to Core, and Full can be chosen', async () => {
+    const core = await readyGame()
+    expect((await store.gameByCode(core.code))!.settings.mode).toBe('core')
+    const full = await readyGame({ mode: 'full' })
+    expect((await store.gameByCode(full.code))!.settings.mode).toBe('full')
+  })
+
+  it('rejects an unknown mode', async () => {
+    const organiserToken = await createOrganiser()
+    await rejects(run('create', { arenaId: 'around-me', center: CENTER, settings: { mode: 'party' }, organiserToken }), 400, 'Unknown game mode')
+  })
+
+  it('start stores how many deck sets each side gets', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    expect(await store.gameByCode(g.code)).toMatchObject({ runner_sets: 1, chaser_sets: 1 })
+  })
+})
+
 describe('pause and resume', () => {
   it('organiser and marshal can pause; a runner gets 403 Marshals only', async () => {
     const g = await safetyGame()

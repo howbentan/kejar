@@ -56,6 +56,8 @@ export interface GameStore {
   updatePlayers(patches: { id: string; patch: Partial<Player> }[]): Promise<void>
   /** Marks a runner caught only if they are not already jailed; true for the first caller. */
   catchRunner(id: string, by: string | null): Promise<boolean>
+  /** Atomically counts one more draw from a side's deck; returns the draw number (0 for the first). */
+  drawCard(gameId: string, side: 'runner' | 'chaser'): Promise<number>
   /** Frees an auto-jailed runner (jailed, no chaser) only if still in that state; true for the first caller. */
   releaseAutoJailed(id: string, atIso: string): Promise<boolean>
   addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>): Promise<void>
@@ -220,6 +222,13 @@ export class MemoryStore implements GameStore {
       const p = this.playerRows.find((x) => x.id === id)
       if (p) Object.assign(p, patch)
     }
+  }
+  async drawCard(gameId: string, side: 'runner' | 'chaser') {
+    const g = this.games.find((x) => x.id === gameId)!
+    const key = side === 'runner' ? 'runner_draws' : 'chaser_draws'
+    const n = g[key] ?? 0
+    g[key] = n + 1
+    return n
   }
   async releaseAutoJailed(id: string, atIso: string) {
     const p = this.playerRows.find((x) => x.id === id)
