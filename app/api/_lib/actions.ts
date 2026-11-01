@@ -304,6 +304,7 @@ const join: Action = async (ctx, body) => {
     caught_by: null,
     jailed: false,
     freed_once: false,
+    freed_at: null,
     push: null,
     removed_at: null,
     outside: false,
@@ -401,6 +402,7 @@ const state: Action = async (ctx, body) => {
       caught_by: null,
       jailed: false,
       freed_once: false,
+      freed_at: null,
       push: (game as GameRow).host_push ?? null,
       removed_at: null,
       outside: false,
@@ -522,7 +524,7 @@ const jailbreak: Action = async (ctx, body) => {
     now: ctx.now,
   })
   if (!verdict.ok) return verdict
-  await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true } })))
+  await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now) } })))
   await ctx.store.addEvent({
     game_id: game.id,
     type: 'jailbreak',
@@ -630,6 +632,7 @@ const redeemMarshalInvite: Action = async (ctx, body) => {
     caught_by: null,
     jailed: false,
     freed_once: false,
+    freed_at: null,
     push: null,
     removed_at: null,
     outside: false,

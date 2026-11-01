@@ -37,6 +37,7 @@ const newPlayer = (gameId: string, name: string) =>
     caught_by: null,
     jailed: false,
     freed_once: false,
+    freed_at: null,
     push: null,
     removed_at: null,
     outside: false,

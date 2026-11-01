@@ -239,6 +239,17 @@ describe('catching and jail', () => {
     })
   })
 
+  it('jailbreak sets freed_at on everyone it frees', async () => {
+    const g = await chasing()
+    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+    await run('jailbreak', { code: g.code, token: g.hafiz.token, qr: JAIL_QR })
+    const game = await store.gameByCode(g.code)
+    const players = await store.players(game!.id)
+    expect(players.find((p) => p.id === g.aina.playerId)!.freed_at).toBe(new Date(now).toISOString())
+    expect(players.find((p) => p.id === g.hafiz.playerId)!.freed_at).toBeNull()
+  })
+
   it('rejects a jail scan of something that is not the jail code', async () => {
     const g = await chasing()
     await rejects(run('jailbreak', { code: g.code, token: g.hafiz.token, qr: tagQr(3) }), 400)
