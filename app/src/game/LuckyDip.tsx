@@ -2,6 +2,7 @@ import * as m from 'motion/react-m'
 import { useEffect, useRef, useState } from 'react'
 import { stationFromQr } from '../../shared/ids.js'
 import type { PowerUpKind } from '../../shared/types.js'
+import { Shockwave, Sparkles, type Spot } from './Celebrate'
 import Marker from './Marker'
 import PowerCard from './PowerCard'
 import type { ClaimResult } from './PowerUpHand'
@@ -16,7 +17,22 @@ export const REVEAL_HOLD_MS = 1_600
 const FLICK_PX = 40
 const FAN = [-12, -6, 0, 6, 12]
 /** The flip's length: the marker measures the card only once it has landed. */
-const FLIP_MS = 450
+export const FLIP_MS = 450
+/**
+ * Sparkles that pop out round the revealed card once it lands, then stay still (no looping): doodle
+ * four-point stars and dots, lime and white, at spots around the 150×234 card.
+ */
+const SPARKLE_SPOTS: Spot[] = [
+  { x: -44, y: 18, kind: 'star', size: 22 },
+  { x: 168, y: -14, kind: 'star', white: true, size: 18 },
+  { x: -30, y: 196, kind: 'dot', size: 8 },
+  { x: 176, y: 120, kind: 'star', size: 26 },
+  { x: 60, y: -40, kind: 'dot', white: true, size: 7 },
+  { x: -54, y: 110, kind: 'dot', size: 6 },
+  { x: 158, y: 246, kind: 'star', white: true, size: 16 },
+  { x: 8, y: 252, kind: 'dot', size: 7 },
+]
+export const SPARKLES = SPARKLE_SPOTS.length
 /** The spotlight settles on the middle card. */
 const SWEEP_PICK = 2
 
@@ -66,6 +82,8 @@ export default function LuckyDip({ kind, station, deckLeft, onDone }: { kind: Po
 
   function pick(i: number) {
     if (picked !== null) return
+    // A bigger buzz than the claim: this is the reward.
+    navigator.vibrate?.([60, 40, 160])
     setPicked(i)
     setStage('reveal')
   }
@@ -74,12 +92,18 @@ export default function LuckyDip({ kind, station, deckLeft, onDone }: { kind: Po
 
   return (
     <div className="moment dip" role="status">
-      {deckLeft !== null && <span className="dip-deck">{`DECK · ${deckLeft} LEFT`}</span>}
+      {/* The deck count goes with the claim stamp; the reveal's marker needs the space above the title. */}
+      {stage === 'stamp' && deckLeft !== null && <span className="dip-deck">{`DECK · ${deckLeft} LEFT`}</span>}
       {stage === 'stamp' && <Stamp text={`CLAIMED · Station ${station} ✓`} small />}
 
       {stage === 'reveal' && (
         <div className="dip-title">
-          <h2 ref={title}>{`Got ${name}!`}</h2>
+          <m.h2
+            ref={title}
+            initial={{ scale: 0.6, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
+          >{`Got ${name}!`}</m.h2>
         </div>
       )}
 
@@ -99,6 +123,9 @@ export default function LuckyDip({ kind, station, deckLeft, onDone }: { kind: Po
                 transition={{ duration: FLIP_MS / 1000, ease: [0.32, 0.72, 0, 1] }}
               >
                 <PowerCard kind={kind} wiggle big />
+                {/* The landing: one lime ring kicks out from the card, and sparkles pop round it. */}
+                <Shockwave delayMs={FLIP_MS} radius={20} />
+                <Sparkles spots={SPARKLE_SPOTS} delayMs={FLIP_MS} />
               </m.div>
             ) : (
               <m.button
@@ -135,8 +162,8 @@ export default function LuckyDip({ kind, station, deckLeft, onDone }: { kind: Po
         <Marker
           marks={[
             { shape: 'circle', target: title },
-            { shape: 'star', target: title },
-            { shape: 'emphasis', target: card },
+            { shape: 'stars', target: title },
+            { shape: 'burst', target: card },
             { shape: 'arrow', target: card },
           ]}
           delayMs={0}

@@ -44,9 +44,30 @@ describe('markPath', () => {
     expect(Math.max(...xs) - Math.min(...xs)).toBeLessThanOrEqual(248 + 70)
   })
 
+  it('a burst rays out from the box, never across it', () => {
+    const box = { x: 100, y: 100, w: 150, h: 234 }
+    for (const p of points(markPath({ shape: 'burst' }, box))) {
+      const inside = p.x > 100 && p.x < 250 && p.y > 100 && p.y < 334
+      expect(inside, `${p.x},${p.y}`).toBe(false)
+    }
+    expect(markPath({ shape: 'burst' }, box).match(/M/g)!.length).toBeGreaterThanOrEqual(10)
+  })
+
+  it('a frame is a scribbled box round a picture, never over it', () => {
+    const box = { x: 40, y: 100, w: 240, h: 320 }
+    for (const p of points(markPath({ shape: 'frame' }, box))) {
+      const inside = p.x > 40 && p.x < 280 && p.y > 100 && p.y < 420
+      expect(inside, `${p.x},${p.y}`).toBe(false)
+    }
+  })
+
+  it('stars scatters three stars round the words', () => {
+    expect(markPath({ shape: 'stars' }, { x: 0, y: 0, w: 200, h: 40 }).match(/M/g)).toHaveLength(3)
+  })
+
   it('draws every shape as a path', () => {
     const box = { x: 10, y: 10, w: 80, h: 20 }
-    for (const shape of ['circle', 'underline', 'star', 'arrow', 'x', 'tick', 'emphasis', 'strike'] as const) {
+    for (const shape of ['circle', 'frame', 'underline', 'star', 'stars', 'burst', 'arrow', 'x', 'tick', 'emphasis', 'strike'] as const) {
       expect(markPath({ shape }, box)).toMatch(/^M/)
     }
   })

@@ -387,6 +387,7 @@ A hand-drawn lime marker that draws itself over the screen, used for hype and wa
   - **Lime on black, black on lime,** one marker weight (about 3 px) everywhere, with a slight hand-drawn wobble. **The one exception:** claiming Dato Seri draws the marker in **yellow** (§7).
   - **Sized from the text it marks:** circles are measured from the words' box with room on every side, so no letters sit outside the loop (owner's request).
   - **Hype and wayfinding only.** **Never on safety screens:** SOS, the marshal screens, pause, removal and reports stay clean and calm.
+  - **One exception, the owner's decision (2026-11-02):** the players' `Game paused` screen shows a time-out photo (used with the photographer's permission) in a marker frame with stars. SOS, marshal screens, removal and reports stay clean.
   - **One scribble moment per screen,** drawn in under 2 s (each stroke about 0.4 s), then it stays still.
   - **Reduced motion:** the marks appear already drawn.
 - **Build note** (left to the builder): draw each stroke by animating its dash offset from the path's real length. The wobble is an SVG displacement filter. In testing, applying it to an inner group hid the strokes in Chrome, while applying it to the whole overlay SVG worked.

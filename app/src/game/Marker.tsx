@@ -12,7 +12,7 @@ type Point = { x: number; y: number }
 type Box = { x: number; y: number; w: number; h: number }
 
 export type Mark = {
-  shape: 'circle' | 'underline' | 'star' | 'arrow' | 'x' | 'tick' | 'emphasis' | 'strike'
+  shape: 'circle' | 'frame' | 'underline' | 'star' | 'stars' | 'burst' | 'arrow' | 'x' | 'tick' | 'emphasis' | 'strike'
   /** The element the mark is sized from. */
   target?: RefObject<HTMLElement | null>
   /** Or a point in the parent's coordinates. */
@@ -43,6 +43,31 @@ export function markPath(mark: Pick<Mark, 'shape' | 'to'>, b: Box): string {
       }
       return line(pts)
     }
+    case 'frame': {
+      // A hand-drawn box round a picture: four slightly wobbly sides that overshoot their corners, drawn as one
+      // stroke going round, always ROOM clear of the picture so it never covers it.
+      const l = b.x - ROOM
+      const t = b.y - ROOM
+      const r = b.x + b.w + ROOM
+      const bt = b.y + b.h + ROOM
+      const side = (x0: number, y0: number, x1: number, y1: number, out: Point) => {
+        const pts: Point[] = []
+        for (let k = 0; k <= 8; k++) {
+          const f = k / 8
+          // Wobble outwards only (`out` points away from the picture), so it never drifts inside.
+          const w = 2.5 * Math.abs(Math.sin(f * Math.PI * 3 + x0 * 0.01))
+          pts.push({ x: x0 + (x1 - x0) * f + out.x * w, y: y0 + (y1 - y0) * f + out.y * w })
+        }
+        return pts
+      }
+      const over = 8
+      return line([
+        ...side(l - over, t, r, t - 1, { x: 0, y: -1 }),
+        ...side(r, t - over, r + 1, bt, { x: 1, y: 0 }),
+        ...side(r + over, bt, l, bt + 1, { x: 0, y: 1 }),
+        ...side(l, bt + over, l - 1, t - over, { x: -1, y: 0 }),
+      ])
+    }
     case 'underline':
       return `M${f(b.x - 4)} ${f(b.y + b.h + 5)} Q${f(cx)} ${f(b.y + b.h + 9)} ${f(b.x + b.w + 4)} ${f(b.y + b.h + 3)}`
     case 'strike':
@@ -68,6 +93,45 @@ export function markPath(mark: Pick<Mark, 'shape' | 'to'>, b: Box): string {
         pts.push({ x: sx + Math.cos(a) * r, y: sy + Math.sin(a) * r })
       }
       return line(pts)
+    }
+    case 'stars': {
+      // Three stars scattered round the words: top right (big), bottom left, and bottom right (small).
+      const star = (sx: number, sy: number, r: number) => {
+        const pts: Point[] = []
+        for (let k = 0; k <= 10; k++) {
+          const ang = -Math.PI / 2 + (k * Math.PI) / 5
+          const rr = k % 2 ? r * 0.4 : r
+          pts.push({ x: sx + Math.cos(ang) * rr, y: sy + Math.sin(ang) * rr })
+        }
+        return line(pts)
+      }
+      return [
+        star(b.x + b.w + ROOM + 10, b.y - 6, 11),
+        star(b.x - ROOM - 12, b.y + b.h + 6, 8),
+        star(b.x + b.w + ROOM + 2, b.y + b.h + 14, 6),
+      ].join(' ')
+    }
+    case 'burst': {
+      // Comic-book rays round the box, starting clear of its edge. None point up (the title and its loop are
+      // there) or straight down (the arrow to the slot is there).
+      const rays: string[] = []
+      const rx = b.w / 2
+      const ry = b.h / 2
+      for (let k = 0; k < 18; k++) {
+        const ang = (k / 18) * Math.PI * 2 + 0.2
+        const dx = Math.cos(ang)
+        const dy = Math.sin(ang)
+        if (dy < -0.6 || (dy > 0.85 && Math.abs(dx) < 0.4)) continue
+        // Distance from the centre to the box edge along this ray, then out past it.
+        const edge = Math.min(Math.abs(rx / (dx || 1e-9)), Math.abs(ry / (dy || 1e-9)))
+        const from = edge + ROOM
+        const len = k % 2 ? 14 : 24
+        rays.push(line([
+          { x: cx + dx * from, y: cy + dy * from },
+          { x: cx + dx * (from + len), y: cy + dy * (from + len) },
+        ]))
+      }
+      return rays.join(' ')
     }
     case 'arrow': {
       const from = { x: cx, y: b.y + b.h + ROOM }
