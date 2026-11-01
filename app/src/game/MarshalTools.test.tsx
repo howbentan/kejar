@@ -15,12 +15,13 @@ vi.mock('../spike/push', () => ({
 
 import MarshalTools from './MarshalTools'
 
-const alert = (id: string, kind: Alert['kind'], text: string, handled = false): Alert => ({
+const alert = (id: string, kind: Alert['kind'], text: string, handled = false, targetId: string | null = null): Alert => ({
   id,
   at: new Date(100_000 - 60_000).toISOString(),
   kind,
   text,
   where: null,
+  targetId,
   handled,
 })
 
