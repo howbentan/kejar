@@ -66,11 +66,11 @@ describe('LuckyDip', () => {
     const { container } = render(<LuckyDip kind="shield" station={3} deckLeft={7} onDone={() => {}} />)
     wait(CLAIM_STAMP_MS)
     fireEvent.click(screen.getByRole('button', { name: 'Pick card 2' }))
-    expect(container.querySelector('.dip-shock')).not.toBeNull()
-    expect(container.querySelectorAll('.dip-sparkle')).toHaveLength(SPARKLES)
+    expect(container.querySelector('.shock')).not.toBeNull()
+    expect(container.querySelectorAll('.spark')).toHaveLength(SPARKLES)
     wait(FLIP_MS)
-    // Two loops, the stars, the burst and the arrow: five marks, each a sketchy double line.
-    expect(container.querySelectorAll('svg.marker path')).toHaveLength(10)
+    // One loop, the stars, the burst and the arrow: four marks, each a sketchy double line.
+    expect(container.querySelectorAll('svg.marker path')).toHaveLength(8)
   })
 
   it('finishes after the reveal', () => {

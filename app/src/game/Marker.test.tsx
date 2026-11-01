@@ -57,11 +57,6 @@ describe('markPath', () => {
     expect(markPath({ shape: 'stars' }, { x: 0, y: 0, w: 200, h: 40 }).match(/M/g)).toHaveLength(3)
   })
 
-  it('a second loop is drawn differently from the first, like a hand going round twice', () => {
-    const box = { x: 0, y: 0, w: 200, h: 40 }
-    expect(markPath({ shape: 'circle', variant: 1 }, box)).not.toBe(markPath({ shape: 'circle' }, box))
-  })
-
   it('draws every shape as a path', () => {
     const box = { x: 10, y: 10, w: 80, h: 20 }
     for (const shape of ['circle', 'underline', 'star', 'stars', 'burst', 'arrow', 'x', 'tick', 'emphasis', 'strike'] as const) {

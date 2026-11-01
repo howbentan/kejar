@@ -19,28 +19,24 @@ export type Mark = {
   at?: Point
   /** Where an arrow points (defaults to 44 px below its start). */
   to?: Point
-  /** A second pass of the same shape, drawn a little differently (a hand going round twice). */
-  variant?: number
 }
 
 const f = (n: number) => n.toFixed(1)
 const line = (pts: Point[]) => 'M' + pts.map((p) => `${f(p.x)} ${f(p.y)}`).join(' L')
 
 /** A shape's path in the parent's coordinates, from the box it marks. Shapes only, never handwriting. */
-export function markPath(mark: Pick<Mark, 'shape' | 'to' | 'variant'>, b: Box): string {
+export function markPath(mark: Pick<Mark, 'shape' | 'to'>, b: Box): string {
   const cx = b.x + b.w / 2
   const cy = b.y + b.h / 2
   switch (mark.shape) {
     case 'circle': {
       // An ellipse through the padded box's corners, only a little wider than the words (so a long title still
       // fits the phone) and as tall as it needs to be, overshooting its start like a hand loop.
-      const v = mark.variant ?? 0
       const a = b.w / 2 + ROOM
-      const rx = a + 2 * ROOM + v * 6
-      const ry = (b.h / 2 + ROOM) / Math.sqrt(1 - (a / (a + 2 * ROOM)) ** 2) + v * 7
+      const rx = a + 2 * ROOM
+      const ry = (b.h / 2 + ROOM) / Math.sqrt(1 - (a / rx) ** 2)
       const pts: Point[] = []
-      // The second pass starts somewhere else and goes a little further round.
-      for (let a = -100 + v * 150; a <= 290 + v * 170; a += 10) {
+      for (let a = -100; a <= 290; a += 10) {
         const t = (a * Math.PI) / 180
         const grow = 1 + 0.02 * Math.sin(t * 3) ** 2
         pts.push({ x: cx + Math.cos(t) * rx * grow, y: cy + Math.sin(t) * ry * grow })

@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import CatchMoment, { CATCH_MOMENT_MS } from './CatchMoment'
+import CatchMoment, { CATCH_MOMENT_MS, STAMP_LAND_MS } from './CatchMoment'
 import Stamp from './Stamp'
 
 const vibrate = vi.fn()
@@ -35,6 +35,21 @@ describe('CatchMoment', () => {
     expect(onDone).not.toHaveBeenCalled()
     act(() => vi.advanceTimersByTime(1))
     expect(onDone).toHaveBeenCalledTimes(1)
+  })
+
+  it('celebrates the catch: a shockwave and sparkles, then rays and stars round the stamp once it lands', () => {
+    const { container } = render(<CatchMoment label="#07 Aina" onDone={() => {}} />)
+    expect(container.querySelector('.shock')).not.toBeNull()
+    expect(container.querySelectorAll('.spark').length).toBeGreaterThanOrEqual(6)
+    expect(container.querySelector('svg.marker')).toBeNull()
+    act(() => vi.advanceTimersByTime(STAMP_LAND_MS))
+    // The burst and the stars: two marks, each a sketchy double line.
+    expect(container.querySelectorAll('svg.marker path')).toHaveLength(4)
+  })
+
+  it('buzzes bigger than a plain tap', () => {
+    render(<CatchMoment label="#07 Aina" onDone={() => {}} />)
+    expect(vibrate).toHaveBeenCalledWith([80, 40, 220])
   })
 
   it('a tap ends it early', () => {

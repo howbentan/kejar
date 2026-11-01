@@ -2,6 +2,7 @@ import * as m from 'motion/react-m'
 import { useEffect, useRef, useState } from 'react'
 import { stationFromQr } from '../../shared/ids.js'
 import type { PowerUpKind } from '../../shared/types.js'
+import { Shockwave, Sparkles, type Spot } from './Celebrate'
 import Marker from './Marker'
 import PowerCard from './PowerCard'
 import type { ClaimResult } from './PowerUpHand'
@@ -21,7 +22,7 @@ export const FLIP_MS = 450
  * Sparkles that pop out round the revealed card once it lands, then stay still (no looping): doodle
  * four-point stars and dots, lime and white, at spots around the 150×234 card.
  */
-const SPARKLE_SPOTS: { x: number; y: number; kind: 'star' | 'dot'; white?: boolean; size: number }[] = [
+const SPARKLE_SPOTS: Spot[] = [
   { x: -44, y: 18, kind: 'star', size: 22 },
   { x: 168, y: -14, kind: 'star', white: true, size: 18 },
   { x: -30, y: 196, kind: 'dot', size: 8 },
@@ -122,35 +123,9 @@ export default function LuckyDip({ kind, station, deckLeft, onDone }: { kind: Po
                 transition={{ duration: FLIP_MS / 1000, ease: [0.32, 0.72, 0, 1] }}
               >
                 <PowerCard kind={kind} wiggle big />
-                {/* The landing: one lime ring kicks out from the card. */}
-                <m.span
-                  className="dip-shock"
-                  aria-hidden="true"
-                  initial={{ scale: 1, opacity: 0 }}
-                  animate={{ scale: 1.55, opacity: [0, 0.9, 0] }}
-                  transition={{ delay: FLIP_MS / 1000, duration: 0.6, ease: 'easeOut' }}
-                />
-                {SPARKLE_SPOTS.map((s, k) => (
-                  <m.span
-                    key={k}
-                    className="dip-sparkle"
-                    aria-hidden="true"
-                    style={{ left: s.x, top: s.y, width: s.size, height: s.size, color: s.white ? 'var(--white)' : 'var(--volt)' }}
-                    initial={{ scale: 0, opacity: 0, rotate: -30 }}
-                    animate={{ scale: [0, 1.35, 1], opacity: 1, rotate: 0 }}
-                    transition={{ delay: FLIP_MS / 1000 + 0.08 * k, duration: 0.35 }}
-                  >
-                    {s.kind === 'star' ? (
-                      <svg viewBox="0 0 24 24" width="100%" height="100%">
-                        <path d="M12 1 C13 9 15 11 23 12 C15 13 13 15 12 23 C11 15 9 13 1 12 C9 11 11 9 12 1 Z" fill="currentColor" />
-                      </svg>
-                    ) : (
-                      <svg viewBox="0 0 10 10" width="100%" height="100%">
-                        <circle cx="5" cy="5" r="5" fill="currentColor" />
-                      </svg>
-                    )}
-                  </m.span>
-                ))}
+                {/* The landing: one lime ring kicks out from the card, and sparkles pop round it. */}
+                <Shockwave delayMs={FLIP_MS} radius={20} />
+                <Sparkles spots={SPARKLE_SPOTS} delayMs={FLIP_MS} />
               </m.div>
             ) : (
               <m.button
@@ -187,7 +162,6 @@ export default function LuckyDip({ kind, station, deckLeft, onDone }: { kind: Po
         <Marker
           marks={[
             { shape: 'circle', target: title },
-            { shape: 'circle', target: title, variant: 1 },
             { shape: 'stars', target: title },
             { shape: 'burst', target: card },
             { shape: 'arrow', target: card },

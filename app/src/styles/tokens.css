@@ -125,6 +125,9 @@ select.input option { background: #141614; color: var(--white); }
   background: rgba(10, 10, 11, 0.92); padding: 24px; text-align: center;
 }
 .moment-flash { position: absolute; inset: 0; background: var(--volt); pointer-events: none; }
+/* Padded so the marker's rays clear the stamp's −8° tilt; the line below sits clear of the rays. */
+.catch-stamp { position: relative; display: inline-block; padding: 18px 10px; }
+.catch-stamp + .moment-line { margin-top: 22px; }
 .moment-line { position: relative; font: 600 17px var(--font); letter-spacing: -0.02em; }
 .stamp {
   position: relative; padding: 6px 18px; border: 4px solid var(--volt); border-radius: 14px; color: var(--volt);
@@ -153,8 +156,8 @@ select.input option { background: #141614; color: var(--white); }
 .dip-fan { position: relative; display: flex; justify-content: center; align-items: flex-end; height: 250px; width: 100%; max-width: 420px; }
 .dip-card { appearance: none; border: 0; padding: 0; background: none; margin: 0 -30px; cursor: pointer; touch-action: none; transform-origin: 50% 120%; }
 .dip-card.picked { position: absolute; left: calc(50% - 75px); bottom: 6px; margin: 0; z-index: 2; cursor: default; transform-origin: 50% 100%; }
-.dip-shock { position: absolute; inset: -4px; border: 3px solid var(--volt); border-radius: 20px; pointer-events: none; }
-.dip-sparkle { position: absolute; pointer-events: none; display: block; }
+.shock { position: absolute; inset: -4px; border: 3px solid var(--volt); pointer-events: none; }
+.spark { position: absolute; pointer-events: none; display: block; }
 .dip-spotlight { position: absolute; top: -10px; bottom: -10px; left: calc(50% - 50px); width: 100px; border-radius: 50%; background: radial-gradient(closest-side, rgba(198, 255, 61, 0.35), transparent); pointer-events: none; z-index: 1; }
 .dip-pick { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 160px; }
 .dip-pick p { margin: 0; font: 700 16px var(--font); }
@@ -195,7 +198,7 @@ select.input option { background: #141614; color: var(--white); }
 .slot svg { flex: none; }
 .slot:disabled { cursor: default; border-style: dashed; opacity: 0.85; }
 .slot.live { background: rgba(198, 255, 61, 0.1); cursor: default; }
-.slot.empty { border-style: dashed; border-color: #444; color: var(--dim); cursor: default; }
+.slot.empty { border-style: dashed; border-color: #444; color: var(--dim); cursor: default; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; line-height: 1.25; }
 .slot-deck { flex: none; font: 500 8px var(--mono); letter-spacing: 0.1em; color: var(--volt); }
 .scan {
   appearance: none; border: 0; border-radius: 14px; cursor: pointer; font: 800 14px var(--font); letter-spacing: -0.02em;
