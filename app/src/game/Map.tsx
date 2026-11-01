@@ -3,7 +3,7 @@ import maplibregl, { type GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useEffect, useRef } from 'react'
 import { circlePolygon } from '../../shared/geo.js'
-import type { Arena } from '../../shared/types.js'
+import type { Arena, LatLng } from '../../shared/types.js'
 import { FUZZ_RADIUS_M, type MapDot } from '../../shared/views.js'
 import { kejarMapStyle } from './mapStyle'
 
@@ -61,12 +61,20 @@ function pinFeatures(pins: Pin[]): FeatureCollection {
   )
 }
 
+function routeFeatures(route: { from: LatLng; to: LatLng } | null) {
+  if (!route) return collection([])
+  return collection([
+    { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [[route.from.lng, route.from.lat], [route.to.lng, route.to.lat]] } },
+  ])
+}
+
 export default function GameMap({
   arena,
   dots,
   stations = [],
   pins = [],
   height = 320,
+  route = null,
 }: {
   arena: Arena
   dots: MapDot[]
@@ -75,6 +83,8 @@ export default function GameMap({
   pins?: Pin[]
   /** Pixels, or '100%' to fill a sized parent (the chase screen). */
   height?: number | string
+  /** A dashed lime line, e.g. the walk to Penjara (motion design §5). Worked out on the phone only. */
+  route?: { from: LatLng; to: LatLng } | null
 }) {
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
@@ -85,6 +95,8 @@ export default function GameMap({
   latestStations.current = stations
   const latestPins = useRef(pins)
   latestPins.current = pins
+  const latestRoute = useRef(route)
+  latestRoute.current = route
   // Polls return a fresh arena object every 3 s; rebuild the map only when its content changes.
   const arenaKey = JSON.stringify(arena)
   const arenaRef = useRef(arena)
@@ -116,6 +128,21 @@ export default function GameMap({
         type: 'circle',
         source: 'jail',
         paint: { 'circle-radius': 9, 'circle-color': BLACK, 'circle-stroke-color': WHITE, 'circle-stroke-width': 1.5 },
+      })
+      m.addLayer({
+        id: 'jail-label',
+        type: 'symbol',
+        source: 'jail',
+        layout: { 'text-field': 'PENJARA', 'text-font': ['Noto Sans Regular'], 'text-size': 11, 'text-offset': [0, 1.5], 'text-letter-spacing': 0.15 },
+        paint: { 'text-color': VOLT, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
+      })
+      m.addSource('route', { type: 'geojson', data: routeFeatures(latestRoute.current) })
+      m.addLayer({
+        id: 'route',
+        type: 'line',
+        source: 'route',
+        layout: { 'line-cap': 'round' },
+        paint: { 'line-color': VOLT, 'line-width': 3, 'line-dasharray': [2, 2] },
       })
       // Lakes cut out of the park: outside the play area, so drawn like the boundary but dashed.
       m.addSource('holes', {
@@ -231,6 +258,12 @@ export default function GameMap({
     if (!ready.current || !map.current) return
     ;(map.current.getSource('stations') as GeoJSONSource | undefined)?.setData(stationFeatures(latestStations.current))
   }, [stationKey])
+
+  const routeKey = JSON.stringify(route)
+  useEffect(() => {
+    if (!ready.current || !map.current) return
+    ;(map.current.getSource('route') as GeoJSONSource | undefined)?.setData(routeFeatures(latestRoute.current))
+  }, [routeKey])
 
   const pinKey = JSON.stringify(pins)
   useEffect(() => {
