@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const reduce = vi.hoisted(() => ({ on: false }))
 vi.mock('motion/react', async (orig) => ({ ...(await orig<typeof import('motion/react')>()), useReducedMotion: () => reduce.on }))
 
-import LuckyDip, { CLAIM_STAMP_MS, PICK_MS, REVEAL_HOLD_MS, SWEEP_MS } from './LuckyDip'
+import LuckyDip, { CLAIM_STAMP_MS, FLIP_MS, PICK_MS, REVEAL_HOLD_MS, SPARKLES, SWEEP_MS } from './LuckyDip'
 
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => {
@@ -60,6 +60,17 @@ describe('LuckyDip', () => {
     fireEvent.pointerDown(card, { clientY: 300 })
     fireEvent.pointerUp(card, { clientY: 250 })
     expect(screen.getByText('Got Durian!')).toBeInTheDocument()
+  })
+
+  it('the reveal celebrates: a shockwave, sparkles, and a loud marker', () => {
+    const { container } = render(<LuckyDip kind="shield" station={3} deckLeft={7} onDone={() => {}} />)
+    wait(CLAIM_STAMP_MS)
+    fireEvent.click(screen.getByRole('button', { name: 'Pick card 2' }))
+    expect(container.querySelector('.dip-shock')).not.toBeNull()
+    expect(container.querySelectorAll('.dip-sparkle')).toHaveLength(SPARKLES)
+    wait(FLIP_MS)
+    // Two loops, the stars, the burst and the arrow: five marks, each a sketchy double line.
+    expect(container.querySelectorAll('svg.marker path')).toHaveLength(10)
   })
 
   it('finishes after the reveal', () => {

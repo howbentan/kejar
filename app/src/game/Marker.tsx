@@ -12,31 +12,35 @@ type Point = { x: number; y: number }
 type Box = { x: number; y: number; w: number; h: number }
 
 export type Mark = {
-  shape: 'circle' | 'underline' | 'star' | 'arrow' | 'x' | 'tick' | 'emphasis' | 'strike'
+  shape: 'circle' | 'underline' | 'star' | 'stars' | 'burst' | 'arrow' | 'x' | 'tick' | 'emphasis' | 'strike'
   /** The element the mark is sized from. */
   target?: RefObject<HTMLElement | null>
   /** Or a point in the parent's coordinates. */
   at?: Point
   /** Where an arrow points (defaults to 44 px below its start). */
   to?: Point
+  /** A second pass of the same shape, drawn a little differently (a hand going round twice). */
+  variant?: number
 }
 
 const f = (n: number) => n.toFixed(1)
 const line = (pts: Point[]) => 'M' + pts.map((p) => `${f(p.x)} ${f(p.y)}`).join(' L')
 
 /** A shape's path in the parent's coordinates, from the box it marks. Shapes only, never handwriting. */
-export function markPath(mark: Pick<Mark, 'shape' | 'to'>, b: Box): string {
+export function markPath(mark: Pick<Mark, 'shape' | 'to' | 'variant'>, b: Box): string {
   const cx = b.x + b.w / 2
   const cy = b.y + b.h / 2
   switch (mark.shape) {
     case 'circle': {
       // An ellipse through the padded box's corners, only a little wider than the words (so a long title still
       // fits the phone) and as tall as it needs to be, overshooting its start like a hand loop.
+      const v = mark.variant ?? 0
       const a = b.w / 2 + ROOM
-      const rx = a + 2 * ROOM
-      const ry = (b.h / 2 + ROOM) / Math.sqrt(1 - (a / rx) ** 2)
+      const rx = a + 2 * ROOM + v * 6
+      const ry = (b.h / 2 + ROOM) / Math.sqrt(1 - (a / (a + 2 * ROOM)) ** 2) + v * 7
       const pts: Point[] = []
-      for (let a = -100; a <= 290; a += 10) {
+      // The second pass starts somewhere else and goes a little further round.
+      for (let a = -100 + v * 150; a <= 290 + v * 170; a += 10) {
         const t = (a * Math.PI) / 180
         const grow = 1 + 0.02 * Math.sin(t * 3) ** 2
         pts.push({ x: cx + Math.cos(t) * rx * grow, y: cy + Math.sin(t) * ry * grow })
@@ -68,6 +72,45 @@ export function markPath(mark: Pick<Mark, 'shape' | 'to'>, b: Box): string {
         pts.push({ x: sx + Math.cos(a) * r, y: sy + Math.sin(a) * r })
       }
       return line(pts)
+    }
+    case 'stars': {
+      // Three stars scattered round the words: top right (big), bottom left, and bottom right (small).
+      const star = (sx: number, sy: number, r: number) => {
+        const pts: Point[] = []
+        for (let k = 0; k <= 10; k++) {
+          const ang = -Math.PI / 2 + (k * Math.PI) / 5
+          const rr = k % 2 ? r * 0.4 : r
+          pts.push({ x: sx + Math.cos(ang) * rr, y: sy + Math.sin(ang) * rr })
+        }
+        return line(pts)
+      }
+      return [
+        star(b.x + b.w + ROOM + 10, b.y - 6, 11),
+        star(b.x - ROOM - 12, b.y + b.h + 6, 8),
+        star(b.x + b.w + ROOM + 2, b.y + b.h + 14, 6),
+      ].join(' ')
+    }
+    case 'burst': {
+      // Comic-book rays round the box, starting clear of its edge. None point up (the title and its loop are
+      // there) or straight down (the arrow to the slot is there).
+      const rays: string[] = []
+      const rx = b.w / 2
+      const ry = b.h / 2
+      for (let k = 0; k < 18; k++) {
+        const ang = (k / 18) * Math.PI * 2 + 0.2
+        const dx = Math.cos(ang)
+        const dy = Math.sin(ang)
+        if (dy < -0.6 || (dy > 0.85 && Math.abs(dx) < 0.4)) continue
+        // Distance from the centre to the box edge along this ray, then out past it.
+        const edge = Math.min(Math.abs(rx / (dx || 1e-9)), Math.abs(ry / (dy || 1e-9)))
+        const from = edge + ROOM
+        const len = k % 2 ? 14 : 24
+        rays.push(line([
+          { x: cx + dx * from, y: cy + dy * from },
+          { x: cx + dx * (from + len), y: cy + dy * (from + len) },
+        ]))
+      }
+      return rays.join(' ')
     }
     case 'arrow': {
       const from = { x: cx, y: b.y + b.h + ROOM }
