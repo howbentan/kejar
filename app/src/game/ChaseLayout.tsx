@@ -3,6 +3,7 @@ import type { View } from '../../shared/views.js'
 import { call } from './api'
 import { currentCoords } from './here'
 import GameMap from './Map'
+import { rippleOrigin } from './ripple'
 import Scanner from './Scanner'
 import { scanTarget, type ScanTarget } from './scan'
 import { loadSession } from './session'
@@ -74,7 +75,13 @@ export default function ChaseLayout(props: {
         <span className="chase-count">{`${view.counts.runnersFree} free`}</span>
       </header>
       <div className="chase-map">
-        <GameMap arena={view.arena} dots={view.dots} stations={view.stations} height="100%" />
+        <GameMap
+          arena={view.arena}
+          dots={view.dots}
+          stations={view.stations}
+          height="100%"
+          ripple={view.lastRevealAt ? { at: view.lastRevealAt, origin: rippleOrigin(view.dots, view.arena) } : null}
+        />
         <div className="chase-over">
           <div className="chase-chips">{props.chips}</div>
           {props.overlay}

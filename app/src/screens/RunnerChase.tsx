@@ -5,7 +5,6 @@ import { stationFromQr } from '../../shared/ids.js'
 import ChaseLayout from '../game/ChaseLayout'
 import CheckinBanner from '../game/CheckinBanner'
 import { dipFor } from '../game/LuckyDip'
-import PingRipple from '../game/PingRipple'
 import PowerUpHand, { claimMessage, type ClaimResult } from '../game/PowerUpHand'
 import { clock, useServerNow } from '../game/time'
 
@@ -101,7 +100,6 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
             </div>
           )}
           {banner && <CheckinBanner checkin={checkin} now={now} openedByPush={openedByPush} />}
-          <PingRipple role={view.me.role} lastRevealAt={view.lastRevealAt} now={now} />
         </>
       }
       slot={<PowerUpHand code={code} view={view} />}

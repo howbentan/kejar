@@ -1,11 +1,13 @@
 import type { Feature as GeoFeature, FeatureCollection, Geometry } from 'geojson'
 import maplibregl, { type GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { useEffect, useRef } from 'react'
-import { circlePolygon } from '../../shared/geo.js'
+import { useEffect, useRef, useState } from 'react'
+import * as m from 'motion/react-m'
+import { circlePolygon, distanceM } from '../../shared/geo.js'
 import type { Arena, LatLng } from '../../shared/types.js'
 import { FUZZ_RADIUS_M, type MapDot } from '../../shared/views.js'
 import { kejarMapStyle } from './mapStyle'
+import { RIPPLE_MS } from './ripple'
 
 const VOLT = '#C6FF3D'
 const WHITE = '#F5F5F3'
@@ -19,14 +21,15 @@ function ring(points: { lat: number; lng: number }[]): number[][] {
   return [...coords, coords[0]]
 }
 
-function dotFeatures(dots: MapDot[]) {
+function dotFeatures(dots: MapDot[], origin: LatLng | null = null) {
   const fuzzy: Feature[] = []
   const points: Feature[] = []
   for (const d of dots) {
     if (d.fuzzy) {
       fuzzy.push({
         type: 'Feature',
-        properties: { missed: !!d.missed, label: d.label ?? '' },
+        // `dist` lets the ping ripple reveal each circle as its wave passes (motion design §8.1).
+        properties: { missed: !!d.missed, label: d.label ?? '', dist: origin ? distanceM(d, origin) : 0 },
         geometry: { type: 'Polygon', coordinates: [ring(circlePolygon(d, FUZZ_RADIUS_M))] },
       })
     } else {
@@ -75,6 +78,7 @@ export default function GameMap({
   pins = [],
   height = 320,
   route = null,
+  ripple = null,
 }: {
   arena: Arena
   dots: MapDot[]
@@ -85,6 +89,8 @@ export default function GameMap({
   height?: number | string
   /** A dashed lime line, e.g. the walk to Penjara (motion design §5). Worked out on the phone only. */
   route?: { from: LatLng; to: LatLng } | null
+  /** The last ping: a lime wave rolls out from `origin`, revealing circles as it passes (motion design §8.1). */
+  ripple?: { at: number; origin: LatLng } | null
 }) {
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
@@ -273,10 +279,59 @@ export default function GameMap({
 
   useEffect(() => {
     if (!ready.current || !map.current) return
-    const { fuzzy, points } = dotFeatures(dots)
+    // Keep each circle's distance from the last ripple, so a poll mid-wave doesn't reveal them all at once.
+    const { fuzzy, points } = dotFeatures(dots, ripple?.origin ?? null)
     ;(map.current.getSource('fuzzy') as GeoJSONSource | undefined)?.setData(fuzzy)
     ;(map.current.getSource('points') as GeoJSONSource | undefined)?.setData(points)
   }, [dots])
+
+  // The ping ripple: rings roll out from the origin, and each circle appears as the wave passes it.
+  const [rings, setRings] = useState<{ x: number; y: number; scale: number; key: number } | null>(null)
+  const rippled = useRef<number | null>(null)
+  const rippleAt = ripple?.at ?? null
+  useEffect(() => {
+    const mp = map.current
+    if (!ripple || !mp || !ready.current || rippled.current === ripple.at) return
+    rippled.current = ripple.at
+    // Only a fresh ping: reopening Kejar later shows the circles as they are.
+    if (Date.now() - ripple.at > 10_000) return
+    navigator.vibrate?.([120, 60, 120])
+    const box = mp.getContainer().getBoundingClientRect()
+    const o = mp.project([ripple.origin.lng, ripple.origin.lat])
+    const corners = [
+      [0, 0],
+      [box.width, 0],
+      [0, box.height],
+      [box.width, box.height],
+    ] as const
+    const maxPx = Math.max(...corners.map(([x, y]) => Math.hypot(x - o.x, y - o.y)))
+    const maxM = Math.max(...corners.map(([x, y]) => distanceM(ripple.origin, mp.unproject([x, y]))))
+    setRings({ x: o.x, y: o.y, scale: maxPx / 10, key: ripple.at })
+    ;(mp.getSource('fuzzy') as GeoJSONSource | undefined)?.setData(dotFeatures(latest.current, ripple.origin).fuzzy)
+    const base: Record<string, unknown> = { 'fuzzy-fill': null, 'fuzzy-line': ['!', ['get', 'missed']], 'fuzzy-missed': ['get', 'missed'], labels: null }
+    const start = performance.now()
+    let frame = 0
+    const step = () => {
+      const t = Math.min(1, (performance.now() - start) / RIPPLE_MS)
+      const r = maxM * (1 - (1 - t) ** 3)
+      for (const [id, f] of Object.entries(base)) {
+        const reach = ['<=', ['get', 'dist'], r]
+        mp.setFilter(id, (f ? ['all', f, reach] : reach) as maplibregl.FilterSpecification)
+      }
+      if (t < 1) frame = requestAnimationFrame(step)
+      else {
+        for (const [id, f] of Object.entries(base)) mp.setFilter(id, f as maplibregl.FilterSpecification | null)
+        window.setTimeout(() => setRings(null), 200)
+      }
+    }
+    frame = requestAnimationFrame(step)
+    return () => {
+      cancelAnimationFrame(frame)
+      for (const [id, f] of Object.entries(base)) mp.setFilter(id, f as maplibregl.FilterSpecification | null)
+    }
+    // Once per ping.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rippleAt])
 
   /** Jump to my dot, or to this phone's own location when I don't have one (e.g. the organiser). */
   function centreOnMe() {
@@ -293,6 +348,19 @@ export default function GameMap({
   return (
     <div style={{ position: 'relative', height: typeof height === 'string' ? height : undefined }}>
       <div ref={el} style={{ height, borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hair)' }} />
+      {rings && (
+        <div className="ripple-rings" aria-hidden="true">
+          {[0, 0.15, 0.3].map((d, k) => (
+            <m.span
+              key={`${rings.key}-${k}`}
+              style={{ left: rings.x - 10, top: rings.y - 10 }}
+              initial={{ scale: 0, opacity: k === 0 ? 0.9 : 0.45 }}
+              animate={{ scale: rings.scale, opacity: 0 }}
+              transition={{ duration: RIPPLE_MS / 1000, delay: d, ease: [0.33, 1, 0.68, 1] }}
+            />
+          ))}
+        </div>
+      )}
       <button type="button" className="map-me" onClick={centreOnMe} aria-label="Centre on me">
         <span aria-hidden="true">◎</span> Me
       </button>

@@ -5,7 +5,6 @@ import type { View } from '../../shared/views.js'
 import CatchMoment from '../game/CatchMoment'
 import ChaseLayout from '../game/ChaseLayout'
 import { dipFor } from '../game/LuckyDip'
-import PingRipple from '../game/PingRipple'
 import PowerUpHand, { claimMessage, type ClaimResult } from '../game/PowerUpHand'
 import { clock, useServerNow } from '../game/time'
 
@@ -63,7 +62,6 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
       side="chaser"
       title={`KEJAR · ${view.me.name.toUpperCase()}`}
       chips={chip && <span className="chip mono">{chip}</span>}
-      overlay={<PingRipple role="chaser" lastRevealAt={view.lastRevealAt} now={now} />}
       slot={<PowerUpHand code={code} view={view} />}
       scanLabel="Scan tag"
       scanClass="scan-chaser"

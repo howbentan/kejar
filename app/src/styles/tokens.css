@@ -154,6 +154,8 @@ select.input option { background: #141614; color: var(--white); }
 .dip-pick p { margin: 0; font: 700 16px var(--font); }
 .dip-timer { display: block; height: 3px; width: 100%; background: var(--volt); transform-origin: left; }
 @media (prefers-reduced-motion: reduce) { .vf-line { animation: none; top: 50%; } }
+.ripple-rings { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+.ripple-rings span { position: absolute; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--volt); box-sizing: border-box; }
 .marker { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 2; }
 .checkin-banner { position: relative; border-radius: 16px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .checkin-banner.ok { background: var(--volt); color: var(--black); }

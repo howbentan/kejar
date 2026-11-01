@@ -4,7 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const call = vi.hoisted(() => vi.fn())
 const scanned = vi.hoisted(() => ({ text: '' }))
 vi.mock('../game/api', () => ({ call, ApiError: class extends Error {} }))
-vi.mock('../game/Map', () => ({ default: () => <div data-testid="map" /> }))
+const mapProps = vi.hoisted(() => ({ last: null as null | { ripple?: { at: number } | null } }))
+vi.mock('../game/Map', () => ({
+  default: (p: { ripple?: { at: number } | null }) => {
+    mapProps.last = p
+    return <div data-testid="map" />
+  },
+}))
 vi.mock('../game/here', () => ({ currentCoords: async () => ({}) }))
 vi.mock('../game/Scanner', () => ({
   default: ({ onResult }: { onResult: (t: string) => void }) => (
@@ -85,6 +91,12 @@ describe('RunnerChase', () => {
     await scan('KEJAR:TAG:03')
     expect(call).not.toHaveBeenCalled()
     expect(screen.getByText("That's not a station or Penjara code")).toBeInTheDocument()
+  })
+
+  it('the ping ripples out on the map, with no ping card on the chase screen', () => {
+    render(<RunnerChase code="ABC234" view={testView({ lastRevealAt: 99_000 })} />)
+    expect(mapProps.last?.ripple?.at).toBe(99_000)
+    expect(screen.queryByText("You've been pinged")).toBeNull()
   })
 
   it('warns that check-ins will be missed when location is off', () => {
