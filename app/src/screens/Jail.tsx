@@ -1,62 +1,7 @@
-import { useCallback, useState } from 'react'
-import type { BreakJudgement } from '../../shared/catch.js'
 import type { View } from '../../shared/views.js'
-import { call } from '../game/api'
-import { currentCoords } from '../game/here'
 import GameMap from '../game/Map'
-import Scanner from '../game/Scanner'
-import { loadSession } from '../game/session'
-import { ErrorText, Screen } from '../game/ui'
+import { Screen } from '../game/ui'
 import { Feed } from './RunnerChase'
-
-const BREAK_REJECTIONS: Record<string, string> = {
-  'too-far-from-jail': 'Get within 30 m of Penjara',
-  'nobody-to-free': 'Nobody to free',
-  'not-a-free-runner': 'Only free runners can break people out',
-  'not-chasing': 'Jailbreaks only work during the chase',
-  paused: 'Game is paused',
-}
-
-/** "Break them out" for free runners: scan the jail code to free everyone jailed (once each). */
-export function BreakOut({ code, view }: { code: string; view: View }) {
-  const [scanning, setScanning] = useState(false)
-  const [result, setResult] = useState('')
-  const [error, setError] = useState('')
-
-  const onScan = useCallback(
-    async (qr: string) => {
-      setScanning(false)
-      setError('')
-      try {
-        const here = await currentCoords()
-        const r = await call<BreakJudgement>('jailbreak', { code, token: loadSession(localStorage, code).token, qr, ...here })
-        setResult(r.ok ? `Freed ${r.freedIds.length} runner${r.freedIds.length === 1 ? '' : 's'} ✓` : BREAK_REJECTIONS[r.reason])
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e))
-      }
-    },
-    [code],
-  )
-
-  if (view.me.role !== 'runner' || view.me.jailed || view.counts.runnersJailed === 0) return null
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {result && (
-        <p role="status" style={{ fontWeight: 600 }}>
-          {result}
-        </p>
-      )}
-      <ErrorText>{error}</ErrorText>
-      {scanning ? (
-        <Scanner onResult={onScan} onCancel={() => setScanning(false)} />
-      ) : (
-        <button className="btn btn-ghost" onClick={() => setScanning(true)}>
-          Break them out ({view.counts.runnersJailed} in Penjara)
-        </button>
-      )}
-    </div>
-  )
-}
 
 // Gentler than the catch lines: an auto-jail may not be the runner's fault (motion design §5a).
 const MISSED_LINES = ['Your phone went ponteng, bro.', 'Signal hilang, bossku?', 'Kena check in lah, boss.', 'Phone in your pocket too deep.']

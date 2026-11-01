@@ -204,7 +204,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     // Skip stale alerts when catching up after a gap: only alert pings still in the future.
     if (game.settings.checkinMode !== 'push' || now >= (times.get(seq)?.revealAt ?? 0)) continue
     const runners = (await store.players(game.id)).filter((p) => p.role === 'runner' && !p.jailed)
-    await pushTo(ctx, runners, { type: 'checkin', code: game.code, seq })
+    await pushTo(ctx, runners, { type: 'checkin', code: game.code, seq, revealAt: times.get(seq)?.revealAt })
   }
 
   for (const seq of work.reveal) {

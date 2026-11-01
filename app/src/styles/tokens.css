@@ -92,15 +92,100 @@ select.input option { background: #141614; color: var(--white); }
 
 /* Centre marker for the play-area picker */
 
-/* Power-up hand */
-.hand { display: flex; gap: 8px; overflow-x: auto; }
-.hand-card {
-  appearance: none; cursor: pointer; text-align: left; min-width: 130px; padding: 12px; border-radius: 16px;
-  background: rgba(198, 255, 61, 0.08); border: 1px solid rgba(198, 255, 61, 0.45); color: var(--white);
-  display: flex; flex-direction: column; gap: 4px; font: 500 12px var(--font);
+/* The one-screen chase (motion design §8.1): top bar, status row, map, dock. Nothing scrolls. */
+.chase { position: relative; height: 100dvh; max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; overflow: hidden; }
+.chase-top {
+  height: 44px; flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 12px;
+  background: linear-gradient(var(--black) 75%, rgba(10, 10, 11, 0)); position: relative; z-index: 3;
 }
-.hand-card b { color: var(--volt); font-size: 15px; letter-spacing: -0.02em; }
-.hand-card span { color: var(--dim); }
+.chase-who { font: 600 10.5px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chase-clock { font: 500 17px var(--mono); letter-spacing: -0.03em; }
+.chase-count { justify-self: end; font: 500 11px var(--mono); color: var(--dim); }
+.chase-map { position: relative; flex: 1; min-height: 0; }
+.chase-map > div:first-child, .chase-map > div:first-child > div:first-child { height: 100%; }
+.chase-map > div:first-child > div:first-child { border-radius: 0; border: 0; }
+/* The status row starts 8 px under the top bar, level with the SOS icon (top 52 px) which owns its right side. */
+.chase-over { position: absolute; left: 12px; right: 12px; top: 8px; z-index: 4; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.chase-over > * { pointer-events: auto; }
+/* The row always keeps its line, so a banner never rides up beside the SOS icon. */
+.chase-chips { min-height: 28px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding-right: 40px; pointer-events: none; }
+.chip {
+  height: 28px; box-sizing: border-box; display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 0 10px;
+  font: 600 11px var(--font); background: rgba(10, 10, 11, 0.88); border: 1px solid #333; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.chip.warn { border-color: var(--volt); color: var(--volt); }
+.chip.warn i { width: 6px; height: 6px; border-radius: 50%; background: var(--volt); box-shadow: 0 0 6px var(--volt); }
+.chase-warning { border: 2px solid var(--white); border-radius: 16px; padding: 10px 12px; background: rgba(10, 10, 11, 0.92); }
+.chase-warning p { margin: 0; font-size: 13px; }
+
+/* Check-in banner: drops over the top of the map; the map stays visible underneath. */
+.checkin-banner { border-radius: 16px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.checkin-banner.ok { background: var(--volt); color: var(--black); }
+.checkin-banner.wait { background: rgba(10, 10, 11, 0.94); border: 1.5px solid var(--volt); color: var(--white); }
+.checkin-banner.miss { background: var(--white); color: var(--black); }
+.banner-row { display: flex; align-items: center; gap: 10px; }
+.banner-row b { display: block; font-size: 15px; letter-spacing: -0.02em; }
+.banner-row span { font-size: 11px; font-weight: 600; }
+.banner-mark { width: 28px; height: 28px; flex: none; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: var(--black); color: var(--volt); font-size: 14px !important; }
+.checkin-banner.wait .banner-mark { background: var(--volt); color: var(--black); }
+.banner-foot { margin: 0; font-size: 12px; font-weight: 600; }
+.banner-strikes { display: flex; align-items: center; gap: 6px; font: 600 9.5px var(--mono); letter-spacing: 0.1em; }
+.banner-strikes i { width: 22px; height: 6px; border-radius: 3px; border: 1.5px solid var(--black); }
+.banner-strikes i.on { background: var(--black); }
+
+/* The dock: the slot, one Scan button, and the ticker. */
+.dock {
+  position: relative; flex: none; z-index: 5; display: flex; flex-direction: column; gap: 7px;
+  padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); background: var(--black); border-top: 1px solid #1e1e1e;
+}
+.dock-row { display: flex; gap: 8px; height: 56px; }
+.slot-wrap { flex: 1; min-width: 0; display: flex; }
+.slot {
+  appearance: none; flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 0 12px; border-radius: 14px; border: 1.5px solid var(--volt); background: none; color: var(--white);
+  font: 500 11px var(--font); text-align: left; cursor: pointer;
+}
+.slot > span { min-width: 0; display: flex; flex-direction: column; }
+.slot b { font-size: 14px; letter-spacing: -0.02em; color: var(--volt); }
+.slot > span > span { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slot.live { background: rgba(198, 255, 61, 0.1); cursor: default; }
+.slot.empty { border-style: dashed; border-color: #444; color: var(--dim); cursor: default; }
+.slot-deck { flex: none; font: 500 8px var(--mono); letter-spacing: 0.1em; color: var(--volt); }
+.scan {
+  appearance: none; border: 0; border-radius: 14px; cursor: pointer; font: 800 14px var(--font); letter-spacing: -0.02em;
+  display: grid; place-items: center;
+}
+.scan-runner { width: 78px; flex: none; background: var(--white); color: var(--black); }
+.scan-chaser { flex: 1.2; background: var(--volt); color: var(--black); font-size: 17px; }
+.dock-pop { position: absolute; left: 12px; right: 12px; bottom: calc(100% + 8px); z-index: 6; }
+.slot-wrap .dock-pop { left: 12px; right: 12px; }
+.dock-pop > div, .dock-pop-text {
+  width: 100%; border-radius: 14px; padding: 10px 12px; background: #141614; border: 1px solid #2a2a2a; color: var(--white);
+}
+.dock-pop-text { appearance: none; text-align: left; font: 600 13px var(--font); cursor: pointer; }
+.scan-overlay { position: fixed; inset: 0; z-index: 45; background: rgba(10, 10, 11, 0.94); display: flex; flex-direction: column; justify-content: center; padding: 16px; }
+
+/* Ticker: one line, newest first; tap for the whole feed. */
+.ticker-wrap { position: relative; }
+.ticker {
+  appearance: none; width: 100%; height: 30px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: 10px;
+  border: 1px solid transparent; background: #141614; color: var(--white); font: 500 11.5px var(--font); text-align: left; cursor: pointer; overflow: hidden;
+}
+.ticker.act { border-color: var(--volt); }
+.ticker-label { flex: none; font: 500 8px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; border: 1px solid #555; border-radius: 6px; padding: 2px 4px; }
+.ticker-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticker-text em { color: var(--volt); font-style: normal; }
+.ticker-count { flex: none; font: 600 9px var(--mono); background: var(--volt); color: var(--black); border-radius: 999px; padding: 1px 6px; }
+.feed-sheet {
+  position: absolute; left: -12px; right: -12px; bottom: calc(100% + 8px + 63px); max-height: 52dvh; overflow-y: auto;
+  background: #0f100f; border-top: 1px solid #2a2a2a; border-radius: 20px 20px 0 0; padding: 8px 14px 12px; z-index: 7;
+}
+.feed-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.feed-list li { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hair); font-size: 13px; }
+.feed-list li.act { border-left: 2px solid var(--volt); padding-left: 8px; }
+.feed-list p { margin: 0; }
+.feed-time { flex: none; font: 500 10px var(--mono); color: var(--dim); padding-top: 2px; }
+.feed-means { color: var(--volt); font-size: 12px; }
 
 /* Help and SOS (motion design §6.0): a Volt "!" on the status row, same spot on every player screen. */
 .sos-icon {

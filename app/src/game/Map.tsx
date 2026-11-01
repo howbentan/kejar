@@ -73,7 +73,8 @@ export default function GameMap({
   stations?: StationMark[]
   /** Safety alerts with a location (marshals only), drawn above everyone. */
   pins?: Pin[]
-  height?: number
+  /** Pixels, or '100%' to fill a sized parent (the chase screen). */
+  height?: number | string
 }) {
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
@@ -257,7 +258,7 @@ export default function GameMap({
   }
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', height: typeof height === 'string' ? height : undefined }}>
       <div ref={el} style={{ height, borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hair)' }} />
       <button type="button" className="map-me" onClick={centreOnMe} aria-label="Centre on me">
         <span aria-hidden="true">◎</span> Me

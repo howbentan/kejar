@@ -181,7 +181,7 @@ describe('pings and check-ins', () => {
     await run('state', { code: g.code, token: g.ben.token })
     await run('state', { code: g.code, token: g.aina.token })
     expect(pushes.map((p) => p.endpoint).sort()).toEqual(['https://push/Aina', 'https://push/Hafiz'])
-    expect(pushes[0].payload).toEqual({ type: 'checkin', code: g.code, seq: 1 })
+    expect(pushes[0].payload).toEqual({ type: 'checkin', code: g.code, seq: 1, revealAt: T0 + 10 * MIN })
   })
 
   it('schedule mode never pushes', async () => {
@@ -496,7 +496,7 @@ describe('power-up stations', () => {
     pushes = []
     expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: flare.id })).toEqual({ ok: true, kind: 'flare' })
     await run('state', { code: g.code, token: g.ben.token })
-    expect(pushes.map((p) => p.payload)).toContainEqual({ type: 'checkin', code: g.code, seq: BONUS_SEQ_BASE })
+    expect(pushes.map((p) => p.payload)).toContainEqual({ type: 'checkin', code: g.code, seq: BONUS_SEQ_BASE, revealAt: now + 30_000 })
     now += 30_000
     const v = await run<View>('state', { code: g.code, token: g.ben.token })
     expect(v.lastRevealAt).toBe(now)

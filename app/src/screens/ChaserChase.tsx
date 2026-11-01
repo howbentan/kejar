@@ -1,17 +1,11 @@
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
 import type { CatchJudgement } from '../../shared/catch.js'
 import { tagIdFromQr } from '../../shared/ids.js'
 import type { View } from '../../shared/views.js'
-import { call } from '../game/api'
-import { currentCoords } from '../game/here'
-import GameMap from '../game/Map'
+import ChaseLayout from '../game/ChaseLayout'
 import PingRipple from '../game/PingRipple'
-import PowerUpHand from '../game/PowerUpHand'
-import Scanner from '../game/Scanner'
-import { loadSession } from '../game/session'
+import PowerUpHand, { claimMessage, type ClaimResult } from '../game/PowerUpHand'
 import { clock, useServerNow } from '../game/time'
-import { ErrorText, Screen } from '../game/ui'
-import { Feed, GameClock } from './RunnerChase'
 
 const REJECTIONS: Record<string, string> = {
   'too-far': 'Too far — get within 50 m',
@@ -31,66 +25,38 @@ export function catchMessage(text: string, r: CatchJudgement): string {
   return REJECTIONS[r.reason] ?? 'Catch not recorded'
 }
 
+/** "Next ping 1:42 · last 3:18 ago", or whichever half is known. */
+function pingChip(view: View, now: number): string | null {
+  const next = view.nextRevealAt === null ? null : `Next ping ${clock(Math.max(0, view.nextRevealAt - now))}`
+  // Time since counts up, so round down (clock() rounds up, for countdowns).
+  const last = view.lastRevealAt === null ? null : `last ${clock(Math.max(0, Math.floor((now - view.lastRevealAt) / 1000) * 1000))} ago`
+  if (next && last) return `${next} · ${last}`
+  return next ?? (last && `Last ping ${last.slice(5)}`)
+}
+
 export default function ChaserChase({ code, view, refresh }: { code: string; view: View; refresh: () => void }) {
   const now = useServerNow(view.now)
-  const [scanning, setScanning] = useState(false)
-  const [result, setResult] = useState('')
-  const [error, setError] = useState('')
-  const lastPing = view.feed.find((f) => f.text.startsWith('Ping'))
+  const chip = pingChip(view, now)
 
-  const onScan = useCallback(
-    async (text: string) => {
-      setScanning(false)
-      setError('')
-      try {
-        const here = await currentCoords()
-        const r = await call<CatchJudgement>('catch', { code, token: loadSession(localStorage, code).token, tagQr: text, ...here })
-        setResult(catchMessage(text, r))
-        refresh()
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e))
-      }
-    },
-    [code, refresh],
+  const describe = useCallback(
+    (s: { action: string }, text: string, r: unknown) =>
+      s.action === 'catch' ? catchMessage(text, r as CatchJudgement) : claimMessage(r as ClaimResult),
+    [],
   )
 
   return (
-    <Screen eyebrow="Kejar">
-      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-        <GameClock view={view} />
-        <span className="muted">{view.counts.runnersFree} Dikejar free</span>
-      </div>
-      <PingRipple role="chaser" lastRevealAt={view.lastRevealAt} now={now} />
-      <div style={{ display: 'flex', gap: 8 }}>
-        <div className="card" style={{ flex: 1 }}>
-          <p className="eyebrow">Last ping</p>
-          <p className="mono" style={{ fontSize: 18 }}>
-            {lastPing ? clock(now - Date.parse(lastPing.at)) + ' ago' : '—'}
-          </p>
-        </div>
-        <div className="card" style={{ flex: 1 }}>
-          <p className="eyebrow">Next ping</p>
-          <p className="mono" style={{ fontSize: 18, color: 'var(--volt)' }}>
-            {view.nextRevealAt ? clock(view.nextRevealAt - now) : '—'}
-          </p>
-        </div>
-      </div>
-      <GameMap arena={view.arena} dots={view.dots} stations={view.stations} height={300} />
-      {result && (
-        <p role="status" style={{ fontWeight: 600 }}>
-          {result}
-        </p>
-      )}
-      <ErrorText>{error}</ErrorText>
-      {scanning ? (
-        <Scanner onResult={onScan} onCancel={() => setScanning(false)} />
-      ) : (
-        <button className="btn" onClick={() => setScanning(true)}>
-          Scan ripped tag
-        </button>
-      )}
-      <PowerUpHand code={code} view={view} />
-      <Feed view={view} />
-    </Screen>
+    <ChaseLayout
+      code={code}
+      view={view}
+      side="chaser"
+      title={`KEJAR · ${view.me.name.toUpperCase()}`}
+      chips={chip && <span className="chip mono">{chip}</span>}
+      overlay={<PingRipple role="chaser" lastRevealAt={view.lastRevealAt} now={now} />}
+      slot={<PowerUpHand code={code} view={view} />}
+      scanLabel="Scan tag"
+      scanClass="scan-chaser"
+      describe={describe}
+      onScanned={refresh}
+    />
   )
 }

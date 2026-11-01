@@ -4,7 +4,8 @@ import MarshalTools from '../game/MarshalTools'
 import PingRipple from '../game/PingRipple'
 import { useServerNow } from '../game/time'
 import { Screen } from '../game/ui'
-import { Feed, GameClock } from './RunnerChase'
+import { GameClock } from '../game/ChaseLayout'
+import { Feed } from './RunnerChase'
 
 /** Everyone live, plus the safety tools: alerts, pause and removing players. */
 export default function MarshalLive({ code, view, refresh }: { code: string; view: View; refresh: () => void }) {
