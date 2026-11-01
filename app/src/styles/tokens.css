@@ -184,6 +184,8 @@ select.input option { background: #141614; color: var(--white); }
 .slot > span { min-width: 0; display: flex; flex-direction: column; }
 .slot b { font-size: 14px; letter-spacing: -0.02em; color: var(--volt); }
 .slot > span > span { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slot svg { flex: none; }
+.slot:disabled { cursor: default; border-style: dashed; opacity: 0.85; }
 .slot.live { background: rgba(198, 255, 61, 0.1); cursor: default; }
 .slot.empty { border-style: dashed; border-color: #444; color: var(--dim); cursor: default; }
 .slot-deck { flex: none; font: 500 8px var(--mono); letter-spacing: 0.1em; color: var(--volt); }

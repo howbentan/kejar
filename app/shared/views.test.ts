@@ -252,6 +252,20 @@ describe('deck and slot', () => {
     expect(view(aina, { powerUps: [durian] }).activePowerUp).toBe('shield')
     expect(view(aina).activePowerUp).toBeNull()
   })
+  const card = (over: Partial<PowerUp>): PowerUp => ({ id: 'u9', game_id: 'g1', player_id: 'r1', kind: 'shield', station: 1, claimed_at: '', used_at: null, consumed_at: null, ...over })
+  it('a running Durian says when it ends; other running effects wait for the next ping', () => {
+    const usedAt = NOW - MIN
+    expect(view(aina, { powerUps: [card({ used_at: new Date(usedAt).toISOString() })] }).activeEndsAt).toBe(usedAt + 10 * MIN)
+    expect(view(aina, { powerUps: [card({ kind: 'cloak', used_at: new Date(usedAt).toISOString() })] }).activeEndsAt).toBeNull()
+    expect(view(aina).activeEndsAt).toBeNull()
+  })
+  it('a chaser holding Mat Rempit during the team cooldown sees when it unlocks', () => {
+    const flare = card({ player_id: 'c1', kind: 'flare' })
+    const bonus = ping(BONUS_SEQ_BASE, NOW - MIN)
+    expect(view(chaser, { powerUps: [flare], pings: [...pings, bonus] }).flareReadyAt).toBe(NOW - MIN + 3 * MIN)
+    expect(view(chaser, { powerUps: [flare] }).flareReadyAt).toBeNull()
+    expect(view(chaser, { pings: [...pings, bonus] }).flareReadyAt).toBeNull()
+  })
 })
 
 describe('jail reason', () => {

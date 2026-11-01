@@ -52,9 +52,25 @@ describe('PowerUpHand', () => {
     expect(screen.getByText('Dikejar within 75 m show exactly')).toBeInTheDocument()
   })
 
-  it('shows a power-up that is still working', () => {
-    render(<PowerUpHand code="ABC234" view={testView({ activePowerUp: 'shield' })} />)
-    expect(screen.getByText('Durian is working')).toBeInTheDocument()
+  it('a card in the slot shows its sticker and READY', () => {
+    render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'shield' }] })} />)
+    expect(screen.getByRole('img', { name: 'Durian' })).toBeInTheDocument()
+    expect(screen.getByText('READY')).toBeInTheDocument()
+  })
+
+  it('a running Durian counts down; other effects wait for the next ping', () => {
+    const { rerender } = render(<PowerUpHand code="ABC234" view={testView({ activePowerUp: 'shield', activeEndsAt: 100_000 + 582_000 })} />)
+    expect(screen.getByText('Durian · ACTIVE')).toBeInTheDocument()
+    expect(screen.getByText('9:42 LEFT')).toBeInTheDocument()
+    rerender(<PowerUpHand code="ABC234" view={testView({ activePowerUp: 'cloak', activeEndsAt: null })} />)
+    expect(screen.getByText('Ponteng · ACTIVE')).toBeInTheDocument()
+    expect(screen.getByText('UNTIL THE NEXT PING')).toBeInTheDocument()
+  })
+
+  it("Mat Rempit waits out the team cooldown, and can't be used until then", () => {
+    render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'flare' }], flareReadyAt: 100_000 + 134_000 })} />)
+    expect(screen.getByText('TEAM COOLDOWN · 2:14')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /mat rempit/i })).toBeDisabled()
   })
 
   it('shows how many cards are left in the deck', () => {
@@ -80,7 +96,7 @@ describe('PowerUpHand', () => {
 
   it('is the slot only: an empty slot says so, and there is no scan button of its own', () => {
     render(<PowerUpHand code="ABC234" view={testView()} />)
-    expect(screen.getByText(/empty slot/i)).toBeInTheDocument()
+    expect(screen.getByText('No power-up. Find a station and scan it.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /scan/i })).toBeNull()
   })
 })

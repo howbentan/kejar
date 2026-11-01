@@ -42,7 +42,7 @@ describe('RunnerChase', () => {
     expect(screen.getByText('9 free')).toBeInTheDocument()
     expect(screen.getByText('Check in in 2:14')).toBeInTheDocument()
     expect(screen.getByTestId('map')).toBeInTheDocument()
-    expect(screen.getByText(/empty slot/i)).toBeInTheDocument()
+    expect(screen.getByText('No power-up. Find a station and scan it.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Scan' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /feed/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /break them out/i })).toBeNull()

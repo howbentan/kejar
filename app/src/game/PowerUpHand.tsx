@@ -1,11 +1,13 @@
+import * as m from 'motion/react-m'
 import { useState } from 'react'
 import type { ClaimJudgement } from '../../shared/powerups.js'
 import type { PowerUp, PowerUpKind } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
 import { loadSession } from './session'
-import { clock } from './time'
+import { clock, useServerNow } from './time'
 import { INFO } from './powerInfo'
+import Sticker from './Sticker'
 import { ErrorText } from './ui'
 
 export type ClaimResult = ({ ok: true; kind: PowerUpKind } | Exclude<ClaimJudgement, { ok: true }>)
@@ -51,6 +53,7 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const token = () => loadSession(localStorage, code).token
+  const now = useServerNow(view.now)
 
   async function use(u: PowerUp) {
     setConfirm(null)
@@ -96,25 +99,40 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
         </div>
       )}
       {view.hand.length > 0 ? (
-        view.hand.map((u) => (
-          <button key={u.id} type="button" className="slot" onClick={() => setConfirm(u)}>
-            <span>
-              <b>{INFO[u.kind].name}</b>
-              <span>{INFO[u.kind].effect}</span>
-            </span>
-            {deck}
-          </button>
-        ))
+        view.hand.map((u) => {
+          const cooling = u.kind === 'flare' && view.flareReadyAt !== null
+          return (
+            <m.button
+              key={u.id}
+              type="button"
+              className="slot"
+              disabled={cooling}
+              initial={{ y: -16, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 18 }}
+              onClick={() => setConfirm(u)}
+            >
+              <Sticker kind={u.kind} size={40} tilt={-4} />
+              <span>
+                <b>{INFO[u.kind].name}</b>
+                <span>{cooling ? `TEAM COOLDOWN · ${clock(view.flareReadyAt! - now)}` : INFO[u.kind].effect}</span>
+              </span>
+              {cooling ? deck : <small className="slot-deck">READY</small>}
+            </m.button>
+          )
+        })
       ) : view.activePowerUp ? (
         <div className="slot live">
+          <Sticker kind={view.activePowerUp} size={40} tilt={-4} />
           <span>
-            <b>{`${INFO[view.activePowerUp].name} is working`}</b>
+            <b>{`${INFO[view.activePowerUp].name} · ACTIVE`}</b>
+            <span>{view.activeEndsAt !== null ? `${clock(view.activeEndsAt - now)} LEFT` : 'UNTIL THE NEXT PING'}</span>
           </span>
           {deck}
         </div>
       ) : (
         <div className="slot empty">
-          <span>Empty slot · scan a station</span>
+          <span>No power-up. Find a station and scan it.</span>
           {deck}
         </div>
       )}
