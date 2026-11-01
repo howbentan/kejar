@@ -110,6 +110,7 @@ export type EventType =
   | 'resumed'
   | 'removed'
   | 'auto-jailed'
+  | 'auto-jail-undone'
 
 export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus'
 

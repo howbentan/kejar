@@ -11,6 +11,7 @@ const KIND_LABEL: Record<Alert['kind'], string> = {
   report: 'Report',
   outside: 'Boundary',
   missed: 'Check-ins',
+  'auto-jail': 'Check-ins',
   'left-start': 'Start',
   'flagged-catch': 'Catch',
 }

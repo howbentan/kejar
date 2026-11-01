@@ -1030,6 +1030,86 @@ describe('automatic alerts', () => {
     expect(await hafizJailed()).toBe(true)
   })
 
+  describe('undoing an auto-jail', () => {
+    /** Hafiz misses pings 1 and 2 and is auto-jailed at +15; Aina keeps checking in. */
+    async function autoJailed() {
+      const g = await safetyGame({ checkinMode: 'schedule' })
+      for (const m of [10, 15]) {
+        now = T0 + m * MIN - 20_000
+        await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+      }
+      now = T0 + 15 * MIN
+      const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+      const alert = v.alerts.find((a) => a.kind === 'auto-jail')!
+      return { ...g, eventId: alert.id }
+    }
+    const hafiz = async (gameId: string, id: string) => (await store.players(gameId)).find((p) => p.id === id)!
+
+    it('frees the runner without using their one escape, and closes the alert', async () => {
+      const g = await autoJailed()
+      now = T0 + 15 * MIN + 10_000
+      expect(await run('undoAutoJail', { code: g.code, organiserToken: g.organiserToken, eventId: g.eventId })).toEqual({ ok: true })
+      const h = await hafiz(g.gameId, g.hafiz.playerId)
+      expect(h.jailed).toBe(false)
+      expect(h.freed_once).toBe(false)
+      expect(h.freed_at).toBe(new Date(now).toISOString())
+      const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+      expect(v.alerts.find((a) => a.id === g.eventId)!.handled).toBe(true)
+      expect(v.feed[0].text).toBe('#03 is back in the game (marshal)')
+      expect(store.safetyRows.at(-1)).toMatchObject({ type: 'auto-jail-undone', target_id: g.hafiz.playerId, data: { by: 'Organiser', target_name: 'Hafiz' } })
+    })
+
+    it('restarts the count: his next miss is only the first', async () => {
+      const g = await autoJailed()
+      now = T0 + 15 * MIN + 10_000
+      await run('undoAutoJail', { code: g.code, token: g.siti.token, eventId: g.eventId })
+      for (const m of [20, 25]) {
+        now = T0 + m * MIN - 20_000
+        await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+        now = T0 + m * MIN
+        await run('state', { code: g.code, organiserToken: g.organiserToken })
+        expect((await hafiz(g.gameId, g.hafiz.playerId)).jailed).toBe(m === 25)
+      }
+    })
+
+    it("can't undo a chaser's catch", async () => {
+      const g = await safetyGame()
+      await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+      await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+      await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })
+      const caught = (await store.events(g.gameId)).find((e) => e.type === 'caught')!
+      expect(await run('undoAutoJail', { code: g.code, organiserToken: g.organiserToken, eventId: caught.id })).toEqual({
+        ok: false,
+        reason: 'not-undoable',
+      })
+    })
+
+    it("can't undo once the runner has been freed some other way", async () => {
+      const g = await autoJailed()
+      now = T0 + 15 * MIN + 10_000
+      await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+      await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR })
+      expect(await run('undoAutoJail', { code: g.code, organiserToken: g.organiserToken, eventId: g.eventId })).toEqual({
+        ok: false,
+        reason: 'not-undoable',
+      })
+    })
+
+    it('is for marshals only', async () => {
+      const g = await autoJailed()
+      await rejects(run('undoAutoJail', { code: g.code, token: g.aina.token, eventId: g.eventId }), 403, 'Marshals only')
+    })
+
+    it('only works once', async () => {
+      const g = await autoJailed()
+      await run('undoAutoJail', { code: g.code, organiserToken: g.organiserToken, eventId: g.eventId })
+      expect(await run('undoAutoJail', { code: g.code, organiserToken: g.organiserToken, eventId: g.eventId })).toEqual({
+        ok: false,
+        reason: 'not-undoable',
+      })
+    })
+  })
+
   it('no check-in is missed while the game is paused', async () => {
     const g = await safetyGame({ checkinMode: 'schedule' })
     // Aina checks in for ping 1; Hafiz never checks in. Paused from +14 to +20, so ping 2 moves to +21.

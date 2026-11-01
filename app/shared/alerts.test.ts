@@ -64,6 +64,12 @@ describe('alertsFrom', () => {
 })
 
 describe('auto-jail alert', () => {
+  it('has its own kind and names the runner it is about', () => {
+    const [a] = alertsFrom([event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2', data: { who: 'Hafiz #03' } })])
+    expect(a.kind).toBe('auto-jail')
+    expect(a.targetId).toBe('r2')
+    expect(alertsFrom([event('outside', T0 + MIN, { data: { who: 'Aina #07' } })])[0].targetId).toBeNull()
+  })
   it('reads as missed and sent to Penjara', () => {
     expect(alertsFrom([event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2', data: { who: 'Hafiz #03' } })]).map((a) => a.text)).toEqual([
       'Hafiz #03 missed 2 check-ins — sent to Penjara',

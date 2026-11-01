@@ -139,7 +139,7 @@ export type NewSavedArena = Omit<SavedArenaRow, 'id' | 'created_at' | 'updated_a
 
 export interface SafetyRecord {
   game_id: string
-  type: 'sos' | 'report' | 'removed'
+  type: 'sos' | 'report' | 'removed' | 'auto-jail-undone'
   player_id: string | null
   target_id: string | null
   lat: number | null

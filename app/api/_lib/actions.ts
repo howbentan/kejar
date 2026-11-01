@@ -778,6 +778,32 @@ const handleAlert: Action = async (ctx, body) => {
   return { ok: true }
 }
 
+/** A marshal frees an auto-jailed runner after a phone fault, without using their one escape (motion design §5b). */
+const undoAutoJail: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const marshal = await requireMarshal(ctx, game, body)
+  const eventId = str(body.eventId)
+  const jailing = (await ctx.store.events(game.id)).find((e) => e.id === eventId && e.type === 'auto-jailed')
+  const target = jailing && (await ctx.store.players(game.id)).find((p) => p.id === jailing.target_id)
+  // Only while they're still in Penjara from this auto-jail: not a chaser's catch, not after a later release.
+  const undoable =
+    !!target && target.jailed && target.caught_by === null && (!target.freed_at || Date.parse(jailing.at) >= Date.parse(target.freed_at))
+  if (!undoable) return { ok: false, reason: 'not-undoable' }
+  await ctx.store.updatePlayers([{ id: target.id, patch: { jailed: false, caught_at: null, freed_at: iso(ctx.now) } }])
+  await ctx.store.addEvent({ game_id: game.id, type: 'auto-jail-undone', actor_id: marshal?.id ?? null, target_id: target.id, data: {} })
+  await ctx.store.addEvent({ game_id: game.id, type: 'handled', actor_id: marshal?.id ?? null, target_id: null, data: { eventId } })
+  await ctx.store.addSafetyRecord({
+    game_id: game.id,
+    type: 'auto-jail-undone',
+    player_id: marshal?.id ?? null,
+    target_id: target.id,
+    lat: null,
+    lng: null,
+    data: { game_code: game.code, by: marshal?.name ?? 'Organiser', target_name: target.name },
+  })
+  return { ok: true }
+}
+
 const removePlayer: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const marshal = await requireMarshal(ctx, game, body)
@@ -971,6 +997,7 @@ export const actions = {
   sos,
   report,
   handleAlert,
+  undoAutoJail,
   removePlayer,
   searchParks,
   parkFeatures,

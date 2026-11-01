@@ -157,6 +157,9 @@ describe('feed wording', () => {
       'Game paused by a marshal',
     ])
   })
+  it('announces an undone auto-jail', () => {
+    expect(feedOf([event('auto-jail-undone', T0 + 16 * MIN, { target_id: 'r2' })])).toEqual(['#03 is back in the game (marshal)'])
+  })
   it('announces an auto-jail', () => {
     expect(feedOf([event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2' })])).toEqual(['#03 missed 2 check-ins — sent to Penjara'])
   })
