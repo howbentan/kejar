@@ -17,7 +17,23 @@ vi.mock('maplibre-gl', () => ({
       on(event: string, cb: () => void) {
         if (event === 'load') created.load = cb
       }
-      remove() {}
+      removed = false
+      remove() {
+        this.removed = true
+      }
+      // Like MapLibre: a removed map has no style, so setFilter throws.
+      setFilter() {
+        if (this.removed) throw new TypeError("Cannot read properties of undefined (reading 'setFilter')")
+      }
+      getContainer() {
+        return { getBoundingClientRect: () => ({ width: 360, height: 480 }) }
+      }
+      project() {
+        return { x: 180, y: 240 }
+      }
+      unproject() {
+        return { lat: 3.001, lng: 101.001 }
+      }
       addSource(id: string, s: { data: unknown }) {
         created.data[id] = s.data
       }
@@ -47,6 +63,13 @@ const arena = {
 }
 
 describe('GameMap', () => {
+  it('leaving the screen mid-ripple never touches the removed map', () => {
+    const { rerender, unmount } = render(<GameMap arena={arena} dots={[]} />)
+    created.load!()
+    rerender(<GameMap arena={arena} dots={[]} ripple={{ at: Date.now(), origin: { lat: 3, lng: 101 } }} />)
+    expect(() => unmount()).not.toThrow()
+  })
+
   it('keeps one map when a poll returns an equal arena as a new object', () => {
     created.count = 0
     const { rerender } = render(<GameMap arena={arena} dots={[]} />)

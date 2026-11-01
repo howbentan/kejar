@@ -252,6 +252,20 @@ describe('deck and slot', () => {
     expect(view(aina, { powerUps: [durian] }).activePowerUp).toBe('shield')
     expect(view(aina).activePowerUp).toBeNull()
   })
+  const card = (over: Partial<PowerUp>): PowerUp => ({ id: 'u9', game_id: 'g1', player_id: 'r1', kind: 'shield', station: 1, claimed_at: '', used_at: null, consumed_at: null, ...over })
+  it('a running Durian says when it ends; other running effects wait for the next ping', () => {
+    const usedAt = NOW - MIN
+    expect(view(aina, { powerUps: [card({ used_at: new Date(usedAt).toISOString() })] }).activeEndsAt).toBe(usedAt + 10 * MIN)
+    expect(view(aina, { powerUps: [card({ kind: 'cloak', used_at: new Date(usedAt).toISOString() })] }).activeEndsAt).toBeNull()
+    expect(view(aina).activeEndsAt).toBeNull()
+  })
+  it('a chaser holding Mat Rempit during the team cooldown sees when it unlocks', () => {
+    const flare = card({ player_id: 'c1', kind: 'flare' })
+    const bonus = ping(BONUS_SEQ_BASE, NOW - MIN)
+    expect(view(chaser, { powerUps: [flare], pings: [...pings, bonus] }).flareReadyAt).toBe(NOW - MIN + 3 * MIN)
+    expect(view(chaser, { powerUps: [flare] }).flareReadyAt).toBeNull()
+    expect(view(chaser, { pings: [...pings, bonus] }).flareReadyAt).toBeNull()
+  })
 })
 
 describe('jail reason', () => {
@@ -267,6 +281,21 @@ describe('jail reason', () => {
   })
   it('is null while free', () => {
     expect(view(aina).jailReason).toBeNull()
+  })
+  it('an auto-jailed runner sees the check-ins it was judged on; nobody else does', () => {
+    const checkins = [
+      { revealAt: T0 + 10 * MIN, ok: true },
+      { revealAt: T0 + 15 * MIN, ok: false },
+    ]
+    const events = [event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2', data: { checkins } })]
+    const players = [chaser, aina, jailedHafiz, wei, siti]
+    expect(view(jailedHafiz, { players, events }).jailCheckins).toEqual([
+      { at: T0 + 10 * MIN, ok: true },
+      { at: T0 + 15 * MIN, ok: false },
+    ])
+    expect(view(aina, { players, events }).jailCheckins).toBeNull()
+    const caught = { ...hafiz, jailed: true, caught_by: 'c1' }
+    expect(view(caught, { players: [chaser, aina, caught, wei, siti], events }).jailCheckins).toBeNull()
   })
 })
 

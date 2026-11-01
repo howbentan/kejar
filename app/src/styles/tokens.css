@@ -119,7 +119,48 @@ select.input option { background: #141614; color: var(--white); }
 .chase-warning p { margin: 0; font-size: 13px; }
 
 /* Check-in banner: drops over the top of the map; the map stays visible underneath. */
-.checkin-banner { border-radius: 16px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+/* Full-screen moments (motion design §4, §5, §7). */
+.moment {
+  position: fixed; inset: 0; z-index: 48; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: rgba(10, 10, 11, 0.92); padding: 24px; text-align: center;
+}
+.moment-flash { position: absolute; inset: 0; background: var(--volt); pointer-events: none; }
+.moment-line { position: relative; font: 600 17px var(--font); letter-spacing: -0.02em; }
+.stamp {
+  position: relative; padding: 6px 18px; border: 4px solid var(--volt); border-radius: 14px; color: var(--volt);
+  font: 800 54px var(--font); letter-spacing: -0.06em; line-height: 1.05; white-space: nowrap;
+}
+.stamp-small { font-size: 26px; border-width: 3px; padding: 6px 12px; border-radius: 10px; }
+.stamp-plate { background: var(--black); box-shadow: 0 0 0 8px var(--black); }
+.bars { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.bars span { position: absolute; top: 0; bottom: 0; width: 5%; background: var(--white); border-radius: 0 0 4px 4px; }
+/* Penjara headlines keep clear of the SOS icon's corner (top 52 px, right 12 px). */
+.jail-title { position: relative; margin: 0; padding-right: 44px; font-size: 34px; font-weight: 800; letter-spacing: -0.05em; line-height: 1.05; }
+.checkin-row { position: relative; display: flex; gap: 18px; font: 500 15px var(--mono); }
+.checkin-row span { color: var(--dim); }
+.checkin-row span.ok { color: var(--volt); }
+.walk-guide { display: flex; flex-direction: column; gap: 8px; }
+.walk-distance { font: 600 12px var(--mono); letter-spacing: 0.12em; color: var(--volt); text-align: center; }
+.viewfinder { position: absolute; inset: 14%; border: 2px solid var(--volt); border-radius: 12px; overflow: hidden; pointer-events: none; }
+.vf-line { position: absolute; left: 0; right: 0; height: 2px; background: var(--volt); box-shadow: 0 0 10px var(--volt); animation: vf-sweep 1.8s ease-in-out infinite alternate; }
+@keyframes vf-sweep { from { top: 4%; } to { top: 94%; } }
+.vf-hint { text-align: center; font: 600 11px var(--mono); letter-spacing: 0.1em; color: var(--volt); text-transform: uppercase; }
+.dip { gap: 28px; }
+.dip-deck { position: absolute; top: 16px; right: 16px; font: 500 10px var(--mono); letter-spacing: 0.12em; color: var(--volt); }
+.dip-title { position: relative; padding: 0 30px; margin-bottom: 12px; }
+.dip-title h2 { margin: 0; font: 800 34px var(--font); letter-spacing: -0.05em; }
+.dip-fan { position: relative; display: flex; justify-content: center; align-items: flex-end; height: 250px; width: 100%; max-width: 420px; }
+.dip-card { appearance: none; border: 0; padding: 0; background: none; margin: 0 -22px; cursor: pointer; touch-action: none; transform-origin: 50% 120%; }
+.dip-card.picked { position: absolute; left: calc(50% - 75px); bottom: 6px; margin: 0; z-index: 2; cursor: default; transform-origin: 50% 100%; }
+.dip-spotlight { position: absolute; top: -10px; bottom: -10px; left: calc(50% - 50px); width: 100px; border-radius: 50%; background: radial-gradient(closest-side, rgba(198, 255, 61, 0.35), transparent); pointer-events: none; z-index: 1; }
+.dip-pick { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 160px; }
+.dip-pick p { margin: 0; font: 700 16px var(--font); }
+.dip-timer { display: block; height: 3px; width: 100%; background: var(--volt); transform-origin: left; }
+@media (prefers-reduced-motion: reduce) { .vf-line { animation: none; top: 50%; } }
+.ripple-rings { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+.ripple-rings span { position: absolute; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--volt); box-sizing: border-box; }
+.marker { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 2; }
+.checkin-banner { position: relative; border-radius: 16px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .checkin-banner.ok { background: var(--volt); color: var(--black); }
 .checkin-banner.wait { background: rgba(10, 10, 11, 0.94); border: 1.5px solid var(--volt); color: var(--white); }
 .checkin-banner.miss { background: var(--white); color: var(--black); }
@@ -148,6 +189,8 @@ select.input option { background: #141614; color: var(--white); }
 .slot > span { min-width: 0; display: flex; flex-direction: column; }
 .slot b { font-size: 14px; letter-spacing: -0.02em; color: var(--volt); }
 .slot > span > span { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slot svg { flex: none; }
+.slot:disabled { cursor: default; border-style: dashed; opacity: 0.85; }
 .slot.live { background: rgba(198, 255, 61, 0.1); cursor: default; }
 .slot.empty { border-style: dashed; border-color: #444; color: var(--dim); cursor: default; }
 .slot-deck { flex: none; font: 500 8px var(--mono); letter-spacing: 0.1em; color: var(--volt); }
@@ -186,6 +229,39 @@ select.input option { background: #141614; color: var(--white); }
 .feed-list p { margin: 0; }
 .feed-time { flex: none; font: 500 10px var(--mono); color: var(--dim); padding-top: 2px; }
 .feed-means { color: var(--volt); font-size: 12px; }
+
+/* Power-up cards (motion design §7): 96×150, the same lime frame for every deck card. */
+.power-card {
+  position: relative; width: 96px; height: 150px; flex: none; box-sizing: border-box; border-radius: 12px; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; padding: 8px 6px; color: var(--white);
+}
+.power-card.front { background: #141614; border: 2px solid var(--volt); }
+.power-card.front::before, .power-card.back::before {
+  content: ''; position: absolute; inset: 4px; border: 1px solid rgba(198, 255, 61, 0.35); border-radius: 8px; pointer-events: none;
+}
+.power-card.big { width: 150px; height: 234px; padding: 12px 10px; border-radius: 16px; border-width: 3px; }
+.power-card.big .pc-eyebrow { font-size: 9px; }
+.power-card.big .pc-art { width: 116px; height: 116px; margin-top: 8px; }
+.power-card.big .pc-name { font-size: 22px; }
+.power-card.big .pc-effect { font-size: 12px; min-height: 30px; }
+.pc-eyebrow { font: 500 6.5px var(--mono); letter-spacing: 0.16em; color: var(--volt); }
+.pc-art { margin-top: 4px; width: 70px; height: 70px; border-radius: 50%; display: grid; place-items: center; background: rgba(198, 255, 61, 0.08); }
+.pc-name { margin-top: auto; font-size: 14px; font-weight: 800; letter-spacing: -0.04em; }
+.pc-effect { font-size: 8px; line-height: 1.25; text-align: center; opacity: 0.78; min-height: 20px; margin-top: 2px; }
+.power-card.back {
+  background-color: var(--black); border: 2px solid var(--volt); justify-content: center;
+  background-image: repeating-linear-gradient(45deg, rgba(198, 255, 61, 0.07) 0 1px, transparent 1px 10px),
+    repeating-linear-gradient(-45deg, rgba(198, 255, 61, 0.07) 0 1px, transparent 1px 10px);
+}
+.pc-corner { position: absolute; width: 10px; height: 10px; border: 0 solid var(--volt); }
+.pc-corner.tl { top: 8px; left: 8px; border-top-width: 2px; border-left-width: 2px; }
+.pc-corner.tr { top: 8px; right: 8px; border-top-width: 2px; border-right-width: 2px; }
+.pc-corner.bl { bottom: 8px; left: 8px; border-bottom-width: 2px; border-left-width: 2px; }
+.pc-corner.br { bottom: 8px; right: 8px; border-bottom-width: 2px; border-right-width: 2px; }
+.pc-seal {
+  width: 52px; height: 52px; border-radius: 50%; border: 2px solid var(--volt); display: grid; place-items: center;
+  font: 800 12px var(--font); letter-spacing: -0.06em; color: var(--volt); background: var(--black); position: relative;
+}
 
 /* Help and SOS (motion design §6.0): a Volt "!" on the status row, same spot on every player screen. */
 .sos-icon {

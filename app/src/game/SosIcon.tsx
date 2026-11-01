@@ -59,6 +59,18 @@ export default function SosIcon({ code, view }: { code: string; view: View }) {
   // A hold still running when the screen goes away must never send.
   useEffect(() => () => window.clearTimeout(hold.current?.timer), [])
 
+  // "Tell a marshal" elsewhere (the auto-jailed screen) opens this sheet with a reason already picked.
+  const preset = useRef<SosReason | null>(null)
+  useEffect(() => {
+    const onAsk = (e: Event) => {
+      if (open) return
+      preset.current = (e as CustomEvent<{ reason?: SosReason }>).detail?.reason ?? null
+      show()
+    }
+    window.addEventListener('kejar:sos', onAsk)
+    return () => window.removeEventListener('kejar:sos', onAsk)
+  })
+
   const show = () => {
     // Already open: a second tap mustn't reset a send in flight or the chips already picked.
     if (open) return
@@ -83,6 +95,15 @@ export default function SosIcon({ code, view }: { code: string; view: View }) {
       setSos({ id: r?.sosId ?? '', notified: r?.notified ?? null })
       setStage('sent')
       navigator.vibrate?.([200, 100, 400])
+      const picked = preset.current
+      preset.current = null
+      if (picked && r?.sosId) {
+        setReason(picked)
+        // The SOS itself went through; a failed detail mustn't take the sheet back to "hold to send".
+        call('sosDetails', { code, ...credentials(code), sosId: r.sosId, reason: picked }).catch((e: unknown) =>
+          setError(e instanceof Error ? e.message : String(e)),
+        )
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setStage('ask')
@@ -122,7 +143,15 @@ export default function SosIcon({ code, view }: { code: string; view: View }) {
 
   return (
     <>
-      <button type="button" className="sos-icon" aria-label="Help and SOS" onClick={show}>
+      <button
+        type="button"
+        className="sos-icon"
+        aria-label="Help and SOS"
+        onClick={() => {
+          if (!open) preset.current = null
+          show()
+        }}
+      >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" aria-hidden="true">
           <path d="M12 5.5v8" />
           <path d="M12 18h.01" />

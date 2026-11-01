@@ -12,6 +12,12 @@ export function useServerNow(serverNow: number): number {
   return base.current.server + (Date.now() - base.current.local)
 }
 
+/** A wall-clock time as players say it in the park: `3:25` (12-hour, no am/pm), on this phone's clock. */
+export function wallClock(ms: number): string {
+  const d = new Date(ms)
+  return `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 /** m:ss, rounding up so a countdown never shows 0:00 early. */
 export function clock(ms: number): string {
   const s = Math.max(0, Math.ceil(ms / 1000))

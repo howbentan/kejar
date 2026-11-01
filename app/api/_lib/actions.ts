@@ -11,7 +11,7 @@ import {
   type ReportReason,
   type SosReason,
 } from '../../shared/alerts.js'
-import { autoJailDue } from '../../shared/checkins.js'
+import { autoJailDue, checkedIn } from '../../shared/checkins.js'
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
@@ -232,19 +232,25 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     await store.addEvent({ game_id: game.id, type: 'ping', actor_id: null, target_id: null, data: { seq, seen, missed: free.length - seen } })
     if (seq < BONUS_SEQ_BASE) {
       // Flares give only 30 s notice, so only scheduled pings count towards a missed streak.
-      const lastTwo = pingTimes(game, now).filter((t) => t.seq <= seq).slice(-2)
-      const atReveals = lastTwo.length === 2 ? await store.latestPositions(game.id, lastTwo.map((t) => iso(t.revealAt))) : {}
+      // The last three are loaded so a jailed runner's screen can show the check-ins it was judged on.
+      const lastThree = pingTimes(game, now).filter((t) => t.seq <= seq).slice(-3)
+      const lastTwo = lastThree.slice(-2)
+      const atReveals = lastTwo.length === 2 ? await store.latestPositions(game.id, lastThree.map((t) => iso(t.revealAt))) : {}
       for (const p of lastTwo.length === 2 ? free : []) {
         // The count starts fresh at the runner's own last release (checkins design §4.4), and only a
         // location inside each ping's 45 s window counts as a check-in (§4.2).
         const since = Math.max(chaseStartOf(game, now)!, p.freed_at ? Date.parse(p.freed_at) : -Infinity)
-        const pings = lastTwo.map((t) => {
+        const judged = lastThree.map((t) => {
           const at = latestAtOrBefore(atReveals[p.id], t.revealAt)
           return { alertAt: t.alertAt, revealAt: t.revealAt, lastAt: at ? Date.parse(at.at) : null }
         })
+        const pings = judged.slice(-2)
         // Two missed scheduled check-ins in a row: sent to Penjara like a catch, with no chaser.
         if (autoJailDue(pings, since) && (await store.catchRunner(p.id, null))) {
-          await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: p.id, data: { who: who(p), seq } })
+          const checkins = judged
+            .filter((t) => t.alertAt >= since)
+            .map((t) => ({ revealAt: t.revealAt, ok: checkedIn(t.alertAt, t.revealAt, t.lastAt) }))
+          await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: p.id, data: { who: who(p), seq, checkins } })
         }
       }
       // Auto-jailing the last free runner ends the game, the same as a catch.
@@ -528,7 +534,9 @@ const catchAction: Action = async (ctx, body) => {
   })
   const after = await ctx.store.players(game.id)
   if (after.filter((p) => p.role === 'runner').every((p) => p.jailed)) await finish(ctx, fresh)
-  return verdict
+  const caught = players.find((p) => p.id === verdict.runnerId)
+  const label = caught?.tag_id ? `#${tag2(caught.tag_id)} ${caught.name}` : (caught?.name ?? '')
+  return { ...verdict, label }
 }
 
 const jailbreak: Action = async (ctx, body) => {

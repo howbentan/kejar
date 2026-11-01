@@ -1,9 +1,10 @@
 import { useCallback } from 'react'
 import type { CatchJudgement } from '../../shared/catch.js'
-import { tagIdFromQr } from '../../shared/ids.js'
+import { stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import type { View } from '../../shared/views.js'
+import CatchMoment from '../game/CatchMoment'
 import ChaseLayout from '../game/ChaseLayout'
-import PingRipple from '../game/PingRipple'
+import { dipFor } from '../game/LuckyDip'
 import PowerUpHand, { claimMessage, type ClaimResult } from '../game/PowerUpHand'
 import { clock, useServerNow } from '../game/time'
 
@@ -40,8 +41,18 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
 
   const describe = useCallback(
     (s: { action: string }, text: string, r: unknown) =>
-      s.action === 'catch' ? catchMessage(text, r as CatchJudgement) : claimMessage(r as ClaimResult),
+      s.action === 'catch' ? catchMessage(text, r as CatchJudgement) : claimMessage(r as ClaimResult, stationFromQr(text)),
     [],
+  )
+
+  const deckLeft = view.deckLeft
+  const momentFor = useCallback(
+    (s: { action: string }, text: string, r: unknown, done: () => void) => {
+      if (s.action === 'claim') return dipFor(text, r, deckLeft, done)
+      const c = r as CatchJudgement
+      return c.ok ? <CatchMoment label={c.label ?? ''} onDone={done} /> : null
+    },
+    [deckLeft],
   )
 
   return (
@@ -51,11 +62,11 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
       side="chaser"
       title={`KEJAR · ${view.me.name.toUpperCase()}`}
       chips={chip && <span className="chip mono">{chip}</span>}
-      overlay={<PingRipple role="chaser" lastRevealAt={view.lastRevealAt} now={now} />}
       slot={<PowerUpHand code={code} view={view} />}
       scanLabel="Scan tag"
       scanClass="scan-chaser"
       describe={describe}
+      momentFor={momentFor}
       onScanned={refresh}
     />
   )

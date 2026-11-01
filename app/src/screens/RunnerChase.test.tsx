@@ -4,7 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const call = vi.hoisted(() => vi.fn())
 const scanned = vi.hoisted(() => ({ text: '' }))
 vi.mock('../game/api', () => ({ call, ApiError: class extends Error {} }))
-vi.mock('../game/Map', () => ({ default: () => <div data-testid="map" /> }))
+const mapProps = vi.hoisted(() => ({ last: null as null | { ripple?: { at: number } | null } }))
+vi.mock('../game/Map', () => ({
+  default: (p: { ripple?: { at: number } | null }) => {
+    mapProps.last = p
+    return <div data-testid="map" />
+  },
+}))
 vi.mock('../game/here', () => ({ currentCoords: async () => ({}) }))
 vi.mock('../game/Scanner', () => ({
   default: ({ onResult }: { onResult: (t: string) => void }) => (
@@ -42,7 +48,7 @@ describe('RunnerChase', () => {
     expect(screen.getByText('9 free')).toBeInTheDocument()
     expect(screen.getByText('Check in in 2:14')).toBeInTheDocument()
     expect(screen.getByTestId('map')).toBeInTheDocument()
-    expect(screen.getByText(/empty slot/i)).toBeInTheDocument()
+    expect(screen.getByText('No power-up. Find a station and scan it.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Scan' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /feed/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /break them out/i })).toBeNull()
@@ -63,12 +69,34 @@ describe('RunnerChase', () => {
     expect(screen.getByText('Freed 2 Dikejar ✓')).toBeInTheDocument()
   })
 
-  it('scanning a station claims it', async () => {
+  it('scanning a station claims it, opens the lucky dip, and no other scan can start meanwhile', async () => {
     call.mockResolvedValue({ ok: true, kind: 'shield' })
     render(<RunnerChase code="ABC234" view={testView()} />)
     await scan('KEJAR:STATION:2')
     expect(call).toHaveBeenCalledWith('claim', { code: 'ABC234', token: 't1', qr: 'KEJAR:STATION:2' })
-    expect(screen.getByText('Got Durian ✓')).toBeInTheDocument()
+    expect(screen.getByText('CLAIMED · Station 2 ✓')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Scan' })).toBeDisabled()
+  })
+
+  it('while a claim is still on its way, no second scan can start', async () => {
+    let finish: (v: unknown) => void = () => {}
+    call.mockImplementation(() => new Promise((r) => (finish = r)))
+    render(<RunnerChase code="ABC234" view={testView()} />)
+    await scan('KEJAR:STATION:2')
+    expect(screen.getByRole('button', { name: 'Scan' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Scan' }))
+    expect(screen.queryByRole('button', { name: 'fake camera' })).toBeNull()
+    expect(call).toHaveBeenCalledTimes(1)
+    await act(async () => finish({ ok: false, reason: 'too-far' }))
+    expect(screen.getByRole('button', { name: 'Scan' })).not.toBeDisabled()
+  })
+
+  it('a refused claim names the station, with no dip', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'too-far' })
+    render(<RunnerChase code="ABC234" view={testView()} />)
+    await scan('KEJAR:STATION:2')
+    expect(screen.getByText('Get closer. You need to be within 30 m of Station 2.')).toBeInTheDocument()
+    expect(screen.queryByText(/CLAIMED/)).toBeNull()
   })
 
   it('scanning anything else says so and calls nothing', async () => {
@@ -76,6 +104,12 @@ describe('RunnerChase', () => {
     await scan('KEJAR:TAG:03')
     expect(call).not.toHaveBeenCalled()
     expect(screen.getByText("That's not a station or Penjara code")).toBeInTheDocument()
+  })
+
+  it('the ping ripples out on the map, with no ping card on the chase screen', () => {
+    render(<RunnerChase code="ABC234" view={testView({ lastRevealAt: 99_000 })} />)
+    expect(mapProps.last?.ripple?.at).toBe(99_000)
+    expect(screen.queryByText("You've been pinged")).toBeNull()
   })
 
   it('warns that check-ins will be missed when location is off', () => {

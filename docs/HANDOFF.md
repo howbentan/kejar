@@ -96,6 +96,17 @@ Also floated: surprise missions, a bounty on the longest survivor. **Malaysian p
 - A slot stays busy while its effect runs.
 - Mat Rempit is one at a time, with a 3-minute team cooldown.
 
+**Plan C2 (branch `plan-c2-moments`, 2026-11-02): the big moments.** **No migration is needed.**
+- Doodle stickers on every Core power-up, and the lime-framed card front and ornate card back.
+- The marker scribble (shapes only, lime, drawn in under 2 s; appears already drawn with reduced motion), including a black tick across "Checked in".
+- The catch: the chaser gets a lime flash and the `dikejar!` stamp; the runner gets the five bars with the stamp on a black plate, then "Ben got you." (name underlined), one of the owner's five lines, and a walk-to-Penjara guide that uses the phone's own GPS and never sends it.
+- Auto-jailed: the bars with `2× MISSED`, the check-in times it was judged on with the misses struck out, and "Tell a marshal →", which opens SOS with "Something else" picked.
+- The lucky dip: "CLAIMED · Station 3 ✓", five face-down cards, a 3 s pick (tap or flick, or the spotlight picks), one card flips, "Got Durian!" with the marker. Refusals name the station. The scanner has a lime viewfinder.
+- The slot: sticker plus READY, "9:42 LEFT" for a running Durian, "UNTIL THE NEXT PING" for others, and "TEAM COOLDOWN · 2:14" for Mat Rempit.
+- The ping ripples out from your dot and each circle appears as the wave passes it (the old ping card stays on the marshal screen only).
+- Moments play once, and only within 15 s of the event, so reopening Kejar doesn't replay them.
+- **Left for C3/D:** the Pak Guard 75 m ring, the auto-jailed circle sliding to Penjara, Dato Seri's yellow marker and foil, and Abang Grab/Toyol slot states.
+
 **Plan C1 (branch `plan-c1-chase`, 2026-11-01): the one-screen chase, the SOS icon, the two-part feed and the check-in banner.** **No migration is needed.**
 - Motion for React at the app root (honours the phone's reduced-motion setting).
 - Every feed line says what happened, then what it means for your side (`→ …` in lime). Lines that need a runner to act get a lime outline and one buzz.

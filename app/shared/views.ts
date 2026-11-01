@@ -3,7 +3,7 @@ import { alertsFrom, type Alert } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
 import { distanceM, fuzz } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
-import { activeShield, decoySpot, slotBusy } from './powerups.js'
+import { activeShield, decoySpot, flareBlocked, SHIELD_MS, slotBusy } from './powerups.js'
 import type { Arena, Game, GameEvent, Phase, Ping, Player, Position, PowerUp, PowerUpKind, Results, Role, Settings } from './types.js'
 
 /** Spec §4.5–4.6 constants. */
@@ -58,6 +58,12 @@ export interface View {
   caughtBy: string | null
   /** Why I'm in Penjara: caught by a chaser, or auto-jailed for missing two check-ins. */
   jailReason: 'caught' | 'missed-checkins' | null
+  /** My running Durian's end time; null for effects that wait for the next ping (motion design §7b). */
+  activeEndsAt: number | null
+  /** A chaser holding Mat Rempit while the team waits: when it unlocks (power-ups design §5a). */
+  flareReadyAt: number | null
+  /** Auto-jailed: the scheduled check-ins that sent me to Penjara (reveal times, oldest first). */
+  jailCheckins: { at: number; ok: boolean }[] | null
   /** A free runner's standing for the next scheduled ping during the chase; null otherwise. */
   checkin: Checkin | null
   feed: FeedItem[]
@@ -265,6 +271,13 @@ function checkinFor(i: ViewInput, phase: Phase): Checkin | null {
   return { state, alertAt: next.alertAt, revealAt: next.revealAt, missedInRow }
 }
 
+function jailCheckinsFor(i: ViewInput, reason: View['jailReason']): View['jailCheckins'] {
+  if (reason !== 'missed-checkins') return null
+  const latest = i.events.filter((e) => e.type === 'auto-jailed' && e.target_id === i.me.id).at(-1)
+  const list = Array.isArray(latest?.data.checkins) ? (latest.data.checkins as { revealAt: number; ok: boolean }[]) : []
+  return list.map((c) => ({ at: c.revealAt, ok: c.ok }))
+}
+
 function jailReasonFor(i: ViewInput): View['jailReason'] {
   if (!i.me.jailed) return null
   if (i.me.caught_by) return 'caught'
@@ -389,7 +402,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, checkin: null, deckLeft: null, activePowerUp: null }
+    return { ...v, dots: [], feed: [], alerts: [], roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, deckLeft: null, activePowerUp: null }
   }
   return v
 }
@@ -461,6 +474,16 @@ function fullView(i: ViewInput): View {
     chaserNearby,
     caughtBy: i.me.jailed && i.me.caught_by ? (byId.get(i.me.caught_by)?.name ?? null) : null,
     jailReason: jailReasonFor(i),
+    activeEndsAt: (() => {
+      const shield = activeShield(i.powerUps, i.me.id, i.now)
+      return shield?.used_at ? Date.parse(shield.used_at) + SHIELD_MS : null
+    })(),
+    flareReadyAt: (() => {
+      const holding = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'flare' && u.used_at === null)
+      const blocked = holding ? flareBlocked(i.pings, i.now) : null
+      return blocked ? i.now + blocked.readyInMs : null
+    })(),
+    jailCheckins: jailCheckinsFor(i, jailReasonFor(i)),
     checkin: checkinFor(i, phase),
     feed,
     counts: {

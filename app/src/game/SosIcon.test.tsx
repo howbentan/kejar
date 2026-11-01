@@ -169,6 +169,16 @@ describe('SosIcon', () => {
     expect(screen.queryByText('sos sent')).toBeNull()
   })
 
+  it('Tell a marshal opens the sheet, and Something else goes with the SOS', async () => {
+    render(<SosIcon code="ABC234" view={view} />)
+    act(() => void window.dispatchEvent(new CustomEvent('kejar:sos', { detail: { reason: 'other' } })))
+    expect(screen.getByText('Need help?')).toBeInTheDocument()
+    fireEvent.pointerDown(bar())
+    await wait(1_000)
+    expect(call).toHaveBeenLastCalledWith('sosDetails', { code: 'ABC234', token: 't1', sosId: 'e9', reason: 'other' })
+    expect(screen.getByRole('button', { name: 'Something else' })).toHaveAttribute('aria-pressed', 'true')
+  })
+
   it('Report a player still sends a report from inside the sheet', async () => {
     await openSheet()
     fireEvent.click(screen.getByRole('button', { name: 'Report a player' }))

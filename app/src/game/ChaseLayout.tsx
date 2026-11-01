@@ -3,6 +3,7 @@ import type { View } from '../../shared/views.js'
 import { call } from './api'
 import { currentCoords } from './here'
 import GameMap from './Map'
+import { rippleOrigin } from './ripple'
 import Scanner from './Scanner'
 import { scanTarget, type ScanTarget } from './scan'
 import { loadSession } from './session'
@@ -36,27 +37,37 @@ export default function ChaseLayout(props: {
   side: 'runner' | 'chaser'
   /** Turns a call's result into the line shown above the dock. */
   describe: (s: Scanned, text: string, result: unknown) => string
+  /** A full-screen moment for a good scan (the catch stamp, the lucky dip), or null for just the line. */
+  momentFor?: (s: Scanned, text: string, result: unknown, done: () => void) => ReactNode | null
   onScanned?: () => void
 }) {
-  const { code, view, side, describe, onScanned } = props
+  const { code, view, side, describe, momentFor, onScanned } = props
   const [scanning, setScanning] = useState(false)
   const [result, setResult] = useState('')
+  const [moment, setMoment] = useState<ReactNode | null>(null)
+  // A scan still on its way: no second scan until it answers (a slow claim mustn't let another through).
+  const [busy, setBusy] = useState(false)
 
   const onScan = useCallback(
     async (text: string) => {
       setScanning(false)
       const target = scanTarget(text, side)
       if ('error' in target) return setResult(target.error)
+      setBusy(true)
       try {
         const here = await currentCoords()
         const r = await call(target.action, { code, token: loadSession(localStorage, code).token, ...target.body, ...here })
         setResult(describe(target, text, r))
+        const m = momentFor?.(target, text, r, () => setMoment(null))
+        if (m) setMoment(m)
         onScanned?.()
       } catch (e) {
         setResult(e instanceof Error ? e.message : String(e))
+      } finally {
+        setBusy(false)
       }
     },
-    [code, side, describe, onScanned],
+    [code, side, describe, momentFor, onScanned],
   )
 
   return (
@@ -69,7 +80,13 @@ export default function ChaseLayout(props: {
         <span className="chase-count">{`${view.counts.runnersFree} free`}</span>
       </header>
       <div className="chase-map">
-        <GameMap arena={view.arena} dots={view.dots} stations={view.stations} height="100%" />
+        <GameMap
+          arena={view.arena}
+          dots={view.dots}
+          stations={view.stations}
+          height="100%"
+          ripple={view.lastRevealAt ? { at: view.lastRevealAt, origin: rippleOrigin(view.dots, view.arena) } : null}
+        />
         <div className="chase-over">
           <div className="chase-chips">{props.chips}</div>
           {props.overlay}
@@ -85,15 +102,20 @@ export default function ChaseLayout(props: {
         )}
         <div className="dock-row">
           {props.slot}
-          <button type="button" className={`scan ${props.scanClass}`} onClick={() => setScanning(true)}>
+          <button type="button" className={`scan ${props.scanClass}`} disabled={!!moment || busy} onClick={() => setScanning(true)}>
             {props.scanLabel}
           </button>
         </div>
         <Ticker feed={view.feed} />
       </footer>
+      {moment}
       {scanning && (
         <div className="scan-overlay">
-          <Scanner onResult={onScan} onCancel={() => setScanning(false)} />
+          <Scanner
+            onResult={onScan}
+            onCancel={() => setScanning(false)}
+            hint={side === 'runner' ? 'Point at the station or Penjara card' : 'Point at the tag or station card'}
+          />
         </div>
       )}
     </main>

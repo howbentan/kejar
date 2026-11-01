@@ -16,7 +16,8 @@ const MAX_ACCURACY_M = 20
 const slack = (p: Position) => Math.min(Math.max(p.accuracy_m, 0), MAX_ACCURACY_M)
 
 export type CatchJudgement =
-  | { ok: true; flagged: boolean; runnerId: string }
+  /** `label` names the runner for the chaser's stamp: `#07 Aina` (motion design §4). Added by the catch action. */
+  | { ok: true; flagged: boolean; runnerId: string; label?: string }
   | { ok: false; reason: 'not-chasing' | 'not-a-chaser' | 'unknown-tag' | 'already-caught' | 'too-far' | 'no-location' | 'shielded' }
 
 export function judgeCatch(i: {

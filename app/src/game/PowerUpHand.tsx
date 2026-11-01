@@ -1,19 +1,14 @@
+import * as m from 'motion/react-m'
 import { useState } from 'react'
 import type { ClaimJudgement } from '../../shared/powerups.js'
 import type { PowerUp, PowerUpKind } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
 import { loadSession } from './session'
-import { clock } from './time'
+import { clock, useServerNow } from './time'
+import { INFO } from './powerInfo'
+import Sticker from './Sticker'
 import { ErrorText } from './ui'
-
-const INFO: Record<PowerUpKind, { name: string; effect: string; used: string }> = {
-  decoy: { name: 'Gostan', effect: 'Your next ping shows you somewhere else', used: 'Gostan set for your next ping' },
-  shield: { name: 'Durian', effect: 'Blocks the next catch, up to 10 min', used: 'Durian on for up to 10 min' },
-  cloak: { name: 'Ponteng', effect: 'You skip the next ping', used: "Ponteng: you'll skip the next ping" },
-  flare: { name: 'Mat Rempit', effect: 'Extra ping in 30 s', used: 'Mat Rempit! Dikejar check in now' },
-  focus: { name: 'Pak Guard', effect: 'Dikejar within 75 m show exactly', used: 'Pak Guard on for the next ping' },
-}
 
 export type ClaimResult = ({ ok: true; kind: PowerUpKind } | Exclude<ClaimJudgement, { ok: true }>)
 type UseResult = { ok: true; kind: PowerUpKind } | { ok: false; reason: string; readyInMs?: number }
@@ -36,8 +31,14 @@ const USE_REJECTIONS: Record<string, string> = {
   paused: 'Game is paused',
 }
 
-export function claimMessage(r: ClaimResult): string {
+/** Plain words for a claim; refusals name the station when the scan said which one (motion design §7). */
+export function claimMessage(r: ClaimResult, station?: number | null): string {
   if (r.ok) return `Got ${INFO[r.kind].name} ✓`
+  if (station) {
+    if (r.reason === 'too-far') return `Get closer. You need to be within 30 m of Station ${station}.`
+    if (r.reason === 'already-claimed') return `You've used Station ${station} this game. Try another one.`
+    if (r.reason === 'locked') return `Station ${station} is cooling down. Ready in ${clock(r.lockedForMs ?? 0)}.`
+  }
   if (r.reason === 'locked') return `This station is cooling down. Ready in ${clock(r.lockedForMs ?? 0)}.`
   if (r.reason === 'hand-full' && r.busyKind) {
     const name = INFO[r.busyKind].name
@@ -52,6 +53,7 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const token = () => loadSession(localStorage, code).token
+  const now = useServerNow(view.now)
 
   async function use(u: PowerUp) {
     setConfirm(null)
@@ -97,25 +99,40 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
         </div>
       )}
       {view.hand.length > 0 ? (
-        view.hand.map((u) => (
-          <button key={u.id} type="button" className="slot" onClick={() => setConfirm(u)}>
-            <span>
-              <b>{INFO[u.kind].name}</b>
-              <span>{INFO[u.kind].effect}</span>
-            </span>
-            {deck}
-          </button>
-        ))
+        view.hand.map((u) => {
+          const cooling = u.kind === 'flare' && view.flareReadyAt !== null
+          return (
+            <m.button
+              key={u.id}
+              type="button"
+              className="slot"
+              disabled={cooling}
+              initial={{ y: -16, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 18 }}
+              onClick={() => setConfirm(u)}
+            >
+              <Sticker kind={u.kind} size={40} tilt={-4} />
+              <span>
+                <b>{INFO[u.kind].name}</b>
+                <span>{cooling ? `TEAM COOLDOWN · ${clock(view.flareReadyAt! - now)}` : INFO[u.kind].effect}</span>
+              </span>
+              {cooling ? deck : <small className="slot-deck">READY</small>}
+            </m.button>
+          )
+        })
       ) : view.activePowerUp ? (
         <div className="slot live">
+          <Sticker kind={view.activePowerUp} size={40} tilt={-4} />
           <span>
-            <b>{`${INFO[view.activePowerUp].name} is working`}</b>
+            <b>{`${INFO[view.activePowerUp].name} · ACTIVE`}</b>
+            <span>{view.activeEndsAt !== null ? `${clock(view.activeEndsAt - now)} LEFT` : 'UNTIL THE NEXT PING'}</span>
           </span>
           {deck}
         </div>
       ) : (
         <div className="slot empty">
-          <span>Empty slot · scan a station</span>
+          <span>No power-up. Find a station and scan it.</span>
           {deck}
         </div>
       )}
