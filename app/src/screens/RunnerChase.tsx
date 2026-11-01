@@ -48,7 +48,7 @@ export default function RunnerChase({ code, view }: { code: string; view: View }
         <div style={{ background: 'var(--volt)', color: 'var(--black)', borderRadius: 20, padding: 18, textAlign: 'center' }}>
           <p style={{ font: '600 11px var(--mono)', letterSpacing: '0.18em' }}>PING INCOMING — CHECK IN</p>
           <p className="mono" style={{ fontSize: 48, fontWeight: 500 }}>
-            {clock(toReveal)}
+            {clock(toReveal ?? 0)}
           </p>
           <p style={{ fontSize: 12, fontWeight: 500 }}>Keep this page open until the ping</p>
         </div>
