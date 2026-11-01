@@ -96,6 +96,8 @@ Also floated: surprise missions, a bounty on the longest survivor. **Malaysian p
 - A slot stays busy while its effect runs.
 - Mat Rempit is one at a time, with a 3-minute team cooldown.
 
+**Plan B (branch `plan-b-slot-deck`, 2026-11-01): one power-up slot, the shared deck per side, Mat Rempit one at a time with a 3-minute team cooldown, Malaysian power-up names with plain-English copy, `DECK · N LEFT`, and the Core/Full switch with a lobby badge.** Before merging to `main`: **run `supabase/migrations/0010_deck.sql` in Supabase first** — claims call its `draw_card` function, so every station claim fails without it. Full's deck is Core plus Gostan until Plan D adds Toyol, Ah Long and Abang Grab.
+
 **Check-ins follow-up (branch `plan-checkins-followup`, 2026-11-01): strict 45 s check-in window, release-aware counting, marshal "Phone problem: undo", and the auto-jailed Penjara screen are built.** Before merging to `main`: **run `supabase/migrations/0009_auto_jail_undo.sql` in Supabase first** (it widens `safety_records.type` so an undo can be logged; without it, the undo fails). Once merged, auto-jail is ready for players.
 
 **Check-ins build (branch `plan-checkins-autojail`, 2026-11-01): auto-jail after two missed check-ins, `freed_at`, results, and the Penjara rename are built and reviewed.** Before merging to `main`: **run `supabase/migrations/0008_freed_at.sql` in Supabase first**, because the app now reads `players.freed_at` and every game breaks without it. Players shouldn't use auto-jail until the follow-up plan (`docs/superpowers/plans/2026-11-01-kejar-checkins-followup.md`: strict 45 s window, marshal undo, auto-jailed screen) is built too. Runners whose location is off now get a warning on the chase screen.
