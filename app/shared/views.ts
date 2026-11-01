@@ -58,6 +58,8 @@ export interface View {
   caughtBy: string | null
   /** Why I'm in Penjara: caught by a chaser, or auto-jailed for missing two check-ins. */
   jailReason: 'caught' | 'missed-checkins' | null
+  /** Auto-jailed: the scheduled check-ins that sent me to Penjara (reveal times, oldest first). */
+  jailCheckins: { at: number; ok: boolean }[] | null
   /** A free runner's standing for the next scheduled ping during the chase; null otherwise. */
   checkin: Checkin | null
   feed: FeedItem[]
@@ -265,6 +267,13 @@ function checkinFor(i: ViewInput, phase: Phase): Checkin | null {
   return { state, alertAt: next.alertAt, revealAt: next.revealAt, missedInRow }
 }
 
+function jailCheckinsFor(i: ViewInput, reason: View['jailReason']): View['jailCheckins'] {
+  if (reason !== 'missed-checkins') return null
+  const latest = i.events.filter((e) => e.type === 'auto-jailed' && e.target_id === i.me.id).at(-1)
+  const list = Array.isArray(latest?.data.checkins) ? (latest.data.checkins as { revealAt: number; ok: boolean }[]) : []
+  return list.map((c) => ({ at: c.revealAt, ok: c.ok }))
+}
+
 function jailReasonFor(i: ViewInput): View['jailReason'] {
   if (!i.me.jailed) return null
   if (i.me.caught_by) return 'caught'
@@ -389,7 +398,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, checkin: null, deckLeft: null, activePowerUp: null }
+    return { ...v, dots: [], feed: [], alerts: [], roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, jailCheckins: null, checkin: null, deckLeft: null, activePowerUp: null }
   }
   return v
 }
@@ -461,6 +470,7 @@ function fullView(i: ViewInput): View {
     chaserNearby,
     caughtBy: i.me.jailed && i.me.caught_by ? (byId.get(i.me.caught_by)?.name ?? null) : null,
     jailReason: jailReasonFor(i),
+    jailCheckins: jailCheckinsFor(i, jailReasonFor(i)),
     checkin: checkinFor(i, phase),
     feed,
     counts: {

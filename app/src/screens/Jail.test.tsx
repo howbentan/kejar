@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../game/api', () => ({ call: vi.fn(), ApiError: class extends Error {} }))
@@ -58,10 +58,49 @@ describe('Jail', () => {
     const view = testView({ caughtBy: null, jailReason: 'missed-checkins' })
     render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true } }} />)
     expect(screen.getByText('PENJARA · AUTO')).toBeInTheDocument()
-    expect(screen.getByText(/Missed two check-ins\./)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Missed two check-ins.' })).toBeInTheDocument()
     const lines = ['Your phone went ponteng, bro.', 'Signal hilang, bossku?', 'Kena check in lah, boss.', 'Phone in your pocket too deep.']
     expect(lines.some((l) => screen.queryByText(l))).toBe(true)
-    expect(screen.getByText('Phone died or no buzz? Tell a marshal.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Phone died or no buzz? Tell a marshal →' })).toBeInTheDocument()
+  })
+
+  it('a fresh auto-jail drops the bars with 2× MISSED', () => {
+    vi.useFakeTimers()
+    const view = testView({ caughtBy: null, jailReason: 'missed-checkins' })
+    render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true, caught_at: new Date(97_000).toISOString() } }} />)
+    expect(screen.getByText('2× MISSED')).toBeInTheDocument()
+    act(() => vi.advanceTimersByTime(ARRIVAL_MS))
+    expect(screen.queryByText('2× MISSED')).toBeNull()
+    expect(screen.getByText('PENJARA · AUTO')).toBeInTheDocument()
+  })
+
+  it('shows the check-ins it was judged on, and the misses get crossed out', () => {
+    const t = (h: number, m: number) => new Date(2026, 10, 1, h, m).getTime()
+    const view = testView({
+      caughtBy: null,
+      jailReason: 'missed-checkins',
+      jailCheckins: [
+        { at: t(15, 25), ok: true },
+        { at: t(15, 30), ok: false },
+        { at: t(15, 35), ok: false },
+      ],
+    })
+    const { container } = render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true } }} />)
+    expect(screen.getByText('3:25 ✓')).toBeInTheDocument()
+    expect(screen.getByText('3:30')).toBeInTheDocument()
+    expect(screen.getByText('3:35')).toBeInTheDocument()
+    expect(container.querySelector('.marker')).not.toBeNull()
+  })
+
+  it('Tell a marshal opens the SOS sheet with Something else picked', () => {
+    const heard = vi.fn()
+    window.addEventListener('kejar:sos', heard)
+    const view = testView({ caughtBy: null, jailReason: 'missed-checkins' })
+    render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true } }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Phone died or no buzz? Tell a marshal →' }))
+    window.removeEventListener('kejar:sos', heard)
+    expect(heard).toHaveBeenCalledTimes(1)
+    expect((heard.mock.calls[0][0] as CustomEvent).detail).toEqual({ reason: 'other' })
   })
 
   it('auto-jailed after already being freed once: out for good', () => {

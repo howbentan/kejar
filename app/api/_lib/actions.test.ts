@@ -1102,6 +1102,17 @@ describe('automatic alerts', () => {
     // Ping 3 (+20): Aina has now missed 2 in a row too, and she was the last runner free.
     now = T0 + 20 * MIN
     await run('state', { code: g.code, organiserToken: g.organiserToken })
+    // Her screen shows the check-ins it was judged on: ping 1 on time, then pings 2 and 3 missed.
+    const aina = (await store.events(g.gameId)).find((e) => e.type === 'auto-jailed' && e.target_id === g.aina.playerId)!
+    expect(aina.data.checkins).toEqual([
+      { revealAt: T0 + 10 * MIN, ok: true },
+      { revealAt: T0 + 15 * MIN, ok: false },
+      { revealAt: T0 + 20 * MIN, ok: false },
+    ])
+    expect(events.find((e) => e.type === 'auto-jailed')!.data.checkins).toEqual([
+      { revealAt: T0 + 10 * MIN, ok: false },
+      { revealAt: T0 + 15 * MIN, ok: false },
+    ])
     expect((await store.gameByCode(g.code))!.winner).toBe('chasers')
   })
 

@@ -268,6 +268,21 @@ describe('jail reason', () => {
   it('is null while free', () => {
     expect(view(aina).jailReason).toBeNull()
   })
+  it('an auto-jailed runner sees the check-ins it was judged on; nobody else does', () => {
+    const checkins = [
+      { revealAt: T0 + 10 * MIN, ok: true },
+      { revealAt: T0 + 15 * MIN, ok: false },
+    ]
+    const events = [event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2', data: { checkins } })]
+    const players = [chaser, aina, jailedHafiz, wei, siti]
+    expect(view(jailedHafiz, { players, events }).jailCheckins).toEqual([
+      { at: T0 + 10 * MIN, ok: true },
+      { at: T0 + 15 * MIN, ok: false },
+    ])
+    expect(view(aina, { players, events }).jailCheckins).toBeNull()
+    const caught = { ...hafiz, jailed: true, caught_by: 'c1' }
+    expect(view(caught, { players: [chaser, aina, caught, wei, siti], events }).jailCheckins).toBeNull()
+  })
 })
 
 describe('feed wording', () => {
