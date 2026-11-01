@@ -9,13 +9,13 @@ import {
   type ReportReason,
 } from '../../shared/alerts.js'
 import { autoJailDue } from '../../shared/checkins.js'
-import { setsFor } from '../../shared/deck.js'
+import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
 import { judgeCatch, judgeJailbreak } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
 import { JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
-import { activeShield, judgeClaim, pickPowerUp, STATION_LOCK_MS } from '../../shared/powerups.js'
+import { activeShield, judgeClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { computeResults } from '../../shared/results.js'
 import { shuffleRoles, validateTeams } from '../../shared/teams.js'
 import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type Role, type Settings } from '../../shared/types.js'
@@ -677,10 +677,17 @@ const claim: Action = async (ctx, body) => {
     arena: game.arena,
     myPos: latest(positions[me.id]),
     powerUps: await ctx.store.powerUps(game.id),
+    pings: await ctx.store.pings(game.id),
     now: ctx.now,
   })
   if (!verdict.ok) return verdict
-  const kind = pickPowerUp(me.role === 'chaser' ? 'chaser' : 'runner', ctx.rng)
+  // The top card of this side's shared deck (power-ups §5b). The draw number is taken atomically, so two
+  // claims at the same moment never get the same card. Games started before decks existed have no sets.
+  const side = me.role === 'chaser' ? 'chaser' : 'runner'
+  const stored = side === 'runner' ? fresh.runner_sets : fresh.chaser_sets
+  const sets = stored ?? setsFor(side, (await ctx.store.players(game.id)).filter((p) => p.role === side).length)
+  const deck = deckFor(fresh.settings.mode ?? 'core', side, sets)
+  const kind = cardAt(`${game.id}:${side}`, deck, await ctx.store.drawCard(game.id, side))
   // Re-checked atomically by the store, so double-taps and simultaneous scans can't both win.
   const claimed = await ctx.store.claimStation(
     { game_id: game.id, player_id: me.id, kind, station: station! },

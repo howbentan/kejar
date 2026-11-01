@@ -1,19 +1,16 @@
 import { distanceM, hash, offset } from './geo.js'
 import { inPlayArea } from './playArea.js'
-import type { Arena, LatLng, Phase, Player, Position, PowerUp, PowerUpKind } from './types.js'
+import { BONUS_SEQ_BASE } from './clock.js'
+import type { Arena, LatLng, Phase, Ping, Player, Position, PowerUp, PowerUpKind } from './types.js'
 
 /** Spec §4.8.1. */
 export const CLAIM_RADIUS_M = 30
 export const CLAIM_FRESH_MS = 30_000
 export const STATION_LOCK_MS = 60_000
-export const HAND_MAX = 3
 export const SHIELD_MS = 10 * 60_000
 const MAX_ACCURACY_M = 20
 const DECOY_MIN_M = 120
 const DECOY_MAX_M = 180
-
-export const RUNNER_KINDS: PowerUpKind[] = ['decoy', 'shield', 'cloak']
-export const CHASER_KINDS: PowerUpKind[] = ['flare', 'focus']
 
 export type ClaimJudgement =
   | { ok: true }
@@ -21,6 +18,9 @@ export type ClaimJudgement =
       ok: false
       reason: 'not-chasing' | 'cannot-claim' | 'unknown-station' | 'too-far' | 'already-claimed' | 'locked' | 'hand-full'
       lockedForMs?: number
+      /** For hand-full: what's in the slot, and whether its effect is still running. */
+      busyKind?: PowerUpKind
+      busyRunning?: boolean
     }
 
 export function judgeClaim(i: {
@@ -30,6 +30,7 @@ export function judgeClaim(i: {
   arena: Arena
   myPos: Position | null
   powerUps: PowerUp[]
+  pings: Ping[]
   now: number
 }): ClaimJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
@@ -49,14 +50,33 @@ export function judgeClaim(i: {
   const lockedForMs = lastClaim + STATION_LOCK_MS - i.now
   if (lockedForMs > 0) return { ok: false, reason: 'locked', lockedForMs }
 
-  const inHand = i.powerUps.filter((u) => u.player_id === i.me.id && u.used_at === null).length
-  if (inHand >= HAND_MAX) return { ok: false, reason: 'hand-full' }
+  const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now)
+  if (busy) return { ok: false, reason: 'hand-full', busyKind: busy.kind, busyRunning: busy.running }
   return { ok: true }
 }
 
-export function pickPowerUp(role: 'runner' | 'chaser', rng: () => number): PowerUpKind {
-  const kinds = role === 'runner' ? RUNNER_KINDS : CHASER_KINDS
-  return kinds[Math.floor(rng() * kinds.length)]
+/**
+ * What fills a player's one slot (power-ups §5a): an unused card, or a used one whose effect is still
+ * running. Durian runs until it blocks a catch or 10 minutes pass; Gostan, Ponteng and Pak Guard until
+ * the next reveal after use; Mat Rempit until its own surprise ping is revealed.
+ */
+export function slotBusy(powerUps: PowerUp[], playerId: string, pings: Ping[], now: number): { kind: PowerUpKind; running: boolean } | null {
+  for (const u of powerUps.filter((x) => x.player_id === playerId)) {
+    if (u.used_at === null) return { kind: u.kind, running: false }
+    const usedAt = Date.parse(u.used_at)
+    const revealedAfter = (bonusOnly: boolean) =>
+      pings.some((p) =>
+        p.revealed && p.seq > 0 && (bonusOnly ? p.seq >= BONUS_SEQ_BASE && Date.parse(p.alert_at) >= usedAt : Date.parse(p.reveal_at) > usedAt),
+      )
+    const running =
+      u.kind === 'shield'
+        ? u.consumed_at === null && now - usedAt < SHIELD_MS
+        : u.kind === 'flare'
+          ? !revealedAfter(true)
+          : !revealedAfter(false)
+    if (running) return { kind: u.kind, running: true }
+  }
+  return null
 }
 
 /** A fake position 120–180 m away, kept inside the play area (and out of lakes) if any of 12 directions allows it. */

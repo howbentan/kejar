@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { MIN, T0 } from '../../shared/fixtures.js'
 import { BONUS_SEQ_BASE } from '../../shared/clock.js'
+import { cardAt, deckFor } from '../../shared/deck.js'
 import { JAIL_QR, stationQr, tagQr } from '../../shared/ids.js'
 import { seeded } from '../../shared/testing.js'
 import type { PowerUpKind, Role } from '../../shared/types.js'
@@ -408,6 +409,44 @@ describe('power-up stations', () => {
     const v = await run<View>('state', { code: g.code, token: g.aina.token })
     expect(v.hand).toHaveLength(1)
     expect(v.feed[0].text).toBe('Aina picked up a power-up')
+  })
+
+  it('a Core game only ever deals Durian and Ponteng to runners, in deck order', async () => {
+    const g = await chasingWithStation()
+    const r = await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    expect(r.kind).toBe(cardAt(`${g.gameId}:runner`, deckFor('core', 'runner', 1), 0))
+    expect(['shield', 'cloak']).toContain(r.kind)
+  })
+
+  it('a second claim while the slot is full is refused and draws nothing', async () => {
+    const g = await chasingWithStation()
+    await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'cloak', station: 9 })
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toEqual({
+      ok: false,
+      reason: 'hand-full',
+      busyKind: 'cloak',
+      busyRunning: false,
+    })
+    expect((await store.gameByCode(g.code))!.runner_draws ?? 0).toBe(0)
+  })
+
+  it('two runners claiming different stations at the same moment draw different cards', async () => {
+    const S2 = { lat: CENTER.lat - 100 / 111_195, lng: CENTER.lng }
+    const g = await readyGame({}, { stations: [S1, S2] })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await Promise.all([
+      run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 }),
+      run('claim', { code: g.code, token: g.hafiz.token, qr: stationQr(2), lat: S2.lat, lng: S2.lng, accuracy_m: 8 }),
+    ])
+    expect((await store.gameByCode(g.code))!.runner_draws).toBe(2)
+  })
+
+  it('a game started before decks existed still deals cards', async () => {
+    const g = await chasingWithStation()
+    await store.updateGame(g.gameId, { runner_sets: null, chaser_sets: null })
+    const r = await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    expect(r.ok).toBe(true)
   })
 
   it('claim from far away is rejected and gives nothing', async () => {
