@@ -99,7 +99,11 @@ export default function ChaseLayout(props: {
       {moment}
       {scanning && (
         <div className="scan-overlay">
-          <Scanner onResult={onScan} onCancel={() => setScanning(false)} />
+          <Scanner
+            onResult={onScan}
+            onCancel={() => setScanning(false)}
+            hint={side === 'runner' ? 'Point at the station or Penjara card' : 'Point at the tag or station card'}
+          />
         </div>
       )}
     </main>

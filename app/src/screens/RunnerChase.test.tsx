@@ -63,12 +63,21 @@ describe('RunnerChase', () => {
     expect(screen.getByText('Freed 2 Dikejar ✓')).toBeInTheDocument()
   })
 
-  it('scanning a station claims it', async () => {
+  it('scanning a station claims it, opens the lucky dip, and no other scan can start meanwhile', async () => {
     call.mockResolvedValue({ ok: true, kind: 'shield' })
     render(<RunnerChase code="ABC234" view={testView()} />)
     await scan('KEJAR:STATION:2')
     expect(call).toHaveBeenCalledWith('claim', { code: 'ABC234', token: 't1', qr: 'KEJAR:STATION:2' })
-    expect(screen.getByText('Got Durian ✓')).toBeInTheDocument()
+    expect(screen.getByText('CLAIMED · Station 2 ✓')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Scan' })).toBeDisabled()
+  })
+
+  it('a refused claim names the station, with no dip', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'too-far' })
+    render(<RunnerChase code="ABC234" view={testView()} />)
+    await scan('KEJAR:STATION:2')
+    expect(screen.getByText('Get closer. You need to be within 30 m of Station 2.')).toBeInTheDocument()
+    expect(screen.queryByText(/CLAIMED/)).toBeNull()
   })
 
   it('scanning anything else says so and calls nothing', async () => {

@@ -138,6 +138,22 @@ select.input option { background: #141614; color: var(--white); }
 .checkin-row span.ok { color: var(--volt); }
 .walk-guide { display: flex; flex-direction: column; gap: 8px; }
 .walk-distance { font: 600 12px var(--mono); letter-spacing: 0.12em; color: var(--volt); text-align: center; }
+.viewfinder { position: absolute; inset: 14%; border: 2px solid var(--volt); border-radius: 12px; overflow: hidden; pointer-events: none; }
+.vf-line { position: absolute; left: 0; right: 0; height: 2px; background: var(--volt); box-shadow: 0 0 10px var(--volt); animation: vf-sweep 1.8s ease-in-out infinite alternate; }
+@keyframes vf-sweep { from { top: 4%; } to { top: 94%; } }
+.vf-hint { text-align: center; font: 600 11px var(--mono); letter-spacing: 0.1em; color: var(--volt); text-transform: uppercase; }
+.dip { gap: 28px; }
+.dip-deck { position: absolute; top: 16px; right: 16px; font: 500 10px var(--mono); letter-spacing: 0.12em; color: var(--volt); }
+.dip-title { position: relative; padding: 0 30px; }
+.dip-title h2 { margin: 0; font: 800 34px var(--font); letter-spacing: -0.05em; }
+.dip-fan { position: relative; display: flex; justify-content: center; align-items: flex-end; height: 200px; width: 100%; max-width: 420px; }
+.dip-card { appearance: none; border: 0; padding: 0; background: none; margin: 0 -14px; cursor: pointer; touch-action: none; transform-origin: 50% 120%; }
+.dip-card.picked { position: absolute; left: calc(50% - 48px); bottom: 40px; margin: 0; z-index: 2; cursor: default; }
+.dip-spotlight { position: absolute; top: -10px; bottom: -10px; left: calc(50% - 50px); width: 100px; border-radius: 50%; background: radial-gradient(closest-side, rgba(198, 255, 61, 0.35), transparent); pointer-events: none; z-index: 1; }
+.dip-pick { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 160px; }
+.dip-pick p { margin: 0; font: 700 16px var(--font); }
+.dip-timer { display: block; height: 3px; width: 100%; background: var(--volt); transform-origin: left; }
+@media (prefers-reduced-motion: reduce) { .vf-line { animation: none; top: 50%; } }
 .marker { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 2; }
 .checkin-banner { position: relative; border-radius: 16px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .checkin-banner.ok { background: var(--volt); color: var(--black); }

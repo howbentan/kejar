@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BreakJudgement } from '../../shared/catch.js'
 import type { View } from '../../shared/views.js'
+import { stationFromQr } from '../../shared/ids.js'
 import ChaseLayout from '../game/ChaseLayout'
 import CheckinBanner from '../game/CheckinBanner'
+import { dipFor } from '../game/LuckyDip'
 import PingRipple from '../game/PingRipple'
 import PowerUpHand, { claimMessage, type ClaimResult } from '../game/PowerUpHand'
 import { clock, useServerNow } from '../game/time'
@@ -58,13 +60,18 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
   const openedByPush = opened && checkin?.alertAt === pushedFor.current
   const banner = !!checkin && (checkin.state !== 'early' || openedByPush)
 
-  const describe = useCallback((s: { action: string }, _text: string, r: unknown) => {
+  const describe = useCallback((s: { action: string }, text: string, r: unknown) => {
     if (s.action === 'jailbreak') {
       const b = r as BreakJudgement
       return b.ok ? `Freed ${b.freedIds.length} Dikejar ✓` : (BREAK_REJECTIONS[b.reason] ?? 'Nobody freed')
     }
-    return claimMessage(r as ClaimResult)
+    return claimMessage(r as ClaimResult, stationFromQr(text))
   }, [])
+  const deckLeft = view.deckLeft
+  const momentFor = useCallback(
+    (s: { action: string }, text: string, r: unknown, done: () => void) => (s.action === 'claim' ? dipFor(text, r, deckLeft, done) : null),
+    [deckLeft],
+  )
 
   return (
     <ChaseLayout
@@ -101,6 +108,7 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
       scanLabel="Scan"
       scanClass="scan-runner"
       describe={describe}
+      momentFor={momentFor}
     />
   )
 }

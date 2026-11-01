@@ -29,8 +29,14 @@ const USE_REJECTIONS: Record<string, string> = {
   paused: 'Game is paused',
 }
 
-export function claimMessage(r: ClaimResult): string {
+/** Plain words for a claim; refusals name the station when the scan said which one (motion design §7). */
+export function claimMessage(r: ClaimResult, station?: number | null): string {
   if (r.ok) return `Got ${INFO[r.kind].name} ✓`
+  if (station) {
+    if (r.reason === 'too-far') return `Get closer. You need to be within 30 m of Station ${station}.`
+    if (r.reason === 'already-claimed') return `You've used Station ${station} this game. Try another one.`
+    if (r.reason === 'locked') return `Station ${station} is cooling down. Ready in ${clock(r.lockedForMs ?? 0)}.`
+  }
   if (r.reason === 'locked') return `This station is cooling down. Ready in ${clock(r.lockedForMs ?? 0)}.`
   if (r.reason === 'hand-full' && r.busyKind) {
     const name = INFO[r.busyKind].name

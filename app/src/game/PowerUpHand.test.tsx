@@ -86,6 +86,11 @@ describe('PowerUpHand', () => {
 })
 
 describe('claimMessage', () => {
+  it('names the station when the scan said which one', () => {
+    expect(claimMessage({ ok: false, reason: 'too-far' }, 3)).toBe('Get closer. You need to be within 30 m of Station 3.')
+    expect(claimMessage({ ok: false, reason: 'already-claimed' }, 3)).toBe("You've used Station 3 this game. Try another one.")
+    expect(claimMessage({ ok: false, reason: 'locked', lockedForMs: 42_000 }, 3)).toBe('Station 3 is cooling down. Ready in 0:42.')
+  })
   it('maps each claim result to plain words', () => {
     expect(claimMessage({ ok: true, kind: 'decoy' })).toBe('Got Gostan ✓')
     expect(claimMessage({ ok: false, reason: 'too-far' })).toBe('Get within 30 m of the station.')

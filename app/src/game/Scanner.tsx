@@ -6,9 +6,12 @@ export default function Scanner({
   onResult,
   onCancel,
   numberFallback,
+  hint,
 }: {
   onResult: (text: string) => void
   onCancel: () => void
+  /** Shown over a lime viewfinder with a sweeping scan line (motion design §7). */
+  hint?: string
   numberFallback?: { label: string; onNumber: (n: number) => void }
 }) {
   const video = useRef<HTMLVideoElement>(null)
@@ -34,7 +37,15 @@ export default function Scanner({
 
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <video ref={video} style={{ width: '100%', borderRadius: 14, background: '#000' }} muted playsInline />
+      <div style={{ position: 'relative' }}>
+        <video ref={video} style={{ width: '100%', borderRadius: 14, background: '#000' }} muted playsInline />
+        {hint && (
+          <div className="viewfinder" aria-hidden="true">
+            <span className="vf-line" />
+          </div>
+        )}
+      </div>
+      {hint && <p className="vf-hint">{hint}</p>}
       {problem && <p className="muted">{problem}</p>}
       {numberFallback && (
         <div style={{ display: 'flex', gap: 8 }}>
