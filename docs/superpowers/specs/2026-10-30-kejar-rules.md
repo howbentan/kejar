@@ -16,7 +16,7 @@ Rules:
 
 ## 2. The rules in one page (both modes)
 
-**Roles.** Dikejar (runners, about 3 in 4 players), Kejar (chasers, about 1 in 4) and marshals. The organiser is also a marshal. Roles are assigned or shuffled in the lobby, and the app refuses lopsided teams.
+**Roles.** Dikejar (runners, about 3 in 4 players), Kejar (chasers, about 1 in 4) and marshals. The organiser is also a marshal. The organiser picks each player's side, Dikejar or Kejar, in the lobby, so vests and armbands go on before the start (owner's decision, 2026-11-01; no random shuffle). The app suggests about 1 Kejar per 4 players and refuses lopsided teams. Marshal is never a player option: marshals join through the organiser's marshal invite link.
 
 **Kit** (§5a). Runners wear their own clothes plus a **dark velcro arm strap** carrying a rip-off tag (a QR code and a number, e.g. #07). Chasers wear a **hi-vis yellow vest** and no armband. Marshals wear an **orange vest** and a MARSHAL lanyard card.
 
