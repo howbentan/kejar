@@ -166,18 +166,14 @@ export class SupabaseStore implements GameStore {
     )
     return (rows ?? []).length > 0
   }
-  async addBonusPing(gameId: string, alertAt: string, revealAt: string) {
-    // Two Flares at once may pick the same number; the primary key refuses one, so try the next.
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const { count } = await this.db.from('pings').select('seq', { count: 'exact', head: true }).eq('game_id', gameId).gte('seq', 1000)
-      const seq = 1000 + (count ?? 0) + attempt
-      const { error } = await this.db
-        .from('pings')
-        .insert({ game_id: gameId, seq, alert_at: alertAt, reveal_at: revealAt, alerted: false, revealed: false })
-      if (!error) return seq
-      if (error.code !== '23505') throw new Error(error.message)
-    }
-    throw new Error('Could not schedule the Flare — try again')
+  async addBonusPing(gameId: string, seq: number, alertAt: string, revealAt: string) {
+    // Two Mat Rempits at once pick the same number; the primary key lets only one in (one at a time, §5a).
+    const { error } = await this.db
+      .from('pings')
+      .insert({ game_id: gameId, seq, alert_at: alertAt, reveal_at: revealAt, alerted: false, revealed: false })
+    if (!error) return true
+    if (error.code === '23505') return false
+    throw new Error(error.message)
   }
   async pauseGame(gameId: string) {
     const rows = check(

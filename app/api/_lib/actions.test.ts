@@ -561,21 +561,36 @@ describe('review fixes', () => {
     expect(events.filter((e) => e.type === 'used')).toHaveLength(1)
   })
 
-  it('two Flares at the same moment both work', async () => {
+  it('two Mat Rempits at the same moment: one works, the other is refused and not spent', async () => {
     const g = await chasingWithStation()
-    const lee = await run('join', { code: g.code, name: 'Lee', accepted: true }).catch(() => null)
-    expect(lee).toBeNull() // game already started; use two flares from one chaser instead
     const [f1, f2] = [await give(g.gameId, g.ben.playerId, 'flare'), await give(g.gameId, g.ben.playerId, 'flare')]
     const results = await Promise.all([
       run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f1.id }),
       run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f2.id }),
     ])
-    expect(results).toEqual([
-      { ok: true, kind: 'flare' },
-      { ok: true, kind: 'flare' },
-    ])
-    expect((await store.pings(g.gameId)).filter((p) => p.seq >= BONUS_SEQ_BASE)).toHaveLength(2)
+    expect(results.filter((r) => r.ok)).toHaveLength(1)
+    expect(results.find((r) => !r.ok)).toEqual({ ok: false, reason: 'flare-pending' })
+    expect((await store.pings(g.gameId)).filter((p) => p.seq >= BONUS_SEQ_BASE)).toHaveLength(1)
+    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'flare' && u.used_at === null)).toHaveLength(1)
   })
+
+  it('a team waits for the surprise ping, then 3 minutes, before the next Mat Rempit', async () => {
+    const g = await chasingWithStation()
+    const [f1, f2] = [await give(g.gameId, g.ben.playerId, 'flare'), await give(g.gameId, g.ben.playerId, 'flare')]
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f1.id })).toEqual({ ok: true, kind: 'flare' })
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f2.id })).toEqual({ ok: false, reason: 'flare-pending' })
+    now += 30_000 // the surprise ping reveals
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    now += 60_000
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f2.id })).toEqual({
+      ok: false,
+      reason: 'flare-cooldown',
+      readyInMs: 120_000,
+    })
+    now += 120_000
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f2.id })).toEqual({ ok: true, kind: 'flare' })
+  })
+
 
   it('two players scanning one station at the same moment: only one gets a power-up', async () => {
     const g = await chasingWithStation()
@@ -1033,8 +1048,8 @@ describe('automatic alerts', () => {
   it('a missed bonus (Mat Rempit) ping never counts towards auto-jail', async () => {
     const g = await safetyGame({ checkinMode: 'schedule' })
     // Two bonus pings land between the scheduled ones; Hafiz ignores both.
-    await store.addBonusPing(g.gameId, new Date(T0 + 11 * MIN).toISOString(), new Date(T0 + 11.5 * MIN).toISOString())
-    await store.addBonusPing(g.gameId, new Date(T0 + 16 * MIN).toISOString(), new Date(T0 + 16.5 * MIN).toISOString())
+    await store.addBonusPing(g.gameId, BONUS_SEQ_BASE, new Date(T0 + 11 * MIN).toISOString(), new Date(T0 + 11.5 * MIN).toISOString())
+    await store.addBonusPing(g.gameId, BONUS_SEQ_BASE + 1, new Date(T0 + 16 * MIN).toISOString(), new Date(T0 + 16.5 * MIN).toISOString())
     for (const m of [9.9, 14.9, 19.9]) {
       now = T0 + m * MIN
       await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })

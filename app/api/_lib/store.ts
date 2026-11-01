@@ -88,7 +88,8 @@ export interface GameStore {
   /** Consumes a shield only if it wasn't already; true for the first caller. */
   consumeShield(id: string): Promise<boolean>
   /** Adds a bonus (Flare) ping with the next free bonus number; safe when two happen at once. */
-  addBonusPing(gameId: string, alertAt: string, revealAt: string): Promise<number>
+  /** Adds surprise ping `seq` only if that number is free; false if another one took it first. */
+  addBonusPing(gameId: string, seq: number, alertAt: string, revealAt: string): Promise<boolean>
   /** Pauses a started, unfinished, unpaused game (paused_at = store clock); true for the first caller. */
   pauseGame(gameId: string): Promise<boolean>
   /**
@@ -339,10 +340,10 @@ export class MemoryStore implements GameStore {
     u.consumed_at = this.nowIso()
     return true
   }
-  async addBonusPing(gameId: string, alertAt: string, revealAt: string) {
-    const seq = 1000 + this.pingRows.filter((p) => p.game_id === gameId && p.seq >= 1000).length
+  async addBonusPing(gameId: string, seq: number, alertAt: string, revealAt: string) {
+    if (this.pingRows.some((p) => p.game_id === gameId && p.seq === seq)) return false
     this.pingRows.push({ game_id: gameId, seq, alert_at: alertAt, reveal_at: revealAt, alerted: false, revealed: false })
-    return seq
+    return true
   }
   async pauseGame(gameId: string) {
     const g = this.games.find((x) => x.id === gameId)

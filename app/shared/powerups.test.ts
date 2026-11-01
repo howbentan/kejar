@@ -3,7 +3,7 @@ import { arenaAroundPoint } from './arenas.js'
 import { iso, MIN, ping, player, pos, T0 } from './fixtures.js'
 import { circlePolygon, distanceM, offset, pointInPolygon } from './geo.js'
 import { buildPlayArea, inPlayArea } from './playArea.js'
-import { activeShield, decoySpot, judgeClaim, slotBusy } from './powerups.js'
+import { activeShield, decoySpot, flareBlocked, judgeClaim, slotBusy } from './powerups.js'
 import { BONUS_SEQ_BASE } from './clock.js'
 import type { Ping, PowerUp } from './types.js'
 
@@ -132,5 +132,19 @@ describe('activeShield', () => {
     expect(activeShield([{ ...shield, consumed_at: iso(NOW) }], 'r1', NOW)).toBeNull()
     expect(activeShield([{ ...shield, used_at: null }], 'r1', NOW)).toBeNull()
     expect(activeShield([shield], 'r2', NOW)).toBeNull()
+  })
+})
+
+describe('flareBlocked', () => {
+  const bonus = (revealAt: number, revealed: boolean): Ping => ({ ...ping(BONUS_SEQ_BASE, revealAt), revealed })
+  it('blocks while another surprise ping is still on its way', () => {
+    expect(flareBlocked([bonus(NOW + 10_000, false)], NOW)).toEqual({ reason: 'flare-pending' })
+  })
+  it('blocks for 3 minutes after a surprise ping is revealed', () => {
+    expect(flareBlocked([bonus(NOW - 60_000, true)], NOW)).toEqual({ reason: 'flare-cooldown', readyInMs: 120_000 })
+  })
+  it('is clear once 3 minutes have passed, or with no surprise pings', () => {
+    expect(flareBlocked([bonus(NOW - 3 * MIN, true)], NOW)).toBeNull()
+    expect(flareBlocked([], NOW)).toBeNull()
   })
 })

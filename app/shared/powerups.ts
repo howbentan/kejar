@@ -8,6 +8,8 @@ export const CLAIM_RADIUS_M = 30
 export const CLAIM_FRESH_MS = 30_000
 export const STATION_LOCK_MS = 60_000
 export const SHIELD_MS = 10 * 60_000
+/** Power-ups §5a: after each surprise ping is revealed, the chasers wait this long for the next. */
+export const FLARE_COOLDOWN_MS = 3 * 60_000
 const MAX_ACCURACY_M = 20
 const DECOY_MIN_M = 120
 const DECOY_MAX_M = 180
@@ -77,6 +79,15 @@ export function slotBusy(powerUps: PowerUp[], playerId: string, pings: Ping[], n
     if (running) return { kind: u.kind, running: true }
   }
   return null
+}
+
+/** Mat Rempit is one at a time, team-wide, with a 3-minute cooldown after each surprise ping (power-ups §5a). */
+export function flareBlocked(pings: Ping[], now: number): { reason: 'flare-pending' } | { reason: 'flare-cooldown'; readyInMs: number } | null {
+  const bonus = pings.filter((p) => p.seq >= BONUS_SEQ_BASE)
+  if (bonus.some((p) => !p.revealed)) return { reason: 'flare-pending' }
+  const last = Math.max(...bonus.map((p) => Date.parse(p.reveal_at)), -Infinity)
+  const readyInMs = last + FLARE_COOLDOWN_MS - now
+  return readyInMs > 0 ? { reason: 'flare-cooldown', readyInMs } : null
 }
 
 /** A fake position 120–180 m away, kept inside the play area (and out of lakes) if any of 12 directions allows it. */

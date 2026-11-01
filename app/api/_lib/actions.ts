@@ -15,7 +15,7 @@ import { arenaAroundPoint } from '../../shared/arenas.js'
 import { judgeCatch, judgeJailbreak } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
 import { JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
-import { activeShield, judgeClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
+import { activeShield, flareBlocked, judgeClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { computeResults } from '../../shared/results.js'
 import { shuffleRoles, validateTeams } from '../../shared/teams.js'
 import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type Role, type Settings } from '../../shared/types.js'
@@ -714,14 +714,27 @@ const usePowerup: Action = async (ctx, body) => {
   // A Flare's reveal must land before the whistle.
   if (u.kind === 'flare' && (endsAt ?? 0) - ctx.now < ALERT_LEAD_MS) return { ok: false, reason: 'too-late' }
 
+  // Mat Rempit: one at a time, team-wide, then a 3-minute wait (power-ups §5a). A refusal isn't spent.
+  const pings = u.kind === 'flare' ? await ctx.store.pings(game.id) : []
+  if (u.kind === 'flare') {
+    const blocked = flareBlocked(pings, ctx.now)
+    if (blocked) return { ok: false, ...blocked }
+  }
   // markUsed is atomic: a double-tap uses the power-up once.
   if (!(await ctx.store.markUsed(u.id))) return { ok: false, reason: 'already-used' }
   if (u.kind === 'flare') {
+    // The next surprise-ping number is a claim: if two Mat Rempits land at once, only one gets it.
+    const seq = BONUS_SEQ_BASE + pings.filter((p) => p.seq >= BONUS_SEQ_BASE).length
+    let added: boolean
     try {
-      await ctx.store.addBonusPing(game.id, iso(ctx.now), iso(ctx.now + ALERT_LEAD_MS))
+      added = await ctx.store.addBonusPing(game.id, seq, iso(ctx.now), iso(ctx.now + ALERT_LEAD_MS))
     } catch (e) {
-      await ctx.store.updatePowerUp(u.id, { used_at: null }) // give the Flare back
+      await ctx.store.updatePowerUp(u.id, { used_at: null }) // give the Mat Rempit back
       throw e
+    }
+    if (!added) {
+      await ctx.store.updatePowerUp(u.id, { used_at: null })
+      return { ok: false, reason: 'flare-pending' }
     }
   }
   await ctx.store.addEvent({ game_id: game.id, type: 'used', actor_id: me.id, target_id: null, data: { kind: u.kind } })
