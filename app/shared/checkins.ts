@@ -6,9 +6,12 @@ export const BONUS_ALERT_LEAD_MS = 30_000
 
 export const alertLeadFor = (seq: number): number => (seq >= BONUS_SEQ_BASE ? BONUS_ALERT_LEAD_MS : SCHEDULED_ALERT_LEAD_MS)
 
-/** A check-in for a ping is a location sent inside its window: from the alert up to the reveal (checkins design §4.2). */
-export function checkedIn(revealAt: number, lastAt: number | null, leadMs: number): boolean {
-  return lastAt !== null && lastAt >= revealAt - leadMs && lastAt <= revealAt
+/**
+ * A check-in for a ping is a location sent inside its window: from the alert up to the reveal
+ * (checkins design §4.2). A pause after the alert stretches the window rather than moving it (§4.6).
+ */
+export function checkedIn(alertAt: number, revealAt: number, lastAt: number | null): boolean {
+  return lastAt !== null && lastAt >= alertAt && lastAt <= revealAt
 }
 
 export interface ScheduledCheckin {
@@ -25,5 +28,5 @@ export interface ScheduledCheckin {
  */
 export function autoJailDue(pings: ScheduledCheckin[], since: number): boolean {
   if (pings.length < 2) return false
-  return pings.slice(-2).every((p) => p.alertAt >= since && !checkedIn(p.revealAt, p.lastAt, SCHEDULED_ALERT_LEAD_MS))
+  return pings.slice(-2).every((p) => p.alertAt >= since && !checkedIn(p.alertAt, p.revealAt, p.lastAt))
 }

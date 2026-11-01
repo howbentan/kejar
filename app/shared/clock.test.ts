@@ -105,6 +105,14 @@ describe('pauses', () => {
     expect(pingTimes(pg).map((p) => p.revealAt)).toEqual([10, 15, 22, 27, 32, 37, 42, 47].map((m) => T0 + m * MIN))
   })
 
+  it('a pause that starts after a ping alert keeps the alert where it was and moves only the reveal', () => {
+    // Ping 1 reveals at T0+10 and alerts 45 s before; a pause from T0+10 min - 20 s lasts 5 min.
+    const pg = game({ pauses: [closed(T0 + 10 * MIN - 20_000, T0 + 15 * MIN - 20_000)] })
+    const [p1] = pingTimes(pg, T0 + 20 * MIN)
+    expect(p1.revealAt).toBe(T0 + 15 * MIN)
+    expect(p1.alertAt).toBe(T0 + 10 * MIN - SCHEDULED_ALERT_LEAD_MS)
+  })
+
   it('an open pause freezes the countdown', () => {
     const pg = game({ paused_at: iso(T0 + 20 * MIN) })
     const left = (now: number) => phaseAt(pg, now).endsAt! - now

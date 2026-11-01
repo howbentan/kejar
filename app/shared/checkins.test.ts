@@ -7,15 +7,19 @@ const LEAD = 45_000
 
 describe('checkedIn', () => {
   it('counts a location exactly 45 s before the reveal, and not one a millisecond earlier', () => {
-    expect(checkedIn(R, R - 45_000, LEAD)).toBe(true)
-    expect(checkedIn(R, R - 45_001, LEAD)).toBe(false)
+    expect(checkedIn(R - LEAD, R, R - 45_000)).toBe(true)
+    expect(checkedIn(R - LEAD, R, R - 45_001)).toBe(false)
   })
   it('counts a location at the reveal itself', () => {
-    expect(checkedIn(R, R, LEAD)).toBe(true)
+    expect(checkedIn(R - LEAD, R, R)).toBe(true)
+  })
+  it('a pause inside the window stretches it: a check-in before the pause still counts', () => {
+    // Alert at R - 45 s, then a 5-minute pause pushed the reveal to R + 5 min.
+    expect(checkedIn(R - LEAD, R + 5 * MIN, R - 30_000)).toBe(true)
   })
   it('never counts a location after the reveal, or no location', () => {
-    expect(checkedIn(R, R + 1, LEAD)).toBe(false)
-    expect(checkedIn(R, null, LEAD)).toBe(false)
+    expect(checkedIn(R - LEAD, R, R + 1)).toBe(false)
+    expect(checkedIn(R - LEAD, R, null)).toBe(false)
   })
 })
 

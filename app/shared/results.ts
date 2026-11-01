@@ -10,8 +10,7 @@ export function computeResults(game: Game, players: Player[], events: GameEvent[
 
   // Survival runs until a runner's first catch or auto-jail (or the end of the game).
   // An auto-jail a marshal undid (a phone fault) doesn't end survival (motion design §5b).
-  const undone = (e: GameEvent) =>
-    events.some((u) => u.type === 'auto-jail-undone' && u.target_id === e.target_id && Date.parse(u.at) >= Date.parse(e.at))
+  const undone = (e: GameEvent) => events.some((u) => u.type === 'auto-jail-undone' && u.data.eventId === e.id)
   const jailings = events
     .filter((e) => e.type === 'caught' || (e.type === 'auto-jailed' && !undone(e)))
     .sort((a, b) => Date.parse(a.at) - Date.parse(b.at))

@@ -788,9 +788,9 @@ const undoAutoJail: Action = async (ctx, body) => {
   // Only while they're still in Penjara from this auto-jail: not a chaser's catch, not after a later release.
   const undoable =
     !!target && target.jailed && target.caught_by === null && (!target.freed_at || Date.parse(jailing.at) >= Date.parse(target.freed_at))
-  if (!undoable) return { ok: false, reason: 'not-undoable' }
-  await ctx.store.updatePlayers([{ id: target.id, patch: { jailed: false, caught_at: null, freed_at: iso(ctx.now) } }])
-  await ctx.store.addEvent({ game_id: game.id, type: 'auto-jail-undone', actor_id: marshal?.id ?? null, target_id: target.id, data: {} })
+  // Atomic, so two marshals tapping at once (or a racing release) free the runner only once.
+  if (!undoable || !(await ctx.store.releaseAutoJailed(target.id, iso(ctx.now)))) return { ok: false, reason: 'not-undoable' }
+  await ctx.store.addEvent({ game_id: game.id, type: 'auto-jail-undone', actor_id: marshal?.id ?? null, target_id: target.id, data: { eventId } })
   await ctx.store.addEvent({ game_id: game.id, type: 'handled', actor_id: marshal?.id ?? null, target_id: null, data: { eventId } })
   await ctx.store.addSafetyRecord({
     game_id: game.id,

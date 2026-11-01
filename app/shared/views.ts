@@ -1,6 +1,6 @@
 import { alertLeadFor, checkedIn } from './checkins.js'
 import { alertsFrom, type Alert } from './alerts.js'
-import { chaseStartOf, MINUTE_MS, nextReveal, phaseAt } from './clock.js'
+import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
 import { distanceM, fuzz } from './geo.js'
 import { activeShield, decoySpot } from './powerups.js'
 import type { Arena, Game, GameEvent, Phase, Ping, Player, Position, PowerUp, Results, Role, Settings } from './types.js'
@@ -142,6 +142,10 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
   const last = revealed[revealed.length - 1]
   if (!last) return { dots, notes }
   const revealAt = Date.parse(last.reveal_at)
+  const alertAt =
+    last.seq >= BONUS_SEQ_BASE
+      ? Date.parse(last.alert_at)
+      : (pingTimes(i.game, i.now).find((t) => t.seq === last.seq)?.alertAt ?? revealAt - alertLeadFor(last.seq))
   const prev = revealed[revealed.length - 2]
   const prevAt = prev ? Date.parse(prev.reveal_at) : (chaseStartOf(i.game, i.now) ?? revealAt)
 
@@ -172,7 +176,7 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
       dot = { ...dotFor(p, at, 'runner'), ...fuzz(at, FUZZ_RADIUS_M, seed), fuzzy: true }
     }
     // Missed = no location inside this ping's check-in window (45 s scheduled, 30 s bonus).
-    if (!checkedIn(revealAt, Date.parse(at.at), alertLeadFor(last.seq))) dot.missed = true
+    if (!checkedIn(alertAt, revealAt, Date.parse(at.at))) dot.missed = true
     dots.push(dot)
   }
   return { dots, notes }

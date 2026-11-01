@@ -56,6 +56,8 @@ export interface GameStore {
   updatePlayers(patches: { id: string; patch: Partial<Player> }[]): Promise<void>
   /** Marks a runner caught only if they are not already jailed; true for the first caller. */
   catchRunner(id: string, by: string | null): Promise<boolean>
+  /** Frees an auto-jailed runner (jailed, no chaser) only if still in that state; true for the first caller. */
+  releaseAutoJailed(id: string, atIso: string): Promise<boolean>
   addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>): Promise<void>
   /**
    * Each player's latest position at or before each of the given times (deduplicated, ascending).
@@ -218,6 +220,12 @@ export class MemoryStore implements GameStore {
       const p = this.playerRows.find((x) => x.id === id)
       if (p) Object.assign(p, patch)
     }
+  }
+  async releaseAutoJailed(id: string, atIso: string) {
+    const p = this.playerRows.find((x) => x.id === id)
+    if (!p || !p.jailed || p.caught_by !== null) return false
+    Object.assign(p, { jailed: false, caught_at: null, freed_at: atIso })
+    return true
   }
   async catchRunner(id: string, by: string | null) {
     const p = this.playerRows.find((x) => x.id === id)

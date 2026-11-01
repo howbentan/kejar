@@ -1100,6 +1100,17 @@ describe('automatic alerts', () => {
       await rejects(run('undoAutoJail', { code: g.code, token: g.aina.token, eventId: g.eventId }), 403, 'Marshals only')
     })
 
+    it('two marshals undoing at the same moment free the runner once', async () => {
+      const g = await autoJailed()
+      const results = await Promise.all([
+        run('undoAutoJail', { code: g.code, organiserToken: g.organiserToken, eventId: g.eventId }),
+        run('undoAutoJail', { code: g.code, token: g.siti.token, eventId: g.eventId }),
+      ])
+      expect(results.filter((r) => r.ok)).toHaveLength(1)
+      expect((await store.events(g.gameId)).filter((e) => e.type === 'auto-jail-undone')).toHaveLength(1)
+      expect(store.safetyRows.filter((r) => r.type === 'auto-jail-undone')).toHaveLength(1)
+    })
+
     it('only works once', async () => {
       const g = await autoJailed()
       await run('undoAutoJail', { code: g.code, organiserToken: g.organiserToken, eventId: g.eventId })
@@ -1108,6 +1119,23 @@ describe('automatic alerts', () => {
         reason: 'not-undoable',
       })
     })
+  })
+
+  it('a check-in just before a pause still counts after the pause', async () => {
+    const g = await safetyGame({ checkinMode: 'schedule' })
+    // Hafiz misses ping 1. For ping 2 (+15) he checks in at -30 s, then a 5-minute pause starts at -20 s.
+    now = T0 + 9.75 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    now = T0 + 15 * MIN - 30_000
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    now = T0 + 15 * MIN - 20_000
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 20 * MIN - 20_000
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 20 * MIN // ping 2's reveal, moved by the pause
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    expect((await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!.jailed).toBe(false)
   })
 
   it('no check-in is missed while the game is paused', async () => {

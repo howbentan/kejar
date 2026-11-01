@@ -50,6 +50,18 @@ export class SupabaseStore implements GameStore {
   async updatePlayers(patches: { id: string; patch: Partial<Player> }[]) {
     for (const { id, patch } of patches) check(await this.db.from('players').update(patch).eq('id', id))
   }
+  async releaseAutoJailed(id: string, atIso: string) {
+    const rows = check(
+      await this.db
+        .from('players')
+        .update({ jailed: false, caught_at: null, freed_at: atIso })
+        .eq('id', id)
+        .eq('jailed', true)
+        .is('caught_by', null)
+        .select('id'),
+    )
+    return (rows ?? []).length > 0
+  }
   async catchRunner(id: string, by: string | null) {
     const rows = check(
       await this.db
