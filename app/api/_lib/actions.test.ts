@@ -1972,3 +1972,43 @@ describe('saved arenas', () => {
     await rejects(run('saveArena', { organiserToken, draft: { name: 'x' } }), 400, 'Invalid play area')
   })
 })
+
+describe('the chaser snapshot at check-in (checkins design §5)', () => {
+  it("a runner who missed the last ping still sees the chasers from the alert of the one she checked into", async () => {
+    const g = await safetyGame({ checkinMode: 'schedule', chaserSnapshot: true })
+    // Ben stands 50 m north at ping 1's alert (+9:15), then walks off.
+    now = T0 + 9 * MIN
+    await run('location', { code: g.code, token: g.ben.token, ...at(50) })
+    now = T0 + 9.75 * MIN // inside ping 1's window
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+    await run('location', { code: g.code, token: g.ben.token, ...at(150) })
+    // Aina misses ping 2 (a location at +12 is outside its window); Ben keeps moving.
+    now = T0 + 12 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    now = T0 + 15.9 * MIN
+    await run('location', { code: g.code, token: g.ben.token, ...at(170) })
+    now = T0 + 16 * MIN
+    const v = await run<View>('state', { code: g.code, token: g.aina.token })
+    expect(v.chaserSnapshot?.positions).toHaveLength(1)
+    const ben = v.chaserSnapshot!.positions[0]
+    expect(ben).toMatchObject({ name: 'Ben', stale: false })
+    expect(Math.abs((ben.lat - CENTER.lat) * 111_195 - 50)).toBeLessThanOrEqual(30)
+    // The ping 1 reveal recorded who checked in, which is how the view still knows at +16.
+    const ping1 = (await store.events(g.gameId)).find((e) => e.type === 'ping' && e.data.seq === 1)!
+    expect(ping1.data.checkedIn).toEqual(expect.arrayContaining([g.aina.playerId, g.hafiz.playerId]))
+    // The chaser never gets a snapshot of their own.
+    expect((await run<View>('state', { code: g.code, token: g.ben.token })).chaserSnapshot).toBeNull()
+  })
+
+  it('with the switch off, reveals record nothing new and nobody gets a snapshot', async () => {
+    const g = await safetyGame({ checkinMode: 'schedule' })
+    now = T0 + 9.75 * MIN
+    await run('location', { code: g.code, token: g.ben.token, ...at(50) })
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    now = T0 + 10.5 * MIN
+    expect((await run<View>('state', { code: g.code, token: g.aina.token })).chaserSnapshot).toBeNull()
+    const ping1 = (await store.events(g.gameId)).find((e) => e.type === 'ping' && e.data.seq === 1)!
+    expect(ping1.data.checkedIn).toBeUndefined()
+  })
+})

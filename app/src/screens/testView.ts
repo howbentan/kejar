@@ -41,6 +41,7 @@ export function testView(over: Partial<View> = {}): View {
     flareReadyAt: null,
     jailCheckins: null,
     checkin: null,
+    chaserSnapshot: null,
     feed: [],
     counts: { runnersFree: 3, runnersJailed: 0, chasers: 1 },
     roster: [],

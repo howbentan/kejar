@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { event, game, iso, MIN, ping, player, pos, T0 } from './fixtures.js'
 import { distanceM } from './geo.js'
-import type { Player, Position, PowerUp } from './types.js'
+import { DEFAULT_SETTINGS, type Player, type Position, type PowerUp } from './types.js'
 import { BONUS_SEQ_BASE, SCHEDULED_ALERT_LEAD_MS } from './clock.js'
-import { viewFor } from './views.js'
+import { CHASER_SNAPSHOT_FUZZ_M, viewFor } from './views.js'
 
 const g = game()
 const NOW = T0 + 16 * MIN // chase started at +5; pings revealed at +10 and +15
@@ -534,5 +534,105 @@ describe('power-up secrecy', () => {
     expect(dot.exact).toBe(true)
     expect(dot.fuzzy).toBeUndefined()
     expect(distanceM(dot, A)).toBeGreaterThanOrEqual(119)
+  })
+})
+
+describe('the chaser snapshot at check-in (checkins design §5)', () => {
+  const on = game({ settings: { ...DEFAULT_SETTINGS, chaserSnapshot: true } })
+  /** Scheduled ping k reveals at +5 + 5k minutes; its alert (the snapshot moment) is 45 s before. */
+  const alertAt = (k: number) => T0 + (5 + 5 * k) * MIN - SCHEDULED_ALERT_LEAD_MS
+  const BEN_1 = { lat: 3.001, lng: 101.001 }
+  const BEN_2 = { lat: 3.002, lng: 101.008 }
+  const BEN_3 = { lat: 3.008, lng: 101.002 }
+  const BEN_LATER = { lat: 3.008, lng: 101.008 }
+  const benTrail = [
+    pos(BEN_1.lat, BEN_1.lng, alertAt(1) - 3_000),
+    pos(BEN_2.lat, BEN_2.lng, alertAt(2) - 5_000),
+    pos(BEN_LATER.lat, BEN_LATER.lng, alertAt(2) + 20_000),
+    pos(BEN_3.lat, BEN_3.lng, alertAt(3) - 2_000),
+  ]
+  const snap = (me: Player, aina: Position[], over: Partial<Parameters<typeof viewFor>[0]> = {}) =>
+    view(me, { game: on, positions: { c1: benTrail, r1: aina }, ...over }).chaserSnapshot
+
+  it("with the switch on, a runner who just checked in sees chasers as of that window's alert time, fuzzed to 30 m", () => {
+    const s = snap(aina, [pos(A.lat, A.lng, alertAt(2) + 10_000)], { now: alertAt(2) + 20_000 })
+    expect(s?.positions).toHaveLength(1)
+    expect(s?.positions[0]).toMatchObject({ name: 'Ben', stale: false })
+    expect(distanceM(s!.positions[0], BEN_2)).toBeLessThanOrEqual(CHASER_SNAPSHOT_FUZZ_M)
+    expect(distanceM(s!.positions[0], BEN_LATER)).toBeGreaterThan(100)
+  })
+
+  it("is frozen: the circles don't move between polls while the chaser does", () => {
+    const aina2 = [pos(A.lat, A.lng, alertAt(2) + 10_000)]
+    const first = snap(aina, aina2, { now: alertAt(2) + 20_000 })
+    expect(snap(aina, aina2, { now: alertAt(2) + 40_000 })).toEqual(first)
+    expect(snap(aina, aina2, { now: T0 + 17 * MIN })).toEqual(first)
+  })
+
+  it('a chaser whose last position is over 60 s old at the alert is marked stale', () => {
+    const at = (ms: number) => snap(aina, [pos(A.lat, A.lng, alertAt(2) + 10_000)], { now: alertAt(2) + 20_000, positions: { c1: [pos(BEN_2.lat, BEN_2.lng, alertAt(2) - ms)], r1: [pos(A.lat, A.lng, alertAt(2) + 10_000)] } })
+    expect(at(61_000)?.positions[0].stale).toBe(true)
+    expect(at(59_000)?.positions[0].stale).toBe(false)
+  })
+
+  it('a chaser with no position at all before the alert is left out', () => {
+    const s = snap(aina, [pos(A.lat, A.lng, alertAt(2) + 10_000)], {
+      now: alertAt(2) + 20_000,
+      positions: { c1: [pos(BEN_LATER.lat, BEN_LATER.lng, alertAt(2) + 1_000)], r1: [pos(A.lat, A.lng, alertAt(2) + 10_000)] },
+    })
+    expect(s).toEqual({ positions: [] })
+  })
+
+  it('the switch off means no chaser snapshot, even after checking in', () => {
+    const v = view(aina, { positions: { c1: benTrail, r1: [pos(A.lat, A.lng, alertAt(2) + 10_000)] }, now: alertAt(2) + 20_000 })
+    expect(v.chaserSnapshot).toBeNull()
+  })
+
+  it("missing this window keeps last window's snapshot showing, per design doc §5.4", () => {
+    const missed3 = [pos(A.lat, A.lng, alertAt(2) + 10_000)]
+    // Window 3 is open and she hasn't checked in yet, then it reveals without her.
+    for (const now of [alertAt(3) + 10_000, T0 + 20.5 * MIN]) {
+      const s = snap(aina, missed3, { now })
+      expect(distanceM(s!.positions[0], BEN_2)).toBeLessThanOrEqual(CHASER_SNAPSHOT_FUZZ_M)
+    }
+    // The next check-in replaces it.
+    const s = snap(aina, [...missed3, pos(A.lat, A.lng, alertAt(3) + 5_000)], { now: alertAt(3) + 10_000 })
+    expect(distanceM(s!.positions[0], BEN_3)).toBeLessThanOrEqual(CHASER_SNAPSHOT_FUZZ_M)
+  })
+
+  it('before any check-in has ever succeeded, the chaser snapshot is null', () => {
+    // One location before window 1, one after its reveal but before window 2's alert: neither is a check-in.
+    expect(snap(aina, [pos(A.lat, A.lng, alertAt(1) - 60_000), pos(A.lat, A.lng, T0 + 12 * MIN)], { now: T0 + 16 * MIN })).toBeNull()
+  })
+
+  it('a Mat Rempit bonus ping never produces or updates a snapshot', () => {
+    const bonus = ping(BONUS_SEQ_BASE, T0 + 17 * MIN)
+    const ben = [...benTrail, pos(BEN_LATER.lat, BEN_LATER.lng, T0 + 16.5 * MIN - 1_000)]
+    const inBonusOnly = [pos(A.lat, A.lng, T0 + 16.75 * MIN)]
+    const over = { pings: [...pings, bonus], now: T0 + 17.5 * MIN }
+    expect(view(aina, { game: on, positions: { c1: ben, r1: inBonusOnly }, ...over }).chaserSnapshot).toBeNull()
+    const s = view(aina, { game: on, positions: { c1: ben, r1: [pos(A.lat, A.lng, alertAt(2) + 10_000), ...inBonusOnly] }, ...over }).chaserSnapshot
+    expect(distanceM(s!.positions[0], BEN_2)).toBeLessThanOrEqual(CHASER_SNAPSHOT_FUZZ_M)
+  })
+
+  it('a check-in recorded at the reveal counts, even when the view no longer has that location', () => {
+    const revealed = event('ping', T0 + 10 * MIN, { data: { seq: 1, seen: 1, missed: 0, checkedIn: ['r1'] } })
+    const s = snap(aina, [pos(A.lat, A.lng, T0 + 12 * MIN)], { now: T0 + 16 * MIN, events: [revealed] })
+    expect(distanceM(s!.positions[0], BEN_1)).toBeLessThanOrEqual(CHASER_SNAPSHOT_FUZZ_M)
+  })
+
+  it('a location sent while jailed is not a check-in for a runner freed afterwards', () => {
+    const freed = { ...aina, freed_once: true, freed_at: iso(T0 + 15.5 * MIN) }
+    const s = view(freed, { game: on, players: [chaser, freed, hafiz, wei, siti], positions: { c1: benTrail, r1: [pos(A.lat, A.lng, alertAt(2) + 10_000)] }, now: T0 + 16 * MIN })
+    expect(s.chaserSnapshot).toBeNull()
+  })
+
+  it('jailed runners keep their spectator map; chasers and marshals never get a snapshot', () => {
+    const jailed = { ...aina, jailed: true }
+    const aina2 = [pos(A.lat, A.lng, alertAt(2) + 10_000)]
+    const over = { now: alertAt(2) + 20_000, players: [chaser, jailed, hafiz, wei, siti] }
+    expect(snap(jailed, aina2, over)).toBeNull()
+    expect(snap(chaser, aina2, { now: alertAt(2) + 20_000 })).toBeNull()
+    expect(snap(siti, aina2, { now: alertAt(2) + 20_000 })).toBeNull()
   })
 })

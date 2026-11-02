@@ -23,7 +23,7 @@ import { activeShield, flareBlocked, judgeClaim, STATION_LOCK_MS } from '../../s
 import { computeResults } from '../../shared/results.js'
 import { validateTeams } from '../../shared/teams.js'
 import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type PowerUpKind, type Role, type Settings } from '../../shared/types.js'
-import { viewFor, latestAtOrBefore } from '../../shared/views.js'
+import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
 import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
 import { MARSHAL_INVITE_TTL_MS, ORGANISER_INVITE_TTL_MS } from '../../shared/invites.js'
@@ -196,6 +196,28 @@ async function recordScanLocation(ctx: Ctx, game: Game, me: Player, body: Body) 
 
 const latest = (list: Position[] | undefined) => (list && list.length ? list[list.length - 1] : null)
 
+const lastAtOf = (list: Position[] | undefined, t: number) => {
+  const at = latestAtOrBefore(list, t)
+  return at ? Date.parse(at.at) : null
+}
+
+/**
+ * A free runner's chaser snapshot needs the chasers as of one more moment: the alert of the last scheduled
+ * ping they checked into (checkins design §5). Loads just that moment, only when it isn't already loaded.
+ */
+async function withSnapshotMoment(ctx: Ctx, input: SnapshotInput, times: string[]): Promise<Record<string, Position[]>> {
+  const w = snapshotWindow(input)
+  if (!w || times.includes(iso(w.alertAt))) return input.positions
+  const extra = await ctx.store.latestPositions(input.game.id, [iso(w.alertAt)])
+  const out: Record<string, Position[]> = { ...input.positions }
+  for (const [id, list] of Object.entries(extra)) {
+    const merged = [...(out[id] ?? [])]
+    for (const p of list) if (!merged.some((x) => x.at === p.at)) merged.push(p)
+    out[id] = merged.sort((a, b) => a.at.localeCompare(b.at))
+  }
+  return out
+}
+
 /** Brings the game up to date: chase start, alerts, reveals and the end. Safe to call from many pages at once. */
 async function advance(ctx: Ctx, game: Game): Promise<void> {
   const { store, now } = ctx
@@ -238,8 +260,22 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
         .map((u) => u.player_id),
     )
     const seen = free.filter((p) => !cloaked.has(p.id) && (positions[p.id] ?? []).length > 0).length
+    // With the chaser-snapshot switch on, a scheduled reveal records who checked in (a location inside its
+    // 45 s window), so a runner's view can find the last window they checked into without loading every
+    // reveal's positions (checkins design §5.4).
+    const scheduled = seq < BONUS_SEQ_BASE ? pingTimes(game, now).find((t) => t.seq === seq) : undefined
+    const checkedInIds =
+      game.settings.chaserSnapshot === true && scheduled
+        ? free.filter((p) => checkedIn(scheduled.alertAt, scheduled.revealAt, lastAtOf(positions[p.id], scheduled.revealAt))).map((p) => p.id)
+        : null
     // Cloaked runners count as missed, matching what chasers see on the map.
-    await store.addEvent({ game_id: game.id, type: 'ping', actor_id: null, target_id: null, data: { seq, seen, missed: free.length - seen } })
+    await store.addEvent({
+      game_id: game.id,
+      type: 'ping',
+      actor_id: null,
+      target_id: null,
+      data: { seq, seen, missed: free.length - seen, ...(checkedInIds ? { checkedIn: checkedInIds } : {}) },
+    })
     if (seq < BONUS_SEQ_BASE) {
       // Flares give only 30 s notice, so only scheduled pings count towards a missed streak.
       // The last three are loaded so a jailed runner's screen can show the check-ins it was judged on.
@@ -457,11 +493,13 @@ const state: Action = async (ctx, body) => {
   const events = await ctx.store.events(game.id)
   const pings = await ctx.store.pings(game.id)
   const ended = phaseAt(game, ctx.now).phase === 'ended'
+  const times = viewTimes(game, pings, ctx.now)
+  const loaded = await ctx.store.latestPositions(game.id, times)
   return viewFor({
     game,
     me,
     players,
-    positions: await ctx.store.latestPositions(game.id, viewTimes(game, pings, ctx.now)),
+    positions: await withSnapshotMoment(ctx, { game, me, positions: loaded, events, now: ctx.now }, times),
     pings,
     events,
     now: ctx.now,
