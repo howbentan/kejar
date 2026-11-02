@@ -1,18 +1,23 @@
-import { alertLeadFor, checkedIn } from './checkins.js'
+import { alertLeadFor, checkedIn, checkinsSince, countedCheckIn } from './checkins.js'
 import { alertsFrom, type Alert, type ReportReason } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
-import { distanceM, fuzz } from './geo.js'
+import { distanceM, fuzz, hash, offset } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { MOMENT_WINDOW_MS } from './moments.js'
+import { POWER_NAME } from './powerNames.js'
 import { activeShield, decoySpot, flareBlocked, SHIELD_MS, slotBusy } from './powerups.js'
-import type { Arena, Game, GameEvent, LatLng, Phase, Ping, Player, Position, PowerUp, PowerUpKind, Results, Role, Settings } from './types.js'
+import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
 
 /** Spec §4.5–4.6 constants. */
 export const FUZZ_RADIUS_M = 15
 export const NEARBY_M = 100
 export const FRESH_MS = 60_000
+/** Checkins design §5.2: runners see chasers as fuzzy circles of about 30 m, twice the runners' 15 m. */
+export const CHASER_SNAPSHOT_FUZZ_M = 30
 /** Focus shows runners this close to the chaser exactly. */
 export const FOCUS_M = 75
+/** Dato Seri's hint zone radius, inside the jail design's 100–200 m band (§4b). */
+export const LEGENDARY_ZONE_M = 150
 const FEED_MAX = 20
 
 export interface MapDot {
@@ -96,6 +101,17 @@ export interface View {
   jailCheckins: { at: number; ok: boolean }[] | null
   /** A free runner's standing for the next scheduled ping during the chase; null otherwise. */
   checkin: Checkin | null
+  /**
+   * With the chaser-snapshot switch on, a free runner sees where the chasers were at the alert of the most
+   * recent scheduled ping they checked into (checkins design §5); null for everyone else, and before a
+   * runner's first check-in.
+   */
+  chaserSnapshot: ChaserSnapshot | null
+  /**
+   * A chaser, with the switch on, between a scheduled ping's alert and its reveal: runners checking in can
+   * see where they were at the alert, so their unseen window has started (checkins design §5.4).
+   */
+  snapshotted: boolean
   feed: FeedItem[]
   counts: { runnersFree: number; runnersJailed: number; chasers: number }
   /** Everyone in the game: shown in the lobby and to marshals; empty for players mid-game. */
@@ -113,6 +129,27 @@ export interface View {
   deckLeft: number | null
   /** My power-up whose effect is still running, which keeps my one slot busy (§5a). */
   activePowerUp: PowerUpKind | null
+  /**
+   * The unlabelled `?` zone around Dato Seri's hidden stash (jail design §4b, §4c): every runner and chaser in
+   * a Full game, during the chase, until someone claims it. Fixed for the game, with the stash somewhere inside.
+   */
+  legendaryZone: { lat: number; lng: number; radiusM: number } | null
+  /**
+   * What Settle could do, for a jailed runner holding an unused Dato Seri (jail design §4b, §4d); null for
+   * everyone else. `options` are the other runners in Penjara; those who already used their one escape are
+   * listed as not eligible (greyed out).
+   */
+  settle: { canFreeSelf: boolean; options: { id: string; name: string; eligible: boolean }[] } | null
+  /**
+   * Marshals and the organiser: exactly where the stash is (null if none), and who claimed it. Left out of
+   * players' views entirely, so not even the key's name reaches their phones (rules doc §9b).
+   */
+  datoStash?: PlacedStash | null
+  /**
+   * Marshals and the organiser in a Full game: the secret code on this game's ★ card, to print it (ruling R15);
+   * null if the game has none. Left out of players' views entirely, like `datoStash`.
+   */
+  datoCode?: string | null
   results: Results | null
 }
 
@@ -148,6 +185,18 @@ export interface Checkin {
   /** 1 when the last scheduled ping that counted for me was missed. A second miss auto-jails, so never 2. */
   missedInRow: 0 | 1
 }
+
+/** Chasers frozen at a scheduled ping's alert, fuzzed to `CHASER_SNAPSHOT_FUZZ_M`. */
+export interface ChaserSnapshot {
+  positions: { name: string; lat: number; lng: number; stale: boolean }[]
+}
+
+/**
+ * Seed for fuzz that must not be undone by players: the deck's secret seed (set at start, never sent to
+ * players), not the game id, which reaches them (e.g. `PowerUp.game_id` in their hand) along with `hash`,
+ * `fuzz` and `offset` in the client bundle. Games from before the seed existed fall back to the id.
+ */
+const secretSeed = (g: Game) => g.deck_seed ?? g.id
 
 export const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
@@ -358,13 +407,9 @@ function checkinFor(i: ViewInput, phase: Phase): Checkin | null {
   const times = pingTimes(i.game, i.now)
   const next = times.find((t) => t.revealAt > i.now)
   if (!next) return null
-  const mine = i.positions[i.me.id]
-  const lastAt = (t: number) => {
-    const at = latestAtOrBefore(mine, t)
-    return at ? Date.parse(at.at) : null
-  }
+  const lastAt = myLastAt(i)
   const prev = times.filter((t) => t.revealAt <= i.now).at(-1)
-  const since = Math.max(chaseStartOf(i.game, i.now)!, i.me.freed_at ? Date.parse(i.me.freed_at) : -Infinity)
+  const since = sinceRelease(i)
   const missedInRow = prev && prev.alertAt >= since && !checkedIn(prev.alertAt, prev.revealAt, lastAt(prev.revealAt)) ? 1 : 0
   const state = checkedIn(next.alertAt, next.revealAt, lastAt(i.now))
     ? 'in'
@@ -374,6 +419,114 @@ function checkinFor(i: ViewInput, phase: Phase): Checkin | null {
         ? 'missed'
         : 'early'
   return { state, alertAt: next.alertAt, revealAt: next.revealAt, missedInRow }
+}
+
+/** My latest location time at or before `t`, from the positions the view was given. */
+function myLastAt(i: Pick<ViewInput, 'me' | 'positions'>): (t: number) => number | null {
+  const mine = i.positions[i.me.id]
+  return (t) => {
+    const at = latestAtOrBefore(mine, t)
+    return at ? Date.parse(at.at) : null
+  }
+}
+
+/** Check-ins only count from the chase start or my last release, whichever is later (checkins design §4.4). */
+function sinceRelease(i: Pick<ViewInput, 'game' | 'me' | 'now'>): number {
+  return checkinsSince(chaseStartOf(i.game, i.now)!, i.me.freed_at)
+}
+
+export type SnapshotInput = Pick<ViewInput, 'game' | 'me' | 'positions' | 'events' | 'now'>
+
+/** The check-in switch only exists in Full: always off in Core, whatever was stored (rules §3). */
+const snapshotOn = (g: Game) => g.settings.mode === 'full' && g.settings.chaserSnapshot === true
+
+/**
+ * The scheduled ping whose alert-time snapshot a free runner sees: the most recent one they checked into
+ * (checkins design §5.4), the same 45 s window test as auto-jail (`checkedIn`). Mat Rempit's bonus pings
+ * never count. A window still open counts as soon as a location lands in it. Windows already revealed
+ * also count when the reveal recorded the runner as checked in (`checkedIn` on the ping event), because a
+ * view only loads positions at a few moments. Null with the switch off, or before a first check-in.
+ */
+export function snapshotWindow(i: SnapshotInput): { seq: number; alertAt: number; revealAt: number } | null {
+  if (!snapshotOn(i.game)) return null
+  if (i.me.role !== 'runner' || i.me.jailed || phaseAt(i.game, i.now).phase !== 'chasing') return null
+  const recorded = new Set(
+    i.events
+      .filter((e) => e.type === 'ping' && Array.isArray(e.data.checkedIn) && (e.data.checkedIn as unknown[]).includes(i.me.id))
+      .map((e) => Number(e.data.seq)),
+  )
+  const lastAt = myLastAt(i)
+  const since = sinceRelease(i)
+  const opened = pingTimes(i.game, i.now).filter((t) => t.seq < BONUS_SEQ_BASE && t.alertAt <= i.now)
+  return (
+    opened
+      .reverse()
+      .find((t) => recorded.has(t.seq) || countedCheckIn(t.alertAt, t.revealAt, lastAt(Math.min(t.revealAt, i.now)), since)) ??
+    null
+  )
+}
+
+/** Every chaser as of the snapshot window's alert, fuzzed the same way on every poll so the circles stay put. */
+function chaserSnapshotFor(i: ViewInput): ChaserSnapshot | null {
+  const w = snapshotWindow(i)
+  if (!w) return null
+  const positions = i.players.flatMap((p) => {
+    if (p.role !== 'chaser' || p.removed_at) return []
+    const at = latestAtOrBefore(i.positions[p.id], w.alertAt)
+    if (!at) return []
+    const spot = fuzz(at, CHASER_SNAPSHOT_FUZZ_M, `${secretSeed(i.game)}:${p.id}:snapshot:${w.seq}`)
+    return [{ name: p.name, lat: spot.lat, lng: spot.lng, stale: w.alertAt - Date.parse(at.at) > FRESH_MS }]
+  })
+  return { positions }
+}
+
+function snapshottedFor(i: ViewInput, phase: Phase): boolean {
+  if (!snapshotOn(i.game) || i.me.role !== 'chaser' || phase !== 'chasing') return false
+  return pingTimes(i.game, i.now).some((t) => t.alertAt <= i.now && i.now < t.revealAt)
+}
+
+export const SNAPSHOT_TAKEN = 'Snapshot taken — Dikejar can see where you were'
+
+/**
+ * The snapshot line for the latest scheduled alert so far while the switch is on, derived from the schedule (§5.4).
+ * Only the latest: with 2-minute pings one line per alert filled the whole 20-line feed and pushed catches off it,
+ * and each repeat says nothing new, so they collapse into the most recent one.
+ */
+function snapshotLines(i: ViewInput, phase: Phase, endsAt: number | null): { at: string; text: string }[] {
+  // Chasers and marshals only (ruling R16): a runner already sees the snapshot itself.
+  if (!snapshotOn(i.game) || (i.me.role !== 'chaser' && i.me.role !== 'marshal')) return []
+  const until = phase === 'ended' && endsAt !== null ? Math.min(endsAt, i.now) : i.now
+  return pingTimes(i.game, i.now)
+    .filter((t) => t.alertAt <= until)
+    .slice(-1)
+    .map((t) => ({ at: new Date(t.alertAt).toISOString(), text: SNAPSHOT_TAKEN }))
+}
+
+/**
+ * The hint zone around an unclaimed stash, for runners and chasers during a Full game's chase (jail design §4b).
+ * Its centre is the stash moved 30–80% of the radius in a direction seeded by the secret deck seed, so it never moves
+ * during the game, the stash is always well inside, and the centre never gives the spot away. No label.
+ */
+function legendaryZoneFor(i: ViewInput, phase: Phase): View['legendaryZone'] {
+  const s = placedStash(i.game.dato_stash)
+  if (i.game.settings.mode !== 'full' || phase !== 'chasing' || !s || s.claimedBy !== null) return null
+  if (i.me.role !== 'runner' && i.me.role !== 'chaser') return null
+  const h = hash(`${secretSeed(i.game)}:legendary-zone`)
+  const angle = ((h & 0xffff) / 0x10000) * 2 * Math.PI
+  const dist = (0.3 + ((h >>> 16) / 0x10000) * 0.5) * LEGENDARY_ZONE_M
+  const c = offset({ lat: s.lat, lng: s.lng }, dist, angle)
+  return { lat: c.lat, lng: c.lng, radiusM: LEGENDARY_ZONE_M }
+}
+
+/** The Settle picker's choices, the same eligibility `judgeSettle` applies. */
+function settleFor(i: ViewInput, phase: Phase): View['settle'] {
+  if (phase !== 'chasing' || i.game.paused_at || i.me.role !== 'runner' || !i.me.jailed) return null
+  const holds = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'dato' && u.used_at === null && !u.taken_at)
+  if (!holds) return null
+  const options = i.players
+    .filter((p) => p.role === 'runner' && p.jailed && p.id !== i.me.id && !p.removed_at)
+    .map((p) => ({ id: p.id, name: p.name, eligible: !p.freed_once }))
+  return { canFreeSelf: !i.me.freed_once, options }
 }
 
 function jailCheckinsFor(i: ViewInput, reason: View['jailReason']): View['jailCheckins'] {
@@ -393,6 +546,7 @@ function jailReasonFor(i: ViewInput): View['jailReason'] {
 }
 
 interface FeedContext {
+  meId: string
   side: 'runner' | 'chaser' | null
   freeNow: number
   jailedNow: number
@@ -431,6 +585,29 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
           'runner',
         )
       return null
+    case 'stolen': {
+      // The feed never says who stole or who lost; only the player who lost the card is told what it was.
+      const thief = e.data.kind === 'along' ? 'Ah Long' : 'Toyol'
+      if (e.target_id && e.target_id === ctx.meId) {
+        const taken = POWER_NAME[e.data.takenKind as PowerUpKind] as string | undefined
+        // Their own loss needs them: it buzzes and gets the needs-you outline in the ticker.
+        return { ...plain(`${thief} took your ${taken ?? 'power-up'}!`), act: true }
+      }
+      return plain(thief === 'Ah Long' ? 'Ah Long came to collect!' : 'Toyol stole a power-up!')
+    }
+    case 'legendary':
+      // Never the card's name or the finder's (jail design §4c, rules doc §9b).
+      return plain('Something legendary was found.')
+    case 'settled': {
+      // Visible to everyone, a lime-box line for Kejar, with the real count (rules doc §9c); still no card name.
+      const n = Number(e.data.freed ?? 0)
+      return two(
+        `Something legendary freed ${n} Dikejar!`,
+        'FREE',
+        ctx.jailedNow === 0 ? 'Penjara is empty again.' : `${ctx.jailedNow} still inside.`,
+        `${n} more Dikejar ${n === 1 ? 'is' : 'are'} loose near Penjara.`,
+      )
+    }
     case 'caught':
       if (!actor || !target) return plain('A Dikejar was caught.')
       return two(`${actor.name} caught ${tag}.`, 'CATCH', `${tag} is walking to Penjara. ${ctx.freeNow} Dikejar still free.`, `Nice. ${ctx.freeNow} Dikejar left to find.`)
@@ -507,7 +684,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, deckLeft: null, activePowerUp: null, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, settle: null, datoStash: undefined, datoCode: undefined, reports: [], ratings: [] }
   }
   return v
 }
@@ -542,6 +719,7 @@ function fullView(i: ViewInput): View {
 
   const runnersNow = i.players.filter((p) => p.role === 'runner')
   const feedContext: FeedContext = {
+    meId: i.me.id,
     side: i.me.role === 'runner' || i.me.role === 'chaser' ? i.me.role : null,
     freeNow: runnersNow.filter((p) => !p.jailed).length,
     jailedNow: runnersNow.filter((p) => p.jailed).length,
@@ -552,7 +730,7 @@ function fullView(i: ViewInput): View {
       const line = feedLine(e, byId, feedContext)
       return line ? [{ at: e.at, ...line }] : []
     }),
-    ...notes.map((n) => ({ ...n, means: null, act: false, label: null })),
+    ...[...notes, ...snapshotLines(i, phase, endsAt)].map((n) => ({ ...n, means: null, act: false, label: null })),
   ]
     .map((entry, order) => ({ entry, order }))
     .sort((a, b) => Date.parse(b.entry.at) - Date.parse(a.entry.at) || b.order - a.order)
@@ -585,12 +763,14 @@ function fullView(i: ViewInput): View {
       return shield?.used_at ? Date.parse(shield.used_at) + SHIELD_MS : null
     })(),
     flareReadyAt: (() => {
-      const holding = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'flare' && u.used_at === null)
+      const holding = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'flare' && u.used_at === null && !u.taken_at)
       const blocked = holding ? flareBlocked(i.pings, i.now) : null
       return blocked ? i.now + blocked.readyInMs : null
     })(),
     jailCheckins: jailCheckinsFor(i, jailReasonFor(i)),
     checkin: checkinFor(i, phase),
+    chaserSnapshot: chaserSnapshotFor(i),
+    snapshotted: snapshottedFor(i, phase),
     feed,
     counts: {
       runnersFree: runners.filter((p) => !p.jailed).length,
@@ -603,13 +783,18 @@ function fullView(i: ViewInput): View {
     reports: postGameReportsFor(i),
     ratings: ratingsFor(i),
     stations: (i.game.arena.stations ?? []).map((s, k) => ({ n: k + 1, lat: s.lat, lng: s.lng })),
-    hand: i.powerUps.filter((u) => u.player_id === i.me.id && u.used_at === null),
+    // `!taken_at`, not `=== null`: a row read before migration 0011 has no taken_at at all (undefined).
+    hand: i.powerUps.filter((u) => u.player_id === i.me.id && u.used_at === null && !u.taken_at),
     shieldActive: activeShield(i.powerUps, i.me.id, i.now) !== null,
     deckLeft: deckLeftFor(i),
     activePowerUp: (() => {
       const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now)
       return busy?.running ? busy.kind : null
     })(),
+    legendaryZone: legendaryZoneFor(i, phase),
+    settle: settleFor(i, phase),
+    // The card's secret code goes only to marshals and the organiser, who print the card (ruling R15).
+    ...(role === 'marshal' ? { datoStash: placedStash(i.game.dato_stash), datoCode: i.game.dato_stash?.code ?? null } : {}),
     results: i.results,
   }
 }

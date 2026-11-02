@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Role } from '../../shared/types.js'
 import { call } from '../game/api'
 import { AlertsOnPhone } from '../game/MarshalTools'
-import SetupMap from '../game/SetupMap'
+import SetupMap, { HiddenCard } from '../game/SetupMap'
 import { loadOrganiserSession } from '../game/organiserSession'
 import { qrDataUrl } from '../game/qr'
 import { ErrorText, ModeBadge, Pills, Screen, tagText } from '../game/ui'
@@ -95,6 +95,8 @@ export default function HostLobby({ code }: { code: string }) {
           </p>
         </div>
       </div>
+      {/* Below the join card, closed by default: players look at this screen to scan the join code. */}
+      {view && <HiddenCard view={view} code={code} credentials={{ organiserToken: organiser.organiserToken }} refresh={refresh} />}
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <button className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={inviteMarshal}>

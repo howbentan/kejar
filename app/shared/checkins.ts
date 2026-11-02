@@ -14,6 +14,19 @@ export function checkedIn(alertAt: number, revealAt: number, lastAt: number | nu
   return lastAt !== null && lastAt >= alertAt && lastAt <= revealAt
 }
 
+/**
+ * Check-ins only count from the chase start or the runner's last release, whichever is later
+ * (checkins design §4.4).
+ */
+export function checkinsSince(chaseStart: number, freedAt: string | null): number {
+  return Math.max(chaseStart, freedAt ? Date.parse(freedAt) : -Infinity)
+}
+
+/** A check-in that counts: the ping's alert went out at or after `since`, and a location landed in its window. */
+export function countedCheckIn(alertAt: number, revealAt: number, lastAt: number | null, since: number): boolean {
+  return alertAt >= since && checkedIn(alertAt, revealAt, lastAt)
+}
+
 export interface ScheduledCheckin {
   alertAt: number
   revealAt: number

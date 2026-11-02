@@ -1,11 +1,11 @@
 import { useCallback } from 'react'
 import type { CatchJudgement } from '../../shared/catch.js'
-import { stationFromQr, tagIdFromQr } from '../../shared/ids.js'
+import { isDatoQr, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import type { View } from '../../shared/views.js'
 import CatchMoment from '../game/CatchMoment'
 import ChaseLayout from '../game/ChaseLayout'
 import { dipFor } from '../game/LuckyDip'
-import PowerUpHand, { claimMessage, type ClaimResult } from '../game/PowerUpHand'
+import PowerUpHand, { claimMessage, stashMessage, type ClaimResult } from '../game/PowerUpHand'
 import { clock, useServerNow } from '../game/time'
 
 const REJECTIONS: Record<string, string> = {
@@ -41,7 +41,11 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
 
   const describe = useCallback(
     (s: { action: string }, text: string, r: unknown) =>
-      s.action === 'catch' ? catchMessage(text, r as CatchJudgement) : claimMessage(r as ClaimResult, stationFromQr(text)),
+      s.action === 'catch'
+        ? catchMessage(text, r as CatchJudgement)
+        : isDatoQr(text)
+          ? stashMessage(r as ClaimResult)
+          : claimMessage(r as ClaimResult, stationFromQr(text)),
     [],
   )
 
@@ -61,7 +65,13 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
       view={view}
       side="chaser"
       title={`KEJAR · ${view.me.name.toUpperCase()}`}
-      chips={chip && <span className="chip mono">{chip}</span>}
+      chips={
+        <>
+          {chip && <span className="chip mono">{chip}</span>}
+          {/* From a scheduled alert until that ping reveals (checkins design §5.4); it says what, never how long. */}
+          {view.snapshotted && <span className="chip snap">SNAPSHOT TAKEN</span>}
+        </>
+      }
       slot={<PowerUpHand code={code} view={view} />}
       scanLabel="Scan tag"
       scanClass="scan-chaser"

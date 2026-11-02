@@ -310,12 +310,13 @@ export default function HostNew() {
               { value: 'core', text: 'Core' },
               { value: 'full', text: 'Full' },
             ]}
-            onChange={(v) => set({ mode: v })}
+            // The check-in switch is Full only (rules §3): back to Core turns it off.
+            onChange={(v) => set(v === 'core' ? { mode: v, chaserSnapshot: false } : { mode: v })}
           />
         </div>
         <p className="muted" style={{ marginTop: -4 }}>
           {settings.mode === 'full'
-            ? 'Everything in Core, plus Gostan and more power-ups as they arrive. For regulars.'
+            ? 'Everything in Core, plus Gostan, Toyol, Ah Long and Abang Grab: more power-ups, and ways to steal them. For regulars.'
             : 'The chase, check-ins and Penjara, plus 4 simple power-ups. Best for first-timers.'}
         </p>
         <NumberField label="Game length (min)" value={settings.lengthMin} min={15} max={90} onChange={(n) => set({ lengthMin: n })} />
@@ -352,6 +353,20 @@ export default function HostNew() {
             onChange={(v) => set({ checkinMode: v })}
           />
         </div>
+        {settings.mode === 'full' && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Dikejar can see Kejar at check-in</span>
+            <Pills<'off' | 'on'>
+              label="Dikejar can see Kejar at check-in"
+              value={settings.chaserSnapshot ? 'on' : 'off'}
+              options={[
+                { value: 'off', text: 'Off' },
+                { value: 'on', text: 'On' },
+              ]}
+              onChange={(v) => set({ chaserSnapshot: v === 'on' })}
+            />
+          </div>
+        )}
       </div>
 
       <ErrorText>{error}</ErrorText>

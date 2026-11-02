@@ -4,7 +4,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const call = vi.hoisted(() => vi.fn())
 const scanned = vi.hoisted(() => ({ text: '' }))
 vi.mock('../game/api', () => ({ call, ApiError: class extends Error {} }))
-vi.mock('../game/Map', () => ({ default: () => <div data-testid="map" /> }))
+const mapProps = vi.hoisted(() => ({ last: null as null | { legendaryZone?: unknown } }))
+vi.mock('../game/Map', () => ({
+  default: (p: { legendaryZone?: unknown }) => {
+    mapProps.last = p
+    return <div data-testid="map" />
+  },
+}))
 vi.mock('../game/here', () => ({ currentCoords: async () => ({}) }))
 vi.mock('../game/Scanner', () => ({
   default: ({ onResult }: { onResult: (t: string) => void }) => (
@@ -73,6 +79,29 @@ describe('ChaserChase', () => {
     await scan('KEJAR:STATION:1')
     expect(call).toHaveBeenCalledWith('claim', { code: 'ABC234', token: 't1', qr: 'KEJAR:STATION:1' })
     expect(screen.getByText('Got Mat Rempit ✓')).toBeInTheDocument()
+  })
+
+  it('shows SNAPSHOT TAKEN while snapshotted, promising nothing about how long', () => {
+    const { rerender } = render(<ChaserChase code="ABC234" view={{ ...chaser(), snapshotted: true }} refresh={() => {}} />)
+    const pill = screen.getByText('SNAPSHOT TAKEN')
+    expect(pill).toHaveClass('chip', 'snap')
+    expect(document.body.textContent).not.toMatch(/until|next alert/i)
+    rerender(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    expect(screen.queryByText('SNAPSHOT TAKEN')).toBeNull()
+  })
+
+  it('a chaser scanning the hidden stash card gets a plain refusal, no reveal', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'cannot-claim' })
+    render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    await scan('KEJAR:DATO')
+    expect(call).toHaveBeenCalledWith('claim', expect.objectContaining({ qr: 'KEJAR:DATO' }))
+    expect(screen.getByText('Nothing here.')).toBeInTheDocument()
+  })
+
+  it('the ? zone shows on the chaser map too', () => {
+    const legendaryZone = { lat: 3, lng: 101, radiusM: 150 }
+    render(<ChaserChase code="ABC234" view={{ ...chaser(), legendaryZone }} refresh={() => {}} />)
+    expect(mapProps.last?.legendaryZone).toEqual(legendaryZone)
   })
 
   it('Scan tag with the Penjara code says so and calls nothing', async () => {

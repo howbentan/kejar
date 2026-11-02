@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const created = vi.hoisted(() => ({
@@ -8,9 +8,29 @@ const created = vi.hoisted(() => ({
   load: null as null | (() => void),
   layers: [] as { id: string; source: string }[],
   data: {} as Record<string, unknown>,
+  markers: [] as { el: HTMLElement; lngLat?: number[]; removed: boolean }[],
 }))
+const reduce = vi.hoisted(() => ({ on: false }))
+vi.mock('motion/react', async (orig) => ({ ...(await orig<typeof import('motion/react')>()), useReducedMotion: () => reduce.on }))
 vi.mock('maplibre-gl', () => ({
   default: {
+    Marker: class {
+      rec: { el: HTMLElement; lngLat?: number[]; removed: boolean }
+      constructor(o: { element: HTMLElement }) {
+        this.rec = { el: o.element, removed: false }
+        created.markers.push(this.rec)
+      }
+      setLngLat(l: number[]) {
+        this.rec.lngLat = l
+        return this
+      }
+      addTo() {
+        return this
+      }
+      remove() {
+        this.rec.removed = true
+      }
+    },
     Map: class {
       constructor() {
         created.count++
@@ -228,5 +248,112 @@ describe('GameMap', () => {
     await new Promise((r) => setTimeout(r, 1_300))
     rerender(<GameMap arena={arena} dots={[...dots]} />)
     expect(created.data.points).toMatchObject({ features: [] })
+  })
+
+  describe("the chasers' snapshot on a runner's map", () => {
+    const layer = (id: string) => created.layers.find((l) => l.id === id) as unknown as { paint: Record<string, unknown>; filter?: unknown }
+    const snap = {
+      positions: [
+        { name: 'Ben', lat: 3.01, lng: 101.01, stale: false },
+        { name: 'Siti', lat: 3.02, lng: 101.02, stale: true },
+      ],
+    }
+
+    it('draws a labelled 30 m circle per chaser, dashed when stale, and changes only with the prop', () => {
+      created.layers = []
+      created.data = {}
+      const { rerender } = render(<GameMap arena={arena} dots={[]} snapshot={snap} />)
+      act(() => created.load!())
+      const features = (created.data.snapshot as { features: { properties: Record<string, unknown>; geometry: { type: string; coordinates: number[][][] } }[] }).features
+      expect(features.map((f) => f.properties)).toEqual([
+        { label: 'Ben', stale: false },
+        { label: 'Siti', stale: true },
+      ])
+      expect(features[0].geometry.type).toBe('Polygon')
+      // Radius ~30 m: the ring's first point is about 30 m from the centre.
+      const [lng, lat] = features[0].geometry.coordinates[0][0]
+      const m = Math.hypot((lat - 3.01) * 111_320, (lng - 101.01) * 111_320 * Math.cos((3.01 * Math.PI) / 180))
+      expect(m).toBeGreaterThan(27)
+      expect(m).toBeLessThan(33)
+      expect(layer('snapshot-stale').paint['line-dasharray']).toBeTruthy()
+      expect(layer('snapshot-line').paint['line-dasharray']).toBeUndefined()
+      const before = created.data.snapshot
+      rerender(<GameMap arena={arena} dots={[{ id: 'x', kind: 'me', lat: 3, lng: 101, at: '', revealedBy: null }]} snapshot={{ ...snap }} />)
+      expect(created.data.snapshot).toBe(before)
+      rerender(<GameMap arena={arena} dots={[]} snapshot={null} />)
+      expect(created.data.snapshot).toMatchObject({ features: [] })
+    })
+
+    it("the organiser's stash pin is legendary yellow at the exact spot", () => {
+      created.layers = []
+      created.data = {}
+      const { rerender } = render(<GameMap arena={arena} dots={[]} stash={{ lat: 3.03, lng: 101.03 }} />)
+      act(() => created.load!())
+      expect(created.data.stash).toMatchObject({ features: [{ geometry: { type: 'Point', coordinates: [101.03, 3.03] } }] })
+      expect(layer('stash').paint['circle-color']).toBe('#FFD60A')
+      rerender(<GameMap arena={arena} dots={[]} stash={null} />)
+      expect(created.data.stash).toMatchObject({ features: [] })
+    })
+  })
+
+  describe("Dato Seri's hint zone", () => {
+    const zone = { lat: 3.1, lng: 101.1, radiusM: 150 }
+    const layer = (id: string) => created.layers.find((l) => l.id === id) as unknown as { paint: Record<string, unknown>; layout?: Record<string, unknown> }
+
+    it('is a dashed legendary-yellow circle, never lime, with an unlabelled ? marker', () => {
+      created.layers = []
+      created.data = {}
+      created.markers = []
+      render(<GameMap arena={arena} dots={[]} legendaryZone={zone} />)
+      act(() => created.load!())
+      expect(layer('legendary-line').paint['line-color']).toBe('#FFD60A')
+      expect(layer('legendary-line').paint['line-dasharray']).toBeTruthy()
+      for (const id of ['legendary-fill', 'legendary-line']) expect(JSON.stringify(layer(id).paint)).not.toMatch(/C6FF3D/i)
+      expect(created.data.legendary).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
+      const mk = created.markers.at(-1)!
+      expect(mk.lngLat).toEqual([101.1, 3.1])
+      expect(mk.el.textContent).toBe('?')
+      expect(mk.el).toHaveAttribute('aria-hidden', 'true')
+      expect(mk.el.getAttribute('title')).toBeNull()
+      // Secret (§4c): nothing in the zone names it.
+      expect(JSON.stringify(created.data.legendary) + mk.el.outerHTML.replace(/legendary-/g, '')).not.toMatch(/dato|legendary|seri/i)
+    })
+
+    it('draws nothing with no zone, and follows the prop when it appears and goes', () => {
+      created.layers = []
+      created.data = {}
+      const { rerender } = render(<GameMap arena={arena} dots={[]} />)
+      act(() => created.load!())
+      expect(created.data.legendary).toMatchObject({ features: [] })
+      rerender(<GameMap arena={arena} dots={[]} legendaryZone={zone} />)
+      expect(created.data.legendary).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
+      rerender(<GameMap arena={arena} dots={[]} legendaryZone={null} />)
+      expect(created.data.legendary).toMatchObject({ features: [] })
+    })
+
+    it('is animated by CSS only; reduced motion marks it still, also when it flips mid-session', () => {
+      created.layers = []
+      created.data = {}
+      created.markers = []
+      reduce.on = false
+      const { rerender } = render(<GameMap arena={arena} dots={[]} legendaryZone={zone} />)
+      act(() => created.load!())
+      expect(created.markers.at(-1)!.el.dataset.still).toBeUndefined()
+      reduce.on = true
+      rerender(<GameMap arena={arena} dots={[]} legendaryZone={{ ...zone }} />)
+      const first = created.markers[0]
+      expect(first.removed).toBe(true)
+      expect(created.markers.at(-1)!.el.dataset.still).toBe('true')
+      expect(layer('legendary-line').paint['line-color']).toBe('#FFD60A')
+      reduce.on = false
+    })
+
+    it('removes the marker when the zone goes', () => {
+      created.markers = []
+      const { rerender } = render(<GameMap arena={arena} dots={[]} legendaryZone={zone} />)
+      act(() => created.load!())
+      rerender(<GameMap arena={arena} dots={[]} legendaryZone={null} />)
+      expect(created.markers.every((m) => m.removed)).toBe(true)
+    })
   })
 })

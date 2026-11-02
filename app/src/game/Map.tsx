@@ -3,9 +3,10 @@ import maplibregl, { type GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useEffect, useRef, useState } from 'react'
 import * as m from 'motion/react-m'
+import { useReducedMotion } from 'motion/react'
 import { circlePolygon, distanceM } from '../../shared/geo.js'
 import type { Arena, LatLng } from '../../shared/types.js'
-import { FUZZ_RADIUS_M, type MapDot } from '../../shared/views.js'
+import { CHASER_SNAPSHOT_FUZZ_M, FUZZ_RADIUS_M, type ChaserSnapshot, type MapDot } from '../../shared/views.js'
 import { kejarMapStyle } from './mapStyle'
 import { RIPPLE_MS } from './ripple'
 import { SlideTracker } from './slideOff'
@@ -13,6 +14,18 @@ import { SlideTracker } from './slideOff'
 const VOLT = '#C6FF3D'
 const WHITE = '#F5F5F3'
 const BLACK = '#0A0A0B'
+
+type LegendaryZone = { lat: number; lng: number; radiusM: number }
+
+/**
+ * Dato Seri's yellow. MapLibre can't read CSS variables, so read tokens.css --legendary-1/2/3 and --legendary-ink
+ * once; the fallback hex values mirror those tokens (#FFF27A, #FFD60A, #F5B800, #1A1400) and must change with them.
+ */
+function legendaryYellow() {
+  const css = typeof document === 'undefined' ? null : getComputedStyle(document.documentElement)
+  const token = (name: string, fallback: string) => css?.getPropertyValue(name).trim() || fallback
+  return { fill: token('--legendary-1', '#FFF27A'), main: token('--legendary-2', '#FFD60A'), deep: token('--legendary-3', '#F5B800'), ink: token('--legendary-ink', '#1A1400') }
+}
 
 type Feature = GeoFeature<Geometry, Record<string, unknown>>
 const collection = (features: Feature[]): FeatureCollection => ({ type: 'FeatureCollection', features })
@@ -65,6 +78,29 @@ function pinFeatures(pins: Pin[]): FeatureCollection {
   )
 }
 
+/** The chasers frozen at a check-in's alert (checkins design §5): a 30 m circle each, labelled, dashed when stale. */
+function snapshotFeatures(s: ChaserSnapshot | null): FeatureCollection {
+  return collection(
+    (s?.positions ?? []).map((p) => ({
+      type: 'Feature',
+      properties: { label: p.name, stale: p.stale },
+      geometry: { type: 'Polygon', coordinates: [ring(circlePolygon(p, CHASER_SNAPSHOT_FUZZ_M))] },
+    })),
+  )
+}
+
+/** Exactly where the stash is: the organiser's and marshals' setup map only (jail design §4b). */
+function stashFeatures(s: LatLng | null): FeatureCollection {
+  return collection(s ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [s.lng, s.lat] } }] : [])
+}
+
+/** The hint zone's circle (no names anywhere: secret, jail design §4c). */
+function zoneFeatures(z: LegendaryZone | null) {
+  return {
+    zone: collection(z ? [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring(circlePolygon(z, z.radiusM))] } }] : []),
+  }
+}
+
 function routeFeatures(route: { from: LatLng; to: LatLng } | null) {
   if (!route) return collection([])
   return collection([
@@ -96,6 +132,9 @@ export default function GameMap({
   ripple = null,
   showJailAndStart = true,
   fit = null,
+  legendaryZone = null,
+  snapshot = null,
+  stash = null,
 }: {
   arena: Arena
   dots: MapDot[]
@@ -119,7 +158,21 @@ export default function GameMap({
    * Re-framed as they move, without rebuilding the map.
    */
   fit?: LatLng[] | null
+  /** Dato Seri's hint zone: a dashed yellow circle with a twinkling ? and a slow ripple, never a name (jail design §4a, §4c). */
+  legendaryZone?: LegendaryZone | null
+  /** Runners: where the chasers were at their last check-in's alert. Frozen: redrawn only when it changes. */
+  snapshot?: ChaserSnapshot | null
+  /** Organiser and marshals before the start: the exact spot Dato Seri's card was dropped, as a yellow pin. */
+  stash?: LatLng | null
 }) {
+  const reduce = useReducedMotion()
+  const [loaded, setLoaded] = useState(false)
+  const latestZone = useRef(legendaryZone)
+  latestZone.current = legendaryZone
+  const latestSnapshot = useRef(snapshot)
+  latestSnapshot.current = snapshot
+  const latestStash = useRef(stash)
+  latestStash.current = stash
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
   const ready = useRef(false)
@@ -203,6 +256,13 @@ export default function GameMap({
         source: 'holes',
         paint: { 'line-color': WHITE, 'line-width': 1.2, 'line-opacity': 0.6, 'line-dasharray': [2, 2] },
       })
+      // Dato Seri's hint zone sits under the players and station marks. Unlabelled on purpose.
+      const y = legendaryYellow()
+      const zone = zoneFeatures(latestZone.current)
+      m.addSource('legendary', { type: 'geojson', data: zone.zone })
+      m.addLayer({ id: 'legendary-fill', type: 'fill', source: 'legendary', paint: { 'fill-color': y.main, 'fill-opacity': 0.12 } })
+      m.addLayer({ id: 'legendary-line', type: 'line', source: 'legendary', paint: { 'line-color': y.main, 'line-width': 2, 'line-dasharray': [2, 2] } })
+      // The ? badge and its ripple are an HTML marker animated by CSS (the compositor), so the map idles.
       m.addSource('toilets', {
         type: 'geojson',
         data: collection(
@@ -235,6 +295,37 @@ export default function GameMap({
           paint: { 'text-color': WHITE },
         })
       }
+      // The chaser snapshot: lime like the chasers' own dots, under the live dots.
+      m.addSource('snapshot', { type: 'geojson', data: snapshotFeatures(latestSnapshot.current) })
+      m.addLayer({ id: 'snapshot-fill', type: 'fill', source: 'snapshot', paint: { 'fill-color': VOLT, 'fill-opacity': 0.1 } })
+      m.addLayer({
+        id: 'snapshot-line',
+        type: 'line',
+        source: 'snapshot',
+        filter: ['!', ['get', 'stale']],
+        paint: { 'line-color': VOLT, 'line-width': 1.2 },
+      })
+      m.addLayer({
+        id: 'snapshot-stale',
+        type: 'line',
+        source: 'snapshot',
+        filter: ['get', 'stale'],
+        paint: { 'line-color': VOLT, 'line-width': 1.2, 'line-dasharray': [2, 2] },
+      })
+      m.addLayer({
+        id: 'snapshot-labels',
+        type: 'symbol',
+        source: 'snapshot',
+        layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 11 },
+        paint: { 'text-color': VOLT, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
+      })
+      m.addSource('stash', { type: 'geojson', data: stashFeatures(latestStash.current) })
+      m.addLayer({
+        id: 'stash',
+        type: 'circle',
+        source: 'stash',
+        paint: { 'circle-radius': 9, 'circle-color': y.main, 'circle-stroke-color': y.deep, 'circle-stroke-width': 2 },
+      })
       m.addSource('stations', { type: 'geojson', data: stationFeatures(latestStations.current) })
       m.addLayer({
         id: 'stations',
@@ -306,9 +397,11 @@ export default function GameMap({
       })
       fitTo(m, latestFit.current)
       ready.current = true
+      setLoaded(true)
     })
     return () => {
       ready.current = false
+      setLoaded(false)
       m.remove()
       map.current = null
     }
@@ -320,11 +413,43 @@ export default function GameMap({
     ;(map.current.getSource('stations') as GeoJSONSource | undefined)?.setData(stationFeatures(latestStations.current))
   }, [stationKey])
 
+  const snapshotKey = JSON.stringify(snapshot)
+  useEffect(() => {
+    if (!ready.current || !map.current) return
+    ;(map.current.getSource('snapshot') as GeoJSONSource | undefined)?.setData(snapshotFeatures(latestSnapshot.current))
+  }, [snapshotKey])
+
+  const stashKey = JSON.stringify(stash)
+  useEffect(() => {
+    if (!ready.current || !map.current) return
+    ;(map.current.getSource('stash') as GeoJSONSource | undefined)?.setData(stashFeatures(latestStash.current))
+  }, [stashKey])
+
   const routeKey = JSON.stringify(route)
   useEffect(() => {
     if (!ready.current || !map.current) return
     ;(map.current.getSource('route') as GeoJSONSource | undefined)?.setData(routeFeatures(latestRoute.current))
   }, [routeKey])
+
+  // The hint zone follows the prop. Its ?-badge is an HTML marker whose twinkle and ripple are pure CSS; under
+  // reduced motion (rebuilt if that flips mid-session) it is simply marked still.
+  const zoneKey = JSON.stringify(legendaryZone)
+  useEffect(() => {
+    const mp = map.current
+    if (!ready.current || !mp) return
+    ;(mp.getSource('legendary') as GeoJSONSource | undefined)?.setData(zoneFeatures(latestZone.current).zone)
+    const z = latestZone.current
+    if (!z) return
+    const el = document.createElement('div')
+    el.className = 'legendary-marker'
+    el.setAttribute('aria-hidden', 'true')
+    if (reduce) el.dataset.still = 'true'
+    el.innerHTML = '<i class="legendary-ring"></i><b>?</b>'
+    const marker = new maplibregl.Marker({ element: el }).setLngLat([z.lng, z.lat]).addTo(mp)
+    return () => {
+      marker.remove()
+    }
+  }, [zoneKey, reduce, loaded])
 
   const fitKey = JSON.stringify(fit)
   useEffect(() => {

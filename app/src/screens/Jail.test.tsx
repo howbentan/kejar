@@ -1,8 +1,19 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../game/api', () => ({ call: vi.fn(), ApiError: class extends Error {} }))
+const call = vi.hoisted(() => vi.fn())
+const scanned = vi.hoisted(() => ({ text: '' }))
+vi.mock('../game/api', () => ({ call, ApiError: class extends Error {} }))
 vi.mock('../game/Map', () => ({ default: () => null }))
+const here = vi.hoisted(() => ({ coords: { lat: 3, lng: 101, accuracy_m: 5 } as Record<string, number> }))
+vi.mock('../game/here', () => ({ currentCoords: async () => here.coords }))
+vi.mock('../game/Scanner', () => ({
+  default: ({ onResult }: { onResult: (t: string) => void }) => (
+    <button type="button" onClick={() => onResult(scanned.text)}>
+      fake camera
+    </button>
+  ),
+}))
 import { ARRIVAL_MS } from '../game/PenjaraArrival'
 import Jail from './Jail'
 import { testView } from './testView'
@@ -19,6 +30,107 @@ const caught = (ago: number, over: Partial<ReturnType<typeof testView>['me']> = 
   const view = testView({ caughtBy: 'Ben', jailReason: 'caught' })
   return { ...view, me: { ...view.me, jailed: true, caught_by: 'c1', caught_at: new Date(100_000 - ago).toISOString(), ...over } }
 }
+
+describe('Settle at Penjara (jail design §4b, §4d)', () => {
+  const settle = {
+    canFreeSelf: true,
+    options: [
+      { id: 'r2', name: 'Hafiz', eligible: true },
+      { id: 'r3', name: 'Wei', eligible: true },
+      { id: 'r4', name: 'Siti', eligible: true },
+      { id: 'r5', name: 'Amir', eligible: false },
+    ],
+  }
+  const holder = (over: Partial<NonNullable<ReturnType<typeof testView>['settle']>> = {}) => ({ ...caught(60_000), settle: { ...settle, ...over } })
+  beforeEach(() => {
+    call.mockReset()
+    here.coords = { lat: 3, lng: 101, accuracy_m: 5 }
+    localStorage.setItem('kejar.game.ABC234', JSON.stringify({ token: 't1' }))
+  })
+  afterEach(() => localStorage.clear())
+  const scan = async (text: string) => {
+    scanned.text = text
+    fireEvent.click(screen.getByRole('button', { name: 'Scan Penjara to settle' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'fake camera' })))
+  }
+
+  it('is only there for a jailed holder', () => {
+    render(<Jail code="ABC234" view={caught(60_000)} />)
+    expect(screen.queryByRole('heading', { name: 'Settle' })).toBeNull()
+  })
+
+  it('lists the others in Penjara: eligible ones tappable, the rest greyed with why, up to 2 picks', () => {
+    render(<Jail code="ABC234" view={holder()} />)
+    expect(screen.getByRole('heading', { name: 'Settle' })).toBeInTheDocument()
+    const amir = screen.getByRole('checkbox', { name: /Amir/ })
+    expect(amir).toBeDisabled()
+    expect(screen.getByText('Already escaped once')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Hafiz' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Wei' }))
+    expect(screen.getByRole('checkbox', { name: 'Siti' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Wei' }))
+    expect(screen.getByRole('checkbox', { name: 'Siti' })).not.toBeDisabled()
+  })
+
+  it('scanning the Penjara code settles with the picks and the location, then names who is free', async () => {
+    call.mockResolvedValue({ ok: true, freedIds: ['r1', 'r2', 'r3'] })
+    render(<Jail code="ABC234" view={holder()} />)
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Hafiz' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Wei' }))
+    await scan('KEJAR:JAIL')
+    expect(call).toHaveBeenCalledWith('settle', {
+      code: 'ABC234',
+      token: 't1',
+      qr: 'KEJAR:JAIL',
+      targetIds: ['r2', 'r3'],
+      lat: 3,
+      lng: 101,
+      accuracy_m: 5,
+    })
+    expect(screen.getByText('Settled! You, Hafiz and Wei are free.')).toBeInTheDocument()
+    // Done: no second scan can overwrite it.
+    expect(screen.queryByRole('button', { name: 'Scan Penjara to settle' })).toBeNull()
+    expect(screen.getAllByRole('checkbox').every((c) => (c as HTMLInputElement).disabled)).toBe(true)
+  })
+
+  it('"You" is only ever the holder; an unknown freed id is never called You', async () => {
+    call.mockResolvedValue({ ok: true, freedIds: ['r2', 'zz'] })
+    render(<Jail code="ABC234" view={holder({ canFreeSelf: false })} />)
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Hafiz' }))
+    await scan('KEJAR:JAIL')
+    expect(screen.getByText('Settled! Hafiz and 1 more are free.')).toBeInTheDocument()
+  })
+
+  it('with no location fix, sends nothing and says to turn location on', async () => {
+    here.coords = {}
+    render(<Jail code="ABC234" view={holder()} />)
+    await scan('KEJAR:JAIL')
+    expect(call).not.toHaveBeenCalled()
+    expect(screen.getByText('Turn on location, then scan the Penjara code again')).toBeInTheDocument()
+  })
+
+  it("scanning anything else isn't a settle", async () => {
+    render(<Jail code="ABC234" view={holder()} />)
+    await scan('KEJAR:STATION:1')
+    expect(call).not.toHaveBeenCalled()
+    expect(screen.getByText("That's not the Penjara code")).toBeInTheDocument()
+  })
+
+  it('a holder already freed once is told, and needs to pick someone', () => {
+    render(<Jail code="ABC234" view={holder({ canFreeSelf: false })} />)
+    expect(screen.getByText("You've already escaped once — Settle can still free others")).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Scan Penjara to settle' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Hafiz' }))
+    expect(screen.getByRole('button', { name: 'Scan Penjara to settle' })).not.toBeDisabled()
+  })
+
+  it('a refusal is plain words', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'too-far-from-jail' })
+    render(<Jail code="ABC234" view={holder()} />)
+    await scan('KEJAR:JAIL')
+    expect(screen.getByText('Get within 30 m of Penjara')).toBeInTheDocument()
+  })
+})
 
 describe('Jail', () => {
   it('a fresh catch lands the bars and the stamp, then says who got you', () => {

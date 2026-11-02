@@ -12,18 +12,18 @@ import {
   type ReportReason,
   type SosReason,
 } from '../../shared/alerts.js'
-import { autoJailDue, checkedIn } from '../../shared/checkins.js'
+import { autoJailDue, checkinsSince, countedCheckIn } from '../../shared/checkins.js'
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
-import { judgeCatch, judgeJailbreak } from '../../shared/catch.js'
+import { judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
-import { JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
-import { activeShield, flareBlocked, judgeClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
+import { datoCodeFromQr, isDatoQr, JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
+import { activeShield, flareBlocked, judgeClaim, judgeDatoClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { computeResults } from '../../shared/results.js'
 import { validateTeams } from '../../shared/teams.js'
-import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type Role, type Settings } from '../../shared/types.js'
-import { viewFor, latestAtOrBefore } from '../../shared/views.js'
+import { DEFAULT_SETTINGS, type Arena, type DatoStash, type Game, type LatLng, type Player, type Position, type PowerUpKind, type Role, type Settings } from '../../shared/types.js'
+import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
 import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
 import { MARSHAL_INVITE_TTL_MS, ORGANISER_INVITE_TTL_MS } from '../../shared/invites.js'
@@ -167,6 +167,9 @@ function settingsFrom(input: unknown): Settings {
   if (!inRange(s.spectatorDelayMin, 0, 5)) throw new ActionError(400, 'Spectator delay must be 0–5 minutes')
   if (s.checkinMode !== 'push' && s.checkinMode !== 'schedule') throw new ActionError(400, 'Unknown check-in mode')
   if (s.mode !== 'core' && s.mode !== 'full') throw new ActionError(400, 'Unknown game mode')
+  if (typeof s.chaserSnapshot !== 'boolean') throw new ActionError(400, 'Chaser snapshot must be on or off')
+  // The check-in switch is a Full-mode extra: always off in Core (rules §3).
+  if (s.mode === 'core') s.chaserSnapshot = false
   return s
 }
 
@@ -194,6 +197,30 @@ async function recordScanLocation(ctx: Ctx, game: Game, me: Player, body: Body) 
 }
 
 const latest = (list: Position[] | undefined) => (list && list.length ? list[list.length - 1] : null)
+
+const lastAtOf = (list: Position[] | undefined, t: number) => {
+  const at = latestAtOrBefore(list, t)
+  return at ? Date.parse(at.at) : null
+}
+
+/**
+ * A free runner's chaser snapshot needs the chasers as of one more moment: the alert of the last scheduled
+ * ping they checked into (checkins design §5). Loads just that moment, only when it isn't already loaded.
+ */
+async function withSnapshotMoment(ctx: Ctx, input: SnapshotInput, times: string[]): Promise<Record<string, Position[]>> {
+  const w = snapshotWindow(input)
+  // Cost: one extra latest_positions call (one RPC) on most polls by a free runner with the switch on, since
+  // the view's usual moments never include an alert; folding it into viewTimes would cost the same RPC for every viewer.
+  if (!w || times.includes(iso(w.alertAt))) return input.positions
+  const extra = await ctx.store.latestPositions(input.game.id, [iso(w.alertAt)])
+  const out: Record<string, Position[]> = { ...input.positions }
+  for (const [id, list] of Object.entries(extra)) {
+    const merged = [...(out[id] ?? [])]
+    for (const p of list) if (!merged.some((x) => x.at === p.at)) merged.push(p)
+    out[id] = merged.sort((a, b) => a.at.localeCompare(b.at))
+  }
+  return out
+}
 
 /** Brings the game up to date: chase start, alerts, reveals and the end. Safe to call from many pages at once. */
 async function advance(ctx: Ctx, game: Game): Promise<void> {
@@ -237,8 +264,26 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
         .map((u) => u.player_id),
     )
     const seen = free.filter((p) => !cloaked.has(p.id) && (positions[p.id] ?? []).length > 0).length
+    // The count starts fresh at each runner's own last release (checkins design §4.4).
+    const sinceFor = (p: Player) => checkinsSince(chaseStartOf(game, now)!, p.freed_at)
+    // With the chaser-snapshot switch on, a scheduled reveal records who checked in (a location inside its
+    // 45 s window, counted under the same release rule as auto-jail), so a runner's view can find the last
+    // window they checked into without loading every reveal's positions (checkins design §5.4).
+    const scheduled = seq < BONUS_SEQ_BASE ? pingTimes(game, now).find((t) => t.seq === seq) : undefined
+    const checkedInIds =
+      game.settings.chaserSnapshot === true && scheduled
+        ? free
+            .filter((p) => countedCheckIn(scheduled.alertAt, scheduled.revealAt, lastAtOf(positions[p.id], scheduled.revealAt), sinceFor(p)))
+            .map((p) => p.id)
+        : null
     // Cloaked runners count as missed, matching what chasers see on the map.
-    await store.addEvent({ game_id: game.id, type: 'ping', actor_id: null, target_id: null, data: { seq, seen, missed: free.length - seen } })
+    await store.addEvent({
+      game_id: game.id,
+      type: 'ping',
+      actor_id: null,
+      target_id: null,
+      data: { seq, seen, missed: free.length - seen, ...(checkedInIds ? { checkedIn: checkedInIds } : {}) },
+    })
     if (seq < BONUS_SEQ_BASE) {
       // Flares give only 30 s notice, so only scheduled pings count towards a missed streak.
       // The last three are loaded so a jailed runner's screen can show the check-ins it was judged on.
@@ -246,9 +291,8 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
       const lastTwo = lastThree.slice(-2)
       const atReveals = lastTwo.length === 2 ? await store.latestPositions(game.id, lastThree.map((t) => iso(t.revealAt))) : {}
       for (const p of lastTwo.length === 2 ? free : []) {
-        // The count starts fresh at the runner's own last release (checkins design §4.4), and only a
-        // location inside each ping's 45 s window counts as a check-in (§4.2).
-        const since = Math.max(chaseStartOf(game, now)!, p.freed_at ? Date.parse(p.freed_at) : -Infinity)
+        // Only a location inside each ping's 45 s window counts as a check-in (§4.2).
+        const since = sinceFor(p)
         const judged = lastThree.map((t) => {
           const at = latestAtOrBefore(atReveals[p.id], t.revealAt)
           return { alertAt: t.alertAt, revealAt: t.revealAt, lastAt: at ? Date.parse(at.at) : null }
@@ -258,7 +302,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
         if (autoJailDue(pings, since) && (await store.catchRunner(p.id, null))) {
           const checkins = judged
             .filter((t) => t.alertAt >= since)
-            .map((t) => ({ revealAt: t.revealAt, ok: checkedIn(t.alertAt, t.revealAt, t.lastAt) }))
+            .map((t) => ({ revealAt: t.revealAt, ok: countedCheckIn(t.alertAt, t.revealAt, t.lastAt, since) }))
           await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: p.id, data: { who: who(p), seq, checkins } })
         }
       }
@@ -316,9 +360,24 @@ const create: Action = async (ctx, body) => {
   const settings = settingsFrom(body.settings)
   let code = newGameCode(ctx.rng)
   while (await ctx.store.gameByCode(code)) code = newGameCode(ctx.rng)
-  await ctx.store.createGame({ code, arena, settings, started_at: null, ended_at: null, winner: null, paused_at: null, pauses: [], organiser_id: organiser.id })
+  await ctx.store.createGame({
+    code,
+    arena,
+    settings,
+    started_at: null,
+    ended_at: null,
+    winner: null,
+    paused_at: null,
+    pauses: [],
+    organiser_id: organiser.id,
+    // Full: Dato Seri's card gets its secret code now, so the organiser can print it before hiding it (ruling R15).
+    ...(settings.mode === 'full' ? { dato_stash: { code: newDatoCode(), lat: null, lng: null, claimedBy: null, claimedAt: null } } : {}),
+  })
   return { code }
 }
+
+/** A fresh secret for a game's ★ card: 22 base64url characters (about 130 random bits), short enough for a clear QR. */
+const newDatoCode = () => newToken().slice(0, 22)
 
 const join: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
@@ -456,11 +515,13 @@ const state: Action = async (ctx, body) => {
   const events = await ctx.store.events(game.id)
   const pings = await ctx.store.pings(game.id)
   const ended = phaseAt(game, ctx.now).phase === 'ended'
+  const times = viewTimes(game, pings, ctx.now)
+  const loaded = await ctx.store.latestPositions(game.id, times)
   return viewFor({
     game,
     me,
     players,
-    positions: await ctx.store.latestPositions(game.id, viewTimes(game, pings, ctx.now)),
+    positions: await withSnapshotMoment(ctx, { game, me, positions: loaded, events, now: ctx.now }, times),
     pings,
     events,
     now: ctx.now,
@@ -577,6 +638,47 @@ const jailbreak: Action = async (ctx, body) => {
   return verdict
 }
 
+/**
+ * Settle (jail design §4b, §4d): the jailed Dato Seri holder scans the Penjara code and picks up to 2 jailed
+ * friends. Frees whoever is eligible exactly as a jailbreak does. The card is spent first, atomically, so a
+ * double tap settles once, and given back if the freeing fails. Visible to everyone, without naming the card.
+ */
+const settle: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  if (str(body.qr).trim() !== JAIL_QR) throw new ActionError(400, "That's not the Penjara code")
+  const targetIds = body.targetIds ?? []
+  if (!Array.isArray(targetIds) || !targetIds.every((t) => typeof t === 'string')) throw new ActionError(400, 'Pick who to free')
+  await recordScanLocation(ctx, game, me, body)
+  await advance(ctx, game)
+  const fresh = (await loadGame(ctx, body)) as Game
+  if (fresh.paused_at) return { ok: false, reason: 'paused' }
+  const dato = (await ctx.store.powerUps(game.id)).find(
+    (u) => u.player_id === me.id && u.kind === 'dato' && u.used_at === null && !u.taken_at,
+  )
+  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
+  const verdict = judgeSettle({
+    phase: phaseAt(fresh, ctx.now).phase,
+    holder: me,
+    holdsDato: !!dato,
+    players: await ctx.store.players(game.id),
+    holderPos: latest(positions[me.id]),
+    jail: game.arena.jail,
+    targetIds,
+    now: ctx.now,
+  })
+  if (!verdict.ok) return verdict
+  if (!(await ctx.store.markUsed(dato!.id))) return { ok: false, reason: 'already-used' }
+  try {
+    await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now) } })))
+  } catch (e) {
+    await ctx.store.updatePowerUp(dato!.id, { used_at: null }) // give Dato Seri back
+    throw e
+  }
+  await ctx.store.addEvent({ game_id: game.id, type: 'settled', actor_id: me.id, target_id: null, data: { freed: verdict.freedIds.length } })
+  return verdict
+}
+
 const subscribe: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const sub = body.subscription as PushSubscriptionJSON | undefined
@@ -685,6 +787,20 @@ const redeemMarshalInvite: Action = async (ctx, body) => {
   return { token, playerId: p.id }
 }
 
+const sideOf = (p: Player): 'runner' | 'chaser' => (p.role === 'chaser' ? 'chaser' : 'runner')
+
+/** The card at a given draw number of a side's shared deck. Games started before decks existed have no sets. */
+async function deckOf(ctx: Ctx, game: Game, side: 'runner' | 'chaser'): Promise<(index: number) => PowerUpKind> {
+  const stored = side === 'runner' ? game.runner_sets : game.chaser_sets
+  const sets = stored ?? setsFor(side, (await ctx.store.players(game.id)).filter((p) => p.role === side).length)
+  const deck = deckFor(game.settings.mode ?? 'core', side, sets)
+  // Seeded with a secret (not the game id players can see), so nobody can work out the next card.
+  return (index) => cardAt(`${game.deck_seed ?? game.id}:${side}`, deck, index)
+}
+
+/** Abang Grab shows this many cards (power-ups §6.3). Each round of the deck is a full reshuffle, so 3 are always there. */
+const GRAB_OFFER = 3
+
 const claim: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
@@ -692,6 +808,7 @@ const claim: Action = async (ctx, body) => {
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
   if (fresh.paused_at) return { ok: false, reason: 'paused' }
+  if (isDatoQr(str(body.qr))) return claimDato(ctx, fresh, me, str(body.qr))
   const station = stationFromQr(str(body.qr))
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeClaim({
@@ -706,13 +823,10 @@ const claim: Action = async (ctx, body) => {
   })
   if (!verdict.ok) return verdict
   // The top card of this side's shared deck (power-ups §5b). The draw number is taken atomically, so two
-  // claims at the same moment never get the same card. Games started before decks existed have no sets.
-  const side = me.role === 'chaser' ? 'chaser' : 'runner'
-  const stored = side === 'runner' ? fresh.runner_sets : fresh.chaser_sets
-  const sets = stored ?? setsFor(side, (await ctx.store.players(game.id)).filter((p) => p.role === side).length)
-  const deck = deckFor(fresh.settings.mode ?? 'core', side, sets)
-  // Seeded with a secret (not the game id players can see), so nobody can work out the next card.
-  const kind = cardAt(`${fresh.deck_seed ?? game.id}:${side}`, deck, await ctx.store.drawCard(game.id, side))
+  // claims at the same moment never get the same card.
+  const side = sideOf(me)
+  const kindAt = await deckOf(ctx, fresh, side)
+  const kind = kindAt(await ctx.store.drawCard(game.id, side))
   // Re-checked atomically by the store, so double-taps and simultaneous scans can't both win.
   const claimed = await ctx.store.claimStation(
     { game_id: game.id, player_id: me.id, kind, station: station! },
@@ -721,6 +835,51 @@ const claim: Action = async (ctx, body) => {
   if (!claimed.ok) return claimed
   await ctx.store.addEvent({ game_id: game.id, type: 'powerup', actor_id: me.id, target_id: null, data: {} })
   return { ok: true, kind }
+}
+
+/**
+ * Scanning Dato Seri's hidden stash (jail design §4b). A refusal changes nothing, so the stash stays claimable.
+ * The store claims it atomically: two runners scanning at once get one card. No 'powerup' event, which would
+ * name the finder: the feed only ever says `Something legendary was found.` (§4c).
+ */
+async function claimDato(ctx: Ctx, game: Game, me: Player, qr: string) {
+  // Only this game's own card (ruling R15). Any other ★ card, bare or another game's, gets the same answer as no
+  // stash before anything else is judged, so it can't tell anyone how near they are or whether a stash exists.
+  const scanned = datoCodeFromQr(qr)
+  const secret = game.dato_stash?.code
+  if (!scanned || !secret || hashToken(scanned) !== hashToken(secret)) return { ok: false, reason: 'no-stash' }
+  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
+  const verdict = judgeDatoClaim({
+    phase: phaseAt(game, ctx.now).phase,
+    me,
+    stash: game.dato_stash,
+    myPos: latest(positions[me.id]),
+    powerUps: await ctx.store.powerUps(game.id),
+    pings: await ctx.store.pings(game.id),
+    now: ctx.now,
+  })
+  if (!verdict.ok) return verdict
+  if (!(await ctx.store.claimDato(game.id, me.id))) return { ok: false, reason: 'no-stash' }
+  await ctx.store.addEvent({ game_id: game.id, type: 'legendary', actor_id: me.id, target_id: null, data: {} })
+  return { ok: true, kind: 'dato' }
+}
+
+/**
+ * The organiser or a marshal hides the printed Dato Seri card and saves the spot (jail design §4b). Full mode
+ * only. Dropping again before the start moves it; once the game starts it stays put.
+ */
+const dropDatoSeri: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  await requireMarshal(ctx, game, body)
+  if (game.settings.mode !== 'full') throw new ActionError(409, 'Dato Seri is in Full mode only')
+  requireLobby(game, ctx.now)
+  const at = coordsOf(body)
+  if (!at) throw new ActionError(400, 'Invalid location')
+  if (!inPlayArea(at, game.arena)) throw new ActionError(400, 'Drop it inside the play area')
+  // Moving it keeps the code, so the card already printed still works. A game made before codes gets one now.
+  const stash: DatoStash = { code: game.dato_stash?.code ?? newDatoCode(), lat: at.lat, lng: at.lng, claimedBy: null, claimedAt: null }
+  await ctx.store.updateGame(game.id, { dato_stash: stash })
+  return { ok: true }
 }
 
 const usePowerup: Action = async (ctx, body) => {
@@ -733,9 +892,13 @@ const usePowerup: Action = async (ctx, body) => {
   const all = await ctx.store.powerUps(game.id)
   const u = all.find((x) => x.id === str(body.powerupId))
   if (!u || u.player_id !== me.id) return { ok: false, reason: 'not-yours' }
+  // Taken by Toyol or Ah Long (e.g. a Grab with its offer open): the owner is told it was taken.
+  if (u.taken_at) return { ok: false, reason: 'taken' }
   if (u.used_at) return { ok: false, reason: 'already-used' }
   if (phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (me.jailed) return { ok: false, reason: 'cannot-use' }
+  // Dato Seri is only ever used through Settle, at Penjara (jail design §4b).
+  if (u.kind === 'dato') return { ok: false, reason: 'settle-at-penjara' }
   // A Flare's reveal must land before the whistle.
   if (u.kind === 'flare' && (endsAt ?? 0) - ctx.now < ALERT_LEAD_MS) return { ok: false, reason: 'too-late' }
 
@@ -745,8 +908,48 @@ const usePowerup: Action = async (ctx, body) => {
     const blocked = flareBlocked(pings, ctx.now)
     if (blocked) return { ok: false, ...blocked }
   }
+  if (u.kind === 'grab') {
+    // Abang Grab (power-ups §6.3): show the top 3 of this side's deck. Not marked used here: the Grab stays in
+    // the slot with its offer until grabPick. The 3 draws are reserved in one atomic step, and a Grab that
+    // already has them (re-opened screen, double-tap) gets the same 3 back without drawing again.
+    const side = sideOf(me)
+    const opened = await ctx.store.openGrab(u.id, side, GRAB_OFFER)
+    if (!opened) return { ok: false, reason: 'already-used' }
+    let offer = opened.offer
+    if (!offer) {
+      const kindAt = await deckOf(ctx, fresh, side)
+      offer = Array.from({ length: GRAB_OFFER }, (_, k) => kindAt(opened.first + k))
+      // Same draws, same cards: a racing second open writes the identical offer.
+      await ctx.store.updatePowerUp(u.id, { offer })
+    }
+    return { ok: true, kind: 'grab', offer }
+  }
   // markUsed is atomic: a double-tap uses the power-up once.
   if (!(await ctx.store.markUsed(u.id))) return { ok: false, reason: 'already-used' }
+  if (u.kind === 'toyol' || u.kind === 'along') {
+    // Spent first (so two taps can't both steal), taken second (atomic per card in the store, so two thieves never
+    // take the same one); if nothing was there to take, the card goes back unspent (power-ups §6.2).
+    let stolen
+    try {
+      stolen = await ctx.store.stealFrom(game.id, u.kind === 'toyol' ? 'chaser' : 'runner', ctx.rng)
+    } catch (e) {
+      await ctx.store.updatePowerUp(u.id, { used_at: null })
+      throw e
+    }
+    if (!stolen) {
+      await ctx.store.updatePowerUp(u.id, { used_at: null })
+      return { ok: false, reason: 'nothing-to-steal' }
+    }
+    await ctx.store.addEvent({
+      game_id: game.id,
+      type: 'stolen',
+      actor_id: me.id,
+      target_id: stolen.stolenFrom,
+      data: { kind: u.kind, takenKind: stolen.kind },
+    })
+    // Only that it worked: whose card it was and what it was stay secret, even from the thief (power-ups §6.2).
+    return { ok: true, kind: u.kind }
+  }
   if (u.kind === 'flare') {
     // The next surprise-ping number is a claim: if two Mat Rempits land at once, only one gets it.
     const seq = BONUS_SEQ_BASE + pings.filter((p) => p.seq >= BONUS_SEQ_BASE).length
@@ -764,6 +967,28 @@ const usePowerup: Action = async (ctx, body) => {
   }
   await ctx.store.addEvent({ game_id: game.id, type: 'used', actor_id: me.id, target_id: null, data: { kind: u.kind } })
   return { ok: true, kind: u.kind }
+}
+
+/**
+ * Abang Grab, step 2: keep one of the offered cards. `choice` is its index in the offer (0–2). The Grab is done
+ * and the kept card takes its place in the slot, sealed (Toyol and Ah Long can't take it) and not switched on.
+ */
+const grabPick: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  await advance(ctx, game)
+  const fresh = (await loadGame(ctx, body)) as Game
+  if (fresh.paused_at) return { ok: false, reason: 'paused' }
+  if (phaseAt(fresh, ctx.now).phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
+  if (me.jailed) return { ok: false, reason: 'cannot-use' }
+  const choice = typeof body.choice === 'number' ? body.choice : NaN
+  // Checked and written atomically by the store, so two picks at once deliver one card.
+  const picked = await ctx.store.pickGrab(str(body.powerupId), me.id, choice)
+  if (!picked.ok) return picked
+  // The other two aren't put back: their draw numbers are spent, so they return at the next reshuffle
+  // (our stand-in for "the bottom of the deck", power-ups §6.3).
+  await ctx.store.addEvent({ game_id: game.id, type: 'powerup', actor_id: me.id, target_id: null, data: {} })
+  return { ok: true, kind: picked.powerUp.kind, powerupId: picked.powerUp.id }
 }
 
 const sos: Action = async (ctx, body) => {
@@ -1128,9 +1353,12 @@ export const actions = {
   location,
   catch: catchAction,
   jailbreak,
+  settle,
   subscribe,
   claim,
   usePowerup,
+  grabPick,
+  dropDatoSeri,
   pause,
   resume,
   sos,

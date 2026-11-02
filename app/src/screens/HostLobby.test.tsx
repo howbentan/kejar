@@ -73,6 +73,21 @@ describe('HostLobby', () => {
     expect(await screen.findByText('CORE')).toBeInTheDocument()
   })
 
+  it('a Full lobby shown to players gives nothing away; the hidden card sits behind a toggle below the join card', async () => {
+    const stash = { lat: 0.002, lng: 0.002, claimedBy: null, claimedAt: null }
+    call.mockImplementation(async (action: string) =>
+      action === 'state' ? { ...lobbyView, settings: { ...DEFAULT_SETTINGS, mode: 'full' }, datoStash: stash } : {},
+    )
+    render(<HostLobby code="ABC234" />)
+    const toggle = await screen.findByRole('button', { name: 'Organiser tools' })
+    expect(document.body.textContent).not.toMatch(/dato|legendary|yellow pin/i)
+    expect(screen.queryByRole('button', { name: 'Drop the ★ card here' })).toBeNull()
+    const join = screen.getByText('Scan to join')
+    expect(join.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    fireEvent.click(toggle)
+    expect(screen.getByRole('button', { name: 'Drop the ★ card here' })).toBeInTheDocument()
+  })
+
   it('lists the players with their tags', async () => {
     render(<HostLobby code="ABC234" />)
     expect(await screen.findByText('Aina')).toBeInTheDocument()

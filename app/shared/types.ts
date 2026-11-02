@@ -22,6 +22,11 @@ export interface Settings {
   spectatorDelayMin: number
   checkinMode: CheckinMode
   mode: GameMode
+  /**
+   * Dikejar can see Kejar at check-in (chaser-snapshot design §5). Off by default. Games stored before this
+   * setting existed have no value, so readers must test `settings.chaserSnapshot === true`.
+   */
+  chaserSnapshot: boolean
 }
 
 /** Spec §4.3 defaults. */
@@ -32,6 +37,7 @@ export const DEFAULT_SETTINGS: Settings = {
   spectatorDelayMin: 2,
   checkinMode: 'push',
   mode: 'core',
+  chaserSnapshot: false,
 }
 
 export interface Arena {
@@ -67,6 +73,39 @@ export interface Game {
   chaser_draws?: number
   /** Secret seed for the deck shuffle, set at start; never sent to players, so the next card can't be predicted. */
   deck_seed?: string | null
+  /**
+   * Dato Seri's hidden stash (jail design §4b): where the organiser or a marshal dropped the card, and who
+   * scanned it first. Never sent to players as is: they get a fuzzy, unlabelled zone. Older games have none.
+   */
+  dato_stash?: DatoStash | null
+}
+
+export interface DatoStash {
+  /**
+   * The secret on this game's printed ★ card (QR `datoQr(code)`), made when the Full game is created, so a copy
+   * of another game's card (or of the public sheet) never claims it (ruling R15). Never sent to players. Games
+   * made before it existed have none, and their card claims nothing until a drop gives them one.
+   */
+  code?: string
+  /** Where the card was dropped; null until the organiser or a marshal drops it. */
+  lat: number | null
+  lng: number | null
+  claimedBy: string | null
+  claimedAt: string | null
+}
+
+/** A stash that has been dropped somewhere, without its secret code. */
+export interface PlacedStash {
+  lat: number
+  lng: number
+  claimedBy: string | null
+  claimedAt: string | null
+}
+
+/** The dropped stash's spot and claim, or null when there's no stash or it hasn't been dropped yet. */
+export function placedStash(s: DatoStash | null | undefined): PlacedStash | null {
+  if (!s || typeof s.lat !== 'number' || typeof s.lng !== 'number') return null
+  return { lat: s.lat, lng: s.lng, claimedBy: s.claimedBy, claimedAt: s.claimedAt }
 }
 
 export interface Player {
@@ -125,18 +164,30 @@ export type EventType =
   | 'sos-details'
   | 'sos-responding'
   | 'rated'
+  | 'stolen'
+  /** Someone scanned Dato Seri's stash. The feed never says who, or what it was (jail design §4c). */
+  | 'legendary'
+  /** Dato Seri's Settle freed `data.freed` runners. Visible, but never names the card (jail design §4). */
+  | 'settled'
 
-export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus'
+export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along' | 'grab' | 'dato'
 
 export interface PowerUp {
   id: string
   game_id: string
   player_id: string
   kind: PowerUpKind
-  station: number
+  /** The station it was claimed at; null for a card Abang Grab delivered. */
+  station: number | null
   claimed_at: string
   used_at: string | null
   consumed_at: string | null
+  /** Delivered by Abang Grab: can't be stolen (power-ups §6.3). */
+  sealed: boolean
+  /** Set when Toyol or Ah Long took this card; a taken card is gone from every hand. */
+  taken_at: string | null
+  /** Abang Grab's open offer (power-ups §6.3): the top 3 cards of the holder's deck, until one is picked. */
+  offer: PowerUpKind[] | null
 }
 
 export interface GameEvent {

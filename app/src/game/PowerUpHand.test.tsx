@@ -18,6 +18,8 @@ const decoy: PowerUp = {
   claimed_at: '',
   used_at: null,
   consumed_at: null,
+  sealed: false,
+  taken_at: null, offer: null,
 }
 
 beforeEach(() => {
@@ -39,6 +41,93 @@ describe('PowerUpHand', () => {
     expect(await screen.findByText('Gostan set for your next ping')).toBeInTheDocument()
   })
 
+  it.each([
+    ['toyol', 'Toyol'],
+    ['along', 'Ah Long'],
+  ] as const)('a %s with nothing to steal says you keep it', async (kind, name) => {
+    call.mockResolvedValue({ ok: false, reason: 'nothing-to-steal' })
+    render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind }] })} />)
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(name, 'i') }))
+    fireEvent.click(screen.getByRole('button', { name: `Use ${name}` }))
+    expect(await screen.findByText(`Nothing to steal — you keep your ${name}.`)).toBeInTheDocument()
+  })
+
+  it.each([
+    ['toyol', 'Toyol', 'Toyol stole a power-up!'],
+    ['along', 'Ah Long', 'Ah Long came to collect!'],
+  ] as const)('a %s that steals shows its used line and nothing else', async (kind, name, line) => {
+    call.mockResolvedValue({ ok: true, kind })
+    render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind }] })} />)
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(name, 'i') }))
+    fireEvent.click(screen.getByRole('button', { name: `Use ${name}` }))
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent(new RegExp(`^${line}$`))
+    expect(screen.queryByText(/durian/i)).toBeNull()
+  })
+
+  it('a card Toyol or Ah Long already took says so', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'taken' })
+    render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'shield' }] })} />)
+    fireEvent.click(screen.getByRole('button', { name: /durian/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use Durian' }))
+    expect(await screen.findByText('Your Durian was taken.')).toBeInTheDocument()
+  })
+
+  it('a held Dato Seri has no Use: it says to use it at Penjara', () => {
+    render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'dato' }] })} />)
+    expect(screen.queryByRole('button', { name: /dato seri/i })).toBeNull()
+    expect(screen.getByText('Use it at Penjara')).toBeInTheDocument()
+    expect(screen.getByText('★ LEGENDARY')).toBeInTheDocument()
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  describe('Abang Grab', () => {
+    const grab: PowerUp = { ...decoy, id: 'g1', kind: 'grab' }
+    const openGrab = async () => {
+      fireEvent.click(screen.getByRole('button', { name: /abang grab/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'Use Abang Grab' }))
+      return screen.findByRole('dialog', { name: 'What should Abang Grab bring?' })
+    }
+
+    it('Use opens the chooser with the 3 offered cards face up; a pick delivers one', async () => {
+      call.mockImplementation(async (action: string) =>
+        action === 'usePowerup' ? { ok: true, kind: 'grab', offer: ['shield', 'cloak', 'decoy'] } : { ok: true, kind: 'cloak', powerupId: 'u5' },
+      )
+      render(<PowerUpHand code="ABC234" view={testView({ hand: [grab] })} />)
+      const dialog = await openGrab()
+      expect(call).toHaveBeenCalledWith('usePowerup', { code: 'ABC234', token: 't1', powerupId: 'g1' })
+      expect(dialog).toHaveTextContent('Keep one. The other two go to the bottom of the deck.')
+      expect(dialog).toHaveAttribute('aria-modal', 'true')
+      expect(dialog).toHaveClass('grab')
+      for (const n of ['Durian', 'Ponteng', 'Gostan']) expect(screen.getByRole('button', { name: `Keep ${n}` })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Keep Ponteng' }))
+      await waitFor(() => expect(call).toHaveBeenCalledWith('grabPick', { code: 'ABC234', token: 't1', powerupId: 'g1', choice: 1 }))
+      expect(await screen.findByText('Abang Grab brought Ponteng!')).toBeInTheDocument()
+      expect(screen.getByText('The other two went to the bottom of the deck.')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Keep Durian' })).toBeNull()
+    })
+
+    it('reopens by itself when the app comes back with an open offer', () => {
+      render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...grab, offer: ['focus', 'flare', 'shield'] }] })} />)
+      expect(screen.getByRole('dialog', { name: 'What should Abang Grab bring?' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Keep Pak Guard' })).toBeInTheDocument()
+    })
+
+    it.each([
+      ['taken', 'Your Abang Grab was taken.'],
+      ['bad-choice', 'Pick one of the three cards'],
+      ['already-used', 'Already used'],
+    ])('a refused pick (%s) is plain words', async (reason, text) => {
+      call.mockImplementation(async (action: string) =>
+        action === 'usePowerup' ? { ok: true, kind: 'grab', offer: ['shield', 'cloak', 'decoy'] } : { ok: false, reason },
+      )
+      render(<PowerUpHand code="ABC234" view={testView({ hand: [grab] })} />)
+      await openGrab()
+      fireEvent.click(screen.getByRole('button', { name: 'Keep Durian' }))
+      expect(await screen.findByText(text)).toBeInTheDocument()
+    })
+  })
+
   it('shows the Malaysian name and plain-English effect of each card', () => {
     const card = (kind: PowerUp['kind']) => ({ ...decoy, id: kind, kind })
     render(<PowerUpHand code="ABC234" view={testView({ hand: [card('shield'), card('cloak'), card('flare'), card('focus')] })} />)
@@ -56,6 +145,15 @@ describe('PowerUpHand', () => {
     render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'shield' }] })} />)
     expect(screen.getByRole('img', { name: 'Durian' })).toBeInTheDocument()
     expect(screen.getByText('READY')).toBeInTheDocument()
+  })
+
+  it('the Dato Seri slot is legendary with a foil; every other kind gets a plain slot', () => {
+    const { rerender } = render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'dato' }] })} />)
+    expect(screen.getByText('Dato Seri').closest('.slot')).toHaveClass('legendary')
+    expect(screen.getByTestId('foil')).toBeInTheDocument()
+    rerender(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'shield' }] })} />)
+    expect(screen.getByRole('button', { name: /durian/i })).not.toHaveClass('legendary')
+    expect(screen.queryByTestId('foil')).toBeNull()
   })
 
   it('a running Durian counts down; other effects wait for the next ping', () => {
@@ -119,5 +217,7 @@ describe('claimMessage', () => {
       "Your Durian is still working. Come back when it's done.",
     )
     expect(claimMessage({ ok: false, reason: 'unknown-station' })).toBe("That's not a station code")
+    // The hidden stash (rules doc §9): a full slot, without naming what's in it.
+    expect(claimMessage({ ok: false, reason: 'hand-full' })).toBe('Use or lose your power-up first')
   })
 })

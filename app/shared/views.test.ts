@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { event, game, iso, MIN, ping, player, pos, T0 } from './fixtures.js'
 import { distanceM } from './geo.js'
-import type { Player, Position, PowerUp } from './types.js'
+import { DEFAULT_SETTINGS, type Player, type Position, type PowerUp } from './types.js'
 import { BONUS_SEQ_BASE, SCHEDULED_ALERT_LEAD_MS } from './clock.js'
-import { viewFor } from './views.js'
+import { CHASER_SNAPSHOT_FUZZ_M, LEGENDARY_ZONE_M, viewFor } from './views.js'
 
 const g = game()
 const NOW = T0 + 16 * MIN // chase started at +5; pings revealed at +10 and +15
@@ -304,11 +304,11 @@ describe('deck and slot', () => {
     expect(view(siti, { game: { ...g, runner_sets: 1, runner_draws: 2 } }).deckLeft).toBeNull()
   })
   it('names a power-up whose effect is still running', () => {
-    const durian: PowerUp = { id: 'u9', game_id: 'g1', player_id: 'r1', kind: 'shield', station: 1, claimed_at: '', used_at: new Date(NOW - MIN).toISOString(), consumed_at: null }
+    const durian: PowerUp = { id: 'u9', game_id: 'g1', player_id: 'r1', kind: 'shield', station: 1, claimed_at: '', used_at: new Date(NOW - MIN).toISOString(), consumed_at: null, sealed: false, taken_at: null, offer: null }
     expect(view(aina, { powerUps: [durian] }).activePowerUp).toBe('shield')
     expect(view(aina).activePowerUp).toBeNull()
   })
-  const card = (over: Partial<PowerUp>): PowerUp => ({ id: 'u9', game_id: 'g1', player_id: 'r1', kind: 'shield', station: 1, claimed_at: '', used_at: null, consumed_at: null, ...over })
+  const card = (over: Partial<PowerUp>): PowerUp => ({ id: 'u9', game_id: 'g1', player_id: 'r1', kind: 'shield', station: 1, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null, ...over })
   it('a running Durian says when it ends; other running effects wait for the next ping', () => {
     const usedAt = NOW - MIN
     expect(view(aina, { powerUps: [card({ used_at: new Date(usedAt).toISOString() })] }).activeEndsAt).toBe(usedAt + 10 * MIN)
@@ -321,6 +321,40 @@ describe('deck and slot', () => {
     expect(view(chaser, { powerUps: [flare], pings: [...pings, bonus] }).flareReadyAt).toBe(NOW - MIN + 3 * MIN)
     expect(view(chaser, { powerUps: [flare] }).flareReadyAt).toBeNull()
     expect(view(chaser, { pings: [...pings, bonus] }).flareReadyAt).toBeNull()
+  })
+})
+
+describe('Toyol and Ah Long', () => {
+  const stolen = (kind: 'toyol' | 'along') =>
+    event('stolen', T0 + 15.5 * MIN, { actor_id: kind === 'toyol' ? 'r1' : 'c1', target_id: kind === 'toyol' ? 'c1' : 'r1', data: { kind, takenKind: 'flare' } })
+  const texts = (me: Player, e = stolen('toyol')) => view(me, { events: [e] }).feed.map((f) => f.text)
+  it('the feed never says who stole or who lost', () => {
+    expect(texts(aina)).toEqual(['Toyol stole a power-up!'])
+    expect(texts(siti)).toEqual(['Toyol stole a power-up!'])
+    expect(texts(hafiz, stolen('along'))).toEqual(['Ah Long came to collect!'])
+    expect(texts(siti, stolen('along'))).toEqual(['Ah Long came to collect!'])
+  })
+  it('the player who lost the card sees a personal line naming it', () => {
+    expect(texts(chaser)).toContain('Toyol took your Mat Rempit!')
+    expect(texts(chaser)).not.toContain('Toyol stole a power-up!')
+    expect(texts(aina, stolen('along'))).toEqual(['Ah Long took your Mat Rempit!'])
+  })
+  it("the victim's own line buzzes and gets the needs-you outline; everyone else's stays plain", () => {
+    expect(view(chaser, { events: [stolen('toyol')] }).feed[0]).toMatchObject({ text: 'Toyol took your Mat Rempit!', act: true })
+    expect(view(aina, { events: [stolen('toyol')] }).feed[0]).toMatchObject({ act: false })
+  })
+  it('a taken card leaves the hand', () => {
+    const c = (over: Partial<PowerUp>): PowerUp => ({ id: 'u9', game_id: 'g1', player_id: 'c1', kind: 'flare', station: 1, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null, ...over })
+    expect(view(chaser, { powerUps: [c({})] }).hand).toHaveLength(1)
+    expect(view(chaser, { powerUps: [c({ taken_at: new Date(NOW).toISOString() })] }).hand).toEqual([])
+  })
+  it('a card row from before migration 0011 (no taken_at at all) still counts as in the hand', () => {
+    const { taken_at: _, ...old } = { id: 'u9', game_id: 'g1', player_id: 'c1', kind: 'flare' as const, station: 1, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null }
+    expect(view(chaser, { powerUps: [old as PowerUp] }).hand).toHaveLength(1)
+    // And a jailed holder of such a Dato Seri can still Settle.
+    const holder = { ...aina, jailed: true }
+    const dato = { ...old, player_id: 'r1', kind: 'dato' as const, station: null }
+    expect(view(holder, { players: [chaser, holder, hafiz, wei, siti], powerUps: [dato as PowerUp] }).settle).not.toBeNull()
   })
 })
 
@@ -392,6 +426,8 @@ describe('power-up effects', () => {
     claimed_at: new Date(usedAt - MIN).toISOString(),
     used_at: new Date(usedAt).toISOString(),
     consumed_at: null,
+    sealed: false,
+    taken_at: null, offer: null,
   })
 
   it('cloaked runner is missing from the next reveal only', () => {
@@ -491,6 +527,8 @@ describe('power-up secrecy', () => {
     claimed_at: new Date(usedAt - MIN).toISOString(),
     used_at: new Date(usedAt).toISOString(),
     consumed_at: null,
+    sealed: false,
+    taken_at: null, offer: null,
   })
 
   it('a cloaked runner looks exactly like a runner who never checked in', () => {
@@ -508,5 +546,235 @@ describe('power-up secrecy', () => {
     expect(dot.exact).toBe(true)
     expect(dot.fuzzy).toBeUndefined()
     expect(distanceM(dot, A)).toBeGreaterThanOrEqual(119)
+  })
+})
+
+describe('the chaser snapshot at check-in (checkins design §5)', () => {
+  const on = game({ settings: { ...DEFAULT_SETTINGS, mode: 'full', chaserSnapshot: true } })
+  /** Scheduled ping k reveals at +5 + 5k minutes; its alert (the snapshot moment) is 45 s before. */
+  const alertAt = (k: number) => T0 + (5 + 5 * k) * MIN - SCHEDULED_ALERT_LEAD_MS
+  const BEN_1 = { lat: 3.001, lng: 101.001 }
+  const BEN_2 = { lat: 3.002, lng: 101.008 }
+  const BEN_3 = { lat: 3.008, lng: 101.002 }
+  const BEN_LATER = { lat: 3.008, lng: 101.008 }
+  const benTrail = [
+    pos(BEN_1.lat, BEN_1.lng, alertAt(1) - 3_000),
+    pos(BEN_2.lat, BEN_2.lng, alertAt(2) - 5_000),
+    pos(BEN_LATER.lat, BEN_LATER.lng, alertAt(2) + 20_000),
+    pos(BEN_3.lat, BEN_3.lng, alertAt(3) - 2_000),
+  ]
+  const snap = (me: Player, aina: Position[], over: Partial<Parameters<typeof viewFor>[0]> = {}) =>
+    view(me, { game: on, positions: { c1: benTrail, r1: aina }, ...over }).chaserSnapshot
+
+  it("with the switch on, a runner who just checked in sees chasers as of that window's alert time, fuzzed to 30 m", () => {
+    const s = snap(aina, [pos(A.lat, A.lng, alertAt(2) + 10_000)], { now: alertAt(2) + 20_000 })
+    expect(s?.positions).toHaveLength(1)
+    expect(s?.positions[0]).toMatchObject({ name: 'Ben', stale: false })
+    expect(distanceM(s!.positions[0], BEN_2)).toBeLessThanOrEqual(CHASER_SNAPSHOT_FUZZ_M)
+    expect(distanceM(s!.positions[0], BEN_LATER)).toBeGreaterThan(100)
+  })
+
+  it("is frozen: the circles don't move between polls while the chaser does", () => {
+    const aina2 = [pos(A.lat, A.lng, alertAt(2) + 10_000)]
+    const first = snap(aina, aina2, { now: alertAt(2) + 20_000 })
+    expect(snap(aina, aina2, { now: alertAt(2) + 40_000 })).toEqual(first)
+    expect(snap(aina, aina2, { now: T0 + 17 * MIN })).toEqual(first)
+  })
+
+  it("is fuzzed with the game's secret seed, so knowing the game and player ids can't undo it", () => {
+    const aina2 = [pos(A.lat, A.lng, alertAt(2) + 10_000)]
+    const at = (deck_seed: string) => snap(aina, aina2, { now: alertAt(2) + 20_000, game: { ...on, deck_seed } })!.positions[0]
+    expect(at('secret-one')).not.toEqual(at('secret-two'))
+    expect(at('secret-one')).toEqual(at('secret-one'))
+  })
+
+  it('a chaser whose last position is over 60 s old at the alert is marked stale', () => {
+    const at = (ms: number) => snap(aina, [pos(A.lat, A.lng, alertAt(2) + 10_000)], { now: alertAt(2) + 20_000, positions: { c1: [pos(BEN_2.lat, BEN_2.lng, alertAt(2) - ms)], r1: [pos(A.lat, A.lng, alertAt(2) + 10_000)] } })
+    expect(at(61_000)?.positions[0].stale).toBe(true)
+    expect(at(59_000)?.positions[0].stale).toBe(false)
+  })
+
+  it('a chaser with no position at all before the alert is left out', () => {
+    const s = snap(aina, [pos(A.lat, A.lng, alertAt(2) + 10_000)], {
+      now: alertAt(2) + 20_000,
+      positions: { c1: [pos(BEN_LATER.lat, BEN_LATER.lng, alertAt(2) + 1_000)], r1: [pos(A.lat, A.lng, alertAt(2) + 10_000)] },
+    })
+    expect(s).toEqual({ positions: [] })
+  })
+
+  it('the switch off means no chaser snapshot, even after checking in', () => {
+    const v = view(aina, { positions: { c1: benTrail, r1: [pos(A.lat, A.lng, alertAt(2) + 10_000)] }, now: alertAt(2) + 20_000 })
+    expect(v.chaserSnapshot).toBeNull()
+  })
+
+  it("missing this window keeps last window's snapshot showing, per design doc §5.4", () => {
+    const missed3 = [pos(A.lat, A.lng, alertAt(2) + 10_000)]
+    // Window 3 is open and she hasn't checked in yet, then it reveals without her.
+    for (const now of [alertAt(3) + 10_000, T0 + 20.5 * MIN]) {
+      const s = snap(aina, missed3, { now })
+      expect(distanceM(s!.positions[0], BEN_2)).toBeLessThanOrEqual(CHASER_SNAPSHOT_FUZZ_M)
+    }
+    // The next check-in replaces it.
+    const s = snap(aina, [...missed3, pos(A.lat, A.lng, alertAt(3) + 5_000)], { now: alertAt(3) + 10_000 })
+    expect(distanceM(s!.positions[0], BEN_3)).toBeLessThanOrEqual(CHASER_SNAPSHOT_FUZZ_M)
+  })
+
+  it('before any check-in has ever succeeded, the chaser snapshot is null', () => {
+    // One location before window 1, one after its reveal but before window 2's alert: neither is a check-in.
+    expect(snap(aina, [pos(A.lat, A.lng, alertAt(1) - 60_000), pos(A.lat, A.lng, T0 + 12 * MIN)], { now: T0 + 16 * MIN })).toBeNull()
+  })
+
+  it('a Mat Rempit bonus ping never produces or updates a snapshot', () => {
+    const bonus = ping(BONUS_SEQ_BASE, T0 + 17 * MIN)
+    const ben = [...benTrail, pos(BEN_LATER.lat, BEN_LATER.lng, T0 + 16.5 * MIN - 1_000)]
+    const inBonusOnly = [pos(A.lat, A.lng, T0 + 16.75 * MIN)]
+    const over = { pings: [...pings, bonus], now: T0 + 17.5 * MIN }
+    expect(view(aina, { game: on, positions: { c1: ben, r1: inBonusOnly }, ...over }).chaserSnapshot).toBeNull()
+    const s = view(aina, { game: on, positions: { c1: ben, r1: [pos(A.lat, A.lng, alertAt(2) + 10_000), ...inBonusOnly] }, ...over }).chaserSnapshot
+    expect(distanceM(s!.positions[0], BEN_2)).toBeLessThanOrEqual(CHASER_SNAPSHOT_FUZZ_M)
+  })
+
+  it('a check-in recorded at the reveal counts, even when the view no longer has that location', () => {
+    const revealed = event('ping', T0 + 10 * MIN, { data: { seq: 1, seen: 1, missed: 0, checkedIn: ['r1'] } })
+    const s = snap(aina, [pos(A.lat, A.lng, T0 + 12 * MIN)], { now: T0 + 16 * MIN, events: [revealed] })
+    expect(distanceM(s!.positions[0], BEN_1)).toBeLessThanOrEqual(CHASER_SNAPSHOT_FUZZ_M)
+  })
+
+  it('a location sent while jailed is not a check-in for a runner freed afterwards', () => {
+    const freed = { ...aina, freed_once: true, freed_at: iso(T0 + 15.5 * MIN) }
+    const s = view(freed, { game: on, players: [chaser, freed, hafiz, wei, siti], positions: { c1: benTrail, r1: [pos(A.lat, A.lng, alertAt(2) + 10_000)] }, now: T0 + 16 * MIN })
+    expect(s.chaserSnapshot).toBeNull()
+  })
+
+  it('jailed runners keep their spectator map; chasers and marshals never get a snapshot', () => {
+    const jailed = { ...aina, jailed: true }
+    const aina2 = [pos(A.lat, A.lng, alertAt(2) + 10_000)]
+    const over = { now: alertAt(2) + 20_000, players: [chaser, jailed, hafiz, wei, siti] }
+    expect(snap(jailed, aina2, over)).toBeNull()
+    expect(snap(chaser, aina2, { now: alertAt(2) + 20_000 })).toBeNull()
+    expect(snap(siti, aina2, { now: alertAt(2) + 20_000 })).toBeNull()
+  })
+})
+
+describe("the snapshot marker on a chaser's own screen (checkins design §5.4)", () => {
+  const on = game({ settings: { ...DEFAULT_SETTINGS, mode: 'full', chaserSnapshot: true } })
+  const alertAt = (k: number) => T0 + (5 + 5 * k) * MIN - SCHEDULED_ALERT_LEAD_MS
+  const SNAP = 'Snapshot taken — Dikejar can see where you were'
+
+  it('a chaser is snapshotted from a scheduled alert until that ping reveals', () => {
+    expect(view(chaser, { game: on, now: alertAt(3) + 1_000 }).snapshotted).toBe(true)
+    expect(view(chaser, { game: on, now: T0 + 20 * MIN - 1 }).snapshotted).toBe(true)
+    expect(view(chaser, { game: on, now: T0 + 16 * MIN }).snapshotted).toBe(false)
+  })
+
+  it('a Mat Rempit bonus ping never snapshots anyone', () => {
+    const bonus = ping(BONUS_SEQ_BASE, T0 + 17 * MIN, { revealed: false })
+    expect(view(chaser, { game: on, pings: [...pings, bonus], now: T0 + 16.8 * MIN }).snapshotted).toBe(false)
+  })
+
+  it('with the switch off, or for anyone but a chaser, snapshotted is false', () => {
+    expect(view(chaser, { now: alertAt(3) + 1_000 }).snapshotted).toBe(false)
+    expect(view(aina, { game: on, now: alertAt(3) + 1_000 }).snapshotted).toBe(false)
+    expect(view(siti, { game: on, now: alertAt(3) + 1_000 }).snapshotted).toBe(false)
+  })
+
+  it('the feed tells chasers and marshals in plain English, keeping only the latest alert line', () => {
+    for (const me of [chaser, siti]) {
+      const lines = view(me, { game: on }).feed.filter((f) => f.text === SNAP)
+      expect(lines.map((f) => f.at)).toEqual([iso(alertAt(2))])
+    }
+  })
+
+  it("runners never get the snapshot line in their feed (ruling R16)", () => {
+    expect(view(aina, { game: on }).feed.some((f) => f.text === SNAP)).toBe(false)
+  })
+
+  it('a Core game ignores the switch: no snapshot, no marker, no feed line (rules §3)', () => {
+    const core = game({ settings: { ...DEFAULT_SETTINGS, mode: 'core', chaserSnapshot: true } })
+    expect(view(chaser, { game: core, now: alertAt(3) + 1_000 }).snapshotted).toBe(false)
+    for (const me of [chaser, siti]) expect(view(me, { game: core }).feed.some((f) => f.text === SNAP)).toBe(false)
+    const checkedIn = view(aina, { game: core, positions: { c1: [pos(3.002, 101.008, alertAt(2) - 5_000)], r1: [pos(A.lat, A.lng, alertAt(2) + 10_000)] }, now: alertAt(2) + 20_000 })
+    expect(checkedIn.chaserSnapshot).toBeNull()
+  })
+
+  it('with 2-minute pings, snapshot lines never crowd catches out of the 20-line feed', () => {
+    const fast = game({ settings: { ...DEFAULT_SETTINGS, mode: 'full', chaserSnapshot: true, pingMin: 2, lengthMin: 90 } })
+    const catches = [0, 1, 2].map((k) => event('caught', T0 + (6 + k) * MIN, { actor_id: 'c1', target_id: 'r2' }))
+    const feed = view(chaser, { game: fast, events: catches, pings: [], now: T0 + 60 * MIN }).feed
+    expect(feed.filter((f) => f.text === SNAP)).toHaveLength(1)
+    expect(feed.filter((f) => /caught/.test(f.text))).toHaveLength(3)
+  })
+
+  it('no snapshot lines with the switch off, for bonus pings, or after the game ended', () => {
+    expect(view(chaser).feed.some((f) => f.text === SNAP)).toBe(false)
+    const bonus = ping(BONUS_SEQ_BASE, T0 + 17 * MIN)
+    expect(view(chaser, { game: on, pings: [...pings, bonus], now: T0 + 18 * MIN }).feed.filter((f) => f.text === SNAP).map((f) => f.at)).toEqual([iso(alertAt(2))])
+    const ended = game({ settings: on.settings, ended_at: iso(T0 + 12 * MIN) })
+    expect(view(chaser, { game: ended, now: T0 + 30 * MIN }).feed.filter((f) => f.text === SNAP).map((f) => f.at)).toEqual([iso(alertAt(1))])
+  })
+})
+
+describe("Dato Seri's hint zone (jail design §4b)", () => {
+  const stash = { lat: 3.004, lng: 101.004, claimedBy: null, claimedAt: null }
+  const full = (id: string) => game({ id, settings: { ...DEFAULT_SETTINGS, mode: 'full' }, dato_stash: stash })
+
+  it('always has the stash well inside, never at the centre, whatever the game', () => {
+    for (let k = 0; k < 40; k++) {
+      const z = view(aina, { game: full(`game-${k}`) }).legendaryZone!
+      expect(z.radiusM).toBe(LEGENDARY_ZONE_M)
+      const d = distanceM(z, stash)
+      expect(d).toBeGreaterThanOrEqual(0.3 * LEGENDARY_ZONE_M - 0.5)
+      expect(d).toBeLessThanOrEqual(0.8 * LEGENDARY_ZONE_M + 0.5)
+    }
+  })
+
+  it("is placed with the game's secret seed, not the game id players can see", () => {
+    const zone = (deck_seed: string) => view(aina, { game: { ...full('g1'), deck_seed } }).legendaryZone
+    expect(zone('secret-one')).not.toEqual(zone('secret-two'))
+    expect(zone('secret-one')).toEqual(zone('secret-one'))
+  })
+
+  it('is the same for runners and chasers, jailed or free; marshals get the exact stash instead', () => {
+    const z = view(aina, { game: full('g1') }).legendaryZone
+    expect(view(chaser, { game: full('g1') }).legendaryZone).toEqual(z)
+    expect(view({ ...aina, jailed: true }, { game: full('g1') }).legendaryZone).toEqual(z)
+    const m = view(siti, { game: full('g1') })
+    expect(m.legendaryZone).toBeNull()
+    expect(m.datoStash).toEqual(stash)
+  })
+
+  it("the card's code is for marshals only, never in a player's view (ruling R15)", () => {
+    const g = { ...full('g1'), dato_stash: { ...stash, code: 'Secret-card-code-12345' } }
+    expect(view(siti, { game: g }).datoCode).toBe('Secret-card-code-12345')
+    expect(view(siti, { game: g }).datoStash).toEqual(stash)
+    for (const me of [aina, chaser, { ...aina, jailed: true }]) {
+      const v = view(me, { game: g })
+      expect(v).not.toHaveProperty('datoCode')
+      expect(JSON.stringify(v)).not.toContain('Secret-card-code-12345')
+    }
+  })
+
+  it('a stash made with the game but not dropped yet has no zone, and no pin for marshals', () => {
+    const g = { ...full('g1'), dato_stash: { code: 'c0de', lat: null, lng: null, claimedBy: null, claimedAt: null } }
+    expect(view(aina, { game: g }).legendaryZone).toBeNull()
+    expect(view(siti, { game: g }).datoStash).toBeNull()
+    expect(view(siti, { game: g }).datoCode).toBe('c0de')
+  })
+
+  it("the Settle picker is offered only during the chase, and not while paused", () => {
+    const holder = { ...aina, jailed: true }
+    const dato: PowerUp = { id: 'u1', game_id: 'g1', player_id: 'r1', kind: 'dato', station: null, claimed_at: iso(NOW), used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null }
+    const over = { players: [chaser, holder, hafiz, wei, siti], powerUps: [dato] }
+    expect(view(holder, over).settle).toEqual({ canFreeSelf: true, options: [] })
+    expect(view(holder, { ...over, game: game({ paused_at: iso(NOW - MIN) }) }).settle).toBeNull()
+    expect(view(holder, { ...over, game: game({ ended_at: iso(NOW - MIN) }) }).settle).toBeNull()
+    expect(view(holder, { ...over, now: T0 + 2 * MIN }).settle).toBeNull()
+  })
+
+  it('is gone once claimed, and outside the chase', () => {
+    const claimed = game({ settings: { ...DEFAULT_SETTINGS, mode: 'full' }, dato_stash: { ...stash, claimedBy: 'r2', claimedAt: iso(NOW) } })
+    expect(view(aina, { game: claimed }).legendaryZone).toBeNull()
+    expect(view(aina, { game: full('g1'), now: T0 + 2 * MIN }).legendaryZone).toBeNull()
+    expect(view(aina, { game: { ...full('g1'), ended_at: iso(NOW - MIN) } }).legendaryZone).toBeNull()
   })
 })

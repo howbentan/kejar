@@ -5,14 +5,16 @@ import { qrDataUrl } from '../game/qr'
 const TAGS = Array.from({ length: 30 }, (_, i) => i + 1)
 const STATIONS = Array.from({ length: MAX_STATIONS }, (_, i) => i + 1)
 
-/** Printable sheet: 30 runner tags plus the jail code. Black on white, no lime text (spec §9). */
+/**
+ * Printable sheet: 30 runner tags plus the jail code. Black on white, no lime text (spec §9). It's public, so it
+ * never has Full mode's hidden ★ card: each game prints its own from Organiser tools (`PrintCard`, ruling R15).
+ */
 export default function PrintTags() {
   const [codes, setCodes] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    void Promise.all([...TAGS.map((n) => tagQr(n)), ...STATIONS.map((n) => stationQr(n)), JAIL_QR].map(async (t) => [t, await qrDataUrl(t)] as const)).then(
-      (pairs) => setCodes(Object.fromEntries(pairs)),
-    )
+    const texts = [...TAGS.map((n) => tagQr(n)), ...STATIONS.map((n) => stationQr(n)), JAIL_QR]
+    void Promise.all(texts.map(async (t) => [t, await qrDataUrl(t)] as const)).then((pairs) => setCodes(Object.fromEntries(pairs)))
   }, [])
 
   return (

@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { testView } from './testView'
 
@@ -34,6 +34,23 @@ describe('Lobby setup map', () => {
     unmount()
     render(<Lobby code="ABC234" view={base} refresh={vi.fn()} />)
     expect(screen.queryByText('Setup: where things go')).toBeNull()
+  })
+})
+
+describe('Lobby: Dato Seri for marshals', () => {
+  it('a marshal in a Full lobby gets the hidden card behind a closed toggle; a runner never does', () => {
+    localStorage.setItem('kejar.game.ABC234', JSON.stringify({ token: 'm1' }))
+    const stash = { lat: 3.1, lng: 101.1, claimedBy: null, claimedAt: null }
+    const base = testView({ phase: 'lobby', settings: { ...testView().settings, mode: 'full' }, datoStash: stash })
+    const { unmount } = render(<Lobby code="ABC234" view={{ ...base, me: { ...base.me, role: 'marshal' } }} refresh={vi.fn()} />)
+    expect(document.body.textContent).not.toMatch(/dato|legendary|yellow pin/i)
+    fireEvent.click(screen.getByRole('button', { name: 'Organiser tools' }))
+    expect(screen.getByRole('button', { name: 'Drop the ★ card here' })).toBeInTheDocument()
+    unmount()
+    render(<Lobby code="ABC234" view={{ ...base, datoStash: undefined }} refresh={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Organiser tools' })).toBeNull()
+    expect(document.body.textContent).not.toMatch(/dato/i)
+    localStorage.clear()
   })
 })
 

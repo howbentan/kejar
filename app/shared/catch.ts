@@ -60,11 +60,67 @@ export function judgeJailbreak(i: {
 }): BreakJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (i.runner.role !== 'runner' || i.runner.jailed) return { ok: false, reason: 'not-a-free-runner' }
-  const p = i.runnerPos
-  if (!p || i.now - Date.parse(p.at) > JAIL_FRESH_MS || distanceM(p, i.jail) > JAIL_RADIUS_M + slack(p)) {
-    return { ok: false, reason: 'too-far-from-jail' }
-  }
+  if (!atJail(i.runnerPos, i.jail, i.now)) return { ok: false, reason: 'too-far-from-jail' }
   const freedIds = i.players.filter((p) => p.role === 'runner' && p.jailed && !p.freed_once).map((p) => p.id)
+  if (freedIds.length === 0) return { ok: false, reason: 'nobody-to-free' }
+  return { ok: true, freedIds }
+}
+
+/** At Penjara: a fix within `JAIL_FRESH_MS`, within `JAIL_RADIUS_M` plus its GPS error (capped). */
+function atJail(p: Position | null, jail: LatLng, now: number): boolean {
+  return !!p && now - Date.parse(p.at) <= JAIL_FRESH_MS && distanceM(p, jail) <= JAIL_RADIUS_M + slack(p)
+}
+
+/** Settle frees the holder plus this many others at most (jail design §4d, rules doc §9c). */
+export const SETTLE_MAX_TARGETS = 2
+
+export type SettleJudgement =
+  | { ok: true; freedIds: string[] }
+  | {
+      ok: false
+      reason:
+        | 'not-chasing'
+        | 'not-jailed'
+        | 'no-dato'
+        | 'too-far-from-jail'
+        | 'too-many-targets'
+        | 'unknown-target'
+        | 'target-already-freed'
+        | 'nobody-to-free'
+      /** For the target refusals: which pick was wrong. */
+      targetId?: string
+    }
+
+/**
+ * Settle, in hidden-stash mode (jail design §4, §4b, §4d): a jailed runner holding Dato Seri, at Penjara (the
+ * same place check as a jailbreak), frees themselves if they haven't used their one escape, plus up to 2 other
+ * jailed runners of their choice. Every pick must be a different jailed runner who hasn't used their escape:
+ * a bad pick refuses the whole Settle rather than being dropped. Refuses if nobody would be freed.
+ * `players` are those still in the game (removed players are left out, so they count as unknown).
+ */
+export function judgeSettle(i: {
+  phase: Phase
+  holder: Player
+  holdsDato: boolean
+  players: Player[]
+  holderPos: Position | null
+  jail: LatLng
+  targetIds: string[]
+  now: number
+}): SettleJudgement {
+  if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
+  if (i.holder.role !== 'runner' || !i.holder.jailed) return { ok: false, reason: 'not-jailed' }
+  if (!i.holdsDato) return { ok: false, reason: 'no-dato' }
+  if (!atJail(i.holderPos, i.jail, i.now)) return { ok: false, reason: 'too-far-from-jail' }
+  if (i.targetIds.length > SETTLE_MAX_TARGETS) return { ok: false, reason: 'too-many-targets' }
+  const seen = new Set<string>([i.holder.id])
+  for (const id of i.targetIds) {
+    const t = i.players.find((p) => p.id === id)
+    if (!t || seen.has(id) || t.role !== 'runner' || !t.jailed) return { ok: false, reason: 'unknown-target', targetId: id }
+    if (t.freed_once) return { ok: false, reason: 'target-already-freed', targetId: id }
+    seen.add(id)
+  }
+  const freedIds = [...(i.holder.freed_once ? [] : [i.holder.id]), ...i.targetIds]
   if (freedIds.length === 0) return { ok: false, reason: 'nobody-to-free' }
   return { ok: true, freedIds }
 }

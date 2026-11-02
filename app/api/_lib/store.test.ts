@@ -271,3 +271,52 @@ describe('drawCard', () => {
     expect([...got].sort()).toEqual([0, 1, 2, 3, 4])
   })
 })
+
+describe('Abang Grab', () => {
+  async function grab() {
+    const g = await startedGame()
+    const u = await store.addPowerUp({ game_id: g.id, player_id: 'p1', kind: 'grab', station: 1 })
+    return { g, u }
+  }
+
+  it('reserves n draws at once and returns the first, once per Grab', async () => {
+    const { g, u } = await grab()
+    await store.drawCard(g.id, 'runner')
+    expect(await store.openGrab(u.id, 'runner', 3)).toEqual({ first: 1, offer: null })
+    await store.updatePowerUp(u.id, { offer: ['shield', 'cloak', 'decoy'] })
+    expect(await store.openGrab(u.id, 'runner', 3)).toEqual({ first: 1, offer: ['shield', 'cloak', 'decoy'] })
+    expect(await store.drawCard(g.id, 'runner')).toBe(4)
+  })
+
+  it('two simultaneous opens reserve once', async () => {
+    const { g, u } = await grab()
+    const [a, b] = await Promise.all([store.openGrab(u.id, 'chaser', 3), store.openGrab(u.id, 'chaser', 3)])
+    expect(a).toEqual(b)
+    expect(await store.drawCard(g.id, 'chaser')).toBe(3)
+  })
+
+  it('a pick on a Grab that Toyol or Ah Long took says taken', async () => {
+    const { u } = await grab()
+    await store.updatePowerUp(u.id, { offer: ['shield', 'cloak', 'decoy'], taken_at: iso(T0) })
+    expect(await store.pickGrab(u.id, 'p1', 0)).toEqual({ ok: false, reason: 'taken' })
+  })
+
+  it("won't open a Grab that was used or taken", async () => {
+    const { u } = await grab()
+    await store.updatePowerUp(u.id, { taken_at: iso(T0) })
+    expect(await store.openGrab(u.id, 'runner', 3)).toBeNull()
+  })
+
+  it('a pick marks the Grab used and adds the sealed, station-less card; a second pick is refused', async () => {
+    const { g, u } = await grab()
+    await store.updatePowerUp(u.id, { offer: ['shield', 'cloak', 'decoy'] })
+    expect(await store.pickGrab(u.id, 'p2', 0)).toEqual({ ok: false, reason: 'not-yours' })
+    expect(await store.pickGrab(u.id, 'p1', 3)).toEqual({ ok: false, reason: 'bad-choice' })
+    const r = await store.pickGrab(u.id, 'p1', 2)
+    expect(r).toMatchObject({ ok: true, powerUp: { player_id: 'p1', kind: 'decoy', sealed: true, station: null, used_at: null } })
+    expect(await store.pickGrab(u.id, 'p1', 1)).toEqual({ ok: false, reason: 'already-used' })
+    const rows = await store.powerUps(g.id)
+    expect(rows.find((x) => x.id === u.id)!.used_at).not.toBeNull()
+    expect(rows).toHaveLength(2)
+  })
+})

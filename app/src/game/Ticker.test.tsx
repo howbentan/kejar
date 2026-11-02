@@ -15,6 +15,16 @@ const item = (n: number, over: Partial<FeedItem> = {}): FeedItem => ({
 })
 
 describe('Ticker', () => {
+  it("a steal victim's own line buzzes and gets the needs-you outline", () => {
+    const vibrate = vi.fn()
+    Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true })
+    const { rerender } = render(<Ticker feed={[item(1)]} />)
+    const stolen = item(2, { text: 'Toyol took your Mat Rempit!', means: null, label: null, act: true })
+    rerender(<Ticker feed={[stolen, item(1)]} />)
+    expect(screen.getByRole('button', { name: 'Feed: Toyol took your Mat Rempit!' })).toHaveClass('ticker', 'act')
+    expect(vibrate).toHaveBeenCalledTimes(1)
+  })
+
   it('shows the newest line with its label and what it means', () => {
     render(<Ticker feed={[item(2), item(1)]} />)
     const t = screen.getByRole('button', { name: /feed/i })

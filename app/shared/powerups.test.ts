@@ -25,6 +25,8 @@ function pu(over: Partial<PowerUp> = {}): PowerUp {
     claimed_at: iso(NOW - 5 * MIN),
     used_at: null,
     consumed_at: null,
+    sealed: false,
+    taken_at: null, offer: null,
     ...over,
   }
 }
@@ -71,6 +73,21 @@ describe('judgeClaim', () => {
 })
 
 describe('slotBusy', () => {
+  it('a card that was taken (Toyol / Ah Long) no longer fills the slot', () => {
+    expect(slotBusy([pu({ kind: 'cloak', taken_at: iso(NOW - 1_000) })], 'r1', [], NOW)).toBeNull()
+  })
+  it('a card row from before migration 0011 (no taken_at at all) still fills the slot', () => {
+    const { taken_at: _, ...old } = pu({ kind: 'cloak' })
+    expect(slotBusy([old as PowerUp], 'r1', [], NOW)).toEqual({ kind: 'cloak', running: false })
+  })
+  it('Toyol and Ah Long are done the moment they are used', () => {
+    expect(slotBusy([pu({ kind: 'toyol', used_at: iso(NOW - 1_000) })], 'r1', [], NOW)).toBeNull()
+    expect(slotBusy([pu({ kind: 'along', used_at: iso(NOW - 1_000) })], 'c1', [], NOW)).toBeNull()
+  })
+  it('an unused Toyol still fills the slot', () => {
+    expect(slotBusy([pu({ kind: 'toyol' })], 'r1', [], NOW)).toEqual({ kind: 'toyol', running: false })
+  })
+
   const T = NOW - 60_000
   const used = (kind: PowerUp['kind'], over: Partial<PowerUp> = {}) => pu({ kind, used_at: iso(T), ...over })
   const revealed = (seq: number, at: number, alertAt = at - 30_000): Ping => ({ ...ping(seq, at), alert_at: iso(alertAt), revealed: true })

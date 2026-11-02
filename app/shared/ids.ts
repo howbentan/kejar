@@ -18,6 +18,24 @@ export function tagIdFromQr(text: string): number | null {
 
 export const JAIL_QR = 'KEJAR:JAIL'
 
+/**
+ * The printed Dato Seri card the organiser hides (jail design §4b); scanning it is a claim. Each game's card
+ * carries that game's own secret code (ruling R15), so it's printed from the organiser tools, never the public sheet.
+ */
+export const datoQr = (code: string) => `KEJAR:DATO:${code}`
+
+/**
+ * Any ★ card, this game's or not, including a bare `KEJAR:DATO`: all go to the server as a claim, which answers
+ * a wrong card exactly like no stash, so a scan never says whose card it was.
+ */
+export const isDatoQr = (text: string) => /^KEJAR:DATO(:|$)/.test(text.trim())
+
+/** The secret code on a ★ card, or null for a bare or malformed one. */
+export function datoCodeFromQr(text: string): string | null {
+  const m = /^KEJAR:DATO:([A-Za-z0-9_-]{1,64})$/.exec(text.trim())
+  return m ? m[1] : null
+}
+
 export const MAX_STATIONS = 8
 
 export function stationQr(n: number): string {

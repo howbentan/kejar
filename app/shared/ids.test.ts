@@ -1,11 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import { arenaAroundPoint } from './arenas.js'
-import { JAIL_QR, newGameCode, stationFromQr, stationQr, tagIdFromQr, tagQr } from './ids.js'
+import { datoCodeFromQr, datoQr, isDatoQr, JAIL_QR, newGameCode, stationFromQr, stationQr, tagIdFromQr, tagQr } from './ids.js'
 import { seeded } from './testing.js'
 
 describe('newGameCode', () => {
   it('makes 6 easy-to-read characters', () => {
     expect(newGameCode(seeded(2))).toMatch(/^[A-HJKMNP-Z2-9]{6}$/)
+  })
+})
+
+describe("Dato Seri's card QR (ruling R15)", () => {
+  it("carries this game's own code, and reads it back", () => {
+    expect(datoQr('aB3_-x')).toBe('KEJAR:DATO:aB3_-x')
+    expect(datoCodeFromQr(' KEJAR:DATO:aB3_-x ')).toBe('aB3_-x')
+  })
+  it('a bare or malformed card has no code, but still counts as a card scan', () => {
+    for (const t of ['KEJAR:DATO', 'KEJAR:DATO:', 'KEJAR:DATO:a b', 'KEJAR:DATO:x:y']) {
+      expect(datoCodeFromQr(t)).toBeNull()
+      expect(isDatoQr(t)).toBe(true)
+    }
+    expect(isDatoQr('KEJAR:DATOX')).toBe(false)
+    expect(isDatoQr('KEJAR:STATION:1')).toBe(false)
   })
 })
 

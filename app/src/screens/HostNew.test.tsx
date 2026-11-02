@@ -108,6 +108,7 @@ describe('HostNew', () => {
     const { unmount } = render(<HostNew />)
     fireEvent.click(await screen.findByRole('button', { name: 'Use KLCC' }))
     expect(screen.getByText('The chase, check-ins and Penjara, plus 4 simple power-ups. Best for first-timers.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /print/i })).toHaveAttribute('href', '/print/tags')
     fireEvent.click(screen.getByRole('button', { name: /create game/i }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ settings: expect.objectContaining({ mode: 'core' }) })))
     unmount()
@@ -115,9 +116,45 @@ describe('HostNew', () => {
     render(<HostNew />)
     fireEvent.click(await screen.findByRole('button', { name: 'Use KLCC' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Game: Full' }))
-    expect(screen.getByText('Everything in Core, plus Gostan and more power-ups as they arrive. For regulars.')).toBeInTheDocument()
+    expect(screen.getByText('Everything in Core, plus Gostan, Toyol, Ah Long and Abang Grab: more power-ups, and ways to steal them. For regulars.')).toBeInTheDocument()
+    // Dato Seri is a secret (rules doc §9b): never on the setup screen.
+    expect(document.body.textContent).not.toMatch(/dato|legendary/i)
+    // The public sheet has no hidden card: each game prints its own from Organiser tools (ruling R15).
+    expect(screen.getByRole('link', { name: /print/i })).toHaveAttribute('href', '/print/tags')
     fireEvent.click(screen.getByRole('button', { name: /create game/i }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ settings: expect.objectContaining({ mode: 'full' }) })))
+  })
+
+  it('the chaser-snapshot switch is Full only, off by default, and can be turned on', async () => {
+    const { unmount } = render(<HostNew />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Use KLCC' }))
+    // Core: no switch at all (rules §3).
+    expect(screen.queryByRole('radio', { name: /Dikejar can see Kejar at check-in/ })).toBeNull()
+    fireEvent.click(screen.getByRole('radio', { name: 'Game: Full' }))
+    expect(screen.getByRole('radio', { name: 'Dikejar can see Kejar at check-in: Off' })).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(screen.getByRole('button', { name: /create game/i }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ settings: expect.objectContaining({ chaserSnapshot: false }) })))
+    unmount()
+    call.mockClear()
+    render(<HostNew />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Use KLCC' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Game: Full' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Dikejar can see Kejar at check-in: On' }))
+    fireEvent.click(screen.getByRole('button', { name: /create game/i }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ settings: expect.objectContaining({ chaserSnapshot: true }) })))
+  })
+
+  it('switching back to Core turns the chaser-snapshot switch off', async () => {
+    render(<HostNew />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Use KLCC' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Game: Full' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Dikejar can see Kejar at check-in: On' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Game: Core' }))
+    expect(screen.queryByRole('radio', { name: /Dikejar can see Kejar at check-in/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /create game/i }))
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ settings: expect.objectContaining({ mode: 'core', chaserSnapshot: false }) })),
+    )
   })
 
   it('creating from an untouched saved park sends no overrides', async () => {

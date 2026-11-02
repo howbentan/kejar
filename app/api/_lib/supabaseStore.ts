@@ -1,9 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Game, GameEvent, Ping, Player, Position, PowerUp } from '../../shared/types.js'
-import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, StationClaim } from './store.js'
+import type { Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind } from '../../shared/types.js'
+import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
 const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, push, removed_at, outside, left_start'
-const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed'
+const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -156,9 +156,44 @@ export class SupabaseStore implements GameStore {
   }
   async markUsed(id: string) {
     const rows = check(
-      await this.db.from('powerups').update({ used_at: this.nowIso() }).eq('id', id).is('used_at', null).select('id'),
+      await this.db.from('powerups').update({ used_at: this.nowIso() }).eq('id', id).is('used_at', null).is('taken_at', null).select('id'),
     )
     return (rows ?? []).length > 0
+  }
+  async stealFrom(gameId: string, side: 'runner' | 'chaser'): Promise<StolenCard | null> {
+    // The database function takes a per-game advisory lock (thefts in one game run one at a time), then locks the
+    // chosen card row `for update` and re-checks it before marking it taken, so two thieves never take the same one.
+    const rows = check(await this.db.rpc('steal_card', { p_game: gameId, p_side: side, p_at: this.nowIso() })) as
+      | { id: string; player_id: string; kind: PowerUp['kind'] }[]
+      | null
+    const row = rows?.[0]
+    return row ? { stolenFrom: row.player_id, kind: row.kind, powerupId: row.id } : null
+  }
+  async openGrab(powerupId: string, side: 'runner' | 'chaser', n: number) {
+    // The database function locks the Grab and bumps the side's counter by n in one transaction.
+    const rows = check(await this.db.rpc('open_grab', { p_powerup: powerupId, p_side: side, p_n: n })) as
+      | { first_draw: number; offer: PowerUpKind[] | null }[]
+      | null
+    const row = rows?.[0]
+    return row ? { first: row.first_draw, offer: row.offer } : null
+  }
+  async pickGrab(powerupId: string, playerId: string, choice: number): Promise<GrabPick> {
+    if (!Number.isInteger(choice)) return { ok: false, reason: 'bad-choice' }
+    // The database function locks the Grab, re-checks, marks it used and inserts the sealed card together.
+    const rows = check(
+      await this.db.rpc('pick_grab', { p_powerup: powerupId, p_player: playerId, p_choice: choice, p_at: this.nowIso() }),
+    ) as { result: string; powerup: PowerUp | null }[] | null
+    const row = rows?.[0]
+    if (row?.result === 'ok' && row.powerup) return { ok: true, powerUp: row.powerup }
+    const reason = row?.result
+    return { ok: false, reason: reason === 'already-used' || reason === 'taken' || reason === 'no-offer' || reason === 'bad-choice' ? reason : 'not-yours' }
+  }
+  async claimDato(gameId: string, playerId: string): Promise<PowerUp | null> {
+    // The database function locks the game row, re-checks the stash is unclaimed, marks it and inserts the card.
+    const rows = check(await this.db.rpc('claim_dato', { p_game: gameId, p_player: playerId, p_at: this.nowIso() })) as
+      | PowerUp[]
+      | null
+    return rows?.[0] ?? null
   }
   async consumeShield(id: string) {
     const rows = check(

@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const reduce = vi.hoisted(() => ({ on: false }))
 vi.mock('motion/react', async (orig) => ({ ...(await orig<typeof import('motion/react')>()), useReducedMotion: () => reduce.on }))
 
-import LuckyDip, { CLAIM_STAMP_MS, FLIP_MS, PICK_MS, REVEAL_HOLD_MS, SPARKLES, SWEEP_MS } from './LuckyDip'
+import LuckyDip, { CLAIM_STAMP_MS, dipFor, FLIP_MS, LEGENDARY_HOLD_MS, PICK_MS, REVEAL_HOLD_MS, SPARKLES, SWEEP_MS } from './LuckyDip'
+import { stashMessage } from './PowerUpHand'
 
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => {
@@ -92,5 +93,52 @@ describe('LuckyDip', () => {
     expect(screen.getByText('Got Durian!')).toBeInTheDocument()
     wait(REVEAL_HOLD_MS)
     expect(onDone).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe("Dato Seri's reveal (motion design §7)", () => {
+  it('a good stash scan skips the fan: one foil card, the yellow marker, then done', () => {
+    const onDone = vi.fn()
+    const { container } = render(<>{dipFor('KEJAR:DATO', { ok: true, kind: 'dato' }, 5, onDone)}</>)
+    expect(screen.queryByText(/CLAIMED · Station/)).toBeNull()
+    expect(screen.queryAllByLabelText('Face-down card')).toHaveLength(0)
+    expect(screen.getByRole('heading', { name: 'Dato Seri.' })).toBeInTheDocument()
+    expect(screen.getByText('Legendary. In Penjara, free yourself and up to two friends. Only one exists.')).toBeInTheDocument()
+    expect(container.querySelector('.power-card.legendary')).not.toBeNull()
+    wait(FLIP_MS)
+    const paths = container.querySelectorAll('svg.marker path')
+    expect(paths.length).toBeGreaterThan(0)
+    for (const p of paths) expect(p.getAttribute('stroke')).toBe('#FFD60A')
+    wait(LEGENDARY_HOLD_MS)
+    expect(onDone).toHaveBeenCalledTimes(1)
+  })
+
+  it('works with reduced motion too', () => {
+    reduce.on = true
+    const onDone = vi.fn()
+    render(<>{dipFor('KEJAR:DATO', { ok: true, kind: 'dato' }, null, onDone)}</>)
+    expect(screen.getByRole('heading', { name: 'Dato Seri.' })).toBeInTheDocument()
+    wait(LEGENDARY_HOLD_MS)
+    expect(onDone).toHaveBeenCalledTimes(1)
+  })
+
+  it('a refused stash scan is a calm line with no moment', () => {
+    expect(dipFor('KEJAR:DATO', { ok: false, reason: 'too-far' }, 5, () => {})).toBeNull()
+  })
+
+  it("refusals never say what it is or call it a station", () => {
+    const cases = [
+      ['too-far', 'Get closer.'],
+      ['no-stash', 'Nothing here.'],
+      ['cannot-claim', 'Nothing here.'],
+      ['not-chasing', 'Nothing here.'],
+      ['hand-full', 'Use or lose your power-up first'],
+      ['paused', 'Game is paused'],
+    ] as const
+    for (const [reason, text] of cases) {
+      const line = stashMessage({ ok: false, reason } as never)
+      expect(line).toBe(text)
+      expect(line).not.toMatch(/station|dato|legend/i)
+    }
   })
 })
