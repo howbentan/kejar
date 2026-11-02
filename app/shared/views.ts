@@ -24,6 +24,8 @@ export interface MapDot {
   missed?: boolean
   /** Shown at the true spot because of a chaser's Focus. */
   exact?: true
+  /** Exact specifically because of Pak Guard's Focus; null for every other dot. */
+  revealedBy: 'focus' | null
   at: string
 }
 
@@ -129,7 +131,7 @@ export function latestAtOrBefore(list: Position[] | undefined, t: number): Posit
 }
 
 function dotFor(p: Player, at: Position, kind: MapDot['kind']): MapDot {
-  return { id: p.id, kind, lat: at.lat, lng: at.lng, at: at.at, label: p.role === 'runner' ? tagLabel(p) : p.name }
+  return { id: p.id, kind, lat: at.lat, lng: at.lng, at: at.at, label: p.role === 'runner' ? tagLabel(p) : p.name, revealedBy: null }
 }
 
 function kindOf(p: Player, me: Player): MapDot['kind'] {
@@ -218,9 +220,11 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
     if (decoyed.has(p.id)) {
       // Drawn the same way as everyone else in range, so a Focus can't expose a Decoy.
       const spot = decoySpot(at, i.game.arena, seed)
-      dot = focused ? { ...dotFor(p, at, 'runner'), ...spot, exact: true } : { ...dotFor(p, at, 'runner'), ...spot, fuzzy: true }
+      dot = focused
+        ? { ...dotFor(p, at, 'runner'), ...spot, exact: true, revealedBy: 'focus' }
+        : { ...dotFor(p, at, 'runner'), ...spot, fuzzy: true }
     } else if (focused) {
-      dot = { ...dotFor(p, at, 'runner'), exact: true }
+      dot = { ...dotFor(p, at, 'runner'), exact: true, revealedBy: 'focus' }
     } else {
       dot = { ...dotFor(p, at, 'runner'), ...fuzz(at, FUZZ_RADIUS_M, seed), fuzzy: true }
     }

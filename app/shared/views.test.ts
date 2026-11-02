@@ -382,6 +382,19 @@ describe('power-up effects', () => {
     expect(dot.fuzzy).toBeUndefined()
   })
 
+  it('a runner shown exactly because of Pak Guard carries revealedBy: focus', () => {
+    const ps = { ...positions, c1: [pos(A.lat + 0.0005, A.lng, T0 + 14.8 * MIN)] } // ~56 m from Aina
+    const dot = view(chaser, { positions: ps, powerUps: [used('u1', 'c1', 'focus', T0 + 14 * MIN)] }).dots.find(
+      (d) => d.id === 'r1',
+    )
+    expect(dot?.revealedBy).toBe('focus')
+  })
+
+  it('an ordinarily-exact dot (a teammate) does not carry revealedBy', () => {
+    const dot = view(aina, {}).dots.find((d) => d.kind === 'teammate')
+    expect(dot?.revealedBy).toBeNull()
+  })
+
   it('a flare reveal between scheduled pings becomes the last reveal', () => {
     const flare = ping(BONUS_SEQ_BASE, T0 + 16.5 * MIN)
     const v = view(chaser, { pings: [...pings, flare], now: T0 + 17 * MIN })

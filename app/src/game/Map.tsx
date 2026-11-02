@@ -35,7 +35,7 @@ function dotFeatures(dots: MapDot[], origin: LatLng | null = null) {
     } else {
       points.push({
         type: 'Feature',
-        properties: { kind: d.kind, label: d.label ?? '' },
+        properties: { kind: d.kind, label: d.label ?? '', revealedBy: d.revealedBy },
         geometry: { type: 'Point', coordinates: [d.lng, d.lat] },
       })
     }
@@ -249,6 +249,18 @@ export default function GameMap({
           'circle-color': ['match', ['get', 'kind'], 'chaser', VOLT, 'marshal', 'rgba(0,0,0,0)', WHITE],
           'circle-stroke-color': ['match', ['get', 'kind'], 'me', 'rgba(245,245,243,0.35)', 'marshal', WHITE, BLACK],
           'circle-stroke-width': ['match', ['get', 'kind'], 'me', 6, 'marshal', 2, 1.5],
+        },
+      })
+      m.addLayer({
+        id: 'reveal-ring',
+        type: 'circle',
+        source: 'points',
+        filter: ['==', ['get', 'revealedBy'], 'focus'],
+        paint: {
+          'circle-radius': 11,
+          'circle-color': 'rgba(0,0,0,0)',
+          'circle-stroke-color': VOLT,
+          'circle-stroke-width': 2,
         },
       })
       m.addLayer({

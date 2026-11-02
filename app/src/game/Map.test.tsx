@@ -80,7 +80,7 @@ describe('GameMap', () => {
 
   it('Centre on me flies to my dot', () => {
     created.flights = []
-    render(<GameMap arena={arena} dots={[{ id: 'me', kind: 'me', lat: 3.2, lng: 101.5, at: '' }]} />)
+    render(<GameMap arena={arena} dots={[{ id: 'me', kind: 'me', lat: 3.2, lng: 101.5, at: '', revealedBy: null }]} />)
     fireEvent.click(screen.getByRole('button', { name: /centre on me/i }))
     expect(created.flights).toEqual([expect.objectContaining({ center: [101.5, 3.2] })])
   })
@@ -135,6 +135,21 @@ describe('GameMap', () => {
     created.load!()
     const ids = created.layers.map((l) => l.id)
     expect(ids).toEqual(expect.arrayContaining(['jail', 'jail-label', 'start', 'start-label']))
+  })
+
+  it("draws a lime reveal ring around a dot revealed by Pak Guard's Focus", () => {
+    created.layers = []
+    created.data = {}
+    const dots = [{ id: 'r1', kind: 'runner' as const, lat: 3.1, lng: 101.1, at: '', revealedBy: 'focus' as const }]
+    render(<GameMap arena={arena} dots={dots} />)
+    created.load!()
+    const ids = created.layers.map((l) => l.id)
+    expect(ids).toContain('reveal-ring')
+    expect(ids.indexOf('reveal-ring')).toBeGreaterThan(ids.indexOf('points'))
+    const ring = created.layers.find((l) => l.id === 'reveal-ring') as unknown as { filter: unknown; paint: Record<string, unknown> }
+    expect(ring.filter).toEqual(['==', ['get', 'revealedBy'], 'focus'])
+    expect(ring.paint['circle-stroke-color']).toBe('#C6FF3D')
+    expect(created.data.points).toMatchObject({ features: [{ properties: { revealedBy: 'focus' } }] })
   })
 
   it('showJailAndStart={false} skips the jail/start circles and labels entirely (e.g. a scoped-down stub arena)', () => {

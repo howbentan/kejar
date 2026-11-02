@@ -67,7 +67,7 @@ export default function SosTakeover({
         <div className="sos-takeover-map">
           <GameMap
             arena={arena}
-            dots={[{ id: 'me', kind: 'me', lat: myPos.lat, lng: myPos.lng, at: new Date().toISOString() }]}
+            dots={[{ id: 'me', kind: 'me', lat: myPos.lat, lng: myPos.lng, at: new Date().toISOString(), revealedBy: null }]}
             pins={[{ id: alert.id, lat: senderPos.lat, lng: senderPos.lng }]}
             route={{ from: myPos, to: senderPos }}
             height={200}

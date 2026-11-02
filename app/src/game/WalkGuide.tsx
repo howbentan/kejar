@@ -59,7 +59,7 @@ export function WalkGuide({ jail, arena, onArrived, onLost }: { jail: LatLng; ar
       {arena && here && !lost && (
         <GameMap
           arena={arena}
-          dots={here ? [{ id: 'me', kind: 'me', lat: here.lat, lng: here.lng, at: new Date().toISOString() }] : []}
+          dots={here ? [{ id: 'me', kind: 'me', lat: here.lat, lng: here.lng, at: new Date().toISOString(), revealedBy: null }] : []}
           route={here ? { from: here, to: jail } : null}
           height={220}
         />
