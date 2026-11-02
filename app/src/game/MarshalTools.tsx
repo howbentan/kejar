@@ -51,8 +51,21 @@ export function AlertsOnPhone({ code, view, refresh }: { code: string; view: Vie
   )
 }
 
-/** Pause and resume, the alert list, and removing players (spec §5.1). */
-export default function MarshalTools({ code, view, refresh }: { code: string; view: View; refresh: () => void }) {
+/**
+ * Pause and resume, the alert list, and removing players (spec §5.1). An open SOS is only ever closed from the
+ * SOS takeover (which insists on an outcome); its pinned row here brings the takeover back via `onOpenSos`.
+ */
+export default function MarshalTools({
+  code,
+  view,
+  refresh,
+  onOpenSos,
+}: {
+  code: string
+  view: View
+  refresh: () => void
+  onOpenSos?: (alertId: string) => void
+}) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null)
@@ -99,8 +112,15 @@ export default function MarshalTools({ code, view, refresh }: { code: string; vi
               {a.respondingName ? `${a.respondingName} IS GOING` : "NOBODY'S GOING YET"}
             </p>
           )}
-          {a.handled && a.outcome && <p className="muted">{a.outcome}</p>}
+          {a.handled && (a.outcome || a.closedByName) && (
+            <p className="muted">{[a.outcome, a.closedByName && `closed by ${a.closedByName}`].filter(Boolean).join(' · ')}</p>
+          )}
         </div>
+        {!a.handled && a.kind === 'sos' && onOpenSos && (
+          <button type="button" className="btn alert-btn" onClick={() => onOpenSos(a.id)}>
+            Open SOS
+          </button>
+        )}
         {!a.handled && a.kind === 'auto-jail' && (
           <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <button type="button" className="btn alert-btn" disabled={busy} onClick={() => act('undoAutoJail', { eventId: a.id })}>
@@ -111,7 +131,7 @@ export default function MarshalTools({ code, view, refresh }: { code: string; vi
             </button>
           </span>
         )}
-        {!a.handled && a.kind !== 'auto-jail' && (
+        {!a.handled && a.kind !== 'auto-jail' && a.kind !== 'sos' && (
           <button type="button" className="btn btn-ghost alert-btn" disabled={busy} onClick={() => act('handleAlert', { eventId: a.id })}>
             Handled
           </button>

@@ -72,6 +72,20 @@ function routeFeatures(route: { from: LatLng; to: LatLng } | null) {
   ])
 }
 
+/** Frames the camera on every point at once (at most street level), e.g. a marshal and the SOS they're walking to. */
+function fitTo(m: maplibregl.Map, points: LatLng[] | null) {
+  if (!points || points.length < 2) return
+  const lngs = points.map((p) => p.lng)
+  const lats = points.map((p) => p.lat)
+  m.fitBounds(
+    [
+      [Math.min(...lngs), Math.min(...lats)],
+      [Math.max(...lngs), Math.max(...lats)],
+    ],
+    { padding: 40, maxZoom: 17, animate: false },
+  )
+}
+
 export default function GameMap({
   arena,
   dots,
@@ -81,6 +95,7 @@ export default function GameMap({
   route = null,
   ripple = null,
   showJailAndStart = true,
+  fit = null,
 }: {
   arena: Arena
   dots: MapDot[]
@@ -99,6 +114,11 @@ export default function GameMap({
    * start circle + "S" label, which would otherwise float on top of whatever `arena.jail`/`arena.start` is.
    */
   showJailAndStart?: boolean
+  /**
+   * Keep these points in view instead of the fixed zoom on the arena's start (the SOS takeover's mini map).
+   * Re-framed as they move, without rebuilding the map.
+   */
+  fit?: LatLng[] | null
 }) {
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
@@ -115,6 +135,8 @@ export default function GameMap({
   latestPins.current = pins
   const latestRoute = useRef(route)
   latestRoute.current = route
+  const latestFit = useRef(fit)
+  latestFit.current = fit
   const showJailAndStartRef = useRef(showJailAndStart)
   showJailAndStartRef.current = showJailAndStart
   // Polls return a fresh arena object every 3 s; rebuild the map only when its content changes.
@@ -282,6 +304,7 @@ export default function GameMap({
         source: 'pins',
         paint: { 'circle-radius': 10, 'circle-color': VOLT, 'circle-stroke-color': WHITE, 'circle-stroke-width': 3 },
       })
+      fitTo(m, latestFit.current)
       ready.current = true
     })
     return () => {
@@ -302,6 +325,12 @@ export default function GameMap({
     if (!ready.current || !map.current) return
     ;(map.current.getSource('route') as GeoJSONSource | undefined)?.setData(routeFeatures(latestRoute.current))
   }, [routeKey])
+
+  const fitKey = JSON.stringify(fit)
+  useEffect(() => {
+    if (!ready.current || !map.current) return
+    fitTo(map.current, latestFit.current)
+  }, [fitKey])
 
   const pinKey = JSON.stringify(pins)
   useEffect(() => {

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const created = vi.hoisted(() => ({
   count: 0,
   flights: [] as unknown[],
+  fits: [] as unknown[],
   load: null as null | (() => void),
   layers: [] as { id: string; source: string }[],
   data: {} as Record<string, unknown>,
@@ -45,6 +46,9 @@ vi.mock('maplibre-gl', () => ({
       }
       flyTo(opts: unknown) {
         created.flights.push(opts)
+      }
+      fitBounds(bounds: unknown) {
+        created.fits.push(bounds)
       }
     },
   },
@@ -161,6 +165,33 @@ describe('GameMap', () => {
     expect(ids).not.toEqual(expect.arrayContaining(['jail', 'jail-label', 'start', 'start-label']))
     expect(created.data.jail).toBeUndefined()
     expect(created.data.start).toBeUndefined()
+  })
+
+  it('fit frames every point on load, then re-frames as they move without rebuilding the map', () => {
+    created.count = 0
+    created.fits = []
+    const me = { lat: 3, lng: 101 }
+    const { rerender } = render(<GameMap arena={arena} dots={[]} fit={[me, { lat: 3.01, lng: 100.99 }]} />)
+    created.load!()
+    expect(created.fits).toEqual([
+      [
+        [100.99, 3],
+        [101, 3.01],
+      ],
+    ])
+    rerender(<GameMap arena={structuredClone(arena)} dots={[]} fit={[me, { lat: 3.02, lng: 101.02 }]} />)
+    expect(created.fits.at(-1)).toEqual([
+      [101, 3],
+      [101.02, 3.02],
+    ])
+    expect(created.count).toBe(1)
+  })
+
+  it('without fit, the camera is never re-framed', () => {
+    created.fits = []
+    render(<GameMap arena={arena} dots={[]} />)
+    created.load!()
+    expect(created.fits).toEqual([])
   })
 
   it('a just-jailed runner (caughtAt) still gets a point feature, at its last known position, for the slide-off moment', () => {

@@ -1,16 +1,12 @@
-import { useState } from 'react'
-import type { Alert } from '../../shared/alerts.js'
+import { useRef, useState } from 'react'
+import { SOS_OUTCOME_LABEL, type Alert, type SosOutcome } from '../../shared/alerts.js'
 import { distanceM } from '../../shared/geo.js'
 import type { Arena, LatLng } from '../../shared/types.js'
 import GameMap from './Map'
 import { useServerNow } from './time'
+import { ErrorText } from './ui'
 
-const OUTCOMES: { value: string; text: string }[] = [
-  { value: 'sorted', text: 'Sorted, all good' },
-  { value: 'first-aid', text: 'First aid given' },
-  { value: 'left', text: 'Player left the game' },
-  { value: 'false-alarm', text: 'False alarm' },
-]
+const OUTCOMES = (Object.keys(SOS_OUTCOME_LABEL) as SosOutcome[]).map((value) => ({ value, text: SOS_OUTCOME_LABEL[value] }))
 
 /** m:ss counted UP since `at`. `clock()` in time.ts counts down for countdowns; this is the opposite direction. */
 function elapsedSince(at: string, now: number): string {
@@ -26,32 +22,56 @@ function parseSos(text: string): { sender: string; reason: string | null } {
 
 /**
  * The marshal SOS takeover (motion design §6.5): hijacks whatever screen is open, full-screen lime ("needs you
- * now"), the moment any SOS is unhandled. The arrow-and-distance mini map follows WalkGuide.tsx's own
- * GameMap/route pattern; since this component takes no `Arena`, it draws a boundary-less one scoped to just
- * the two points involved, with the sender's spot drawn as a safety pin rather than borrowing the jail marker.
+ * now"), the moment any SOS is unhandled. A convenience overlay, not a lock: "See the map first" hands the
+ * marshal back to their normal screen (`onDismiss`), from where the pinned SOS row brings it back. The
+ * arrow-and-distance mini map follows WalkGuide.tsx's own GameMap/route pattern on the game's real arena,
+ * framed to fit both the marshal and the sender, with the sender's spot drawn as a safety pin.
+ *
+ * Owns the busy and error state for its two server calls: a second tap while one is in flight does nothing,
+ * and a failed call says so here (it covers the screen, so an error anywhere else wouldn't be seen).
  */
 export default function SosTakeover({
   alert,
+  arena,
   myPos,
   senderPos,
   onRespond,
   onClose,
+  onDismiss,
 }: {
   alert: Alert
+  arena: Arena
   myPos: LatLng | null
   senderPos: LatLng | null
-  onRespond: () => void
-  onClose: (outcome: string) => void
+  onRespond: () => Promise<unknown>
+  onClose: (outcome: SosOutcome) => Promise<unknown>
+  onDismiss: () => void
 }) {
   // No server-synced `now` is passed in (the brief's own prop signature has none); re-seeding the same
   // ticking-clock hook every render with the local clock still ticks once a second, just without the
   // phone-clock-skew correction that a real `view.now` would give it.
   const now = useServerNow(Date.now())
-  const [outcome, setOutcome] = useState<string | null>(null)
+  const [outcome, setOutcome] = useState<SosOutcome | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  // A ref as well as state: two taps in the same frame both see `busy` false, but not this.
+  const inFlight = useRef(false)
   const { sender, reason } = parseSos(alert.text)
-  const showMap = myPos !== null && senderPos !== null
 
-  const arena: Arena | null = showMap && myPos && senderPos ? { id: 'sos', name: 'sos', boundary: [], jail: senderPos, start: myPos } : null
+  async function send(request: () => Promise<unknown>) {
+    if (inFlight.current) return
+    inFlight.current = true
+    setBusy(true)
+    setError('')
+    try {
+      await request()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      inFlight.current = false
+      setBusy(false)
+    }
+  }
 
   return (
     <div className="sos-takeover" role="dialog" aria-label="SOS">
@@ -63,17 +83,15 @@ export default function SosTakeover({
         <p>{reason ?? `Waiting for ${sender} to say…`}</p>
       </div>
 
-      {arena && myPos && senderPos && (
+      {myPos && senderPos && (
         <div className="sos-takeover-map">
           <GameMap
             arena={arena}
             dots={[{ id: 'me', kind: 'me', lat: myPos.lat, lng: myPos.lng, at: new Date().toISOString(), revealedBy: null }]}
             pins={[{ id: alert.id, lat: senderPos.lat, lng: senderPos.lng }]}
             route={{ from: myPos, to: senderPos }}
+            fit={[myPos, senderPos]}
             height={200}
-            // `arena` here is a stub scoped to just these two points, not a real jail/start — don't let
-            // GameMap draw a "PENJARA"/"S" label on top of the sender's or marshal's own dot.
-            showJailAndStart={false}
           />
           <p className="sos-takeover-distance mono">{`${Math.round(distanceM(myPos, senderPos))} M`}</p>
         </div>
@@ -82,11 +100,11 @@ export default function SosTakeover({
       <p className="sos-takeover-status">{alert.respondingName ? `${alert.respondingName} IS GOING` : "NOBODY'S GOING YET"}</p>
 
       <div className="sos-takeover-actions">
-        <button type="button" className="btn" onClick={onRespond}>
+        <button type="button" className="btn" disabled={busy} onClick={() => send(onRespond)}>
           I'm going
         </button>
-        {/* A peek, not a safety action: left as a no-op for now (builder's call per the brief). */}
-        <button type="button" className="btn btn-ghost" onClick={() => {}}>
+        {/* A peek, not a safety action: nothing goes to the server, the SOS stays open. */}
+        <button type="button" className="btn btn-ghost" onClick={onDismiss}>
           See the map first
         </button>
       </div>
@@ -104,9 +122,19 @@ export default function SosTakeover({
           </button>
         ))}
       </div>
-      <button type="button" className="btn sos-takeover-close" disabled={!outcome} onClick={() => outcome && onClose(outcome)}>
+      <button
+        type="button"
+        className="btn sos-takeover-close"
+        disabled={!outcome || busy}
+        onClick={() => outcome && send(() => onClose(outcome))}
+      >
         Close SOS
       </button>
+      {error && (
+        <div className="sos-takeover-panel">
+          <ErrorText>{error}</ErrorText>
+        </div>
+      )}
     </div>
   )
 }

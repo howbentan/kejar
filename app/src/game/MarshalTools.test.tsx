@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Alert } from '../../shared/alerts.js'
 import { testView } from '../screens/testView'
@@ -61,9 +61,26 @@ describe('MarshalTools', () => {
   })
 
   it('Handled calls handleAlert with the event id', async () => {
-    render(<MarshalTools code="ABC234" view={testView({ alerts: [alert('e1', 'sos', 'SOS from Aina #07')] })} refresh={refresh} />)
+    render(<MarshalTools code="ABC234" view={testView({ alerts: [alert('e1', 'outside', 'Aina #07 left the play area')] })} refresh={refresh} />)
     fireEvent.click(screen.getByRole('button', { name: 'Handled' }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('handleAlert', { code: 'ABC234', organiserToken: 'h1', eventId: 'e1' }))
+  })
+
+  it('an open SOS has no Handled button (only the takeover closes it, with an outcome); Open SOS brings the takeover back', () => {
+    const onOpenSos = vi.fn()
+    const view = testView({ alerts: [alert('e1', 'sos', 'SOS from Aina #07'), alert('e2', 'outside', 'Aina #07 left the play area')] })
+    render(<MarshalTools code="ABC234" view={view} refresh={refresh} onOpenSos={onOpenSos} />)
+    const [sosRow, outsideRow] = screen.getAllByRole('listitem')
+    expect(within(sosRow).queryByRole('button', { name: 'Handled' })).toBeNull()
+    expect(within(outsideRow).getByRole('button', { name: 'Handled' })).toBeInTheDocument()
+    fireEvent.click(within(sosRow).getByRole('button', { name: 'Open SOS' }))
+    expect(onOpenSos).toHaveBeenCalledWith('e1')
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  it('a closed SOS has no Open SOS button', () => {
+    render(<MarshalTools code="ABC234" view={testView({ alerts: [alert('e1', 'sos', 'SOS from Aina #07', true)] })} refresh={refresh} onOpenSos={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Open SOS' })).toBeNull()
   })
 
   it('an open auto-jail alert offers Phone problem: undo and It stands', async () => {
@@ -101,6 +118,14 @@ describe('MarshalTools', () => {
     expect(rows[0]).toContain('Aina #07 left the play area')
     expect(rows[1]).toContain('SOS from Ben')
     expect(screen.getAllByRole('button', { name: 'Handled' })).toHaveLength(1)
+  })
+
+  it('a closed alert says who closed it, after the outcome', () => {
+    const closedSos = { ...alert('e1', 'sos', 'SOS from Aina #07', true), outcome: 'first-aid', closedByName: 'Siti' }
+    const closedOutside = { ...alert('e2', 'outside', 'Aina #07 left the play area', true), closedByName: 'Owner' }
+    render(<MarshalTools code="ABC234" view={testView({ alerts: [closedSos, closedOutside] })} refresh={refresh} />)
+    expect(screen.getByText('first-aid · closed by Siti')).toBeInTheDocument()
+    expect(screen.getByText('closed by Owner')).toBeInTheDocument()
   })
 
   it('buzzes when a new SOS arrives', () => {
