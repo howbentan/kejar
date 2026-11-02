@@ -23,7 +23,7 @@ export interface Settings {
   checkinMode: CheckinMode
   mode: GameMode
   /**
-   * Dikejar can see Kejar at check-in (chaser-snapshot design ง5). Off by default. Games stored before this
+   * Dikejar can see Kejar at check-in (chaser-snapshot design ยง5). Off by default. Games stored before this
    * setting existed have no value, so readers must test `settings.chaserSnapshot === true`.
    */
   chaserSnapshot: boolean
