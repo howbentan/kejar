@@ -66,3 +66,83 @@ $$;
 -- Server-only, like the other game functions.
 revoke execute on function steal_card(uuid, text, timestamptz) from public, anon, authenticated;
 grant execute on function steal_card(uuid, text, timestamptz) to service_role;
+
+-- Task 2: Abang Grab, "order off the menu" (power-ups §6.3).
+-- A delivered card has no station. The station check (between 1 and 8) already passes for null, and the
+-- unique index on (game_id, player_id, station) treats nulls as distinct, so a player can hold several
+-- delivered cards over a game; claim_station's "already claimed here" test never matches a null station.
+alter table powerups alter column station drop not null;
+-- offer_from: the first of the 3 draw numbers the Grab reserved; offer: the 3 kinds the app worked out from them.
+alter table powerups
+  add column offer_from int,
+  add column offer jsonb;
+
+-- On use: locks the Grab, and if it's still held and hasn't reserved yet, bumps the side's draw counter by p_n
+-- in the same transaction and remembers the first number. A Grab that already reserved returns the same first
+-- number and its offer (re-opened screen, double-tap) without drawing again. Nothing if the Grab is gone.
+create function open_grab(p_powerup uuid, p_side text, p_n int) returns table (first_draw int, offer jsonb)
+language plpgsql
+as $$
+declare
+  g powerups;
+  f int;
+begin
+  select * into g from powerups where id = p_powerup and kind = 'grab' for update;
+  if not found or g.used_at is not null or g.taken_at is not null then
+    return;
+  end if;
+  if g.offer_from is not null then
+    return query select g.offer_from, g.offer;
+    return;
+  end if;
+  update games
+     set runner_draws = runner_draws + (p_side = 'runner')::int * p_n,
+         chaser_draws = chaser_draws + (p_side = 'chaser')::int * p_n
+   where id = g.game_id
+  returning (case when p_side = 'runner' then runner_draws else chaser_draws end) - p_n into f;
+  update powerups set offer_from = f where id = p_powerup;
+  return query select f, null::jsonb;
+end;
+$$;
+
+-- On pick: locks the Grab, re-checks it (this player's, still held, has an offer, choice in range), marks it
+-- used and inserts the chosen card sealed with no station, all in one transaction. The other two offered
+-- cards aren't reinserted: their draw numbers are spent, so they come back at the next reshuffle.
+create function pick_grab(p_powerup uuid, p_player uuid, p_choice int, p_at timestamptz)
+returns table (result text, powerup jsonb)
+language plpgsql
+as $$
+declare
+  g powerups;
+  new_row powerups;
+begin
+  select * into g from powerups where id = p_powerup for update;
+  if not found or g.player_id <> p_player then
+    return query select 'not-yours'::text, null::jsonb;
+    return;
+  end if;
+  if g.used_at is not null or g.taken_at is not null then
+    return query select 'already-used'::text, null::jsonb;
+    return;
+  end if;
+  if g.kind <> 'grab' or g.offer is null then
+    return query select 'no-offer'::text, null::jsonb;
+    return;
+  end if;
+  if p_choice < 0 or p_choice >= jsonb_array_length(g.offer) then
+    return query select 'bad-choice'::text, null::jsonb;
+    return;
+  end if;
+  update powerups set used_at = p_at where id = p_powerup;
+  insert into powerups (game_id, player_id, kind, station, claimed_at, sealed)
+    values (g.game_id, p_player, g.offer ->> p_choice, null, p_at, true)
+    returning * into new_row;
+  return query select 'ok'::text, to_jsonb(new_row);
+end;
+$$;
+
+-- Server-only, like the other game functions.
+revoke execute on function open_grab(uuid, text, int) from public, anon, authenticated;
+grant execute on function open_grab(uuid, text, int) to service_role;
+revoke execute on function pick_grab(uuid, uuid, int, timestamptz) from public, anon, authenticated;
+grant execute on function pick_grab(uuid, uuid, int, timestamptz) to service_role;

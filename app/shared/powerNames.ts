@@ -9,4 +9,5 @@ export const POWER_NAME: Record<PowerUpKind, string> = {
   focus: 'Pak Guard',
   toyol: 'Toyol',
   along: 'Ah Long',
+  grab: 'Abang Grab',
 }

@@ -22,7 +22,7 @@ import { JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/i
 import { activeShield, flareBlocked, judgeClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { computeResults } from '../../shared/results.js'
 import { validateTeams } from '../../shared/teams.js'
-import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type Role, type Settings } from '../../shared/types.js'
+import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type PowerUpKind, type Role, type Settings } from '../../shared/types.js'
 import { viewFor, latestAtOrBefore } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
 import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
@@ -685,6 +685,20 @@ const redeemMarshalInvite: Action = async (ctx, body) => {
   return { token, playerId: p.id }
 }
 
+const sideOf = (p: Player): 'runner' | 'chaser' => (p.role === 'chaser' ? 'chaser' : 'runner')
+
+/** The card at a given draw number of a side's shared deck. Games started before decks existed have no sets. */
+async function deckOf(ctx: Ctx, game: Game, side: 'runner' | 'chaser'): Promise<(index: number) => PowerUpKind> {
+  const stored = side === 'runner' ? game.runner_sets : game.chaser_sets
+  const sets = stored ?? setsFor(side, (await ctx.store.players(game.id)).filter((p) => p.role === side).length)
+  const deck = deckFor(game.settings.mode ?? 'core', side, sets)
+  // Seeded with a secret (not the game id players can see), so nobody can work out the next card.
+  return (index) => cardAt(`${game.deck_seed ?? game.id}:${side}`, deck, index)
+}
+
+/** Abang Grab shows this many cards (power-ups §6.3). Each round of the deck is a full reshuffle, so 3 are always there. */
+const GRAB_OFFER = 3
+
 const claim: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
@@ -706,13 +720,10 @@ const claim: Action = async (ctx, body) => {
   })
   if (!verdict.ok) return verdict
   // The top card of this side's shared deck (power-ups §5b). The draw number is taken atomically, so two
-  // claims at the same moment never get the same card. Games started before decks existed have no sets.
-  const side = me.role === 'chaser' ? 'chaser' : 'runner'
-  const stored = side === 'runner' ? fresh.runner_sets : fresh.chaser_sets
-  const sets = stored ?? setsFor(side, (await ctx.store.players(game.id)).filter((p) => p.role === side).length)
-  const deck = deckFor(fresh.settings.mode ?? 'core', side, sets)
-  // Seeded with a secret (not the game id players can see), so nobody can work out the next card.
-  const kind = cardAt(`${fresh.deck_seed ?? game.id}:${side}`, deck, await ctx.store.drawCard(game.id, side))
+  // claims at the same moment never get the same card.
+  const side = sideOf(me)
+  const kindAt = await deckOf(ctx, fresh, side)
+  const kind = kindAt(await ctx.store.drawCard(game.id, side))
   // Re-checked atomically by the store, so double-taps and simultaneous scans can't both win.
   const claimed = await ctx.store.claimStation(
     { game_id: game.id, player_id: me.id, kind, station: station! },
@@ -744,6 +755,22 @@ const usePowerup: Action = async (ctx, body) => {
   if (u.kind === 'flare') {
     const blocked = flareBlocked(pings, ctx.now)
     if (blocked) return { ok: false, ...blocked }
+  }
+  if (u.kind === 'grab') {
+    // Abang Grab (power-ups §6.3): show the top 3 of this side's deck. Not marked used here: the Grab stays in
+    // the slot with its offer until grabPick. The 3 draws are reserved in one atomic step, and a Grab that
+    // already has them (re-opened screen, double-tap) gets the same 3 back without drawing again.
+    const side = sideOf(me)
+    const opened = await ctx.store.openGrab(u.id, side, GRAB_OFFER)
+    if (!opened) return { ok: false, reason: 'already-used' }
+    let offer = opened.offer
+    if (!offer) {
+      const kindAt = await deckOf(ctx, fresh, side)
+      offer = Array.from({ length: GRAB_OFFER }, (_, k) => kindAt(opened.first + k))
+      // Same draws, same cards: a racing second open writes the identical offer.
+      await ctx.store.updatePowerUp(u.id, { offer })
+    }
+    return { ok: true, kind: 'grab', offer }
   }
   // markUsed is atomic: a double-tap uses the power-up once.
   if (!(await ctx.store.markUsed(u.id))) return { ok: false, reason: 'already-used' }
@@ -787,6 +814,28 @@ const usePowerup: Action = async (ctx, body) => {
   }
   await ctx.store.addEvent({ game_id: game.id, type: 'used', actor_id: me.id, target_id: null, data: { kind: u.kind } })
   return { ok: true, kind: u.kind }
+}
+
+/**
+ * Abang Grab, step 2: keep one of the offered cards. `choice` is its index in the offer (0–2). The Grab is done
+ * and the kept card takes its place in the slot, sealed (Toyol and Ah Long can't take it) and not switched on.
+ */
+const grabPick: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  await advance(ctx, game)
+  const fresh = (await loadGame(ctx, body)) as Game
+  if (fresh.paused_at) return { ok: false, reason: 'paused' }
+  if (phaseAt(fresh, ctx.now).phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
+  if (me.jailed) return { ok: false, reason: 'cannot-use' }
+  const choice = typeof body.choice === 'number' ? body.choice : NaN
+  // Checked and written atomically by the store, so two picks at once deliver one card.
+  const picked = await ctx.store.pickGrab(str(body.powerupId), me.id, choice)
+  if (!picked.ok) return picked
+  // The other two aren't put back: their draw numbers are spent, so they return at the next reshuffle
+  // (our stand-in for "the bottom of the deck", power-ups §6.3).
+  await ctx.store.addEvent({ game_id: game.id, type: 'powerup', actor_id: me.id, target_id: null, data: {} })
+  return { ok: true, kind: picked.powerUp.kind, powerupId: picked.powerUp.id }
 }
 
 const sos: Action = async (ctx, body) => {
@@ -1154,6 +1203,7 @@ export const actions = {
   subscribe,
   claim,
   usePowerup,
+  grabPick,
   pause,
   resume,
   sos,

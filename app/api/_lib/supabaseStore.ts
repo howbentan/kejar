@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Game, GameEvent, Ping, Player, Position, PowerUp } from '../../shared/types.js'
-import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, StationClaim, StolenCard } from './store.js'
+import type { Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind } from '../../shared/types.js'
+import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
 const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, push, removed_at, outside, left_start'
 const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed'
@@ -167,6 +167,25 @@ export class SupabaseStore implements GameStore {
       | null
     const row = rows?.[0]
     return row ? { stolenFrom: row.player_id, kind: row.kind, powerupId: row.id } : null
+  }
+  async openGrab(powerupId: string, side: 'runner' | 'chaser', n: number) {
+    // The database function locks the Grab and bumps the side's counter by n in one transaction.
+    const rows = check(await this.db.rpc('open_grab', { p_powerup: powerupId, p_side: side, p_n: n })) as
+      | { first_draw: number; offer: PowerUpKind[] | null }[]
+      | null
+    const row = rows?.[0]
+    return row ? { first: row.first_draw, offer: row.offer } : null
+  }
+  async pickGrab(powerupId: string, playerId: string, choice: number): Promise<GrabPick> {
+    if (!Number.isInteger(choice)) return { ok: false, reason: 'bad-choice' }
+    // The database function locks the Grab, re-checks, marks it used and inserts the sealed card together.
+    const rows = check(
+      await this.db.rpc('pick_grab', { p_powerup: powerupId, p_player: playerId, p_choice: choice, p_at: this.nowIso() }),
+    ) as { result: string; powerup: PowerUp | null }[] | null
+    const row = rows?.[0]
+    if (row?.result === 'ok' && row.powerup) return { ok: true, powerUp: row.powerup }
+    const reason = row?.result
+    return { ok: false, reason: reason === 'already-used' || reason === 'no-offer' || reason === 'bad-choice' ? reason : 'not-yours' }
   }
   async consumeShield(id: string) {
     const rows = check(

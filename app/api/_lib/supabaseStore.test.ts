@@ -50,6 +50,29 @@ describe('SupabaseStore', () => {
     expect(rpcs).toEqual([{ fn: 'draw_card', args: { p_game: 'g1', p_side: 'chaser' } }])
   })
 
+  it("opens Abang Grab through open_grab, reserving the side's next 3 draws in one call", async () => {
+    const rpcs: { fn: string; args: Record<string, unknown> }[] = []
+    const db = {
+      rpc: async (fn: string, args: Record<string, unknown>) => (rpcs.push({ fn, args }), { data: [{ first_draw: 6, offer: null }], error: null }),
+    } as unknown as SupabaseClient
+    expect(await new SupabaseStore(db, () => 0).openGrab('u1', 'runner', 3)).toEqual({ first: 6, offer: null })
+    expect(rpcs).toEqual([{ fn: 'open_grab', args: { p_powerup: 'u1', p_side: 'runner', p_n: 3 } }])
+  })
+
+  it('picks through pick_grab, stamped with the game clock, and passes refusals on', async () => {
+    const rpcs: { fn: string; args: Record<string, unknown> }[] = []
+    const replies = [[{ result: 'ok', powerup: { id: 'u2', kind: 'shield', sealed: true } }], [{ result: 'already-used', powerup: null }]]
+    const db = {
+      rpc: async (fn: string, args: Record<string, unknown>) => (rpcs.push({ fn, args }), { data: replies.shift(), error: null }),
+    } as unknown as SupabaseClient
+    const store = new SupabaseStore(db, () => Date.parse('2026-10-25T09:07:00.000Z'))
+    expect(await store.pickGrab('u1', 'p1', 2)).toEqual({ ok: true, powerUp: { id: 'u2', kind: 'shield', sealed: true } })
+    expect(await store.pickGrab('u1', 'p1', 0)).toEqual({ ok: false, reason: 'already-used' })
+    expect(await store.pickGrab('u1', 'p1', 0.5)).toEqual({ ok: false, reason: 'bad-choice' })
+    expect(rpcs[0]).toEqual({ fn: 'pick_grab', args: { p_powerup: 'u1', p_player: 'p1', p_choice: 2, p_at: '2026-10-25T09:07:00.000Z' } })
+    expect(rpcs).toHaveLength(2)
+  })
+
   it('osmCachePut upserts on key with the store clock', async () => {
     const { db, upserts } = fakeDb()
     const now = Date.parse('2026-10-27T09:00:00.000Z')

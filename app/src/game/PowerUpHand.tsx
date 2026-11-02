@@ -28,6 +28,8 @@ const USE_REJECTIONS: Record<string, string> = {
   'not-chasing': 'Power-ups work during the chase',
   'cannot-use': "You can't use power-ups in Penjara",
   'not-yours': "That isn't yours",
+  'no-offer': 'Open Abang Grab first to see the cards',
+  'bad-choice': 'Pick one of the three cards',
   paused: 'Game is paused',
 }
 

@@ -92,6 +92,18 @@ export interface GameStore {
    * `rng` is for the in-memory store only; Postgres uses random().
    */
   stealFrom(gameId: string, side: 'runner' | 'chaser', rng?: () => number): Promise<StolenCard | null>
+  /**
+   * Abang Grab, on use (power-ups §6.3): atomically, if the Grab is still held (unused, untaken), reserves
+   * the next `n` draw numbers of `side`'s deck in one step and remembers the first on the Grab. A Grab that
+   * already reserved its draws returns the same first number (and its stored offer) without drawing again.
+   * Null if the Grab is gone.
+   */
+  openGrab(powerupId: string, side: 'runner' | 'chaser', n: number): Promise<{ first: number; offer: PowerUpKind[] | null } | null>
+  /**
+   * Abang Grab, on pick: atomically checks the Grab is this player's, still held and has an offer, marks it
+   * used and adds the chosen card (offer[choice]) to the player's slot, sealed, with no station.
+   */
+  pickGrab(powerupId: string, playerId: string, choice: number): Promise<GrabPick>
   /** Consumes a shield only if it wasn't already; true for the first caller. */
   consumeShield(id: string): Promise<boolean>
   /** Adds a bonus (Flare) ping with the next free bonus number; safe when two happen at once. */
@@ -169,7 +181,11 @@ export type StationClaim =
   | { ok: true; powerUp: PowerUp }
   | { ok: false; reason: 'already-claimed' | 'locked'; lockedForMs?: number }
 
-export type NewPowerUp = Omit<PowerUp, 'id' | 'claimed_at' | 'used_at' | 'consumed_at' | 'sealed' | 'taken_at'>
+export type GrabPick =
+  | { ok: true; powerUp: PowerUp }
+  | { ok: false; reason: 'not-yours' | 'already-used' | 'no-offer' | 'bad-choice' }
+
+export type NewPowerUp = Omit<PowerUp, 'id' | 'claimed_at' | 'used_at' | 'consumed_at' | 'sealed' | 'taken_at' | 'offer'>
 
 /** In-memory store for tests. */
 export class MemoryStore implements GameStore {
@@ -181,6 +197,8 @@ export class MemoryStore implements GameStore {
   private pingRows: Ping[] = []
   private eventRows: GameEvent[] = []
   private powerUpRows: PowerUp[] = []
+  /** Abang Grab id → the first draw number it reserved (the `offer_from` column in Postgres). */
+  private grabFrom = new Map<string, number>()
   safetyRows: (SafetyRecord & { at: string })[] = []
   private organisationRows: Organisation[] = []
   private organiserRows: OrganiserRow[] = []
@@ -319,7 +337,7 @@ export class MemoryStore implements GameStore {
     return this.eventRows.filter((e) => e.game_id === gameId).map((e) => ({ ...e }))
   }
   async addPowerUp(p: NewPowerUp) {
-    const row: PowerUp = { ...p, id: this.id('u'), claimed_at: this.nowIso(), used_at: null, consumed_at: null, sealed: false, taken_at: null }
+    const row: PowerUp = { ...p, id: this.id('u'), claimed_at: this.nowIso(), used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null }
     this.powerUpRows.push(row)
     return { ...row }
   }
@@ -337,7 +355,7 @@ export class MemoryStore implements GameStore {
     const last = Math.max(...here.map((u) => Date.parse(u.claimed_at)), -Infinity)
     const lockedForMs = last + lockMs - this.clock()
     if (lockedForMs > 0) return { ok: false, reason: 'locked', lockedForMs }
-    const row: PowerUp = { ...p, id: this.id('u'), claimed_at: this.nowIso(), used_at: null, consumed_at: null, sealed: false, taken_at: null }
+    const row: PowerUp = { ...p, id: this.id('u'), claimed_at: this.nowIso(), used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null }
     this.powerUpRows.push(row)
     return { ok: true, powerUp: { ...row } }
   }
@@ -359,6 +377,41 @@ export class MemoryStore implements GameStore {
     const card = pick(this.powerUpRows.filter((u) => u.player_id === victim.id && stealable(u)))
     card.taken_at = this.nowIso()
     return { stolenFrom: victim.id, kind: card.kind, powerupId: card.id }
+  }
+  async openGrab(powerupId: string, side: 'runner' | 'chaser', n: number) {
+    const u = this.powerUpRows.find((x) => x.id === powerupId)
+    if (!u || u.used_at || u.taken_at) return null
+    const reserved = this.grabFrom.get(u.id)
+    if (reserved !== undefined) return { first: reserved, offer: u.offer ? [...u.offer] : null }
+    const g = this.games.find((x) => x.id === u.game_id)!
+    const key = side === 'runner' ? 'runner_draws' : 'chaser_draws'
+    const first = g[key] ?? 0
+    g[key] = first + n
+    this.grabFrom.set(u.id, first)
+    return { first, offer: null }
+  }
+  async pickGrab(powerupId: string, playerId: string, choice: number): Promise<GrabPick> {
+    const u = this.powerUpRows.find((x) => x.id === powerupId)
+    if (!u || u.player_id !== playerId) return { ok: false, reason: 'not-yours' }
+    if (u.used_at || u.taken_at) return { ok: false, reason: 'already-used' }
+    if (!u.offer) return { ok: false, reason: 'no-offer' }
+    if (!Number.isInteger(choice) || choice < 0 || choice >= u.offer.length) return { ok: false, reason: 'bad-choice' }
+    u.used_at = this.nowIso()
+    const row: PowerUp = {
+      id: this.id('u'),
+      game_id: u.game_id,
+      player_id: playerId,
+      kind: u.offer[choice],
+      station: null,
+      claimed_at: this.nowIso(),
+      used_at: null,
+      consumed_at: null,
+      sealed: true,
+      taken_at: null,
+      offer: null,
+    }
+    this.powerUpRows.push(row)
+    return { ok: true, powerUp: { ...row } }
   }
   async consumeShield(id: string) {
     const u = this.powerUpRows.find((x) => x.id === id)

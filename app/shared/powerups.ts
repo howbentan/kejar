@@ -67,7 +67,7 @@ export function slotBusy(powerUps: PowerUp[], playerId: string, pings: Ping[], n
     if (u.taken_at !== null) continue // Toyol or Ah Long took it: gone from the hand
     if (u.used_at === null) return { kind: u.kind, running: false }
     // Done the moment they succeed (power-ups §5a): nothing keeps running.
-    if (u.kind === 'toyol' || u.kind === 'along') continue
+    if (u.kind === 'toyol' || u.kind === 'along' || u.kind === 'grab') continue
     const usedAt = Date.parse(u.used_at)
     const revealedAfter = (bonusOnly: boolean) =>
       pings.some((p) =>

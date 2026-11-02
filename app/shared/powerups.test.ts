@@ -26,7 +26,7 @@ function pu(over: Partial<PowerUp> = {}): PowerUp {
     used_at: null,
     consumed_at: null,
     sealed: false,
-    taken_at: null,
+    taken_at: null, offer: null,
     ...over,
   }
 }

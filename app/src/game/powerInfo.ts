@@ -10,4 +10,6 @@ export const INFO: Record<PowerUpKind, { name: string; effect: string; used: str
   focus: { name: 'Pak Guard', effect: 'Dikejar within 75 m show exactly', used: 'Pak Guard on for the next ping' },
   toyol: { name: POWER_NAME.toyol, effect: 'Takes a random power-up from a Kejar', used: 'Toyol stole a power-up!' },
   along: { name: POWER_NAME.along, effect: 'Takes a random power-up from a Dikejar', used: 'Ah Long came to collect!' },
+  // Using it opens the offer; the delivered line (`Abang Grab brought <Name>!`) comes with the chooser (Task 10).
+  grab: { name: POWER_NAME.grab, effect: 'See the top 3 cards and keep one', used: 'What should Abang Grab bring?' },
 }

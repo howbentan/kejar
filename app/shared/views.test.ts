@@ -304,11 +304,11 @@ describe('deck and slot', () => {
     expect(view(siti, { game: { ...g, runner_sets: 1, runner_draws: 2 } }).deckLeft).toBeNull()
   })
   it('names a power-up whose effect is still running', () => {
-    const durian: PowerUp = { id: 'u9', game_id: 'g1', player_id: 'r1', kind: 'shield', station: 1, claimed_at: '', used_at: new Date(NOW - MIN).toISOString(), consumed_at: null, sealed: false, taken_at: null }
+    const durian: PowerUp = { id: 'u9', game_id: 'g1', player_id: 'r1', kind: 'shield', station: 1, claimed_at: '', used_at: new Date(NOW - MIN).toISOString(), consumed_at: null, sealed: false, taken_at: null, offer: null }
     expect(view(aina, { powerUps: [durian] }).activePowerUp).toBe('shield')
     expect(view(aina).activePowerUp).toBeNull()
   })
-  const card = (over: Partial<PowerUp>): PowerUp => ({ id: 'u9', game_id: 'g1', player_id: 'r1', kind: 'shield', station: 1, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, ...over })
+  const card = (over: Partial<PowerUp>): PowerUp => ({ id: 'u9', game_id: 'g1', player_id: 'r1', kind: 'shield', station: 1, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null, ...over })
   it('a running Durian says when it ends; other running effects wait for the next ping', () => {
     const usedAt = NOW - MIN
     expect(view(aina, { powerUps: [card({ used_at: new Date(usedAt).toISOString() })] }).activeEndsAt).toBe(usedAt + 10 * MIN)
@@ -340,7 +340,7 @@ describe('Toyol and Ah Long', () => {
     expect(texts(aina, stolen('along'))).toEqual(['Ah Long took your Mat Rempit!'])
   })
   it('a taken card leaves the hand', () => {
-    const c = (over: Partial<PowerUp>): PowerUp => ({ id: 'u9', game_id: 'g1', player_id: 'c1', kind: 'flare', station: 1, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, ...over })
+    const c = (over: Partial<PowerUp>): PowerUp => ({ id: 'u9', game_id: 'g1', player_id: 'c1', kind: 'flare', station: 1, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null, ...over })
     expect(view(chaser, { powerUps: [c({})] }).hand).toHaveLength(1)
     expect(view(chaser, { powerUps: [c({ taken_at: new Date(NOW).toISOString() })] }).hand).toEqual([])
   })
@@ -415,7 +415,7 @@ describe('power-up effects', () => {
     used_at: new Date(usedAt).toISOString(),
     consumed_at: null,
     sealed: false,
-    taken_at: null,
+    taken_at: null, offer: null,
   })
 
   it('cloaked runner is missing from the next reveal only', () => {
@@ -516,7 +516,7 @@ describe('power-up secrecy', () => {
     used_at: new Date(usedAt).toISOString(),
     consumed_at: null,
     sealed: false,
-    taken_at: null,
+    taken_at: null, offer: null,
   })
 
   it('a cloaked runner looks exactly like a runner who never checked in', () => {

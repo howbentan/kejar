@@ -127,14 +127,15 @@ export type EventType =
   | 'rated'
   | 'stolen'
 
-export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along'
+export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along' | 'grab'
 
 export interface PowerUp {
   id: string
   game_id: string
   player_id: string
   kind: PowerUpKind
-  station: number
+  /** The station it was claimed at; null for a card Abang Grab delivered. */
+  station: number | null
   claimed_at: string
   used_at: string | null
   consumed_at: string | null
@@ -142,6 +143,8 @@ export interface PowerUp {
   sealed: boolean
   /** Set when Toyol or Ah Long took this card; a taken card is gone from every hand. */
   taken_at: string | null
+  /** Abang Grab's open offer (power-ups §6.3): the top 3 cards of the holder's deck, until one is picked. */
+  offer: PowerUpKind[] | null
 }
 
 export interface GameEvent {
