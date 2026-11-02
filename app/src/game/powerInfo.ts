@@ -12,4 +12,6 @@ export const INFO: Record<PowerUpKind, { name: string; effect: string; used: str
   along: { name: POWER_NAME.along, effect: 'Takes a random power-up from a Dikejar', used: 'Ah Long came to collect!' },
   // Using it opens the offer; the delivered line (`Abang Grab brought <Name>!`) comes with the chooser (Task 10).
   grab: { name: POWER_NAME.grab, effect: 'See the top 3 cards and keep one', used: 'What should Abang Grab bring?' },
+  // Used only through Settle at Penjara; the feed line for everyone is `Something legendary freed N Dikejar!`.
+  dato: { name: POWER_NAME.dato, effect: 'Settle: at Penjara, free yourself and up to 2 others', used: 'Settled!' },
 }

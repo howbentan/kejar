@@ -10,4 +10,5 @@ export const POWER_NAME: Record<PowerUpKind, string> = {
   toyol: 'Toyol',
   along: 'Ah Long',
   grab: 'Abang Grab',
+  dato: 'Dato Seri',
 }

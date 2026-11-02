@@ -18,6 +18,11 @@ export function tagIdFromQr(text: string): number | null {
 
 export const JAIL_QR = 'KEJAR:JAIL'
 
+/** The printed Dato Seri card the organiser hides (jail design §4b); scanning it is a claim. */
+export const DATO_QR = 'KEJAR:DATO'
+
+export const isDatoQr = (text: string) => text.trim() === DATO_QR
+
 export const MAX_STATIONS = 8
 
 export function stationQr(n: number): string {

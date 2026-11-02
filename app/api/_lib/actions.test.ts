@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { MIN, T0 } from '../../shared/fixtures.js'
 import { BONUS_SEQ_BASE } from '../../shared/clock.js'
 import { cardAt, deckFor } from '../../shared/deck.js'
+import { distanceM } from '../../shared/geo.js'
 import { JAIL_QR, stationQr, tagQr } from '../../shared/ids.js'
 import { seeded } from '../../shared/testing.js'
 import type { PowerUpKind, Role } from '../../shared/types.js'
@@ -2030,5 +2031,192 @@ describe('the chaser snapshot at check-in (checkins design §5)', () => {
     expect((await run<View>('state', { code: g.code, token: g.aina.token })).chaserSnapshot).toBeNull()
     const ping1 = (await store.events(g.gameId)).find((e) => e.type === 'ping' && e.data.seq === 1)!
     expect(ping1.data.checkedIn).toBeUndefined()
+  })
+})
+
+describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
+  const STASH = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const atStash = { lat: STASH.lat, lng: STASH.lng, accuracy_m: 8 }
+
+  /** A Full game in the lobby with Siti as marshal. */
+  async function lobby() {
+    const g = await readyGame({ mode: 'full' })
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    return { ...g, siti, gameId: (await store.gameByCode(g.code))!.id }
+  }
+  async function chasing(drop = true) {
+    const g = await lobby()
+    if (drop) await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    return g
+  }
+  const scan = (g: { code: string }, token: string, where: object = atStash) =>
+    run('claim', { code: g.code, token, qr: 'KEJAR:DATO', ...where })
+  const stash = async (g: { code: string }) => (await store.gameByCode(g.code))!.dato_stash
+
+  it('the organiser or a marshal drops it, and dropping again before the start moves it', async () => {
+    const g = await lobby()
+    expect(await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })).toEqual({ ok: true })
+    expect(await stash(g)).toEqual({ ...STASH, claimedBy: null, claimedAt: null })
+    const moved = { lat: CENTER.lat - 50 / 111_195, lng: CENTER.lng }
+    expect(await run('dropDatoSeri', { code: g.code, token: g.siti.token, ...moved })).toEqual({ ok: true })
+    expect(await stash(g)).toEqual({ ...moved, claimedBy: null, claimedAt: null })
+  })
+
+  it('players cannot drop it', async () => {
+    const g = await lobby()
+    await rejects(run('dropDatoSeri', { code: g.code, token: g.aina.token, ...STASH }), 403)
+    await rejects(run('dropDatoSeri', { code: g.code, token: g.ben.token, ...STASH }), 403)
+    expect(await stash(g)).toBeFalsy()
+  })
+
+  it('is Full mode only, inside the play area only, and fixed once the game starts', async () => {
+    const core = await readyGame()
+    await rejects(run('dropDatoSeri', { code: core.code, organiserToken: core.organiserToken, ...STASH }), 409, 'Full mode')
+    const g = await lobby()
+    const far = { lat: CENTER.lat + 400 / 111_195, lng: CENTER.lng }
+    await rejects(run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...far }), 400, 'inside the play area')
+    await rejects(run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, lat: 'x', lng: 1 }), 400)
+    await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    await rejects(run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, lat: CENTER.lat, lng: CENTER.lng }), 409)
+    expect(await stash(g)).toMatchObject(STASH)
+  })
+
+  it('the first runner to scan the stash claims Dato Seri; it stops working after', async () => {
+    const g = await chasing()
+    expect(await scan(g, g.aina.token)).toEqual({ ok: true, kind: 'dato' })
+    expect(await stash(g)).toEqual({ ...STASH, claimedBy: g.aina.playerId, claimedAt: new Date(now).toISOString() })
+    const held = (await store.powerUps(g.gameId)).filter((u) => u.kind === 'dato')
+    expect(held).toEqual([expect.objectContaining({ player_id: g.aina.playerId, station: null, used_at: null, sealed: false })])
+    expect(await scan(g, g.hafiz.token)).toEqual({ ok: false, reason: 'no-stash' })
+    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'dato')).toHaveLength(1)
+  })
+
+  it('a chaser scanning the stash is refused, not consumed', async () => {
+    const g = await chasing()
+    expect(await scan(g, g.ben.token)).toEqual({ ok: false, reason: 'cannot-claim' })
+    expect((await stash(g))!.claimedBy).toBeNull()
+    expect(await scan(g, g.aina.token)).toEqual({ ok: true, kind: 'dato' })
+  })
+
+  it('a marshal or a jailed runner is refused with nothing changed', async () => {
+    const g = await chasing()
+    expect(await scan(g, g.siti.token)).toEqual({ ok: false, reason: 'cannot-claim' })
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: true } }])
+    expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'cannot-claim' })
+    expect((await stash(g))!.claimedBy).toBeNull()
+    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'dato')).toHaveLength(0)
+  })
+
+  it('needs a fresh position within 30 m of the stash, forgiving GPS error as stations do', async () => {
+    const g = await chasing()
+    expect(await scan(g, g.aina.token, { lat: CENTER.lat, lng: CENTER.lng, accuracy_m: 8 })).toEqual({ ok: false, reason: 'too-far' })
+    await run('location', { code: g.code, token: g.hafiz.token, ...atStash })
+    now += 31_000
+    expect(await scan(g, g.hafiz.token, {})).toEqual({ ok: false, reason: 'too-far' })
+    // 45 m off with 20 m accuracy is within 30 + 20.
+    const near = { lat: STASH.lat + 45 / 111_195, lng: STASH.lng, accuracy_m: 20 }
+    expect(await scan(g, g.hafiz.token, near)).toEqual({ ok: true, kind: 'dato' })
+  })
+
+  it('a full slot is refused with hand-full and the stash stays claimable', async () => {
+    const g = await chasing()
+    await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'cloak', station: 1 })
+    expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'hand-full' })
+    expect((await stash(g))!.claimedBy).toBeNull()
+    expect(await scan(g, g.hafiz.token)).toEqual({ ok: true, kind: 'dato' })
+  })
+
+  it('is refused before the chase, while paused, and when no stash was dropped', async () => {
+    const g = await lobby()
+    await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 2 * MIN // hiding
+    expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'not-chasing' })
+    now = T0 + 7 * MIN
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'paused' })
+    now = T0
+    const none = await chasing(false)
+    expect(await scan(none, none.aina.token)).toEqual({ ok: false, reason: 'no-stash' })
+  })
+
+  it('two runners scanning at the same moment: exactly one gets it', async () => {
+    const g = await chasing()
+    const [a, b] = await Promise.all([scan(g, g.aina.token), scan(g, g.hafiz.token)])
+    expect([a, b].filter((r) => r.ok)).toHaveLength(1)
+    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'dato')).toHaveLength(1)
+  })
+
+  it('Dato Seri is secret: the feed never names it or the finder', async () => {
+    const g = await chasing()
+    await scan(g, g.aina.token)
+    for (const token of [g.hafiz.token, g.ben.token, g.siti.token]) {
+      const v = await run<View>('state', { code: g.code, token })
+      expect(v.feed[0].text).toBe('Something legendary was found.')
+      const lines = v.feed.map((f) => f.text)
+      expect(lines.filter((t) => /Aina/.test(t))).toEqual(['Aina joined'])
+      expect(lines.join(' ')).not.toMatch(/Dato|picked up/)
+    }
+    expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).feed[0].text).toBe('Something legendary was found.')
+    // The finder's reveal is their own claim result and hand.
+    expect((await run<View>('state', { code: g.code, token: g.aina.token })).hand.map((u) => u.kind)).toEqual(['dato'])
+  })
+
+  it('every player sees an unlabelled hint zone around the stash during the chase, gone once claimed', async () => {
+    const g = await lobby()
+    await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    expect((await run<View>('state', { code: g.code, token: g.aina.token })).legendaryZone).toBeNull()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 2 * MIN // hiding: not yet
+    expect((await run<View>('state', { code: g.code, token: g.aina.token })).legendaryZone).toBeNull()
+    now = T0 + 7 * MIN
+    const zones: View['legendaryZone'][] = []
+    for (const token of [g.aina.token, g.hafiz.token, g.ben.token]) {
+      const v = await run<View>('state', { code: g.code, token })
+      expect(Object.keys(v.legendaryZone!).sort()).toEqual(['lat', 'lng', 'radiusM'])
+      expect(v.legendaryZone!.radiusM).toBe(150)
+      expect(distanceM(v.legendaryZone!, STASH)).toBeLessThan(150)
+      expect(v).not.toHaveProperty('datoStash')
+      expect(JSON.stringify(v)).not.toMatch(/dato/i)
+      zones.push(v.legendaryZone)
+    }
+    // Fixed, like a geocache: the same circle for everyone on every poll, and not centred on the card.
+    expect(new Set(zones.map((z) => JSON.stringify(z))).size).toBe(1)
+    expect(distanceM(zones[0]!, STASH)).toBeGreaterThan(20)
+    now += MIN
+    expect((await run<View>('state', { code: g.code, token: g.aina.token })).legendaryZone).toEqual(zones[0])
+    await scan(g, g.hafiz.token)
+    for (const token of [g.aina.token, g.hafiz.token, g.ben.token]) {
+      expect((await run<View>('state', { code: g.code, token })).legendaryZone).toBeNull()
+    }
+  })
+
+  it('marshals and the organiser see the exact stash instead of the zone', async () => {
+    const g = await chasing()
+    for (const who of [{ token: g.siti.token }, { organiserToken: g.organiserToken }]) {
+      const v = await run<View>('state', { code: g.code, ...who })
+      expect(v.datoStash).toEqual({ ...STASH, claimedBy: null, claimedAt: null })
+      expect(v.legendaryZone).toBeNull()
+    }
+  })
+
+  it('Dato Seri cannot be used from the slot like other cards; it is for Settle', async () => {
+    const g = await chasing()
+    await scan(g, g.aina.token)
+    const dato = (await store.powerUps(g.gameId)).find((u) => u.kind === 'dato')!
+    expect(await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: dato.id })).toEqual({ ok: false, reason: 'settle-at-penjara' })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === dato.id)!.used_at).toBeNull()
+  })
+
+  it('a Core game never has a zone', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    expect((await run<View>('state', { code: g.code, token: g.aina.token })).legendaryZone).toBeNull()
   })
 })

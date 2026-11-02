@@ -18,8 +18,8 @@ import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/are
 import { arenaAroundPoint } from '../../shared/arenas.js'
 import { judgeCatch, judgeJailbreak } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
-import { JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
-import { activeShield, flareBlocked, judgeClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
+import { isDatoQr, JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
+import { activeShield, flareBlocked, judgeClaim, judgeDatoClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { computeResults } from '../../shared/results.js'
 import { validateTeams } from '../../shared/teams.js'
 import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type PowerUpKind, type Role, type Settings } from '../../shared/types.js'
@@ -750,6 +750,7 @@ const claim: Action = async (ctx, body) => {
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
   if (fresh.paused_at) return { ok: false, reason: 'paused' }
+  if (isDatoQr(str(body.qr))) return claimDato(ctx, fresh, me)
   const station = stationFromQr(str(body.qr))
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeClaim({
@@ -778,6 +779,44 @@ const claim: Action = async (ctx, body) => {
   return { ok: true, kind }
 }
 
+/**
+ * Scanning Dato Seri's hidden stash (jail design §4b). A refusal changes nothing, so the stash stays claimable.
+ * The store claims it atomically: two runners scanning at once get one card. No 'powerup' event, which would
+ * name the finder: the feed only ever says `Something legendary was found.` (§4c).
+ */
+async function claimDato(ctx: Ctx, game: Game, me: Player) {
+  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
+  const verdict = judgeDatoClaim({
+    phase: phaseAt(game, ctx.now).phase,
+    me,
+    stash: game.dato_stash,
+    myPos: latest(positions[me.id]),
+    powerUps: await ctx.store.powerUps(game.id),
+    pings: await ctx.store.pings(game.id),
+    now: ctx.now,
+  })
+  if (!verdict.ok) return verdict
+  if (!(await ctx.store.claimDato(game.id, me.id))) return { ok: false, reason: 'no-stash' }
+  await ctx.store.addEvent({ game_id: game.id, type: 'legendary', actor_id: me.id, target_id: null, data: {} })
+  return { ok: true, kind: 'dato' }
+}
+
+/**
+ * The organiser or a marshal hides the printed Dato Seri card and saves the spot (jail design §4b). Full mode
+ * only. Dropping again before the start moves it; once the game starts it stays put.
+ */
+const dropDatoSeri: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  await requireMarshal(ctx, game, body)
+  if (game.settings.mode !== 'full') throw new ActionError(409, 'Dato Seri is in Full mode only')
+  requireLobby(game, ctx.now)
+  const at = coordsOf(body)
+  if (!at) throw new ActionError(400, 'Invalid location')
+  if (!inPlayArea(at, game.arena)) throw new ActionError(400, 'Drop it inside the play area')
+  await ctx.store.updateGame(game.id, { dato_stash: { lat: at.lat, lng: at.lng, claimedBy: null, claimedAt: null } })
+  return { ok: true }
+}
+
 const usePowerup: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
@@ -791,6 +830,8 @@ const usePowerup: Action = async (ctx, body) => {
   if (u.used_at || u.taken_at) return { ok: false, reason: 'already-used' }
   if (phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (me.jailed) return { ok: false, reason: 'cannot-use' }
+  // Dato Seri is only ever used through Settle, at Penjara (jail design §4b).
+  if (u.kind === 'dato') return { ok: false, reason: 'settle-at-penjara' }
   // A Flare's reveal must land before the whistle.
   if (u.kind === 'flare' && (endsAt ?? 0) - ctx.now < ALERT_LEAD_MS) return { ok: false, reason: 'too-late' }
 
@@ -1248,6 +1289,7 @@ export const actions = {
   claim,
   usePowerup,
   grabPick,
+  dropDatoSeri,
   pause,
   resume,
   sos,

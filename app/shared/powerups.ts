@@ -1,7 +1,7 @@
 import { distanceM, hash, offset } from './geo.js'
 import { inPlayArea } from './playArea.js'
 import { BONUS_SEQ_BASE } from './clock.js'
-import type { Arena, LatLng, Phase, Ping, Player, Position, PowerUp, PowerUpKind } from './types.js'
+import type { Arena, DatoStash, LatLng, Phase, Ping, Player, Position, PowerUp, PowerUpKind } from './types.js'
 
 /** Spec §4.8.1. */
 export const CLAIM_RADIUS_M = 30
@@ -40,11 +40,7 @@ export function judgeClaim(i: {
   const spot = i.station === null ? undefined : i.arena.stations?.[i.station - 1]
   if (!spot) return { ok: false, reason: 'unknown-station' }
 
-  const p = i.myPos
-  const slack = p ? Math.min(Math.max(p.accuracy_m, 0), MAX_ACCURACY_M) : 0
-  if (!p || i.now - Date.parse(p.at) > CLAIM_FRESH_MS || distanceM(p, spot) > CLAIM_RADIUS_M + slack) {
-    return { ok: false, reason: 'too-far' }
-  }
+  if (!withinClaimReach(i.myPos, spot, i.now)) return { ok: false, reason: 'too-far' }
 
   const here = i.powerUps.filter((u) => u.station === i.station)
   if (here.some((u) => u.player_id === i.me.id)) return { ok: false, reason: 'already-claimed' }
@@ -54,6 +50,38 @@ export function judgeClaim(i: {
 
   const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now)
   if (busy) return { ok: false, reason: 'hand-full', busyKind: busy.kind, busyRunning: busy.running }
+  return { ok: true }
+}
+
+/** A fresh enough fix within `CLAIM_RADIUS_M` of the spot, forgiving GPS error up to 20 m (spec §4.8.1). */
+function withinClaimReach(p: Position | null, spot: LatLng, now: number): boolean {
+  const slack = p ? Math.min(Math.max(p.accuracy_m, 0), MAX_ACCURACY_M) : 0
+  return !!p && now - Date.parse(p.at) <= CLAIM_FRESH_MS && distanceM(p, spot) <= CLAIM_RADIUS_M + slack
+}
+
+export type DatoClaimJudgement =
+  | { ok: true }
+  | { ok: false; reason: 'not-chasing' | 'cannot-claim' | 'no-stash' | 'too-far' | 'hand-full' }
+
+/**
+ * Scanning Dato Seri's hidden stash (jail design §4b): the first free runner within reach, with an empty slot.
+ * The same reach as a station. A full slot doesn't say what's in it (rules doc §9: `Use or lose your
+ * power-up first`), and nothing is changed by a refusal, so the stash stays claimable.
+ */
+export function judgeDatoClaim(i: {
+  phase: Phase
+  me: Player
+  stash: DatoStash | null | undefined
+  myPos: Position | null
+  powerUps: PowerUp[]
+  pings: Ping[]
+  now: number
+}): DatoClaimJudgement {
+  if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
+  if (i.me.role !== 'runner' || i.me.jailed) return { ok: false, reason: 'cannot-claim' }
+  if (!i.stash || i.stash.claimedBy !== null) return { ok: false, reason: 'no-stash' }
+  if (!withinClaimReach(i.myPos, i.stash, i.now)) return { ok: false, reason: 'too-far' }
+  if (slotBusy(i.powerUps, i.me.id, i.pings, i.now)) return { ok: false, reason: 'hand-full' }
   return { ok: true }
 }
 
@@ -67,7 +95,7 @@ export function slotBusy(powerUps: PowerUp[], playerId: string, pings: Ping[], n
     if (u.taken_at !== null) continue // Toyol or Ah Long took it: gone from the hand
     if (u.used_at === null) return { kind: u.kind, running: false }
     // Done the moment they succeed (power-ups §5a): nothing keeps running.
-    if (u.kind === 'toyol' || u.kind === 'along' || u.kind === 'grab') continue
+    if (u.kind === 'toyol' || u.kind === 'along' || u.kind === 'grab' || u.kind === 'dato') continue
     const usedAt = Date.parse(u.used_at)
     const revealedAfter = (bonusOnly: boolean) =>
       pings.some((p) =>

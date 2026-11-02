@@ -19,6 +19,8 @@ const CLAIM_REJECTIONS: Record<string, string> = {
   'unknown-station': "That's not a station code",
   'not-chasing': 'Stations open when the chase starts',
   'cannot-claim': "You can't claim power-ups right now",
+  // The hidden stash with a full slot (rules doc §9); a station's hand-full names the card instead.
+  'hand-full': 'Use or lose your power-up first',
   paused: 'Game is paused',
 }
 

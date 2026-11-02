@@ -53,6 +53,7 @@ export function testView(over: Partial<View> = {}): View {
     deckLeft: null,
     activePowerUp: null,
     shieldActive: false,
+    legendaryZone: null,
     results: null,
     ...over,
   }

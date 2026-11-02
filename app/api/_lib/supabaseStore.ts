@@ -3,7 +3,7 @@ import type { Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind } fr
 import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
 const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, push, removed_at, outside, left_start'
-const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed'
+const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -186,6 +186,13 @@ export class SupabaseStore implements GameStore {
     if (row?.result === 'ok' && row.powerup) return { ok: true, powerUp: row.powerup }
     const reason = row?.result
     return { ok: false, reason: reason === 'already-used' || reason === 'no-offer' || reason === 'bad-choice' ? reason : 'not-yours' }
+  }
+  async claimDato(gameId: string, playerId: string): Promise<PowerUp | null> {
+    // The database function locks the game row, re-checks the stash is unclaimed, marks it and inserts the card.
+    const rows = check(await this.db.rpc('claim_dato', { p_game: gameId, p_player: playerId, p_at: this.nowIso() })) as
+      | PowerUp[]
+      | null
+    return rows?.[0] ?? null
   }
   async consumeShield(id: string) {
     const rows = check(

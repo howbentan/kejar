@@ -6,6 +6,10 @@ describe('scanTarget', () => {
     expect(scanTarget('KEJAR:STATION:3', 'runner')).toEqual({ action: 'claim', body: { qr: 'KEJAR:STATION:3' } })
     expect(scanTarget('KEJAR:STATION:3', 'chaser')).toEqual({ action: 'claim', body: { qr: 'KEJAR:STATION:3' } })
   })
+  it('the hidden stash card claims, for either side (the server turns chasers away)', () => {
+    expect(scanTarget('KEJAR:DATO', 'runner')).toEqual({ action: 'claim', body: { qr: 'KEJAR:DATO' } })
+    expect(scanTarget(' KEJAR:DATO ', 'chaser')).toEqual({ action: 'claim', body: { qr: ' KEJAR:DATO ' } })
+  })
   it('the Penjara code breaks runners out', () => {
     expect(scanTarget('KEJAR:JAIL', 'runner')).toEqual({ action: 'jailbreak', body: { qr: 'KEJAR:JAIL' } })
   })

@@ -73,6 +73,18 @@ export interface Game {
   chaser_draws?: number
   /** Secret seed for the deck shuffle, set at start; never sent to players, so the next card can't be predicted. */
   deck_seed?: string | null
+  /**
+   * Dato Seri's hidden stash (jail design §4b): where the organiser or a marshal dropped the card, and who
+   * scanned it first. Never sent to players as is: they get a fuzzy, unlabelled zone. Older games have none.
+   */
+  dato_stash?: DatoStash | null
+}
+
+export interface DatoStash {
+  lat: number
+  lng: number
+  claimedBy: string | null
+  claimedAt: string | null
 }
 
 export interface Player {
@@ -132,8 +144,10 @@ export type EventType =
   | 'sos-responding'
   | 'rated'
   | 'stolen'
+  /** Someone scanned Dato Seri's stash. The feed never says who, or what it was (jail design §4c). */
+  | 'legendary'
 
-export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along' | 'grab'
+export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along' | 'grab' | 'dato'
 
 export interface PowerUp {
   id: string

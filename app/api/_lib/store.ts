@@ -104,6 +104,12 @@ export interface GameStore {
    * used and adds the chosen card (offer[choice]) to the player's slot, sealed, with no station.
    */
   pickGrab(powerupId: string, playerId: string, choice: number): Promise<GrabPick>
+  /**
+   * Dato Seri's hidden stash (jail design §4b): atomically, if the game has a stash nobody has claimed, marks
+   * it claimed by this player (claimedAt = store clock) and gives them the 'dato' card, with no station.
+   * Null if there's no stash or someone got there first.
+   */
+  claimDato(gameId: string, playerId: string): Promise<PowerUp | null>
   /** Consumes a shield only if it wasn't already; true for the first caller. */
   consumeShield(id: string): Promise<boolean>
   /** Adds a bonus (Flare) ping with the next free bonus number; safe when two happen at once. */
@@ -368,7 +374,7 @@ export class MemoryStore implements GameStore {
   async stealFrom(gameId: string, side: 'runner' | 'chaser', rng: () => number = Math.random): Promise<StolenCard | null> {
     const pick = <T,>(xs: T[]): T => xs[Math.min(xs.length - 1, Math.floor(rng() * xs.length))]
     const stealable = (u: PowerUp) =>
-      u.game_id === gameId && !u.used_at && !u.consumed_at && !u.taken_at && !u.sealed && (u.kind as string) !== 'dato' // Dato Seri (a later task's kind) is immune
+      u.game_id === gameId && !u.used_at && !u.consumed_at && !u.taken_at && !u.sealed && u.kind !== 'dato' // Dato Seri is immune
     const owners = this.playerRows
       .filter((p) => p.game_id === gameId && p.role === side && !p.removed_at && !(side === 'runner' && p.jailed))
       .filter((p) => this.powerUpRows.some((u) => u.player_id === p.id && stealable(u)))
@@ -412,6 +418,27 @@ export class MemoryStore implements GameStore {
     }
     this.powerUpRows.push(row)
     return { ok: true, powerUp: { ...row } }
+  }
+  async claimDato(gameId: string, playerId: string) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g?.dato_stash || g.dato_stash.claimedBy !== null) return null
+    // A fresh object: gameByCode hands out shallow copies that share the old one.
+    g.dato_stash = { ...g.dato_stash, claimedBy: playerId, claimedAt: this.nowIso() }
+    const row: PowerUp = {
+      id: this.id('u'),
+      game_id: gameId,
+      player_id: playerId,
+      kind: 'dato',
+      station: null,
+      claimed_at: this.nowIso(),
+      used_at: null,
+      consumed_at: null,
+      sealed: false,
+      taken_at: null,
+      offer: null,
+    }
+    this.powerUpRows.push(row)
+    return { ...row }
   }
   async consumeShield(id: string) {
     const u = this.powerUpRows.find((x) => x.id === id)

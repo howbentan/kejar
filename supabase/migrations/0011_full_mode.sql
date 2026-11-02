@@ -146,3 +146,37 @@ revoke execute on function open_grab(uuid, text, int) from public, anon, authent
 grant execute on function open_grab(uuid, text, int) to service_role;
 revoke execute on function pick_grab(uuid, uuid, int, timestamptz) from public, anon, authenticated;
 grant execute on function pick_grab(uuid, uuid, int, timestamptz) to service_role;
+
+-- Task 7: Dato Seri's hidden stash (jail design §4b). Where the organiser or a marshal dropped the card,
+-- and who scanned it first: { lat, lng, claimedBy, claimedAt }. Null = no stash this game.
+alter table games add column dato_stash jsonb;
+
+-- The first free runner to scan the stash: locks the game row, re-checks nobody has claimed it, marks it
+-- claimed and inserts the 'dato' card (no station) in one transaction, so two scans at once give one card.
+-- The app has already checked the scanner (a free runner, close enough, empty slot). Returns the card, or nothing.
+create function claim_dato(p_game uuid, p_player uuid, p_at timestamptz) returns setof powerups
+language plpgsql
+as $$
+declare
+  g games;
+  new_row powerups;
+begin
+  select * into g from games where id = p_game for update;
+  if not found or g.dato_stash is null or jsonb_typeof(g.dato_stash) <> 'object'
+     or (g.dato_stash ->> 'claimedBy') is not null then
+    return;
+  end if;
+  update games
+     set dato_stash = g.dato_stash || jsonb_build_object(
+           'claimedBy', p_player::text,
+           'claimedAt', to_char(p_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+   where id = p_game;
+  insert into powerups (game_id, player_id, kind, station, claimed_at)
+    values (p_game, p_player, 'dato', null, p_at)
+    returning * into new_row;
+  return next new_row;
+end;
+$$;
+
+revoke execute on function claim_dato(uuid, uuid, timestamptz) from public, anon, authenticated;
+grant execute on function claim_dato(uuid, uuid, timestamptz) to service_role;

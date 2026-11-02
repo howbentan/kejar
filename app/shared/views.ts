@@ -1,12 +1,12 @@
 import { alertLeadFor, checkedIn, checkinsSince, countedCheckIn } from './checkins.js'
 import { alertsFrom, type Alert, type ReportReason } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
-import { distanceM, fuzz } from './geo.js'
+import { distanceM, fuzz, hash, offset } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { MOMENT_WINDOW_MS } from './moments.js'
 import { POWER_NAME } from './powerNames.js'
 import { activeShield, decoySpot, flareBlocked, SHIELD_MS, slotBusy } from './powerups.js'
-import type { Arena, Game, GameEvent, LatLng, Phase, Ping, Player, Position, PowerUp, PowerUpKind, Results, Role, Settings } from './types.js'
+import type { Arena, DatoStash, Game, GameEvent, LatLng, Phase, Ping, Player, Position, PowerUp, PowerUpKind, Results, Role, Settings } from './types.js'
 
 /** Spec §4.5–4.6 constants. */
 export const FUZZ_RADIUS_M = 15
@@ -16,6 +16,8 @@ export const FRESH_MS = 60_000
 export const CHASER_SNAPSHOT_FUZZ_M = 30
 /** Focus shows runners this close to the chaser exactly. */
 export const FOCUS_M = 75
+/** Dato Seri's hint zone radius, inside the jail design's 100–200 m band (§4b). */
+export const LEGENDARY_ZONE_M = 150
 const FEED_MAX = 20
 
 export interface MapDot {
@@ -127,6 +129,16 @@ export interface View {
   deckLeft: number | null
   /** My power-up whose effect is still running, which keeps my one slot busy (§5a). */
   activePowerUp: PowerUpKind | null
+  /**
+   * The unlabelled `?` zone around Dato Seri's hidden stash (jail design §4b, §4c): every runner and chaser in
+   * a Full game, during the chase, until someone claims it. Fixed for the game, with the stash somewhere inside.
+   */
+  legendaryZone: { lat: number; lng: number; radiusM: number } | null
+  /**
+   * Marshals and the organiser: exactly where the stash is (null if none), and who claimed it. Left out of
+   * players' views entirely, so not even the key's name reaches their phones (rules doc §9b).
+   */
+  datoStash?: DatoStash | null
   results: Results | null
 }
 
@@ -463,6 +475,22 @@ function snapshotLines(i: ViewInput, phase: Phase, endsAt: number | null): { at:
     .map((t) => ({ at: new Date(t.alertAt).toISOString(), text: SNAPSHOT_TAKEN }))
 }
 
+/**
+ * The hint zone around an unclaimed stash, for runners and chasers during a Full game's chase (jail design §4b).
+ * Its centre is the stash moved 30–80% of the radius in a direction seeded by the game id, so it never moves
+ * during the game, the stash is always well inside, and the centre never gives the spot away. No label.
+ */
+function legendaryZoneFor(i: ViewInput, phase: Phase): View['legendaryZone'] {
+  const s = i.game.dato_stash
+  if (i.game.settings.mode !== 'full' || phase !== 'chasing' || !s || s.claimedBy !== null) return null
+  if (i.me.role !== 'runner' && i.me.role !== 'chaser') return null
+  const h = hash(`${i.game.id}:legendary-zone`)
+  const angle = ((h & 0xffff) / 0x10000) * 2 * Math.PI
+  const dist = (0.3 + ((h >>> 16) / 0x10000) * 0.5) * LEGENDARY_ZONE_M
+  const c = offset({ lat: s.lat, lng: s.lng }, dist, angle)
+  return { lat: c.lat, lng: c.lng, radiusM: LEGENDARY_ZONE_M }
+}
+
 function jailCheckinsFor(i: ViewInput, reason: View['jailReason']): View['jailCheckins'] {
   if (reason !== 'missed-checkins') return null
   const latest = i.events.filter((e) => e.type === 'auto-jailed' && e.target_id === i.me.id).at(-1)
@@ -528,6 +556,9 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
       }
       return plain(thief === 'Ah Long' ? 'Ah Long came to collect!' : 'Toyol stole a power-up!')
     }
+    case 'legendary':
+      // Never the card's name or the finder's (jail design §4c, rules doc §9b).
+      return plain('Something legendary was found.')
     case 'caught':
       if (!actor || !target) return plain('A Dikejar was caught.')
       return two(`${actor.name} caught ${tag}.`, 'CATCH', `${tag} is walking to Penjara. ${ctx.freeNow} Dikejar still free.`, `Nice. ${ctx.freeNow} Dikejar left to find.`)
@@ -604,7 +635,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, datoStash: undefined, reports: [], ratings: [] }
   }
   return v
 }
@@ -710,6 +741,8 @@ function fullView(i: ViewInput): View {
       const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now)
       return busy?.running ? busy.kind : null
     })(),
+    legendaryZone: legendaryZoneFor(i, phase),
+    ...(role === 'marshal' ? { datoStash: i.game.dato_stash ?? null } : {}),
     results: i.results,
   }
 }

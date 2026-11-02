@@ -3,7 +3,7 @@ import { event, game, iso, MIN, ping, player, pos, T0 } from './fixtures.js'
 import { distanceM } from './geo.js'
 import { DEFAULT_SETTINGS, type Player, type Position, type PowerUp } from './types.js'
 import { BONUS_SEQ_BASE, SCHEDULED_ALERT_LEAD_MS } from './clock.js'
-import { CHASER_SNAPSHOT_FUZZ_M, viewFor } from './views.js'
+import { CHASER_SNAPSHOT_FUZZ_M, LEGENDARY_ZONE_M, viewFor } from './views.js'
 
 const g = game()
 const NOW = T0 + 16 * MIN // chase started at +5; pings revealed at +10 and +15
@@ -672,5 +672,36 @@ describe("the snapshot marker on a chaser's own screen (checkins design §5.4)",
     expect(view(aina, { game: on, pings: [...pings, bonus], now: T0 + 18 * MIN }).feed.filter((f) => f.text === SNAP)).toHaveLength(2)
     const ended = game({ settings: on.settings, ended_at: iso(T0 + 12 * MIN) })
     expect(view(aina, { game: ended, now: T0 + 30 * MIN }).feed.filter((f) => f.text === SNAP).map((f) => f.at)).toEqual([iso(alertAt(1))])
+  })
+})
+
+describe("Dato Seri's hint zone (jail design §4b)", () => {
+  const stash = { lat: 3.004, lng: 101.004, claimedBy: null, claimedAt: null }
+  const full = (id: string) => game({ id, settings: { ...DEFAULT_SETTINGS, mode: 'full' }, dato_stash: stash })
+
+  it('always has the stash well inside, never at the centre, whatever the game', () => {
+    for (let k = 0; k < 40; k++) {
+      const z = view(aina, { game: full(`game-${k}`) }).legendaryZone!
+      expect(z.radiusM).toBe(LEGENDARY_ZONE_M)
+      const d = distanceM(z, stash)
+      expect(d).toBeGreaterThanOrEqual(0.3 * LEGENDARY_ZONE_M - 0.5)
+      expect(d).toBeLessThanOrEqual(0.8 * LEGENDARY_ZONE_M + 0.5)
+    }
+  })
+
+  it('is the same for runners and chasers, jailed or free; marshals get the exact stash instead', () => {
+    const z = view(aina, { game: full('g1') }).legendaryZone
+    expect(view(chaser, { game: full('g1') }).legendaryZone).toEqual(z)
+    expect(view({ ...aina, jailed: true }, { game: full('g1') }).legendaryZone).toEqual(z)
+    const m = view(siti, { game: full('g1') })
+    expect(m.legendaryZone).toBeNull()
+    expect(m.datoStash).toEqual(stash)
+  })
+
+  it('is gone once claimed, and outside the chase', () => {
+    const claimed = game({ settings: { ...DEFAULT_SETTINGS, mode: 'full' }, dato_stash: { ...stash, claimedBy: 'r2', claimedAt: iso(NOW) } })
+    expect(view(aina, { game: claimed }).legendaryZone).toBeNull()
+    expect(view(aina, { game: full('g1'), now: T0 + 2 * MIN }).legendaryZone).toBeNull()
+    expect(view(aina, { game: { ...full('g1'), ended_at: iso(NOW - MIN) } }).legendaryZone).toBeNull()
   })
 })

@@ -132,5 +132,7 @@ describe('claimMessage', () => {
       "Your Durian is still working. Come back when it's done.",
     )
     expect(claimMessage({ ok: false, reason: 'unknown-station' })).toBe("That's not a station code")
+    // The hidden stash (rules doc §9): a full slot, without naming what's in it.
+    expect(claimMessage({ ok: false, reason: 'hand-full' })).toBe('Use or lose your power-up first')
   })
 })
