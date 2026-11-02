@@ -73,6 +73,14 @@ describe('HostLobby', () => {
     expect(await screen.findByText('CORE')).toBeInTheDocument()
   })
 
+  it('in a Full game the organiser can drop Dato Seri from the setup map', async () => {
+    call.mockImplementation(async (action: string) =>
+      action === 'state' ? { ...lobbyView, settings: { ...DEFAULT_SETTINGS, mode: 'full' }, datoStash: null } : {},
+    )
+    render(<HostLobby code="ABC234" />)
+    expect(await screen.findByRole('button', { name: 'Drop Dato Seri here' })).toBeInTheDocument()
+  })
+
   it('lists the players with their tags', async () => {
     render(<HostLobby code="ABC234" />)
     expect(await screen.findByText('Aina')).toBeInTheDocument()

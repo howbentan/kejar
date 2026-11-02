@@ -315,7 +315,7 @@ export default function HostNew() {
         </div>
         <p className="muted" style={{ marginTop: -4 }}>
           {settings.mode === 'full'
-            ? 'Everything in Core, plus Gostan and more power-ups as they arrive. For regulars.'
+            ? 'Everything in Core, plus Gostan, Toyol, Ah Long and Abang Grab: more power-ups, and ways to steal them. For regulars.'
             : 'The chase, check-ins and Penjara, plus 4 simple power-ups. Best for first-timers.'}
         </p>
         <NumberField label="Game length (min)" value={settings.lengthMin} min={15} max={90} onChange={(n) => set({ lengthMin: n })} />
@@ -370,7 +370,7 @@ export default function HostNew() {
       <button className="btn" disabled={busy} onClick={create}>
         {busy ? 'Creating…' : 'Create game'}
       </button>
-      <a className="muted" href="/print/tags">
+      <a className="muted" href={settings.mode === 'full' ? '/print/tags?mode=full' : '/print/tags'}>
         Print runner tags and the Penjara code →
       </a>
     </Screen>

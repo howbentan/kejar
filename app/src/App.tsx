@@ -35,7 +35,7 @@ function Routed() {
     case 'game':
       return <GameScreen code={code!} />
     case 'print-tags':
-      return <PrintTags />
+      return <PrintTags full={new URLSearchParams(window.location.search).get('mode') === 'full'} />
     case 'organiser-redeem':
       return <OrganiserRedeem token={token!} />
     case 'marshal-redeem':

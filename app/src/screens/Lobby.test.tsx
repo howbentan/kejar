@@ -37,6 +37,20 @@ describe('Lobby setup map', () => {
   })
 })
 
+describe('Lobby: Dato Seri for marshals', () => {
+  it('a marshal in a Full lobby gets Drop Dato Seri here; a runner never does', () => {
+    localStorage.setItem('kejar.game.ABC234', JSON.stringify({ token: 'm1' }))
+    const base = testView({ phase: 'lobby', settings: { ...testView().settings, mode: 'full' }, datoStash: null })
+    const { unmount } = render(<Lobby code="ABC234" view={{ ...base, me: { ...base.me, role: 'marshal' } }} refresh={vi.fn()} />)
+    expect(screen.getByRole('button', { name: 'Drop Dato Seri here' })).toBeInTheDocument()
+    unmount()
+    render(<Lobby code="ABC234" view={{ ...base, datoStash: undefined }} refresh={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Drop Dato Seri here' })).toBeNull()
+    expect(document.body.textContent).not.toMatch(/dato/i)
+    localStorage.clear()
+  })
+})
+
 describe('Lobby mode badge', () => {
   it('shows CORE or FULL, and CORE when an older game has no mode', () => {
     const base = testView({ phase: 'lobby' })

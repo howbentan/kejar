@@ -81,7 +81,9 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
         <ModeBadge mode={view.settings.mode} />
       </div>
       <p className="muted">{role ? ROLE_COPY[role] : 'Waiting for the organiser to give you a role…'}</p>
-      {role === 'marshal' && <SetupMap view={view} />}
+      {role === 'marshal' && (
+        <SetupMap view={view} code={code} credentials={{ token: loadSession(localStorage, code).token ?? '' }} refresh={refresh} />
+      )}
 
       {role === 'runner' && (
         <div className="card">

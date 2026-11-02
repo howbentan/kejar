@@ -85,7 +85,7 @@ export default function HostLobby({ code }: { code: string }) {
         {view && <ModeBadge mode={view.settings.mode} />}
       </div>
       {view && <AlertsOnPhone code={code} view={view} refresh={refresh} />}
-      {view && <SetupMap view={view} />}
+      {view && <SetupMap view={view} code={code} credentials={{ organiserToken: organiser.organiserToken }} refresh={refresh} />}
       <div className="card" style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
         {qr && <img src={qr} alt="Join QR code" width={120} height={120} style={{ borderRadius: 10 }} />}
         <div>
