@@ -12,7 +12,7 @@ import {
   type ReportReason,
   type SosReason,
 } from '../../shared/alerts.js'
-import { autoJailDue, checkedIn } from '../../shared/checkins.js'
+import { autoJailDue, checkinsSince, countedCheckIn } from '../../shared/checkins.js'
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
@@ -207,6 +207,8 @@ const lastAtOf = (list: Position[] | undefined, t: number) => {
  */
 async function withSnapshotMoment(ctx: Ctx, input: SnapshotInput, times: string[]): Promise<Record<string, Position[]>> {
   const w = snapshotWindow(input)
+  // Cost: one extra latest_positions call (one RPC) on most polls by a free runner with the switch on, since
+  // the view's usual moments never include an alert; folding it into viewTimes would cost the same RPC for every viewer.
   if (!w || times.includes(iso(w.alertAt))) return input.positions
   const extra = await ctx.store.latestPositions(input.game.id, [iso(w.alertAt)])
   const out: Record<string, Position[]> = { ...input.positions }
@@ -260,13 +262,17 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
         .map((u) => u.player_id),
     )
     const seen = free.filter((p) => !cloaked.has(p.id) && (positions[p.id] ?? []).length > 0).length
+    // The count starts fresh at each runner's own last release (checkins design §4.4).
+    const sinceFor = (p: Player) => checkinsSince(chaseStartOf(game, now)!, p.freed_at)
     // With the chaser-snapshot switch on, a scheduled reveal records who checked in (a location inside its
-    // 45 s window), so a runner's view can find the last window they checked into without loading every
-    // reveal's positions (checkins design §5.4).
+    // 45 s window, counted under the same release rule as auto-jail), so a runner's view can find the last
+    // window they checked into without loading every reveal's positions (checkins design §5.4).
     const scheduled = seq < BONUS_SEQ_BASE ? pingTimes(game, now).find((t) => t.seq === seq) : undefined
     const checkedInIds =
       game.settings.chaserSnapshot === true && scheduled
-        ? free.filter((p) => checkedIn(scheduled.alertAt, scheduled.revealAt, lastAtOf(positions[p.id], scheduled.revealAt))).map((p) => p.id)
+        ? free
+            .filter((p) => countedCheckIn(scheduled.alertAt, scheduled.revealAt, lastAtOf(positions[p.id], scheduled.revealAt), sinceFor(p)))
+            .map((p) => p.id)
         : null
     // Cloaked runners count as missed, matching what chasers see on the map.
     await store.addEvent({
@@ -283,9 +289,8 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
       const lastTwo = lastThree.slice(-2)
       const atReveals = lastTwo.length === 2 ? await store.latestPositions(game.id, lastThree.map((t) => iso(t.revealAt))) : {}
       for (const p of lastTwo.length === 2 ? free : []) {
-        // The count starts fresh at the runner's own last release (checkins design §4.4), and only a
-        // location inside each ping's 45 s window counts as a check-in (§4.2).
-        const since = Math.max(chaseStartOf(game, now)!, p.freed_at ? Date.parse(p.freed_at) : -Infinity)
+        // Only a location inside each ping's 45 s window counts as a check-in (§4.2).
+        const since = sinceFor(p)
         const judged = lastThree.map((t) => {
           const at = latestAtOrBefore(atReveals[p.id], t.revealAt)
           return { alertAt: t.alertAt, revealAt: t.revealAt, lastAt: at ? Date.parse(at.at) : null }
@@ -295,7 +300,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
         if (autoJailDue(pings, since) && (await store.catchRunner(p.id, null))) {
           const checkins = judged
             .filter((t) => t.alertAt >= since)
-            .map((t) => ({ revealAt: t.revealAt, ok: checkedIn(t.alertAt, t.revealAt, t.lastAt) }))
+            .map((t) => ({ revealAt: t.revealAt, ok: countedCheckIn(t.alertAt, t.revealAt, t.lastAt, since) }))
           await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: p.id, data: { who: who(p), seq, checkins } })
         }
       }

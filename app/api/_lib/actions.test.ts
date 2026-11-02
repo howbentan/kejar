@@ -2001,6 +2001,26 @@ describe('the chaser snapshot at check-in (checkins design §5)', () => {
     expect((await run<View>('state', { code: g.code, token: g.ben.token })).chaserSnapshot).toBeNull()
   })
 
+  it('a runner freed after the alert has not checked in for that window, even with a location inside it', async () => {
+    const g = await safetyGame({ checkinMode: 'schedule', chaserSnapshot: true })
+    now = T0 + 9.75 * MIN // Aina checks in for ping 1; Hafiz doesn't
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    now = T0 + 12 * MIN
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })
+    // Ping 2's alert is at +14:15. Aina frees Hafiz at +14:30, and he sends a location inside the window.
+    now = T0 + 14.5 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR })).toMatchObject({ ok: true })
+    now = T0 + 14.75 * MIN
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+    now = T0 + 16 * MIN
+    const v = await run<View>('state', { code: g.code, token: g.hafiz.token })
+    const ping2 = (await store.events(g.gameId)).find((e) => e.type === 'ping' && e.data.seq === 2)!
+    expect(ping2.data.checkedIn).toEqual([g.aina.playerId])
+    expect(v.chaserSnapshot).toBeNull()
+  })
+
   it('with the switch off, reveals record nothing new and nobody gets a snapshot', async () => {
     const g = await safetyGame({ checkinMode: 'schedule' })
     now = T0 + 9.75 * MIN

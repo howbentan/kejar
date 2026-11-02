@@ -1,4 +1,4 @@
-import { alertLeadFor, checkedIn } from './checkins.js'
+import { alertLeadFor, checkedIn, checkinsSince, countedCheckIn } from './checkins.js'
 import { alertsFrom, type Alert, type ReportReason } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
 import { distanceM, fuzz } from './geo.js'
@@ -402,7 +402,7 @@ function myLastAt(i: Pick<ViewInput, 'me' | 'positions'>): (t: number) => number
 
 /** Check-ins only count from the chase start or my last release, whichever is later (checkins design §4.4). */
 function sinceRelease(i: Pick<ViewInput, 'game' | 'me' | 'now'>): number {
-  return Math.max(chaseStartOf(i.game, i.now)!, i.me.freed_at ? Date.parse(i.me.freed_at) : -Infinity)
+  return checkinsSince(chaseStartOf(i.game, i.now)!, i.me.freed_at)
 }
 
 export type SnapshotInput = Pick<ViewInput, 'game' | 'me' | 'positions' | 'events' | 'now'>
@@ -428,7 +428,7 @@ export function snapshotWindow(i: SnapshotInput): { seq: number; alertAt: number
   return (
     opened
       .reverse()
-      .find((t) => recorded.has(t.seq) || (t.alertAt >= since && checkedIn(t.alertAt, t.revealAt, lastAt(Math.min(t.revealAt, i.now))))) ??
+      .find((t) => recorded.has(t.seq) || countedCheckIn(t.alertAt, t.revealAt, lastAt(Math.min(t.revealAt, i.now)), since)) ??
     null
   )
 }
