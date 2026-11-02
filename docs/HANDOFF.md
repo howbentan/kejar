@@ -107,6 +107,10 @@ Also floated: surprise missions, a bounty on the longest survivor. **Malaysian p
 - Moments play once, and only within 15 s of the event, so reopening Kejar doesn't replay them.
 - **Left for C3/D:** the Pak Guard 75 m ring, the auto-jailed circle sliding to Penjara, Dato Seri's yellow marker and foil, and Abang Grab/Toyol slot states.
 
+**Plans C3 and D written (2026-11-02, not built).** `docs/superpowers/plans/2026-11-02-kejar-plan-c3-polish.md` (marshal SOS takeover, post-game report, Pak Guard ring, auto-jail slide-off) and `docs/superpowers/plans/2026-11-02-kejar-plan-d-full-mode.md` (Toyol, Ah Long, Abang Grab, the chaser-snapshot switch, Dato Seri's stash and Settle). Chosen execution: subagent-driven.
+
+**Luar Garisan designed (2026-11-02, not built).** `docs/superpowers/specs/2026-11-02-kejar-luar-garisan-design.md`. A real penalty for leaving the play area — today it's only a one-time marshal alert. Not Penjara: a separate `disqualified` flag ends survival-time/catch-eligibility for that round, with no physical destination. Triggers on two consecutive out-of-bounds position reports (reusing auto-jail's exact pattern and evaluation point), after an earlier live-30-second-timer version was dropped once it became clear runner location isn't a continuous stream under today's tracking mode.
+
 **Plan C1 (branch `plan-c1-chase`, 2026-11-01): the one-screen chase, the SOS icon, the two-part feed and the check-in banner.** **No migration is needed.**
 - Motion for React at the app root (honours the phone's reduced-motion setting).
 - Every feed line says what happened, then what it means for your side (`→ …` in lime). Lines that need a runner to act get a lime outline and one buzz.
