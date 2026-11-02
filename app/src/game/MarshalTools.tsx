@@ -55,6 +55,7 @@ export default function MarshalTools({ code, view, refresh }: { code: string; vi
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null)
+  const [tab, setTab] = useState<'live' | 'after'>('live')
 
   // Buzz when a new SOS comes in: marshals may be looking at the park, not the screen.
   const openSos = view.alerts.filter((a) => a.kind === 'sos' && !a.handled).length
@@ -77,9 +78,46 @@ export default function MarshalTools({ code, view, refresh }: { code: string; vi
     }
   }
 
-  const open = view.alerts.filter((a) => !a.handled)
-  const handled = view.alerts.filter((a) => a.handled)
+  // Live tab order (motion design): open SOS pinned up top, then everything else open, then closed.
+  const openAlerts = view.alerts.filter((a) => !a.handled)
+  const openSosAlerts = openAlerts.filter((a) => a.kind === 'sos')
+  const needsALook = openAlerts.filter((a) => a.kind !== 'sos')
+  const closedAlerts = view.alerts.filter((a) => a.handled)
   const players = view.roster.filter((p) => p.role !== 'marshal' || p.id !== view.me.id)
+
+  function AlertRow(a: Alert) {
+    return (
+      <li key={a.id} className={`alert-row${a.handled ? ' alert-handled' : ''}${a.kind === 'sos' && !a.handled ? ' alert-sos' : ''}`}>
+        <div style={{ flex: 1 }}>
+          <p className="eyebrow">
+            {KIND_LABEL[a.kind]} · {ago(a.at, view.now)}
+          </p>
+          <p>{a.text}</p>
+          {a.kind === 'sos' && !a.handled && (
+            <p className="eyebrow" style={{ color: 'var(--volt)' }}>
+              {a.respondingName ? `${a.respondingName} IS GOING` : "NOBODY'S GOING YET"}
+            </p>
+          )}
+          {a.handled && a.outcome && <p className="muted">{a.outcome}</p>}
+        </div>
+        {!a.handled && a.kind === 'auto-jail' && (
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <button type="button" className="btn alert-btn" disabled={busy} onClick={() => act('undoAutoJail', { eventId: a.id })}>
+              Phone problem: undo
+            </button>
+            <button type="button" className="btn btn-ghost alert-btn" disabled={busy} onClick={() => act('handleAlert', { eventId: a.id })}>
+              It stands
+            </button>
+          </span>
+        )}
+        {!a.handled && a.kind !== 'auto-jail' && (
+          <button type="button" className="btn btn-ghost alert-btn" disabled={busy} onClick={() => act('handleAlert', { eventId: a.id })}>
+            Handled
+          </button>
+        )}
+      </li>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -95,36 +133,54 @@ export default function MarshalTools({ code, view, refresh }: { code: string; vi
       <ErrorText>{error}</ErrorText>
 
       <p className="eyebrow">Alerts</p>
-      {view.alerts.length === 0 ? (
-        <p className="muted">No alerts.</p>
+      <div className="pills" role="tablist" aria-label="Alerts">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'live'}
+          className={tab === 'live' ? 'pill pill-on' : 'pill'}
+          onClick={() => setTab('live')}
+        >
+          Live
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'after'}
+          className={tab === 'after' ? 'pill pill-on' : 'pill'}
+          onClick={() => setTab('after')}
+        >
+          After game
+        </button>
+      </div>
+
+      {tab === 'live' ? (
+        <div role="tabpanel" aria-label="Live">
+          {view.alerts.length === 0 ? (
+            <p className="muted">No alerts.</p>
+          ) : (
+            <>
+              {openSosAlerts.length > 0 && <ul className="alert-list">{openSosAlerts.map(AlertRow)}</ul>}
+              {needsALook.length > 0 && (
+                <>
+                  <p className="eyebrow">Needs a look</p>
+                  <ul className="alert-list">{needsALook.map(AlertRow)}</ul>
+                </>
+              )}
+              {closedAlerts.length > 0 && (
+                <>
+                  <p className="eyebrow">Closed</p>
+                  <ul className="alert-list">{closedAlerts.map(AlertRow)}</ul>
+                </>
+              )}
+            </>
+          )}
+        </div>
       ) : (
-        <ul className="alert-list">
-          {[...open, ...handled].map((a) => (
-            <li key={a.id} className={`alert-row${a.handled ? ' alert-handled' : ''}${a.kind === 'sos' && !a.handled ? ' alert-sos' : ''}`}>
-              <div style={{ flex: 1 }}>
-                <p className="eyebrow">
-                  {KIND_LABEL[a.kind]} · {ago(a.at, view.now)}
-                </p>
-                <p>{a.text}</p>
-              </div>
-              {!a.handled && a.kind === 'auto-jail' && (
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <button type="button" className="btn alert-btn" disabled={busy} onClick={() => act('undoAutoJail', { eventId: a.id })}>
-                    Phone problem: undo
-                  </button>
-                  <button type="button" className="btn btn-ghost alert-btn" disabled={busy} onClick={() => act('handleAlert', { eventId: a.id })}>
-                    It stands
-                  </button>
-                </span>
-              )}
-              {!a.handled && a.kind !== 'auto-jail' && (
-                <button type="button" className="btn btn-ghost alert-btn" disabled={busy} onClick={() => act('handleAlert', { eventId: a.id })}>
-                  Handled
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
+        <div role="tabpanel" aria-label="After game">
+          {/* Task 8 wires post-game reports (View.reports) in here. */}
+          <p className="muted">No reports yet.</p>
+        </div>
       )}
 
       <p className="eyebrow">Players</p>

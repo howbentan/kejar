@@ -111,6 +111,45 @@ describe('MarshalTools', () => {
     expect(vibrate).toHaveBeenCalledTimes(1)
   })
 
+  it('pins open SOS alerts atop the Live tab, lime, with who is going', () => {
+    const sos = alert('e1', 'sos', 'SOS from Aina #07')
+    const outsideAlert = alert('e2', 'outside', 'Aina #07 left the play area')
+    render(<MarshalTools code="ABC234" view={testView({ alerts: [sos, outsideAlert] })} refresh={refresh} />)
+    const rows = screen.getAllByRole('listitem')
+    expect(rows[0]).toHaveTextContent(/sos/i)
+    expect(rows[0]).toHaveTextContent(/nobody's going yet/i)
+    expect(rows[0].className).toContain('alert-sos')
+  })
+
+  it("shows who's responding to an open SOS, same copy as the SOS takeover", () => {
+    const sos = { ...alert('e1', 'sos', 'SOS from Aina #07'), respondingName: 'Hafiz' }
+    render(<MarshalTools code="ABC234" view={testView({ alerts: [sos] })} refresh={refresh} />)
+    expect(screen.getByText("Hafiz IS GOING")).toBeInTheDocument()
+  })
+
+  it('groups other open alerts under a Needs a look heading', () => {
+    const outsideAlert = alert('e2', 'outside', 'Aina #07 left the play area')
+    render(<MarshalTools code="ABC234" view={testView({ alerts: [outsideAlert] })} refresh={refresh} />)
+    expect(screen.getByText(/needs a look/i)).toBeInTheDocument()
+  })
+
+  it('closed alerts fade under a Closed heading with their outcome', () => {
+    const closedSos = { ...alert('e1', 'sos', 'SOS from Aina #07', true), outcome: 'sorted' }
+    render(<MarshalTools code="ABC234" view={testView({ alerts: [closedSos] })} refresh={refresh} />)
+    expect(screen.getByText('Closed')).toBeInTheDocument()
+    expect(screen.getByText('sorted')).toBeInTheDocument()
+    const row = screen.getByRole('listitem')
+    expect(row.className).toContain('alert-handled')
+  })
+
+  it('switches to an After game tab with its own tabpanel', () => {
+    render(<MarshalTools code="ABC234" view={testView()} refresh={refresh} />)
+    expect(screen.getByRole('tab', { name: /live/i })).toHaveAttribute('aria-selected', 'true')
+    fireEvent.click(screen.getByRole('tab', { name: /after game/i }))
+    expect(screen.getByRole('tabpanel')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /after game/i })).toHaveAttribute('aria-selected', 'true')
+  })
+
   it('offers SOS alerts on this phone until they are on', async () => {
     subscribe.mockResolvedValue({ endpoint: 'https://push/x' })
     const { rerender } = render(<MarshalTools code="ABC234" view={testView()} refresh={refresh} />)
