@@ -96,7 +96,7 @@ Also floated: surprise missions, a bounty on the longest survivor. **Malaysian p
 - A slot stays busy while its effect runs.
 - Mat Rempit is one at a time, with a 3-minute team cooldown.
 
-**Plan D (branch `plan-d-full-mode`, 2026-11-03): Full mode's extras.** **Before merging to main: run `supabase/migrations/0011_full_mode.sql` in Supabase first.** The app now reads and writes `games.dato_stash` (every new game is created through it) and `powerups.taken_at`/`sealed`/`offer`, and calls its `steal_card`, `open_grab`, `pick_grab` and `claim_dato` functions, so without it every game breaks, Core included. It runs in one transaction and is safe to run again.
+**Plan D (branch `plan-d-full-mode`, 2026-11-03): Full mode's extras.** Migration `0011_full_mode.sql` has been run in Supabase (2026-11-03), so it's ready to merge. The app now reads and writes `games.dato_stash` (every new game is created through it) and `powerups.taken_at`/`sealed`/`offer`, and calls its `steal_card`, `open_grab`, `pick_grab` and `claim_dato` functions, so without it every game breaks, Core included. It runs in one transaction and is safe to run again.
 - Toyol (runners) and Ah Long (chasers) take one random unused card from a random free player on the other side. The feed never names who; the victim gets their own line. Nothing to take: the stealer keeps theirs.
 - Abang Grab shows the top 3 cards of your side's deck; you keep one, sealed (it can't be stolen), and the other two go to the bottom.
 - The chaser-snapshot switch (Full only, off by default): at check-in, runners see where the chasers were at the alert, fuzzed 30 m. Chasers get a `SNAPSHOT TAKEN` chip, and chasers and marshals get a feed line.
