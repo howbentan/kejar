@@ -33,7 +33,7 @@ function CheckinRow({ checkins }: { checkins: { at: number; ok: boolean }[] }) {
 
 /** Dato Seri's holder in Penjara: Settle sits here, on the Penjara screen, where the Penjara code gets scanned. */
 function Settle({ code, view }: { code: string; view: View }) {
-  return view.settle ? <SettlePanel code={code} settle={view.settle} /> : null
+  return view.settle ? <SettlePanel code={code} meId={view.me.id} settle={view.settle} /> : null
 }
 
 /** Sent to Penjara for missing two check-ins in a row: says why, and points to a marshal for a phone fault. */

@@ -412,9 +412,11 @@ select.input option { background: #141614; color: var(--white); }
 .sos-takeover-close { width: 100%; max-width: 380px; background: var(--black); color: var(--volt); }
 
 /* Abang Grab's chooser (power-ups §6.3): the top 3 cards face up, tap one to keep it. */
-.grab { gap: 14px; }
+.grab { gap: 14px; overflow-y: auto; justify-content: flex-start; padding-top: 72px; }
 .grab-title { margin: 0; font: 800 26px var(--font); letter-spacing: -0.04em; }
-.grab-cards { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.grab-cards { display: flex; gap: 6px; justify-content: center; flex-wrap: nowrap; }
+/* Three 96 px cards don't fit 320 px minus the gutters: scale the row down on narrow phones. */
+@media (max-width: 340px) { .grab-cards .power-card { zoom: 0.86; } }
 .grab-card { appearance: none; border: 0; padding: 0; background: none; cursor: pointer; border-radius: 14px; }
 .grab-card:focus-visible { outline: 2px solid var(--volt); outline-offset: 3px; }
 .grab-card:disabled { opacity: 0.6; cursor: default; }

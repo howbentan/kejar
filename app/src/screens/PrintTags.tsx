@@ -54,8 +54,8 @@ export default function PrintTags({ full = false }: { full?: boolean }) {
       {full && (
         <>
           <p className="no-print" style={{ marginTop: 24, fontWeight: 700 }}>
-            The ★ card is Dato Seri, the secret legendary. Hide it in the play area, then stand by it and tap Drop Dato Seri
-            here in the lobby. Don&apos;t tell the players.
+            The ★ card is the hidden legendary. Hide it in the play area, stand by it, then in the lobby tap Organiser only ·
+            show hidden card, and Drop the ★ card here. Don&apos;t tell the players.
           </p>
           <div data-testid="stash-card" className="tag" style={{ marginTop: 8, width: '70mm', border: '2px solid #0A0A0B', padding: 12, textAlign: 'center' }}>
             {codes[DATO_QR] && <img src={codes[DATO_QR]} alt="★" style={{ width: '55mm', height: '55mm' }} />}

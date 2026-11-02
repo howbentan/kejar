@@ -32,5 +32,8 @@ describe('PrintTags', () => {
     expect(card.textContent).toBe('★kejar.')
     // The printed card itself never says what it is (rules doc §9b).
     expect(card.outerHTML.replace('data:KEJAR:DATO', '')).not.toMatch(/dato|seri|legend|power|scan/i)
+    // Nor does the on-screen note for the organiser: the page can be seen over their shoulder.
+    expect(document.body.textContent).not.toMatch(/dato|seri/i)
+    expect(screen.getByText(/Organiser only · show hidden card/)).toBeInTheDocument()
   })
 })

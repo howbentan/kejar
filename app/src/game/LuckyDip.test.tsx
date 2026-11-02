@@ -131,7 +131,7 @@ describe("Dato Seri's reveal (motion design §7)", () => {
       ['too-far', 'Get closer.'],
       ['no-stash', 'Nothing here.'],
       ['cannot-claim', 'Nothing here.'],
-      ['not-chasing', 'Nothing here yet.'],
+      ['not-chasing', 'Nothing here.'],
       ['hand-full', 'Use or lose your power-up first'],
       ['paused', 'Game is paused'],
     ] as const

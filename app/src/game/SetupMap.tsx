@@ -10,11 +10,17 @@ export type SetupCredentials = { organiserToken: string } | { token: string }
 
 /**
  * Dato Seri's hidden stash, for the organiser and marshals in a Full lobby (jail design §4b): stand by the hidden
- * ★ card and save the spot. Dropping again before the start moves it. No marker scribble here (marshal screen).
+ * ★ card and save the spot. Dropping again before the start moves it. The lobby is the screen organisers show to
+ * players, so it stays behind a closed, neutrally worded toggle: nothing names the card or shows the pin until it's
+ * opened (rules doc §9b). No marker scribble here (marshal screen).
  */
-function DatoDrop({ code, credentials, refresh, dropped }: { code: string; credentials: SetupCredentials; refresh: () => void; dropped: boolean }) {
+export function HiddenCard({ view, code, credentials, refresh }: { view: View; code: string; credentials: SetupCredentials; refresh: () => void }) {
+  const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // datoStash is only in the organiser's and marshals' views (undefined for players).
+  if (view.settings.mode !== 'full' || view.phase !== 'lobby' || view.datoStash === undefined) return null
+  const stash = view.datoStash
   async function drop() {
     setBusy(true)
     setError('')
@@ -29,16 +35,29 @@ function DatoDrop({ code, credentials, refresh, dropped }: { code: string; crede
       setBusy(false)
     }
   }
+  if (!open) {
+    return (
+      <button type="button" className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen(true)}>
+        Organiser only · show hidden card
+      </button>
+    )
+  }
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <p className="eyebrow settle-eyebrow">★ Dato Seri</p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <p className="eyebrow settle-eyebrow">★ Hidden card</p>
+        <button type="button" className="btn btn-ghost" style={{ padding: '6px 12px' }} onClick={() => setOpen(false)}>
+          Hide
+        </button>
+      </div>
       <p className="muted">
-        {dropped
-          ? 'Dato Seri is hidden at the yellow pin. Players only see a ? zone round it. Drop again to move it.'
+        {stash
+          ? 'The ★ card is hidden at the yellow pin. Players only see a ? zone round it. Drop again to move it.'
           : 'Hide the ★ card somewhere in the play area, stand next to it, then drop it here. Players only see a ? zone round it.'}
       </p>
+      <GameMap arena={view.arena} dots={[]} height={200} stash={stash ? { lat: stash.lat, lng: stash.lng } : null} />
       <button type="button" className="btn btn-legendary" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={drop}>
-        Drop Dato Seri here
+        Drop the ★ card here
       </button>
       <ErrorText>{error}</ErrorText>
     </div>
@@ -46,35 +65,19 @@ function DatoDrop({ code, credentials, refresh, dropped }: { code: string; crede
 }
 
 /** Before the game: where marshals put each station's QR card, the jail and the start (Plan 4b §5.6). */
-export default function SetupMap({
-  view,
-  code,
-  credentials,
-  refresh,
-}: {
-  view: View
-  /** With these, the organiser or a marshal can drop Dato Seri's stash in a Full lobby. */
-  code?: string
-  credentials?: SetupCredentials | null
-  refresh?: () => void
-}) {
+export default function SetupMap({ view }: { view: View }) {
   const stations = view.stations ?? []
-  // datoStash is only in the organiser's and marshals' views (undefined for players).
-  const stash = view.datoStash ?? null
-  const canDrop = view.settings.mode === 'full' && view.phase === 'lobby' && view.datoStash !== undefined && !!code && !!credentials
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <p className="eyebrow">Setup: where things go</p>
-      <GameMap arena={view.arena} dots={[]} stations={stations} height={260} stash={stash ? { lat: stash.lat, lng: stash.lng } : null} />
+      <GameMap arena={view.arena} dots={[]} stations={stations} height={260} />
       <ul className="muted" style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
         {stations.map((s) => (
           <li key={s.n}>{`Station ${s.n}`}</li>
         ))}
         <li>Penjara</li>
         <li>Start</li>
-        {stash && <li>Dato Seri (yellow pin)</li>}
       </ul>
-      {canDrop && <DatoDrop code={code!} credentials={credentials!} refresh={refresh ?? (() => {})} dropped={!!stash} />}
     </div>
   )
 }

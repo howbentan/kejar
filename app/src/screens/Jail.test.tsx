@@ -5,7 +5,8 @@ const call = vi.hoisted(() => vi.fn())
 const scanned = vi.hoisted(() => ({ text: '' }))
 vi.mock('../game/api', () => ({ call, ApiError: class extends Error {} }))
 vi.mock('../game/Map', () => ({ default: () => null }))
-vi.mock('../game/here', () => ({ currentCoords: async () => ({ lat: 3, lng: 101, accuracy_m: 5 }) }))
+const here = vi.hoisted(() => ({ coords: { lat: 3, lng: 101, accuracy_m: 5 } as Record<string, number> }))
+vi.mock('../game/here', () => ({ currentCoords: async () => here.coords }))
 vi.mock('../game/Scanner', () => ({
   default: ({ onResult }: { onResult: (t: string) => void }) => (
     <button type="button" onClick={() => onResult(scanned.text)}>
@@ -43,6 +44,7 @@ describe('Settle at Penjara (jail design §4b, §4d)', () => {
   const holder = (over: Partial<NonNullable<ReturnType<typeof testView>['settle']>> = {}) => ({ ...caught(60_000), settle: { ...settle, ...over } })
   beforeEach(() => {
     call.mockReset()
+    here.coords = { lat: 3, lng: 101, accuracy_m: 5 }
     localStorage.setItem('kejar.game.ABC234', JSON.stringify({ token: 't1' }))
   })
   afterEach(() => localStorage.clear())
@@ -86,6 +88,25 @@ describe('Settle at Penjara (jail design §4b, §4d)', () => {
       accuracy_m: 5,
     })
     expect(screen.getByText('Settled! You, Hafiz and Wei are free.')).toBeInTheDocument()
+    // Done: no second scan can overwrite it.
+    expect(screen.queryByRole('button', { name: 'Scan Penjara to settle' })).toBeNull()
+    expect(screen.getAllByRole('checkbox').every((c) => (c as HTMLInputElement).disabled)).toBe(true)
+  })
+
+  it('"You" is only ever the holder; an unknown freed id is never called You', async () => {
+    call.mockResolvedValue({ ok: true, freedIds: ['r2', 'zz'] })
+    render(<Jail code="ABC234" view={holder({ canFreeSelf: false })} />)
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Hafiz' }))
+    await scan('KEJAR:JAIL')
+    expect(screen.getByText('Settled! Hafiz and 1 more are free.')).toBeInTheDocument()
+  })
+
+  it('with no location fix, sends nothing and says to turn location on', async () => {
+    here.coords = {}
+    render(<Jail code="ABC234" view={holder()} />)
+    await scan('KEJAR:JAIL')
+    expect(call).not.toHaveBeenCalled()
+    expect(screen.getByText('Turn on location, then scan the Penjara code again')).toBeInTheDocument()
   })
 
   it("scanning anything else isn't a settle", async () => {

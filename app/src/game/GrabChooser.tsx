@@ -60,7 +60,7 @@ export default function GrabChooser({
 
   const title = 'What should Abang Grab bring?'
   return (
-    <div className="moment grab" role="dialog" aria-label={title}>
+    <div className="moment grab" role="dialog" aria-modal="true" aria-label={title}>
       {brought ? (
         <>
           <m.div

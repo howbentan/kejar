@@ -34,8 +34,10 @@ function names(list: string[]): string {
  * the Penjara code: the scan is the confirm, and it sends the location the server checks (30 m, under 30 s old),
  * exactly like a jailbreak. Those who already used their one escape are greyed out.
  */
-export default function SettlePanel({ code, settle }: { code: string; settle: NonNullable<View['settle']> }) {
+export default function SettlePanel({ code, meId, settle }: { code: string; meId: string; settle: NonNullable<View['settle']> }) {
   const [picked, setPicked] = useState<string[]>([])
+  // Settled: the card is spent, so nothing more to scan (and a second scan can't overwrite the result).
+  const [done, setDone] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -53,13 +55,19 @@ export default function SettlePanel({ code, settle }: { code: string; settle: No
     setBusy(true)
     try {
       const here = await currentCoords()
+      // The server needs a fresh location at Penjara; without one the settle can only fail.
+      if (typeof here.lat !== 'number' || typeof here.lng !== 'number') return setError('Turn on location, then scan the Penjara code again')
       const r = await call<SettleResult>('settle', { code, token: loadSession(localStorage, code).token, qr: JAIL_QR, targetIds: picked, ...here })
       if (r.ok) {
         navigator.vibrate?.([60, 40, 300])
-        const who = r.freedIds.map((id) => settle.options.find((o) => o.id === id)?.name ?? 'You')
-        // The holder first, as "You".
-        who.sort((a, b) => (a === 'You' ? -1 : b === 'You' ? 1 : 0))
-        const verb = who.length === 1 && who[0] !== 'You' ? 'is' : 'are'
+        // "You" is the holder's own id only; others by name, and anyone not in the list as "N more".
+        const self = r.freedIds.includes(meId) ? ['You'] : []
+        const others = r.freedIds.filter((id) => id !== meId).map((id) => settle.options.find((o) => o.id === id)?.name ?? null)
+        const named = others.filter((n): n is string => n !== null)
+        const unknown = others.length - named.length
+        const who = [...self, ...named, ...(unknown > 0 ? [`${unknown} more`] : [])]
+        const verb = who.length === 1 && who[0] !== 'You' && unknown === 0 ? 'is' : 'are'
+        setDone(true)
         setMessage(`Settled! ${names(who)} ${verb} free.`)
       } else if (r.reason === 'target-already-freed') {
         const name = settle.options.find((o) => o.id === r.targetId)?.name ?? 'Someone you picked'
@@ -89,7 +97,7 @@ export default function SettlePanel({ code, settle }: { code: string; settle: No
             return (
               <li key={o.id}>
                 <label className={o.eligible ? '' : 'off'}>
-                  <input type="checkbox" checked={on} disabled={!o.eligible || full || busy} onChange={() => toggle(o.id)} />
+                  <input type="checkbox" checked={on} disabled={!o.eligible || full || busy || done} onChange={() => toggle(o.id)} />
                   <span>{o.name}</span>
                   {!o.eligible && <span className="muted" style={{ marginLeft: 'auto', fontSize: 12 }}>Already escaped once</span>}
                 </label>
@@ -101,9 +109,11 @@ export default function SettlePanel({ code, settle }: { code: string; settle: No
         <p className="muted">Nobody else is in Penjara.</p>
       )}
       <p className="muted" style={{ fontSize: 12 }}>{`${picked.length} of ${MAX_PICKS} picked`}</p>
-      <button type="button" className="btn btn-legendary" disabled={!ready || busy} onClick={() => setScanning(true)}>
-        Scan Penjara to settle
-      </button>
+      {!done && (
+        <button type="button" className="btn btn-legendary" disabled={!ready || busy} onClick={() => setScanning(true)}>
+          Scan Penjara to settle
+        </button>
+      )}
       {message && <p role="status">{message}</p>}
       <ErrorText>{error}</ErrorText>
       {scanning && (

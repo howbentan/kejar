@@ -15,7 +15,7 @@ vi.mock('./Map', () => ({
 }))
 
 import { testView } from '../screens/testView'
-import SetupMap from './SetupMap'
+import SetupMap, { HiddenCard } from './SetupMap'
 
 const lobby = (over: Parameters<typeof testView>[0] = {}) =>
   testView({ phase: 'lobby', settings: { ...DEFAULT_SETTINGS, mode: 'full' }, datoStash: null, ...over })
@@ -26,54 +26,83 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-describe('SetupMap: dropping Dato Seri', () => {
+const open = () => fireEvent.click(screen.getByRole('button', { name: 'Organiser only · show hidden card' }))
+
+describe('SetupMap', () => {
+  it('never shows the stash, even in a Full lobby with it dropped', () => {
+    const datoStash = { lat: 3.02, lng: 101.02, claimedBy: null, claimedAt: null }
+    render(<SetupMap view={lobby({ datoStash })} />)
+    expect(mapProps.last?.stash ?? null).toBeNull()
+    expect(document.body.textContent).not.toMatch(/dato|legendary|hidden/i)
+  })
+})
+
+describe('HiddenCard: dropping Dato Seri', () => {
+  it('is closed by default: no pin and no name, only a neutral toggle', () => {
+    const datoStash = { lat: 3.02, lng: 101.02, claimedBy: null, claimedAt: null }
+    mapProps.last = null
+    render(<HiddenCard view={lobby({ datoStash })} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={() => {}} />)
+    expect(mapProps.last).toBeNull()
+    expect(document.body.textContent).not.toMatch(/dato|legendary/i)
+    expect(screen.queryByRole('button', { name: 'Drop the ★ card here' })).toBeNull()
+    open()
+    expect((mapProps.last as { stash?: unknown } | null)?.stash).toEqual({ lat: 3.02, lng: 101.02 })
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
+    expect(screen.queryByRole('button', { name: 'Drop the ★ card here' })).toBeNull()
+  })
+
   it('in a Full lobby, the organiser drops it at their current spot', async () => {
     call.mockResolvedValue({ ok: true })
     const refresh = vi.fn()
-    render(<SetupMap view={lobby()} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={refresh} />)
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Drop Dato Seri here' })))
+    render(<HiddenCard view={lobby()} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={refresh} />)
+    open()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Drop the ★ card here' })))
     expect(call).toHaveBeenCalledWith('dropDatoSeri', { code: 'ABC234', organiserToken: 'h1', lat: 3.01, lng: 101.01, accuracy_m: 4 })
     expect(refresh).toHaveBeenCalled()
   })
 
   it('a marshal drops it with their own token', async () => {
     call.mockResolvedValue({ ok: true })
-    render(<SetupMap view={lobby()} code="ABC234" credentials={{ token: 'm1' }} refresh={() => {}} />)
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Drop Dato Seri here' })))
+    render(<HiddenCard view={lobby()} code="ABC234" credentials={{ token: 'm1' }} refresh={() => {}} />)
+    open()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Drop the ★ card here' })))
     expect(call).toHaveBeenCalledWith('dropDatoSeri', expect.objectContaining({ code: 'ABC234', token: 'm1' }))
   })
 
   it('shows the exact stash pin once dropped', () => {
     const datoStash = { lat: 3.02, lng: 101.02, claimedBy: null, claimedAt: null }
-    render(<SetupMap view={lobby({ datoStash })} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={() => {}} />)
+    render(<HiddenCard view={lobby({ datoStash })} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={() => {}} />)
+    open()
     expect(mapProps.last?.stash).toEqual({ lat: 3.02, lng: 101.02 })
     expect(screen.getByText(/hidden at the yellow pin/)).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/dato/i)
   })
 
   it('without a location fix, says so and calls nothing', async () => {
     here.coords = {}
-    render(<SetupMap view={lobby()} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={() => {}} />)
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Drop Dato Seri here' })))
+    render(<HiddenCard view={lobby()} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={() => {}} />)
+    open()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Drop the ★ card here' })))
     expect(call).not.toHaveBeenCalled()
     expect(screen.getByText('Turn on location, then stand by the card and try again')).toBeInTheDocument()
   })
 
   it('a refusal shows the server message', async () => {
     call.mockRejectedValue(new Error('Drop it inside the play area'))
-    render(<SetupMap view={lobby()} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={() => {}} />)
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Drop Dato Seri here' })))
+    render(<HiddenCard view={lobby()} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={() => {}} />)
+    open()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Drop the ★ card here' })))
     expect(screen.getByText('Drop it inside the play area')).toBeInTheDocument()
   })
 
-  it('not in Core, not after the start, and never without organiser or marshal access', () => {
+  it('not in Core, not after the start, and never for players', () => {
     const creds = { code: 'ABC234', credentials: { organiserToken: 'h1' }, refresh: () => {} }
-    const { rerender } = render(<SetupMap view={lobby({ settings: { ...DEFAULT_SETTINGS, mode: 'core' } })} {...creds} />)
-    expect(screen.queryByRole('button', { name: 'Drop Dato Seri here' })).toBeNull()
-    rerender(<SetupMap view={lobby({ phase: 'hiding' })} {...creds} />)
-    expect(screen.queryByRole('button', { name: 'Drop Dato Seri here' })).toBeNull()
-    rerender(<SetupMap view={lobby({ datoStash: undefined })} {...creds} />)
-    expect(screen.queryByRole('button', { name: 'Drop Dato Seri here' })).toBeNull()
-    rerender(<SetupMap view={lobby()} />)
-    expect(screen.queryByRole('button', { name: 'Drop Dato Seri here' })).toBeNull()
+    const toggle = () => screen.queryByRole('button', { name: 'Organiser only · show hidden card' })
+    const { rerender } = render(<HiddenCard view={lobby({ settings: { ...DEFAULT_SETTINGS, mode: 'core' } })} {...creds} />)
+    expect(toggle()).toBeNull()
+    rerender(<HiddenCard view={lobby({ phase: 'hiding' })} {...creds} />)
+    expect(toggle()).toBeNull()
+    rerender(<HiddenCard view={lobby({ datoStash: undefined })} {...creds} />)
+    expect(toggle()).toBeNull()
   })
 })

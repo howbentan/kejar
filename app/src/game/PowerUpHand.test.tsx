@@ -97,6 +97,8 @@ describe('PowerUpHand', () => {
       const dialog = await openGrab()
       expect(call).toHaveBeenCalledWith('usePowerup', { code: 'ABC234', token: 't1', powerupId: 'g1' })
       expect(dialog).toHaveTextContent('Keep one. The other two go to the bottom of the deck.')
+      expect(dialog).toHaveAttribute('aria-modal', 'true')
+      expect(dialog).toHaveClass('grab')
       for (const n of ['Durian', 'Ponteng', 'Gostan']) expect(screen.getByRole('button', { name: `Keep ${n}` })).toBeInTheDocument()
       fireEvent.click(screen.getByRole('button', { name: 'Keep Ponteng' }))
       await waitFor(() => expect(call).toHaveBeenCalledWith('grabPick', { code: 'ABC234', token: 't1', powerupId: 'g1', choice: 1 }))
