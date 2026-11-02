@@ -162,4 +162,40 @@ describe('GameMap', () => {
     expect(created.data.jail).toBeUndefined()
     expect(created.data.start).toBeUndefined()
   })
+
+  it('a just-jailed runner (caughtAt) still gets a point feature, at its last known position, for the slide-off moment', () => {
+    localStorage.clear()
+    created.data = {}
+    const { rerender } = render(<GameMap arena={arena} dots={[]} />)
+    created.load!()
+    const dots = [{ id: 'r1', kind: 'runner' as const, lat: 3.05, lng: 101.05, at: '', revealedBy: null, caughtAt: new Date().toISOString() }]
+    rerender(<GameMap arena={arena} dots={dots} />)
+    expect(created.data.points).toMatchObject({ features: [{ geometry: { coordinates: [101.05, 3.05] } }] })
+  })
+
+  it('a jailed runner whose slide-off window has passed gets no point feature (ordinary behaviour)', () => {
+    localStorage.clear()
+    created.data = {}
+    const { rerender } = render(<GameMap arena={arena} dots={[]} />)
+    created.load!()
+    const longAgo = new Date(Date.now() - 20_000).toISOString()
+    const dots = [{ id: 'r1', kind: 'runner' as const, lat: 3.05, lng: 101.05, at: '', revealedBy: null, caughtAt: longAgo }]
+    rerender(<GameMap arena={arena} dots={dots} />)
+    expect(created.data.points).toMatchObject({ features: [] })
+  })
+
+  it('an auto-jailed runner\'s slide finishes and the dot is dropped for good, even while the server keeps sending it', async () => {
+    localStorage.clear()
+    created.data = {}
+    const { rerender } = render(<GameMap arena={arena} dots={[]} />)
+    created.load!()
+    const caughtAt = new Date().toISOString()
+    const dots = [{ id: 'r1', kind: 'runner' as const, lat: 3.05, lng: 101.05, at: '', revealedBy: null, caughtAt }]
+    rerender(<GameMap arena={arena} dots={dots} />)
+    expect(created.data.points).toMatchObject({ features: [{ geometry: { coordinates: [101.05, 3.05] } }] })
+    // Wait past the slide duration, then force another pass (as the next poll would) with the same dot.
+    await new Promise((r) => setTimeout(r, 1_300))
+    rerender(<GameMap arena={arena} dots={[...dots]} />)
+    expect(created.data.points).toMatchObject({ features: [] })
+  })
 })

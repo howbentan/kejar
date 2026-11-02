@@ -8,6 +8,7 @@ import type { Arena, LatLng } from '../../shared/types.js'
 import { FUZZ_RADIUS_M, type MapDot } from '../../shared/views.js'
 import { kejarMapStyle } from './mapStyle'
 import { RIPPLE_MS } from './ripple'
+import { SlideTracker } from './slideOff'
 
 const VOLT = '#C6FF3D'
 const WHITE = '#F5F5F3'
@@ -102,6 +103,10 @@ export default function GameMap({
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
   const ready = useRef(false)
+  // A just-jailed runner's dot (`caughtAt` set) slides to Penjara once, then is dropped for good (Task 7) —
+  // tracked per mounted map, independent of the server still sending it for the rest of its window.
+  const slideTracker = useRef<SlideTracker | null>(null)
+  if (!slideTracker.current) slideTracker.current = new SlideTracker(localStorage)
   const latest = useRef(dots)
   latest.current = dots
   const latestStations = useRef(stations)
@@ -306,11 +311,23 @@ export default function GameMap({
 
   useEffect(() => {
     if (!ready.current || !map.current) return
-    // Keep each circle's distance from the last ripple, so a poll mid-wave doesn't reveal them all at once.
-    const { fuzzy, points } = dotFeatures(dots, ripple?.origin ?? null)
-    ;(map.current.getSource('fuzzy') as GeoJSONSource | undefined)?.setData(fuzzy)
-    ;(map.current.getSource('points') as GeoJSONSource | undefined)?.setData(points)
-  }, [dots])
+    let frame = 0
+    const paint = () => {
+      const mp = map.current
+      if (!mp) return
+      const { dots: display, active } = slideTracker.current!.apply(dots, arena.jail, Date.now())
+      latest.current = display
+      // Keep each circle's distance from the last ripple, so a poll mid-wave doesn't reveal them all at once.
+      const { fuzzy, points } = dotFeatures(display, ripple?.origin ?? null)
+      ;(mp.getSource('fuzzy') as GeoJSONSource | undefined)?.setData(fuzzy)
+      ;(mp.getSource('points') as GeoJSONSource | undefined)?.setData(points)
+      // A just-jailed runner's dot is mid-slide: keep redrawing every frame until it either finishes or is
+      // dropped (undone, or the window's over), instead of waiting for the next poll.
+      if (active) frame = requestAnimationFrame(paint)
+    }
+    paint()
+    return () => cancelAnimationFrame(frame)
+  }, [dots, arena.jail])
 
   // The ping ripple: rings roll out from the origin, and each circle appears as the wave passes it.
   // Each ring is drawn at its final size and grows from nothing, so its outline stays thin (scaling a small

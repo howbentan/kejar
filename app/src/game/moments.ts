@@ -1,5 +1,6 @@
-/** A moment plays only this soon after the thing happened, so reopening Kejar later doesn't replay it. */
-export const MOMENT_WINDOW_MS = 15_000
+import { MOMENT_WINDOW_MS } from '../../shared/moments.js'
+
+export { MOMENT_WINDOW_MS }
 
 /** True once per `key` and time, and only while it's fresh. Marks it played (spec Review Focus 1). */
 export function shouldPlay(key: string, at: string | null, now: number, store: Storage): boolean {

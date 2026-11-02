@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { event, game, MIN, ping, player, pos, T0 } from './fixtures.js'
+import { event, game, iso, MIN, ping, player, pos, T0 } from './fixtures.js'
 import { distanceM } from './geo.js'
 import type { Player, Position, PowerUp } from './types.js'
 import { BONUS_SEQ_BASE, SCHEDULED_ALERT_LEAD_MS } from './clock.js'
@@ -65,6 +65,44 @@ describe('chaser view', () => {
     const jailed = { ...aina, jailed: true }
     const v = view(chaser, { players: [chaser, jailed, hafiz, wei, siti] })
     expect(v.dots.find((d) => d.id === 'r1')).toBeUndefined()
+  })
+})
+
+describe('a just-jailed runner slides off before disappearing for good', () => {
+  const caughtAt = T0 + 14 * MIN
+  const lastSeenAt = T0 + 13.5 * MIN
+  const positionsBeforeCaught = { ...positions, r1: [pos(A.lat, A.lng, lastSeenAt)] }
+
+  it('a runner auto-jailed in the last 15s still has a dot, for the slide-off moment', () => {
+    const jailed = { ...aina, jailed: true, caught_at: iso(caughtAt) }
+    const v = view(chaser, { players: [chaser, jailed, hafiz, wei, siti], positions: positionsBeforeCaught, now: caughtAt + 5_000 })
+    expect(v.dots.find((d) => d.id === 'r1')).toMatchObject({ lat: A.lat, lng: A.lng, caughtAt: iso(caughtAt) })
+  })
+
+  it('a runner jailed more than 15s ago has no dot, as today', () => {
+    const jailed = { ...aina, jailed: true, caught_at: iso(caughtAt) }
+    const v = view(chaser, { players: [chaser, jailed, hafiz, wei, siti], positions: positionsBeforeCaught, now: caughtAt + 20_000 })
+    expect(v.dots.find((d) => d.id === 'r1')).toBeUndefined()
+  })
+
+  it('a runner whose auto-jail is undone mid-window does not keep sliding', () => {
+    const unjailed = { ...aina, jailed: false, caught_at: iso(caughtAt) }
+    const v = view(chaser, { players: [chaser, unjailed, hafiz, wei, siti], positions: positionsBeforeCaught, now: caughtAt + 5_000 })
+    const dot = v.dots.find((d) => d.id === 'r1')
+    expect(dot).toMatchObject({ kind: 'runner' }) // back to an ordinary free-runner dot, not mid-slide
+    expect(dot?.caughtAt).toBeUndefined()
+  })
+
+  it('a marshal also sees a just-jailed runner mid-slide', () => {
+    const jailed = { ...hafiz, jailed: true, caught_at: iso(caughtAt) }
+    const v = view(siti, { players: [chaser, aina, jailed, wei, siti], now: caughtAt + 5_000 })
+    expect(v.dots.find((d) => d.id === 'r2')).toMatchObject({ kind: 'runner', caughtAt: iso(caughtAt) })
+  })
+
+  it('a free runner viewing teammates also sees one mid-slide to Penjara', () => {
+    const jailed = { ...hafiz, jailed: true, caught_at: iso(caughtAt) }
+    const v = view(aina, { players: [chaser, aina, jailed, wei, siti], now: caughtAt + 5_000 })
+    expect(v.dots.find((d) => d.id === 'r2')).toMatchObject({ kind: 'teammate', caughtAt: iso(caughtAt) })
   })
 })
 

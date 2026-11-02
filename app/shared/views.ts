@@ -3,6 +3,7 @@ import { alertsFrom, type Alert } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
 import { distanceM, fuzz } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
+import { MOMENT_WINDOW_MS } from './moments.js'
 import { activeShield, decoySpot, flareBlocked, SHIELD_MS, slotBusy } from './powerups.js'
 import type { Arena, Game, GameEvent, LatLng, Phase, Ping, Player, Position, PowerUp, PowerUpKind, Results, Role, Settings } from './types.js'
 
@@ -27,6 +28,12 @@ export interface MapDot {
   /** Exact specifically because of Pak Guard's Focus; null for every other dot. */
   revealedBy: 'focus' | null
   at: string
+  /**
+   * Set only for a runner just caught or auto-jailed, within the slide-off window (`MOMENT_WINDOW_MS` of
+   * `caught_at`) — their last known position, for a one-shot client-side slide to Penjara before they
+   * disappear for good. Absent for every other dot.
+   */
+  caughtAt?: string
 }
 
 export interface RosterEntry {
@@ -141,11 +148,32 @@ function kindOf(p: Player, me: Player): MapDot['kind'] {
   return 'runner'
 }
 
+/**
+ * A runner just caught or auto-jailed (`caught_at` within `MOMENT_WINDOW_MS` of real wall-clock `now`) still
+ * gets a dot at their last known position, so the client can play a one-shot slide to Penjara before they
+ * disappear for good. Not a general exception: a runner whose jailing has been undone (`jailed` back to
+ * `false`, e.g. a marshal's auto-jail undo) falls out immediately, even mid-window. Always uses the real
+ * `now` — never a function-local, possibly-delayed time — because the slide-off is a real-time UI moment,
+ * independent of the spectator-delay mechanic some callers apply to everything else.
+ */
+function slidingDot(p: Player, i: ViewInput, kind: MapDot['kind']): MapDot | null {
+  if (!p.jailed || !p.caught_at) return null
+  const caughtAt = Date.parse(p.caught_at)
+  if (!(i.now - caughtAt >= 0 && i.now - caughtAt < MOMENT_WINDOW_MS)) return null
+  const at = latestAtOrBefore(i.positions[p.id], i.now)
+  if (!at) return null
+  return { ...dotFor(p, at, kind), caughtAt: p.caught_at }
+}
+
 /** Everyone's position as of time `t` (marshals live; jailed spectators delayed). */
 function everyoneAt(i: ViewInput, t: number): MapDot[] {
   const dots: MapDot[] = []
   for (const p of i.players) {
-    if (p.role === 'runner' && p.jailed && p.id !== i.me.id) continue
+    if (p.role === 'runner' && p.jailed && p.id !== i.me.id) {
+      const sliding = slidingDot(p, i, kindOf(p, i.me))
+      if (sliding) dots.push(sliding)
+      continue
+    }
     const at = latestAtOrBefore(i.positions[p.id], t)
     if (at) dots.push(dotFor(p, at, kindOf(p, i.me)))
   }
@@ -207,7 +235,12 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
     .filter((p): p is Position => !!p)
 
   for (const p of i.players) {
-    if (p.role !== 'runner' || p.jailed) continue
+    if (p.role !== 'runner') continue
+    if (p.jailed) {
+      const sliding = slidingDot(p, i, 'runner')
+      if (sliding) dots.push(sliding)
+      continue
+    }
     const at = latestAtOrBefore(i.positions[p.id], revealAt)
     // A cloaked runner must look exactly like one who never checked in.
     if (!at || cloaked.has(p.id)) {
@@ -238,7 +271,12 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
 function runnerDots(i: ViewInput): { dots: MapDot[]; nearby: boolean } {
   const dots: MapDot[] = []
   for (const p of i.players) {
-    if (p.role !== 'runner' || p.jailed) continue
+    if (p.role !== 'runner') continue
+    if (p.jailed) {
+      const sliding = slidingDot(p, i, 'teammate')
+      if (sliding) dots.push(sliding)
+      continue
+    }
     const at = latestAtOrBefore(i.positions[p.id], i.now)
     if (at) dots.push(dotFor(p, at, p.id === i.me.id ? 'me' : 'teammate'))
   }
