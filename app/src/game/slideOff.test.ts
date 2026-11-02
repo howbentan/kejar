@@ -65,6 +65,20 @@ describe('SlideTracker', () => {
     expect(dots).toEqual([ordinary])
   })
 
+  it('a runner re-jailed with a new caught_at but no intervening unjailed snapshot (undo-then-recatch between two polls) still gets a fresh slide, not the old slide continued', () => {
+    const tracker = new SlideTracker(localStorage)
+    // First jailing starts sliding; this tracked entry is never evicted (the id keeps appearing with
+    // caughtAt on every call below), so the very next apply() finds it still present.
+    tracker.apply([dot({ caughtAt: AT, lat: 3.01, lng: 101.02 })], JAIL, T)
+    // Next poll: same id, but a brand-new caught_at (e.g. a marshal's undo and a fresh catch both landed
+    // between two polls) — the client never sees an intervening unjailed snapshot for this id.
+    const AT2 = new Date(T + 500).toISOString()
+    const { dots, active } = tracker.apply([dot({ caughtAt: AT2, lat: 3.05, lng: 101.09 })], JAIL, T + 500)
+    expect(active).toBe(true)
+    // A fresh slide from the NEW last-known position — not the old slide's interpolated position.
+    expect(dots).toEqual([expect.objectContaining({ lat: 3.05, lng: 101.09 })])
+  })
+
   it('a runner jailed again later (after a free spell) gets a fresh slide, not stale state', () => {
     const tracker = new SlideTracker(localStorage)
     // First jailing plays all the way out.
