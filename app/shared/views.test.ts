@@ -102,6 +102,24 @@ describe('marshal and jailed views', () => {
     const v = view(jailed, { players: [chaser, aina, jailed, wei, siti], positions: ps })
     expect(v.dots.find((d) => d.id === 'c1')).toMatchObject({ lat: 3.001, lng: 101.001 })
   })
+
+  it('a marshal sees the live position of a runner with an open SOS', () => {
+    const events = [event('sos', T0, { actor_id: 'r1', data: { who: 'Aina #07' } })]
+    const v = view(siti, { events, positions: { ...positions, r1: [pos(3.01, 101.01, T0 + MIN)] } })
+    expect(v.sosPositions.r1).toEqual({ lat: 3.01, lng: 101.01 })
+  })
+
+  it('sosPositions is empty once the SOS is handled', () => {
+    const events = [event('sos', T0, { actor_id: 'r1' }), event('handled', T0 + MIN, { data: { eventId: `sos-${T0}` } })]
+    const v = view(siti, { events })
+    expect(v.sosPositions).toEqual({})
+  })
+
+  it('sosPositions is empty for non-marshal roles even with an open SOS', () => {
+    const events = [event('sos', T0, { actor_id: 'r1' })]
+    const v = view(aina, { events, positions: { ...positions, r1: [pos(3.01, 101.01, T0 + MIN)] } })
+    expect(v.sosPositions).toEqual({})
+  })
 })
 
 describe('timers and counts', () => {

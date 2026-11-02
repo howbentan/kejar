@@ -9,6 +9,7 @@ export function testView(over: Partial<View> = {}): View {
     now: 100_000,
     paused: false,
     alerts: [],
+    sosPositions: {},
     reportable: [],
     me: {
       id: 'r1',

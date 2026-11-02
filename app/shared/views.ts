@@ -4,7 +4,7 @@ import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes
 import { distanceM, fuzz } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { activeShield, decoySpot, flareBlocked, SHIELD_MS, slotBusy } from './powerups.js'
-import type { Arena, Game, GameEvent, Phase, Ping, Player, Position, PowerUp, PowerUpKind, Results, Role, Settings } from './types.js'
+import type { Arena, Game, GameEvent, LatLng, Phase, Ping, Player, Position, PowerUp, PowerUpKind, Results, Role, Settings } from './types.js'
 
 /** Spec §4.5–4.6 constants. */
 export const FUZZ_RADIUS_M = 15
@@ -43,6 +43,8 @@ export interface View {
   paused: boolean
   /** Safety alerts: for marshals and the organiser only. */
   alerts: Alert[]
+  /** Live position of each player with a currently open SOS; marshal-only, empty otherwise. */
+  sosPositions: Record<string, LatLng>
   /** Everyone I could report. */
   reportable: { id: string; name: string }[]
   me: Player
@@ -146,6 +148,20 @@ function everyoneAt(i: ViewInput, t: number): MapDot[] {
     if (at) dots.push(dotFor(p, at, kindOf(p, i.me)))
   }
   return dots
+}
+
+/** Live position of each player with a currently open SOS, keyed by that player's id (not the alert id). */
+function sosPositionsFor(i: ViewInput): Record<string, LatLng> {
+  const result: Record<string, LatLng> = {}
+  const open = alertsFrom(i.events).filter((a) => a.kind === 'sos' && !a.handled)
+  for (const alert of open) {
+    const sent = i.events.find((e) => e.id === alert.id)
+    const senderId = sent?.actor_id
+    if (!senderId) continue
+    const at = latestAtOrBefore(i.positions[senderId], i.now)
+    if (at) result[senderId] = { lat: at.lat, lng: at.lng }
+  }
+  return result
 }
 
 /** Revealed pings in time order (bonus Flare pings are numbered out of order). */
@@ -402,7 +418,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, deckLeft: null, activePowerUp: null }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, deckLeft: null, activePowerUp: null }
   }
   return v
 }
@@ -463,6 +479,7 @@ function fullView(i: ViewInput): View {
     now: i.now,
     paused: !!i.game.paused_at,
     alerts: role === 'marshal' ? alertsFrom(i.events) : [],
+    sosPositions: role === 'marshal' ? sosPositionsFor(i) : {},
     reportable: i.players.filter((p) => p.id !== i.me.id).map((p) => ({ id: p.id, name: p.name })),
     me: i.me,
     arena: i.game.arena,
