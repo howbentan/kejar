@@ -415,8 +415,21 @@ select.input option { background: #141614; color: var(--white); }
 .grab { gap: 14px; overflow-y: auto; justify-content: flex-start; padding-top: 72px; }
 .grab-title { margin: 0; font: 800 26px var(--font); letter-spacing: -0.04em; }
 .grab-cards { display: flex; gap: 6px; justify-content: center; flex-wrap: nowrap; }
-/* Three 96 px cards don't fit 320 px minus the gutters: scale the row down on narrow phones. */
-@media (max-width: 340px) { .grab-cards .power-card { zoom: 0.86; } }
+/* At 14 px "Abang Grab" wraps to two lines in a 96 px card and pushes its effect line out of the card. */
+.grab-cards .pc-name { font-size: 13px; }
+/*
+ * Three 96 px cards need 300 px, more than a phone under 348 px has inside the 24 px gutters (320 px leaves 272).
+ * Below that the cards are laid out smaller (86x134, same shape) rather than scaled with `zoom`, which older
+ * browsers (Firefox for Android before 126) ignore: 3 x 86 + 2 x 6 = 270 px fits from 320 px up.
+ */
+@media (max-width: 347px) {
+  .grab-cards .power-card { width: 86px; height: 134px; padding: 7px 5px; }
+  .grab-cards .pc-art { width: 60px; height: 60px; }
+  .grab-cards .pc-art svg { width: 56px; height: 56px; }
+  /* 11.5 px keeps the longest name, Abang Grab, on one line in the 72 px inside a small card. */
+  .grab-cards .pc-name { font-size: 11.5px; }
+  .grab-cards .pc-effect { font-size: 7.5px; }
+}
 .grab-card { appearance: none; border: 0; padding: 0; background: none; cursor: pointer; border-radius: 14px; }
 .grab-card:focus-visible { outline: 2px solid var(--volt); outline-offset: 3px; }
 .grab-card:disabled { opacity: 0.6; cursor: default; }
