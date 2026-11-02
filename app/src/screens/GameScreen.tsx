@@ -43,9 +43,9 @@ export default function GameScreen({ code }: { code: string }) {
     )
   }
   if (current.me.removed_at) return <Removed />
-  if (current.phase === 'ended') return <Results view={current} isHost={current.me.id === 'host'} />
   if (current.phase === 'lobby') return <Lobby code={code} view={current} refresh={refresh} />
   if (current.me.role === 'marshal') return <MarshalLive code={code} view={current} refresh={refresh} />
+  if (current.phase === 'ended') return <Results code={code} view={current} isHost={current.me.id === 'host'} />
 
   // Runners and chasers: their screen, with the Help and SOS icon in the same corner on every one.
   let screen: ReactNode

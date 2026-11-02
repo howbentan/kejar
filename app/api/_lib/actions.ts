@@ -817,7 +817,8 @@ const sosDetails: Action = async (ctx, body) => {
 const report: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
-  requireRunning(game, ctx.now)
+  // Unlike other actions, a report stays valid after the game ends (Plan C3 post-game flow) — only the lobby refuses it.
+  if (phaseAt(game, ctx.now).phase === 'lobby') throw new ActionError(409, 'The game is not running')
   const reason = str(body.reason) as ReportReason
   if (!Object.hasOwn(REASON_LABEL, reason)) throw new ActionError(400, 'Pick a reason')
   const note = str(body.note).trim()
@@ -838,6 +839,19 @@ const report: Action = async (ctx, body) => {
     data: { game_code: game.code, name: data.name, target_name: data.targetName, reason, note },
   })
   return { ok: true, notified: await alertMarshals(ctx, game, alertsFrom([e])[0].text) }
+}
+
+/** "How fun was it?" after the game, 1-5 plus an optional note (Plan C3). Marshal-only reading, in `views.ts`. */
+const rate: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  if (phaseAt(game, ctx.now).phase === 'lobby') throw new ActionError(409, 'The game is not running')
+  const rating = Number(body.rating)
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw new ActionError(400, 'Pick a rating from 1 to 5')
+  const note = str(body.note).trim()
+  if (note.length > NOTE_MAX) throw new ActionError(400, `Keep the note under ${NOTE_MAX} characters`)
+  await ctx.store.addEvent({ game_id: game.id, type: 'rated', actor_id: me.id, target_id: null, data: { name: who(me), rating, note } })
+  return { ok: true }
 }
 
 /** A marshal taps "I'm going" on an SOS; everyone sees who's responding on the alert. No uniqueness check — a second marshal can still respond. */
@@ -1100,6 +1114,7 @@ export const actions = {
   sos,
   sosDetails,
   report,
+  rate,
   handleAlert,
   respondToSos,
   undoAutoJail,

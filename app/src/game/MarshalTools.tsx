@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { REASON_LABEL } from '../../shared/alerts.js'
 import type { Alert } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
 import { currentPushEnv, NotificationsDeniedError, pushSupport, subscribe } from '../spike/push'
@@ -178,8 +179,52 @@ export default function MarshalTools({ code, view, refresh }: { code: string; vi
         </div>
       ) : (
         <div role="tabpanel" aria-label="After game">
-          {/* Task 8 wires post-game reports (View.reports) in here. */}
-          <p className="muted">No reports yet.</p>
+          {view.reports.length === 0 && view.ratings.length === 0 ? (
+            <p className="muted">No reports yet.</p>
+          ) : (
+            <>
+              {view.ratings.length > 0 && (
+                <>
+                  <p className="eyebrow">How fun was it?</p>
+                  <ul className="alert-list">
+                    {view.ratings.map((r) => (
+                      <li key={r.id} className="alert-row">
+                        <div style={{ flex: 1 }}>
+                          <p className="eyebrow">
+                            {r.rating}/5 · {ago(r.at, view.now)}
+                          </p>
+                          <p>
+                            {r.name}
+                            {r.note ? `: ${r.note}` : ''}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              {view.reports.length > 0 && (
+                <>
+                  <p className="eyebrow">Reports</p>
+                  <ul className="alert-list">
+                    {view.reports.map((r) => (
+                      <li key={r.id} className="alert-row">
+                        <div style={{ flex: 1 }}>
+                          <p className="eyebrow">
+                            {REASON_LABEL[r.reason]} · {ago(r.at, view.now)}
+                          </p>
+                          <p>
+                            {r.name} reported {r.targetName}
+                            {r.note ? `: ${r.note}` : ''}
+                          </p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </>
+          )}
         </div>
       )}
 

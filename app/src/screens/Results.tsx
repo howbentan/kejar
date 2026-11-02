@@ -1,8 +1,9 @@
 import type { View } from '../../shared/views.js'
 import { clock } from '../game/time'
 import { Screen, Wordmark } from '../game/ui'
+import PostGameFeedback from './PostGameFeedback'
 
-export default function Results({ view, isHost }: { view: View; isHost: boolean }) {
+export default function Results({ code, view, isHost }: { code: string; view: View; isHost: boolean }) {
   const r = view.results
   const name = (id: string) => view.roster.find((p) => p.id === id)?.name ?? 'Someone'
   const awards = r
@@ -35,6 +36,7 @@ export default function Results({ view, isHost }: { view: View; isHost: boolean 
           ))}
         </div>
       )}
+      <PostGameFeedback code={code} view={view} />
       {isHost && (
         <a className="btn" href="/host/new" style={{ textAlign: 'center', textDecoration: 'none' }}>
           Play again

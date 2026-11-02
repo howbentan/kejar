@@ -1,11 +1,11 @@
 import * as m from 'motion/react-m'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { NOTE_MAX, REASON_LABEL, SOS_REASON_LABEL, type ReportReason, type SosReason } from '../../shared/alerts.js'
+import { SOS_REASON_LABEL, type SosReason } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
 import { credentials } from './auth'
 import { currentCoords } from './here'
-import { ErrorText, Pills } from './ui'
+import { ErrorText } from './ui'
 
 /** An SOS can't wait long for GPS: send what we have after 1.5 s (spec §5: "immediately"). */
 const SOS_FIX_MS = 1_500
@@ -21,9 +21,8 @@ const NOBODY = 'SOS saved, but no marshal has alerts on. Find a marshal or call 
 const ALREADY = 'Marshals already have your SOS.'
 
 const SOS_REASONS = Object.keys(SOS_REASON_LABEL) as SosReason[]
-const REPORT_REASONS = (Object.keys(REASON_LABEL) as ReportReason[]).map((value) => ({ value, text: REASON_LABEL[value] }))
 
-type Stage = 'ask' | 'sending' | 'sent' | 'report'
+type Stage = 'ask' | 'sending' | 'sent'
 
 /**
  * Help and SOS, a small Volt "!" in the same spot on every player screen (motion design §6.0). It reads as
@@ -39,7 +38,6 @@ export default function SosIcon({ code, view }: { code: string; view: View }) {
   const [sos, setSos] = useState<{ id: string; notified: number | null } | null>(null)
   const [reason, setReason] = useState<SosReason | null>(null)
   const [withId, setWithId] = useState<string | null>(null)
-  const [reported, setReported] = useState('')
   const hold = useRef<{ at: number; timer: number } | null>(null)
 
   const close = () => {
@@ -80,7 +78,6 @@ export default function SosIcon({ code, view }: { code: string; view: View }) {
     setSos(null)
     setReason(null)
     setWithId(null)
-    setReported('')
     setOpen(true)
   }
 
@@ -209,11 +206,6 @@ export default function SosIcon({ code, view }: { code: string; view: View }) {
                 <button type="button" className="sos-cancel" onClick={close}>
                   Cancel
                 </button>
-                {stage === 'ask' && (
-                  <button type="button" className="sos-link" onClick={() => setStage('report')}>
-                    Report a player
-                  </button>
-                )}
               </>
             )}
             {stage === 'sent' && (
@@ -248,75 +240,9 @@ export default function SosIcon({ code, view }: { code: string; view: View }) {
                 </button>
               </>
             )}
-            {stage === 'report' &&
-              (reported ? (
-                <>
-                  <p role="status" className="safety-status">
-                    {reported}
-                  </p>
-                  <button type="button" className="sos-cancel" onClick={close}>
-                    Done
-                  </button>
-                </>
-              ) : (
-                <ReportForm code={code} view={view} onSent={() => setReported('Report sent')} onCancel={close} />
-              ))}
           </m.div>
         </>
       )}
     </>
-  )
-}
-
-/** Today's report form, kept inside the sheet until the post-game report replaces it (Plan C3). */
-function ReportForm({ code, view, onSent, onCancel }: { code: string; view: View; onSent: () => void; onCancel: () => void }) {
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [target, setTarget] = useState('')
-  const [reason, setReason] = useState<ReportReason>('unsafe')
-  const [note, setNote] = useState('')
-
-  async function send() {
-    setBusy(true)
-    setError('')
-    try {
-      const here = await currentCoords()
-      await call('report', { code, ...credentials(code), targetId: target, reason, note: note.trim(), ...here })
-      onSent()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="safety-sheet">
-      <label className="eyebrow" htmlFor="report-target">
-        Player
-      </label>
-      <select id="report-target" className="input" value={target} onChange={(e) => setTarget(e.target.value)}>
-        <option value="">Pick a player</option>
-        {view.reportable.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.name}
-          </option>
-        ))}
-      </select>
-      <Pills label="Reason" options={REPORT_REASONS} value={reason} onChange={setReason} />
-      <label className="eyebrow" htmlFor="report-note">
-        Note (optional)
-      </label>
-      <textarea id="report-note" className="input" rows={2} maxLength={NOTE_MAX} value={note} onChange={(e) => setNote(e.target.value)} />
-      <ErrorText>{error}</ErrorText>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button type="button" className="btn" disabled={busy || !target} onClick={send}>
-          Send report
-        </button>
-        <button type="button" className="btn btn-ghost" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
-    </div>
   )
 }

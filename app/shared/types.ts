@@ -124,6 +124,7 @@ export type EventType =
   | 'auto-jail-undone'
   | 'sos-details'
   | 'sos-responding'
+  | 'rated'
 
 export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus'
 

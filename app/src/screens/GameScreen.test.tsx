@@ -7,6 +7,13 @@ const state = vi.hoisted(() => ({ view: null as View | null }))
 vi.mock('../game/useGameState', () => ({ useGameState: () => ({ view: state.view, error: '', refresh: vi.fn() }) }))
 vi.mock('../game/api', () => ({ call: vi.fn(), ApiError: class extends Error {} }))
 vi.mock('../game/Map', () => ({ default: () => null }))
+// jsdom has no matchMedia, which the marshal alerts card checks.
+vi.mock('../spike/push', () => ({
+  subscribe: vi.fn(),
+  pushSupport: () => 'unsupported',
+  currentPushEnv: () => ({}),
+  NotificationsDeniedError: class extends Error {},
+}))
 
 import GameScreen from './GameScreen'
 
@@ -44,5 +51,20 @@ describe('GameScreen safety routing', () => {
     expect(screen.getByRole('button', { name: 'Help and SOS' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Report' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'SOS' })).toBeNull()
+  })
+
+  it('sends a marshal to MarshalLive once the game has ended too, not to Results', () => {
+    const base = testView()
+    state.view = testView({ phase: 'ended', me: { ...base.me, id: 'm1', role: 'marshal', tag_id: null } })
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByText('Marshal · live')).toBeInTheDocument()
+    expect(screen.queryByText('Game over')).toBeNull()
+  })
+
+  it('sends a non-marshal to Results once the game has ended', () => {
+    state.view = testView({ phase: 'ended', results: { winner: 'runners', survivors: [], longestSurvivor: null, mostCatches: null, jailbreakHero: null } })
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByText('Game over')).toBeInTheDocument()
+    expect(screen.queryByText('Marshal · live')).toBeNull()
   })
 })

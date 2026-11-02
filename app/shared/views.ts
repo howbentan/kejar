@@ -1,5 +1,5 @@
 import { alertLeadFor, checkedIn } from './checkins.js'
-import { alertsFrom, type Alert } from './alerts.js'
+import { alertsFrom, type Alert, type ReportReason } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
 import { distanceM, fuzz } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
@@ -44,6 +44,25 @@ export interface RosterEntry {
   jailed: boolean
 }
 
+/** A report made once the game had already ended; marshal/organiser-only, for the inbox's After game tab. */
+export interface PostGameReport {
+  id: string
+  at: string
+  name: string
+  targetName: string
+  reason: ReportReason
+  note: string
+}
+
+/** A player's "how fun was it?" rating; marshal/organiser-only, for the inbox's After game tab. */
+export interface PostGameRating {
+  id: string
+  at: string
+  name: string
+  rating: number
+  note: string
+}
+
 export interface View {
   phase: Phase
   endsAt: number | null
@@ -81,6 +100,10 @@ export interface View {
   counts: { runnersFree: number; runnersJailed: number; chasers: number }
   /** Everyone in the game: shown in the lobby and to marshals; empty for players mid-game. */
   roster: RosterEntry[]
+  /** Reports filed once the game had already ended; marshals and the organiser only, for the After game tab. */
+  reports: PostGameReport[]
+  /** "How fun was it?" ratings; marshals and the organiser only, for the After game tab. */
+  ratings: PostGameRating[]
   /** Power-up stations, numbered from 1. */
   stations: { n: number; lat: number; lng: number }[]
   /** My unused power-ups. */
@@ -192,6 +215,30 @@ function sosPositionsFor(i: ViewInput): Record<string, LatLng> {
     if (at) result[senderId] = { lat: at.lat, lng: at.lng }
   }
   return result
+}
+
+/** Reports filed after the game had already ended (ones filed mid-game already surface via `alerts`). */
+function postGameReportsFor(i: ViewInput): PostGameReport[] {
+  if (i.me.role !== 'marshal' || !i.game.ended_at) return []
+  const endedAt = Date.parse(i.game.ended_at)
+  return i.events
+    .filter((e) => e.type === 'report' && Date.parse(e.at) >= endedAt)
+    .map((e) => ({
+      id: e.id,
+      at: e.at,
+      name: String(e.data.name ?? ''),
+      targetName: String(e.data.targetName ?? ''),
+      reason: (e.data.reason as ReportReason) ?? 'other',
+      note: String(e.data.note ?? ''),
+    }))
+}
+
+/** Every "how fun was it?" rating; only ever submitted post-game, so no time filter needed. */
+function ratingsFor(i: ViewInput): PostGameRating[] {
+  if (i.me.role !== 'marshal') return []
+  return i.events
+    .filter((e) => e.type === 'rated')
+    .map((e) => ({ id: e.id, at: e.at, name: String(e.data.name ?? ''), rating: Number(e.data.rating ?? 0), note: String(e.data.note ?? '') }))
 }
 
 /** Revealed pings in time order (bonus Flare pings are numbered out of order). */
@@ -460,7 +507,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, deckLeft: null, activePowerUp: null }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, deckLeft: null, activePowerUp: null, reports: [], ratings: [] }
   }
   return v
 }
@@ -553,6 +600,8 @@ function fullView(i: ViewInput): View {
     roster: showRoster
       ? i.players.map((p) => ({ id: p.id, name: p.name, role: p.role, tag_id: p.tag_id, jailed: p.jailed }))
       : [],
+    reports: postGameReportsFor(i),
+    ratings: ratingsFor(i),
     stations: (i.game.arena.stations ?? []).map((s, k) => ({ n: k + 1, lat: s.lat, lng: s.lng })),
     hand: i.powerUps.filter((u) => u.player_id === i.me.id && u.used_at === null),
     shieldActive: activeShield(i.powerUps, i.me.id, i.now) !== null,

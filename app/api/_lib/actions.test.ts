@@ -869,6 +869,49 @@ describe('SOS and reports', () => {
     expect(store.safetyRows[0]).toMatchObject({ type: 'report', player_id: g.hafiz.playerId, target_id: g.ben.playerId })
   })
 
+  it('report is refused in the lobby, but still works once the game has ended', async () => {
+    const lobby = await readyGame()
+    await rejects(run('report', { code: lobby.code, token: lobby.aina.token, targetId: lobby.ben.playerId, reason: 'unsafe' }), 409)
+    const g = await safetyGame()
+    now = T0 + 51 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken }) // advances the game to 'ended'
+    expect(await run('report', { code: g.code, token: g.aina.token, targetId: g.ben.playerId, reason: 'dispute', note: '' })).toEqual({ ok: true, notified: 1 })
+  })
+
+  it('rate validates the rating range and note length, and is refused in the lobby but works once ended', async () => {
+    const lobby = await readyGame()
+    await rejects(run('rate', { code: lobby.code, token: lobby.aina.token, rating: 4 }), 409)
+    const g = await safetyGame()
+    const base = { code: g.code, token: g.aina.token }
+    await rejects(run('rate', { ...base, rating: 0 }), 400)
+    await rejects(run('rate', { ...base, rating: 6 }), 400)
+    await rejects(run('rate', { ...base, rating: 3.5 }), 400)
+    await rejects(run('rate', { ...base, rating: 4, note: 'x'.repeat(141) }), 400)
+    expect(await run('rate', { ...base, rating: 4, note: 'fun!' })).toEqual({ ok: true })
+    now = T0 + 51 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(await run('rate', { code: g.code, token: g.hafiz.token, rating: 5, note: '' })).toEqual({ ok: true })
+    const events = await store.events(g.gameId)
+    expect(events.filter((e) => e.type === 'rated')).toHaveLength(2)
+  })
+
+  it("marshals and the organiser see post-end reports and ratings in their view, but players don't", async () => {
+    const g = await safetyGame()
+    now = T0 + 51 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken }) // ends the game
+    await run('rate', { code: g.code, token: g.aina.token, rating: 4, note: 'fun!' })
+    await run('report', { code: g.code, token: g.aina.token, targetId: g.ben.playerId, reason: 'dispute', note: 'after the fact' })
+    const marshalView = await run<View>('state', { code: g.code, token: g.siti.token })
+    expect(marshalView.ratings).toEqual([expect.objectContaining({ name: 'Aina #07', rating: 4, note: 'fun!' })])
+    expect(marshalView.reports).toEqual([expect.objectContaining({ name: 'Aina #07', targetName: 'Ben', reason: 'dispute', note: 'after the fact' })])
+    const hostView = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(hostView.ratings).toHaveLength(1)
+    expect(hostView.reports).toHaveLength(1)
+    const playerView = await run<View>('state', { code: g.code, token: g.ben.token })
+    expect(playerView.ratings).toEqual([])
+    expect(playerView.reports).toEqual([])
+  })
+
   it('marshals see alerts; runners and chasers see none', async () => {
     const g = await safetyGame()
     await run('sos', { code: g.code, token: g.aina.token, ...at(30) })

@@ -179,14 +179,8 @@ describe('SosIcon', () => {
     expect(screen.getByRole('button', { name: 'Something else' })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('Report a player still sends a report from inside the sheet', async () => {
+  it('has no Report a player link any more — that moved to the post-game screen', async () => {
     await openSheet()
-    fireEvent.click(screen.getByRole('button', { name: 'Report a player' }))
-    fireEvent.change(screen.getByLabelText('Player'), { target: { value: 'c1' } })
-    fireEvent.click(screen.getByRole('radio', { name: 'Reason: Catch dispute' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Send report' }))
-    await wait(0)
-    expect(call).toHaveBeenCalledWith('report', { code: 'ABC234', token: 't1', targetId: 'c1', reason: 'dispute', note: '', ...HERE })
-    expect(screen.getByText('Report sent')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Report a player' })).toBeNull()
   })
 })

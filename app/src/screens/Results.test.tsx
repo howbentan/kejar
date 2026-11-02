@@ -1,7 +1,10 @@
 import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
-import Results from './Results'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { testView } from './testView'
+
+vi.mock('../game/api', () => ({ call: vi.fn(), ApiError: class extends Error {} }))
+
+import Results from './Results'
 
 afterEach(cleanup)
 
@@ -24,7 +27,7 @@ describe('Results', () => {
         jailbreakHero: { id: 'r3', freed: 1 },
       },
     })
-    render(<Results view={view} isHost={false} />)
+    render(<Results code="ABC234" view={view} isHost={false} />)
     expect(screen.getByText('Dikejar escaped.')).toBeInTheDocument()
     expect(screen.getByText('Aina · 25:00')).toBeInTheDocument()
     expect(screen.getByText('Ben · 2')).toBeInTheDocument()
@@ -37,9 +40,16 @@ describe('Results', () => {
       roster,
       results: { winner: 'chasers', survivors: [], longestSurvivor: null, mostCatches: null, jailbreakHero: null },
     })
-    render(<Results view={view} isHost={false} />)
+    render(<Results code="ABC234" view={view} isHost={false} />)
     expect(screen.getByText('Kejar win.')).toBeInTheDocument()
     expect(screen.queryByText(/most catches/i)).toBeNull()
     expect(screen.queryByText(/jailbreak hero/i)).toBeNull()
+  })
+
+  it('renders the post-game feedback: the fun rating and the report link', () => {
+    const view = testView({ phase: 'ended', roster, results: null })
+    render(<Results code="ABC234" view={view} isHost={false} />)
+    expect(screen.getByText('How fun was it?')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Report a player' })).toBeInTheDocument()
   })
 })

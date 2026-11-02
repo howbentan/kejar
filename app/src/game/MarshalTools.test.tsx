@@ -150,6 +150,28 @@ describe('MarshalTools', () => {
     expect(screen.getByRole('tab', { name: /after game/i })).toHaveAttribute('aria-selected', 'true')
   })
 
+  it('says there are no reports yet when the After game tab is empty', () => {
+    render(<MarshalTools code="ABC234" view={testView()} refresh={refresh} />)
+    fireEvent.click(screen.getByRole('tab', { name: /after game/i }))
+    expect(screen.getByText('No reports yet.')).toBeInTheDocument()
+  })
+
+  it('shows post-game ratings and reports in the After game tab', () => {
+    const view = testView({
+      ratings: [{ id: 'rt1', at: new Date(100_000 - 60_000).toISOString(), name: 'Aina #07', rating: 4, note: 'fun!' }],
+      reports: [
+        { id: 'rp1', at: new Date(100_000 - 30_000).toISOString(), name: 'Aina #07', targetName: 'Ben', reason: 'dispute', note: 'after the fact' },
+      ],
+    })
+    render(<MarshalTools code="ABC234" view={view} refresh={refresh} />)
+    fireEvent.click(screen.getByRole('tab', { name: /after game/i }))
+    expect(screen.getByText('How fun was it?')).toBeInTheDocument()
+    expect(screen.getByText('4/5 · 1 min ago')).toBeInTheDocument()
+    expect(screen.getByText('Aina #07: fun!')).toBeInTheDocument()
+    expect(screen.getByText('Catch dispute · now')).toBeInTheDocument()
+    expect(screen.getByText('Aina #07 reported Ben: after the fact')).toBeInTheDocument()
+  })
+
   it('offers SOS alerts on this phone until they are on', async () => {
     subscribe.mockResolvedValue({ endpoint: 'https://push/x' })
     const { rerender } = render(<MarshalTools code="ABC234" view={testView()} refresh={refresh} />)
