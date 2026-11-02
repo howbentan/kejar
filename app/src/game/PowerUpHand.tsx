@@ -1,5 +1,5 @@
 import * as m from 'motion/react-m'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ClaimJudgement } from '../../shared/powerups.js'
 import type { PowerUp, PowerUpKind } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
@@ -7,12 +7,15 @@ import { call } from './api'
 import { loadSession } from './session'
 import { clock, useServerNow } from './time'
 import { INFO } from './powerInfo'
+import GrabChooser from './GrabChooser'
 import { Foil } from './PowerCard'
 import Sticker from './Sticker'
 import { ErrorText } from './ui'
 
 export type ClaimResult = ({ ok: true; kind: PowerUpKind } | Exclude<ClaimJudgement, { ok: true }>)
-type UseResult = { ok: true; kind: PowerUpKind } | { ok: false; reason: string; readyInMs?: number }
+type UseResult =
+  | { ok: true; kind: PowerUpKind; offer?: PowerUpKind[]; takenKind?: PowerUpKind }
+  | { ok: false; reason: string; readyInMs?: number }
 
 const CLAIM_REJECTIONS: Record<string, string> = {
   'too-far': 'Get within 30 m of the station.',
@@ -36,6 +39,20 @@ const USE_REJECTIONS: Record<string, string> = {
   paused: 'Game is paused',
 }
 
+/**
+ * Plain words for a scan of the hidden stash card. It's a secret (rules doc §9b): no refusal says what the card
+ * is, or calls it a station, so anyone who isn't meant to have it learns nothing.
+ */
+export function stashMessage(r: ClaimResult | { ok: false; reason: 'no-stash' | 'paused' }): string {
+  if (r.ok) return `Got ${INFO[r.kind].name} ✓`
+  const reason: string = r.reason
+  if (reason === 'too-far') return 'Get closer.'
+  if (reason === 'hand-full') return 'Use or lose your power-up first'
+  if (reason === 'not-chasing') return 'Nothing here yet.'
+  if (reason === 'paused') return CLAIM_REJECTIONS.paused
+  return 'Nothing here.'
+}
+
 /** Plain words for a claim; refusals name the station when the scan said which one (motion design §7). */
 export function claimMessage(r: ClaimResult, station?: number | null): string {
   if (r.ok) return `Got ${INFO[r.kind].name} ✓`
@@ -57,17 +74,33 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
   const [confirm, setConfirm] = useState<PowerUp | null>(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [grab, setGrab] = useState<{ powerupId: string; offer: PowerUpKind[] } | null>(null)
   const token = () => loadSession(localStorage, code).token
   const now = useServerNow(view.now)
+
+  // Back with an Abang Grab whose offer is still open (closed app, reload): reopen its chooser once.
+  const reopened = useRef<string | null>(null)
+  const openOffer = view.hand.find((u) => u.kind === 'grab' && u.offer && u.offer.length > 0)
+  useEffect(() => {
+    if (!openOffer || reopened.current === openOffer.id) return
+    reopened.current = openOffer.id
+    setGrab({ powerupId: openOffer.id, offer: openOffer.offer! })
+  }, [openOffer])
 
   async function use(u: PowerUp) {
     setConfirm(null)
     setError('')
     try {
       const r = await call<UseResult>('usePowerup', { code, token: token(), powerupId: u.id })
+      if (r.ok && r.kind === 'grab' && r.offer) {
+        reopened.current = u.id
+        return setGrab({ powerupId: u.id, offer: r.offer })
+      }
       setMessage(
         r.ok
           ? INFO[r.kind].used
+          : r.reason === 'taken'
+            ? `Your ${INFO[u.kind].name} was taken.`
           : r.reason === 'flare-cooldown'
             ? `Mat Rempit is ready again in ${clock(r.readyInMs ?? 0)}.`
             : r.reason === 'flare-pending'
@@ -108,18 +141,37 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
       {view.hand.length > 0 ? (
         view.hand.map((u) => {
           const cooling = u.kind === 'flare' && view.flareReadyAt !== null
+          // Dato Seri is only ever used through Settle, at Penjara: no Use here (jail design §4b).
+          if (u.kind === 'dato') {
+            return (
+              <m.div
+                key={u.id}
+                className="slot legendary"
+                initial={{ y: -16, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 18 }}
+              >
+                <Foil />
+                <Sticker kind="dato" size={40} tilt={-4} />
+                <span>
+                  <b>{INFO.dato.name}</b>
+                  <span>{INFO.dato.used}</span>
+                </span>
+                <small className="slot-deck">★ LEGENDARY</small>
+              </m.div>
+            )
+          }
           return (
             <m.button
               key={u.id}
               type="button"
-              className={u.kind === 'dato' ? 'slot legendary' : 'slot'}
+              className="slot"
               disabled={cooling}
               initial={{ y: -16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ type: 'spring', stiffness: 500, damping: 18 }}
               onClick={() => setConfirm(u)}
             >
-              {u.kind === 'dato' && <Foil />}
               <Sticker kind={u.kind} size={40} tilt={-4} />
               <span>
                 <b>{INFO[u.kind].name}</b>
@@ -145,6 +197,7 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
           {deck}
         </div>
       )}
+      {grab && <GrabChooser code={code} powerupId={grab.powerupId} offer={grab.offer} onClose={() => setGrab(null)} />}
     </div>
   )
 }

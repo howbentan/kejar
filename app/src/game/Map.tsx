@@ -6,7 +6,7 @@ import * as m from 'motion/react-m'
 import { useReducedMotion } from 'motion/react'
 import { circlePolygon, distanceM } from '../../shared/geo.js'
 import type { Arena, LatLng } from '../../shared/types.js'
-import { FUZZ_RADIUS_M, type MapDot } from '../../shared/views.js'
+import { CHASER_SNAPSHOT_FUZZ_M, FUZZ_RADIUS_M, type ChaserSnapshot, type MapDot } from '../../shared/views.js'
 import { kejarMapStyle } from './mapStyle'
 import { RIPPLE_MS } from './ripple'
 import { SlideTracker } from './slideOff'
@@ -78,6 +78,22 @@ function pinFeatures(pins: Pin[]): FeatureCollection {
   )
 }
 
+/** The chasers frozen at a check-in's alert (checkins design §5): a 30 m circle each, labelled, dashed when stale. */
+function snapshotFeatures(s: ChaserSnapshot | null): FeatureCollection {
+  return collection(
+    (s?.positions ?? []).map((p) => ({
+      type: 'Feature',
+      properties: { label: p.name, stale: p.stale },
+      geometry: { type: 'Polygon', coordinates: [ring(circlePolygon(p, CHASER_SNAPSHOT_FUZZ_M))] },
+    })),
+  )
+}
+
+/** Exactly where the stash is: the organiser's and marshals' setup map only (jail design §4b). */
+function stashFeatures(s: LatLng | null): FeatureCollection {
+  return collection(s ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [s.lng, s.lat] } }] : [])
+}
+
 /** The hint zone's circle (no names anywhere: secret, jail design §4c). */
 function zoneFeatures(z: LegendaryZone | null) {
   return {
@@ -117,6 +133,8 @@ export default function GameMap({
   showJailAndStart = true,
   fit = null,
   legendaryZone = null,
+  snapshot = null,
+  stash = null,
 }: {
   arena: Arena
   dots: MapDot[]
@@ -142,11 +160,19 @@ export default function GameMap({
   fit?: LatLng[] | null
   /** Dato Seri's hint zone: a dashed yellow circle with a twinkling ? and a slow ripple, never a name (jail design §4a, §4c). */
   legendaryZone?: LegendaryZone | null
+  /** Runners: where the chasers were at their last check-in's alert. Frozen: redrawn only when it changes. */
+  snapshot?: ChaserSnapshot | null
+  /** Organiser and marshals before the start: the exact spot Dato Seri's card was dropped, as a yellow pin. */
+  stash?: LatLng | null
 }) {
   const reduce = useReducedMotion()
   const [loaded, setLoaded] = useState(false)
   const latestZone = useRef(legendaryZone)
   latestZone.current = legendaryZone
+  const latestSnapshot = useRef(snapshot)
+  latestSnapshot.current = snapshot
+  const latestStash = useRef(stash)
+  latestStash.current = stash
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
   const ready = useRef(false)
@@ -269,6 +295,37 @@ export default function GameMap({
           paint: { 'text-color': WHITE },
         })
       }
+      // The chaser snapshot: lime like the chasers' own dots, under the live dots.
+      m.addSource('snapshot', { type: 'geojson', data: snapshotFeatures(latestSnapshot.current) })
+      m.addLayer({ id: 'snapshot-fill', type: 'fill', source: 'snapshot', paint: { 'fill-color': VOLT, 'fill-opacity': 0.1 } })
+      m.addLayer({
+        id: 'snapshot-line',
+        type: 'line',
+        source: 'snapshot',
+        filter: ['!', ['get', 'stale']],
+        paint: { 'line-color': VOLT, 'line-width': 1.2 },
+      })
+      m.addLayer({
+        id: 'snapshot-stale',
+        type: 'line',
+        source: 'snapshot',
+        filter: ['get', 'stale'],
+        paint: { 'line-color': VOLT, 'line-width': 1.2, 'line-dasharray': [2, 2] },
+      })
+      m.addLayer({
+        id: 'snapshot-labels',
+        type: 'symbol',
+        source: 'snapshot',
+        layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 11 },
+        paint: { 'text-color': VOLT, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
+      })
+      m.addSource('stash', { type: 'geojson', data: stashFeatures(latestStash.current) })
+      m.addLayer({
+        id: 'stash',
+        type: 'circle',
+        source: 'stash',
+        paint: { 'circle-radius': 9, 'circle-color': y.main, 'circle-stroke-color': y.deep, 'circle-stroke-width': 2 },
+      })
       m.addSource('stations', { type: 'geojson', data: stationFeatures(latestStations.current) })
       m.addLayer({
         id: 'stations',
@@ -355,6 +412,18 @@ export default function GameMap({
     if (!ready.current || !map.current) return
     ;(map.current.getSource('stations') as GeoJSONSource | undefined)?.setData(stationFeatures(latestStations.current))
   }, [stationKey])
+
+  const snapshotKey = JSON.stringify(snapshot)
+  useEffect(() => {
+    if (!ready.current || !map.current) return
+    ;(map.current.getSource('snapshot') as GeoJSONSource | undefined)?.setData(snapshotFeatures(latestSnapshot.current))
+  }, [snapshotKey])
+
+  const stashKey = JSON.stringify(stash)
+  useEffect(() => {
+    if (!ready.current || !map.current) return
+    ;(map.current.getSource('stash') as GeoJSONSource | undefined)?.setData(stashFeatures(latestStash.current))
+  }, [stashKey])
 
   const routeKey = JSON.stringify(route)
   useEffect(() => {

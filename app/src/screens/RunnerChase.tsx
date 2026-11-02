@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BreakJudgement } from '../../shared/catch.js'
 import type { View } from '../../shared/views.js'
-import { stationFromQr } from '../../shared/ids.js'
+import { isDatoQr, stationFromQr } from '../../shared/ids.js'
 import ChaseLayout from '../game/ChaseLayout'
 import CheckinBanner from '../game/CheckinBanner'
 import { dipFor } from '../game/LuckyDip'
-import PowerUpHand, { claimMessage, type ClaimResult } from '../game/PowerUpHand'
+import PowerUpHand, { claimMessage, stashMessage, type ClaimResult } from '../game/PowerUpHand'
 import { clock, useServerNow } from '../game/time'
 
 /** The full feed as a list, for screens without the dock (Penjara, the marshal). */
@@ -64,6 +64,7 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
       const b = r as BreakJudgement
       return b.ok ? `Freed ${b.freedIds.length} Dikejar ✓` : (BREAK_REJECTIONS[b.reason] ?? 'Nobody freed')
     }
+    if (isDatoQr(text)) return stashMessage(r as ClaimResult)
     return claimMessage(r as ClaimResult, stationFromQr(text))
   }, [])
   const deckLeft = view.deckLeft

@@ -410,3 +410,27 @@ select.input option { background: #141614; color: var(--white); }
 .sos-takeover .sos-chips button { border-color: var(--black); color: var(--black); }
 .sos-takeover .sos-chips button.on { background: var(--black); border-color: var(--black); color: var(--volt); }
 .sos-takeover-close { width: 100%; max-width: 380px; background: var(--black); color: var(--volt); }
+
+/* Abang Grab's chooser (power-ups §6.3): the top 3 cards face up, tap one to keep it. */
+.grab { gap: 14px; }
+.grab-title { margin: 0; font: 800 26px var(--font); letter-spacing: -0.04em; }
+.grab-cards { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.grab-card { appearance: none; border: 0; padding: 0; background: none; cursor: pointer; border-radius: 14px; }
+.grab-card:focus-visible { outline: 2px solid var(--volt); outline-offset: 3px; }
+.grab-card:disabled { opacity: 0.6; cursor: default; }
+
+/* Dato Seri's reveal (motion design §7): the only yellow moment, one foil card, no fan. */
+.dip-title .legendary-stop { color: var(--legendary-2); }
+.legendary-line { margin: 0; max-width: 300px; font: 500 14px var(--font); color: var(--legendary-1); }
+
+/* The chasers' frozen snapshot shows on runners' maps; a chaser just sees that it happened. */
+.chip.snap { border-color: var(--volt); color: var(--white); letter-spacing: 0.08em; }
+
+/* Settle at Penjara (jail design §4b, §4d): pick up to 2, then scan the Penjara code. */
+.settle { display: flex; flex-direction: column; gap: 10px; border-color: var(--legendary-3); }
+.settle-eyebrow { color: var(--legendary-2); }
+.settle-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.settle-list label { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--hair); border-radius: 12px; }
+.settle-list label.off { opacity: 0.45; }
+.settle-list input { accent-color: var(--legendary-2); width: 18px; height: 18px; }
+.btn.btn-legendary { background: var(--legendary-2); color: var(--legendary-ink); border-color: var(--legendary-3); }

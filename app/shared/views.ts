@@ -479,12 +479,17 @@ function snapshottedFor(i: ViewInput, phase: Phase): boolean {
 
 export const SNAPSHOT_TAKEN = 'Snapshot taken — Dikejar can see where you were'
 
-/** One feed line per scheduled alert so far while the switch is on, derived from the schedule (§5.4). */
+/**
+ * The snapshot line for the latest scheduled alert so far while the switch is on, derived from the schedule (§5.4).
+ * Only the latest: with 2-minute pings one line per alert filled the whole 20-line feed and pushed catches off it,
+ * and each repeat says nothing new, so they collapse into the most recent one.
+ */
 function snapshotLines(i: ViewInput, phase: Phase, endsAt: number | null): { at: string; text: string }[] {
   if (i.game.settings.chaserSnapshot !== true) return []
   const until = phase === 'ended' && endsAt !== null ? Math.min(endsAt, i.now) : i.now
   return pingTimes(i.game, i.now)
     .filter((t) => t.alertAt <= until)
+    .slice(-1)
     .map((t) => ({ at: new Date(t.alertAt).toISOString(), text: SNAPSHOT_TAKEN }))
 }
 
@@ -576,7 +581,8 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
       const thief = e.data.kind === 'along' ? 'Ah Long' : 'Toyol'
       if (e.target_id && e.target_id === ctx.meId) {
         const taken = POWER_NAME[e.data.takenKind as PowerUpKind] as string | undefined
-        return plain(`${thief} took your ${taken ?? 'power-up'}!`)
+        // Their own loss needs them: it buzzes and gets the needs-you outline in the ticker.
+        return { ...plain(`${thief} took your ${taken ?? 'power-up'}!`), act: true }
       }
       return plain(thief === 'Ah Long' ? 'Ah Long came to collect!' : 'Toyol stole a power-up!')
     }

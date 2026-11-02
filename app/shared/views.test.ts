@@ -339,6 +339,10 @@ describe('Toyol and Ah Long', () => {
     expect(texts(chaser)).not.toContain('Toyol stole a power-up!')
     expect(texts(aina, stolen('along'))).toEqual(['Ah Long took your Mat Rempit!'])
   })
+  it("the victim's own line buzzes and gets the needs-you outline; everyone else's stays plain", () => {
+    expect(view(chaser, { events: [stolen('toyol')] }).feed[0]).toMatchObject({ text: 'Toyol took your Mat Rempit!', act: true })
+    expect(view(aina, { events: [stolen('toyol')] }).feed[0]).toMatchObject({ act: false })
+  })
   it('a taken card leaves the hand', () => {
     const c = (over: Partial<PowerUp>): PowerUp => ({ id: 'u9', game_id: 'g1', player_id: 'c1', kind: 'flare', station: 1, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null, ...over })
     expect(view(chaser, { powerUps: [c({})] }).hand).toHaveLength(1)
@@ -666,17 +670,25 @@ describe("the snapshot marker on a chaser's own screen (checkins design §5.4)",
     expect(view(siti, { game: on, now: alertAt(3) + 1_000 }).snapshotted).toBe(false)
   })
 
-  it('the feed tells everyone at each scheduled alert, in plain English', () => {
+  it('the feed tells everyone in plain English, keeping only the latest alert line', () => {
     for (const me of [aina, chaser, siti]) {
       const lines = view(me, { game: on }).feed.filter((f) => f.text === SNAP)
-      expect(lines.map((f) => f.at)).toEqual([iso(alertAt(2)), iso(alertAt(1))])
+      expect(lines.map((f) => f.at)).toEqual([iso(alertAt(2))])
     }
+  })
+
+  it('with 2-minute pings, snapshot lines never crowd catches out of the 20-line feed', () => {
+    const fast = game({ settings: { ...DEFAULT_SETTINGS, chaserSnapshot: true, pingMin: 2, lengthMin: 90 } })
+    const catches = [0, 1, 2].map((k) => event('caught', T0 + (6 + k) * MIN, { actor_id: 'c1', target_id: 'r2' }))
+    const feed = view(aina, { game: fast, events: catches, pings: [], now: T0 + 60 * MIN }).feed
+    expect(feed.filter((f) => f.text === SNAP)).toHaveLength(1)
+    expect(feed.filter((f) => /caught/.test(f.text))).toHaveLength(3)
   })
 
   it('no snapshot lines with the switch off, for bonus pings, or after the game ended', () => {
     expect(view(aina).feed.some((f) => f.text === SNAP)).toBe(false)
     const bonus = ping(BONUS_SEQ_BASE, T0 + 17 * MIN)
-    expect(view(aina, { game: on, pings: [...pings, bonus], now: T0 + 18 * MIN }).feed.filter((f) => f.text === SNAP)).toHaveLength(2)
+    expect(view(aina, { game: on, pings: [...pings, bonus], now: T0 + 18 * MIN }).feed.filter((f) => f.text === SNAP).map((f) => f.at)).toEqual([iso(alertAt(2))])
     const ended = game({ settings: on.settings, ended_at: iso(T0 + 12 * MIN) })
     expect(view(aina, { game: ended, now: T0 + 30 * MIN }).feed.filter((f) => f.text === SNAP).map((f) => f.at)).toEqual([iso(alertAt(1))])
   })

@@ -86,6 +86,7 @@ export default function ChaseLayout(props: {
           stations={view.stations}
           height="100%"
           legendaryZone={view.legendaryZone}
+          snapshot={view.chaserSnapshot}
           ripple={view.lastRevealAt ? { at: view.lastRevealAt, origin: rippleOrigin(view.dots, view.arena) } : null}
         />
         <div className="chase-over">

@@ -4,9 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const call = vi.hoisted(() => vi.fn())
 const scanned = vi.hoisted(() => ({ text: '' }))
 vi.mock('../game/api', () => ({ call, ApiError: class extends Error {} }))
-const mapProps = vi.hoisted(() => ({ last: null as null | { ripple?: { at: number } | null } }))
+type MapProps = { ripple?: { at: number } | null; snapshot?: unknown; legendaryZone?: unknown }
+const mapProps = vi.hoisted(() => ({ last: null as null | MapProps }))
 vi.mock('../game/Map', () => ({
-  default: (p: { ripple?: { at: number } | null }) => {
+  default: (p: MapProps) => {
     mapProps.last = p
     return <div data-testid="map" />
   },
@@ -97,6 +98,35 @@ describe('RunnerChase', () => {
     await scan('KEJAR:STATION:2')
     expect(screen.getByText('Get closer. You need to be within 30 m of Station 2.')).toBeInTheDocument()
     expect(screen.queryByText(/CLAIMED/)).toBeNull()
+  })
+
+  it('scanning the hidden stash card claims it and shows the legendary reveal, with no fan', async () => {
+    call.mockResolvedValue({ ok: true, kind: 'dato' })
+    render(<RunnerChase code="ABC234" view={testView()} />)
+    await scan('KEJAR:DATO')
+    expect(call).toHaveBeenCalledWith('claim', { code: 'ABC234', token: 't1', qr: 'KEJAR:DATO' })
+    expect(screen.getByRole('heading', { name: 'Dato Seri.' })).toBeInTheDocument()
+    expect(screen.queryByText(/CLAIMED · Station/)).toBeNull()
+  })
+
+  it.each([
+    ['hand-full', 'Use or lose your power-up first'],
+    ['too-far', 'Get closer.'],
+    ['no-stash', 'Nothing here.'],
+  ])('a refused stash scan (%s) says so without naming a station', async (reason, text) => {
+    call.mockResolvedValue({ ok: false, reason })
+    render(<RunnerChase code="ABC234" view={testView()} />)
+    await scan('KEJAR:DATO')
+    expect(screen.getByText(text)).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Dato Seri.' })).toBeNull()
+  })
+
+  it("draws the chasers' frozen snapshot and the ? zone on the map", () => {
+    const chaserSnapshot = { positions: [{ name: 'Ben', lat: 3.001, lng: 101.001, stale: false }] }
+    const legendaryZone = { lat: 3, lng: 101, radiusM: 150 }
+    render(<RunnerChase code="ABC234" view={testView({ chaserSnapshot, legendaryZone })} />)
+    expect(mapProps.last?.snapshot).toEqual(chaserSnapshot)
+    expect(mapProps.last?.legendaryZone).toEqual(legendaryZone)
   })
 
   it('scanning anything else says so and calls nothing', async () => {

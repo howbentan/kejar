@@ -12,7 +12,7 @@ type Point = { x: number; y: number }
 type Box = { x: number; y: number; w: number; h: number }
 
 export type Mark = {
-  shape: 'circle' | 'frame' | 'underline' | 'star' | 'stars' | 'burst' | 'arrow' | 'x' | 'tick' | 'emphasis' | 'strike'
+  shape: 'circle' | 'frame' | 'underline' | 'star' | 'stars' | 'burst' | 'arrow' | 'x' | 'tick' | 'emphasis' | 'strike' | 'crown'
   /** The element the mark is sized from. */
   target?: RefObject<HTMLElement | null>
   /** Or a point in the parent's coordinates. */
@@ -77,6 +77,23 @@ export function markPath(mark: Pick<Mark, 'shape' | 'to'>, b: Box): string {
       ])
     case 'x':
       return `${line([{ x: b.x - 4, y: b.y - 4 }, { x: b.x + b.w + 4, y: b.y + b.h + 4 }])} ${line([{ x: b.x + b.w + 4, y: b.y - 4 }, { x: b.x - 4, y: b.y + b.h + 4 }])}`
+    case 'crown': {
+      // A three-point crown sitting just above the words (Dato Seri's reveal, motion design §7).
+      const w = Math.min(56, Math.max(36, b.w * 0.35))
+      const l = cx - w / 2
+      const base = b.y - 6
+      const top = base - w * 0.5
+      return line([
+        { x: l, y: base },
+        { x: l - 2, y: top },
+        { x: l + w * 0.27, y: base - w * 0.22 },
+        { x: cx, y: top - 4 },
+        { x: l + w * 0.73, y: base - w * 0.22 },
+        { x: l + w + 2, y: top },
+        { x: l + w, y: base },
+        { x: l, y: base },
+      ])
+    }
     case 'tick':
       return line([
         { x: b.x + b.w * 0.12, y: b.y + b.h * 0.55 },
@@ -183,9 +200,10 @@ function boxOf(mark: Mark, parent: HTMLElement | null): Box {
 
 /**
  * The marker scribble (motion design §8.5): a lime marker that draws itself over its positioned parent, for hype
- * and wayfinding only. Never put it on SOS, marshal, pause, removal or report screens.
+ * and wayfinding only. Never put it on SOS, marshal, pause, removal or report screens. Yellow is for claiming Dato
+ * Seri only, the one time the marker is ever yellow (motion design §7).
  */
-export default function Marker({ marks, colour = 'lime', delayMs = 0 }: { marks: Mark[]; colour?: 'lime' | 'black'; delayMs?: number }) {
+export default function Marker({ marks, colour = 'lime', delayMs = 0 }: { marks: Mark[]; colour?: 'lime' | 'black' | 'yellow'; delayMs?: number }) {
   const reduce = useReducedMotion()
   const svg = useRef<SVGSVGElement>(null)
   const [paths, setPaths] = useState<string[]>([])
@@ -201,7 +219,8 @@ export default function Marker({ marks, colour = 'lime', delayMs = 0 }: { marks:
   }, [])
 
   const stroke = Math.min(MARK_STROKE_MS, MOMENT_MAX_MS / Math.max(1, marks.length)) / 1000
-  const colourHex = colour === 'lime' ? '#C6FF3D' : '#0A0A0B'
+  // Yellow mirrors tokens.css --legendary-2.
+  const colourHex = colour === 'lime' ? '#C6FF3D' : colour === 'yellow' ? '#FFD60A' : '#0A0A0B'
 
   return (
     <svg ref={svg} className="marker" aria-hidden="true" data-drawn={reduce ? 'now' : 'animated'} filter={`url(#${wob})`}>

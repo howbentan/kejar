@@ -1,6 +1,6 @@
 import * as m from 'motion/react-m'
 import { useEffect, useRef, useState } from 'react'
-import { stationFromQr } from '../../shared/ids.js'
+import { isDatoQr, stationFromQr } from '../../shared/ids.js'
 import type { PowerUpKind } from '../../shared/types.js'
 import { Shockwave, Sparkles, type Spot } from './Celebrate'
 import Marker from './Marker'
@@ -36,10 +36,72 @@ export const SPARKLES = SPARKLE_SPOTS.length
 /** The spotlight settles on the middle card. */
 const SWEEP_PICK = 2
 
-/** The dip for a good station scan, or null (a refusal stays a calm line, no marker). */
+/** The dip for a good station scan (Dato Seri's own reveal for the stash), or null (a refusal stays a calm line, no marker). */
 export function dipFor(text: string, r: unknown, deckLeft: number | null, done: () => void) {
   const c = r as ClaimResult
-  return c.ok ? <LuckyDip kind={c.kind} station={stationFromQr(text) ?? 0} deckLeft={deckLeft} onDone={done} /> : null
+  if (!c.ok) return null
+  if (isDatoQr(text) || c.kind === 'dato') return <LegendaryReveal onDone={done} />
+  return <LuckyDip kind={c.kind} station={stationFromQr(text) ?? 0} deckLeft={deckLeft} onDone={done} />
+}
+
+/** Dato Seri's reveal stays up a little longer than a deck card's: it's the one legendary. */
+export const LEGENDARY_HOLD_MS = 2_600
+
+/**
+ * Claiming Dato Seri from the hidden stash (motion design §7): no fan, since there's only one card. The foil card
+ * flips in with a long buzz, `Dato Seri.` with a yellow full stop, and the marker draws in yellow, the only time
+ * it ever does: a loop round the card, stars, burst lines and a crown over the name. Reduced motion: the marker
+ * and card appear without animating (Marker and motion handle that), the timing is the same.
+ */
+export function LegendaryReveal({ onDone }: { onDone: () => void }) {
+  const [landed, setLanded] = useState(false)
+  const title = useRef<HTMLHeadingElement>(null)
+  const card = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    navigator.vibrate?.([400, 80, 400])
+    const t = window.setTimeout(() => setLanded(true), FLIP_MS)
+    const done = window.setTimeout(onDone, LEGENDARY_HOLD_MS)
+    return () => (window.clearTimeout(t), window.clearTimeout(done))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return (
+    <div className="moment dip" role="status">
+      <div className="dip-title">
+        <m.h2
+          ref={title}
+          initial={{ scale: 0.6, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
+        >
+          Dato Seri<span className="legendary-stop">.</span>
+        </m.h2>
+      </div>
+      <div className="dip-fan">
+        <m.div
+          ref={card}
+          className="dip-card picked"
+          initial={{ scale: 0.4, rotateY: 90, opacity: 0 }}
+          animate={{ scale: 1, rotateY: 0, opacity: 1 }}
+          transition={{ duration: FLIP_MS / 1000, ease: [0.32, 0.72, 0, 1] }}
+        >
+          <PowerCard kind="dato" big />
+        </m.div>
+      </div>
+      <p className="legendary-line">Legendary. In Penjara, free yourself and up to two friends. Only one exists.</p>
+      {landed && (
+        <Marker
+          colour="yellow"
+          marks={[
+            { shape: 'crown', target: title },
+            { shape: 'frame', target: card },
+            { shape: 'stars', target: card },
+            { shape: 'burst', target: card },
+          ]}
+          delayMs={0}
+        />
+      )}
+    </div>
+  )
 }
 
 type Stage = 'stamp' | 'fan' | 'sweep' | 'reveal'

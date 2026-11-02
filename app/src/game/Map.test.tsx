@@ -250,6 +250,52 @@ describe('GameMap', () => {
     expect(created.data.points).toMatchObject({ features: [] })
   })
 
+  describe("the chasers' snapshot on a runner's map", () => {
+    const layer = (id: string) => created.layers.find((l) => l.id === id) as unknown as { paint: Record<string, unknown>; filter?: unknown }
+    const snap = {
+      positions: [
+        { name: 'Ben', lat: 3.01, lng: 101.01, stale: false },
+        { name: 'Siti', lat: 3.02, lng: 101.02, stale: true },
+      ],
+    }
+
+    it('draws a labelled 30 m circle per chaser, dashed when stale, and changes only with the prop', () => {
+      created.layers = []
+      created.data = {}
+      const { rerender } = render(<GameMap arena={arena} dots={[]} snapshot={snap} />)
+      act(() => created.load!())
+      const features = (created.data.snapshot as { features: { properties: Record<string, unknown>; geometry: { type: string; coordinates: number[][][] } }[] }).features
+      expect(features.map((f) => f.properties)).toEqual([
+        { label: 'Ben', stale: false },
+        { label: 'Siti', stale: true },
+      ])
+      expect(features[0].geometry.type).toBe('Polygon')
+      // Radius ~30 m: the ring's first point is about 30 m from the centre.
+      const [lng, lat] = features[0].geometry.coordinates[0][0]
+      const m = Math.hypot((lat - 3.01) * 111_320, (lng - 101.01) * 111_320 * Math.cos((3.01 * Math.PI) / 180))
+      expect(m).toBeGreaterThan(27)
+      expect(m).toBeLessThan(33)
+      expect(layer('snapshot-stale').paint['line-dasharray']).toBeTruthy()
+      expect(layer('snapshot-line').paint['line-dasharray']).toBeUndefined()
+      const before = created.data.snapshot
+      rerender(<GameMap arena={arena} dots={[{ id: 'x', kind: 'me', lat: 3, lng: 101, at: '', revealedBy: null }]} snapshot={{ ...snap }} />)
+      expect(created.data.snapshot).toBe(before)
+      rerender(<GameMap arena={arena} dots={[]} snapshot={null} />)
+      expect(created.data.snapshot).toMatchObject({ features: [] })
+    })
+
+    it("the organiser's stash pin is legendary yellow at the exact spot", () => {
+      created.layers = []
+      created.data = {}
+      const { rerender } = render(<GameMap arena={arena} dots={[]} stash={{ lat: 3.03, lng: 101.03 }} />)
+      act(() => created.load!())
+      expect(created.data.stash).toMatchObject({ features: [{ geometry: { type: 'Point', coordinates: [101.03, 3.03] } }] })
+      expect(layer('stash').paint['circle-color']).toBe('#FFD60A')
+      rerender(<GameMap arena={arena} dots={[]} stash={null} />)
+      expect(created.data.stash).toMatchObject({ features: [] })
+    })
+  })
+
   describe("Dato Seri's hint zone", () => {
     const zone = { lat: 3.1, lng: 101.1, radiusM: 150 }
     const layer = (id: string) => created.layers.find((l) => l.id === id) as unknown as { paint: Record<string, unknown>; layout?: Record<string, unknown> }
