@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Game, GameEvent, Ping, Player, Position, PowerUp } from '../../shared/types.js'
-import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, StationClaim } from './store.js'
+import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, StationClaim, StolenCard } from './store.js'
 
 const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, push, removed_at, outside, left_start'
 const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed'
@@ -156,9 +156,17 @@ export class SupabaseStore implements GameStore {
   }
   async markUsed(id: string) {
     const rows = check(
-      await this.db.from('powerups').update({ used_at: this.nowIso() }).eq('id', id).is('used_at', null).select('id'),
+      await this.db.from('powerups').update({ used_at: this.nowIso() }).eq('id', id).is('used_at', null).is('taken_at', null).select('id'),
     )
     return (rows ?? []).length > 0
+  }
+  async stealFrom(gameId: string, side: 'runner' | 'chaser'): Promise<StolenCard | null> {
+    // The database function locks the candidate card (skip locked), so two thieves never take the same one.
+    const rows = check(await this.db.rpc('steal_card', { p_game: gameId, p_side: side, p_at: this.nowIso() })) as
+      | { id: string; player_id: string; kind: PowerUp['kind'] }[]
+      | null
+    const row = rows?.[0]
+    return row ? { stolenFrom: row.player_id, kind: row.kind, powerupId: row.id } : null
   }
   async consumeShield(id: string) {
     const rows = check(

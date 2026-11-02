@@ -1,5 +1,5 @@
 import type { ArenaDraft } from '../../shared/arenaDraft.js'
-import type { Arena, Game, GameEvent, Ping, Player, Position, PowerUp } from '../../shared/types.js'
+import type { Arena, Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind } from '../../shared/types.js'
 
 export type GameRow = Game & { organiser_id: string; host_push?: PushSubscriptionJSON | null }
 export type PlayerRow = Player & { token_hash: string }
@@ -85,6 +85,13 @@ export interface GameStore {
   claimStation(p: NewPowerUp, lockMs: number): Promise<StationClaim>
   /** Marks a power-up used only if it wasn't already; true for the first caller. */
   markUsed(id: string): Promise<boolean>
+  /**
+   * Toyol / Ah Long (power-ups §6.2): atomically picks a random eligible player on `side` (Ah Long's
+   * runners must be free, not jailed), then a random card of theirs, and marks it taken (`taken_at`).
+   * Eligible cards are unused, unconsumed, untaken, unsealed and not Dato Seri. Null if nothing qualifies.
+   * `rng` is for the in-memory store only; Postgres uses random().
+   */
+  stealFrom(gameId: string, side: 'runner' | 'chaser', rng?: () => number): Promise<StolenCard | null>
   /** Consumes a shield only if it wasn't already; true for the first caller. */
   consumeShield(id: string): Promise<boolean>
   /** Adds a bonus (Flare) ping with the next free bonus number; safe when two happen at once. */
@@ -152,11 +159,17 @@ export interface SafetyRecord {
   data: Record<string, unknown>
 }
 
+export interface StolenCard {
+  stolenFrom: string
+  kind: PowerUpKind
+  powerupId: string
+}
+
 export type StationClaim =
   | { ok: true; powerUp: PowerUp }
   | { ok: false; reason: 'already-claimed' | 'locked'; lockedForMs?: number }
 
-export type NewPowerUp = Omit<PowerUp, 'id' | 'claimed_at' | 'used_at' | 'consumed_at'>
+export type NewPowerUp = Omit<PowerUp, 'id' | 'claimed_at' | 'used_at' | 'consumed_at' | 'sealed' | 'taken_at'>
 
 /** In-memory store for tests. */
 export class MemoryStore implements GameStore {
@@ -306,7 +319,7 @@ export class MemoryStore implements GameStore {
     return this.eventRows.filter((e) => e.game_id === gameId).map((e) => ({ ...e }))
   }
   async addPowerUp(p: NewPowerUp) {
-    const row: PowerUp = { ...p, id: this.id('u'), claimed_at: this.nowIso(), used_at: null, consumed_at: null }
+    const row: PowerUp = { ...p, id: this.id('u'), claimed_at: this.nowIso(), used_at: null, consumed_at: null, sealed: false, taken_at: null }
     this.powerUpRows.push(row)
     return { ...row }
   }
@@ -324,15 +337,28 @@ export class MemoryStore implements GameStore {
     const last = Math.max(...here.map((u) => Date.parse(u.claimed_at)), -Infinity)
     const lockedForMs = last + lockMs - this.clock()
     if (lockedForMs > 0) return { ok: false, reason: 'locked', lockedForMs }
-    const row: PowerUp = { ...p, id: this.id('u'), claimed_at: this.nowIso(), used_at: null, consumed_at: null }
+    const row: PowerUp = { ...p, id: this.id('u'), claimed_at: this.nowIso(), used_at: null, consumed_at: null, sealed: false, taken_at: null }
     this.powerUpRows.push(row)
     return { ok: true, powerUp: { ...row } }
   }
   async markUsed(id: string) {
     const u = this.powerUpRows.find((x) => x.id === id)
-    if (!u || u.used_at) return false
+    if (!u || u.used_at || u.taken_at) return false // a card Toyol or Ah Long took can't be used
     u.used_at = this.nowIso()
     return true
+  }
+  async stealFrom(gameId: string, side: 'runner' | 'chaser', rng: () => number = Math.random): Promise<StolenCard | null> {
+    const pick = <T,>(xs: T[]): T => xs[Math.min(xs.length - 1, Math.floor(rng() * xs.length))]
+    const stealable = (u: PowerUp) =>
+      u.game_id === gameId && !u.used_at && !u.consumed_at && !u.taken_at && !u.sealed && (u.kind as string) !== 'dato' // Dato Seri (a later task's kind) is immune
+    const owners = this.playerRows
+      .filter((p) => p.game_id === gameId && p.role === side && !p.removed_at && !(side === 'runner' && p.jailed))
+      .filter((p) => this.powerUpRows.some((u) => u.player_id === p.id && stealable(u)))
+    if (!owners.length) return null
+    const victim = pick(owners)
+    const card = pick(this.powerUpRows.filter((u) => u.player_id === victim.id && stealable(u)))
+    card.taken_at = this.nowIso()
+    return { stolenFrom: victim.id, kind: card.kind, powerupId: card.id }
   }
   async consumeShield(id: string) {
     const u = this.powerUpRows.find((x) => x.id === id)

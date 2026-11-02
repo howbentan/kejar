@@ -733,7 +733,7 @@ const usePowerup: Action = async (ctx, body) => {
   const all = await ctx.store.powerUps(game.id)
   const u = all.find((x) => x.id === str(body.powerupId))
   if (!u || u.player_id !== me.id) return { ok: false, reason: 'not-yours' }
-  if (u.used_at) return { ok: false, reason: 'already-used' }
+  if (u.used_at || u.taken_at) return { ok: false, reason: 'already-used' }
   if (phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (me.jailed) return { ok: false, reason: 'cannot-use' }
   // A Flare's reveal must land before the whistle.
@@ -747,6 +747,29 @@ const usePowerup: Action = async (ctx, body) => {
   }
   // markUsed is atomic: a double-tap uses the power-up once.
   if (!(await ctx.store.markUsed(u.id))) return { ok: false, reason: 'already-used' }
+  if (u.kind === 'toyol' || u.kind === 'along') {
+    // Spent first (so two taps can't both steal), taken second (atomic per card in the store, so two thieves never
+    // take the same one); if nothing was there to take, the card goes back unspent (power-ups §6.2).
+    let stolen
+    try {
+      stolen = await ctx.store.stealFrom(game.id, u.kind === 'toyol' ? 'chaser' : 'runner', ctx.rng)
+    } catch (e) {
+      await ctx.store.updatePowerUp(u.id, { used_at: null })
+      throw e
+    }
+    if (!stolen) {
+      await ctx.store.updatePowerUp(u.id, { used_at: null })
+      return { ok: false, reason: 'nothing-to-steal' }
+    }
+    await ctx.store.addEvent({
+      game_id: game.id,
+      type: 'stolen',
+      actor_id: me.id,
+      target_id: stolen.stolenFrom,
+      data: { kind: u.kind, takenKind: stolen.kind },
+    })
+    return { ok: true, kind: u.kind, stolenFrom: stolen.stolenFrom, takenKind: stolen.kind, powerupId: stolen.powerupId }
+  }
   if (u.kind === 'flare') {
     // The next surprise-ping number is a claim: if two Mat Rempits land at once, only one gets it.
     const seq = BONUS_SEQ_BASE + pings.filter((p) => p.seq >= BONUS_SEQ_BASE).length

@@ -4,6 +4,7 @@ import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes
 import { distanceM, fuzz } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { MOMENT_WINDOW_MS } from './moments.js'
+import { POWER_NAME } from './powerNames.js'
 import { activeShield, decoySpot, flareBlocked, SHIELD_MS, slotBusy } from './powerups.js'
 import type { Arena, Game, GameEvent, LatLng, Phase, Ping, Player, Position, PowerUp, PowerUpKind, Results, Role, Settings } from './types.js'
 
@@ -393,6 +394,7 @@ function jailReasonFor(i: ViewInput): View['jailReason'] {
 }
 
 interface FeedContext {
+  meId: string
   side: 'runner' | 'chaser' | null
   freeNow: number
   jailedNow: number
@@ -431,6 +433,15 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
           'runner',
         )
       return null
+    case 'stolen': {
+      // The feed never says who stole or who lost; only the player who lost the card is told what it was.
+      const thief = e.data.kind === 'along' ? 'Ah Long' : 'Toyol'
+      if (e.target_id && e.target_id === ctx.meId) {
+        const taken = POWER_NAME[e.data.takenKind as PowerUpKind] as string | undefined
+        return plain(`${thief} took your ${taken ?? 'power-up'}!`)
+      }
+      return plain(thief === 'Ah Long' ? 'Ah Long came to collect!' : 'Toyol stole a power-up!')
+    }
     case 'caught':
       if (!actor || !target) return plain('A Dikejar was caught.')
       return two(`${actor.name} caught ${tag}.`, 'CATCH', `${tag} is walking to Penjara. ${ctx.freeNow} Dikejar still free.`, `Nice. ${ctx.freeNow} Dikejar left to find.`)
@@ -542,6 +553,7 @@ function fullView(i: ViewInput): View {
 
   const runnersNow = i.players.filter((p) => p.role === 'runner')
   const feedContext: FeedContext = {
+    meId: i.me.id,
     side: i.me.role === 'runner' || i.me.role === 'chaser' ? i.me.role : null,
     freeNow: runnersNow.filter((p) => !p.jailed).length,
     jailedNow: runnersNow.filter((p) => p.jailed).length,
@@ -585,7 +597,7 @@ function fullView(i: ViewInput): View {
       return shield?.used_at ? Date.parse(shield.used_at) + SHIELD_MS : null
     })(),
     flareReadyAt: (() => {
-      const holding = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'flare' && u.used_at === null)
+      const holding = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'flare' && u.used_at === null && u.taken_at === null)
       const blocked = holding ? flareBlocked(i.pings, i.now) : null
       return blocked ? i.now + blocked.readyInMs : null
     })(),
@@ -603,7 +615,7 @@ function fullView(i: ViewInput): View {
     reports: postGameReportsFor(i),
     ratings: ratingsFor(i),
     stations: (i.game.arena.stations ?? []).map((s, k) => ({ n: k + 1, lat: s.lat, lng: s.lng })),
-    hand: i.powerUps.filter((u) => u.player_id === i.me.id && u.used_at === null),
+    hand: i.powerUps.filter((u) => u.player_id === i.me.id && u.used_at === null && u.taken_at === null),
     shieldActive: activeShield(i.powerUps, i.me.id, i.now) !== null,
     deckLeft: deckLeftFor(i),
     activePowerUp: (() => {

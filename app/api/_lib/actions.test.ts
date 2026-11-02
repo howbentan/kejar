@@ -672,6 +672,121 @@ describe('review fixes', () => {
   })
 })
 
+describe('Toyol and Ah Long', () => {
+  const S1 = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  async function chasing() {
+    const g = await readyGame({}, { stations: [S1] })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    return { ...g, gameId: (await store.gameByCode(g.code))!.id }
+  }
+  let station = 0
+  // The unique index is one claim per player per station, so cards given to one player use different stations.
+  const give = async (gameId: string, playerId: string, kind: PowerUpKind, patch: object = {}) => {
+    const row = await store.addPowerUp({ game_id: gameId, player_id: playerId, kind, station: (station++ % 8) + 1 })
+    if (Object.keys(patch).length) await store.updatePowerUp(row.id, patch)
+    return row
+  }
+  const use = (g: { code: string }, token: string, powerupId: string) => run('usePowerup', { code: g.code, token, powerupId })
+
+  it('Toyol removes a card from a chaser without giving it to the runner', async () => {
+    const g = await chasing()
+    const flare = await give(g.gameId, g.ben.playerId, 'flare')
+    const toyol = await give(g.gameId, g.aina.playerId, 'toyol')
+    const r = await use(g, g.aina.token, toyol.id)
+    expect(r).toEqual({ ok: true, kind: 'toyol', stolenFrom: g.ben.playerId, takenKind: 'flare', powerupId: flare.id })
+    const rows = await store.powerUps(g.gameId)
+    expect(rows.find((u) => u.id === flare.id)!.taken_at).not.toBeNull()
+    expect(rows.filter((u) => u.player_id === g.aina.playerId && u.id !== toyol.id)).toHaveLength(0)
+    expect(rows.find((u) => u.id === toyol.id)!.used_at).not.toBeNull()
+    const vBen = await run<View>('state', { code: g.code, token: g.ben.token })
+    expect(vBen.hand).toEqual([])
+    expect(vBen.feed[0].text).toBe('Toyol took your Mat Rempit!')
+    const vAina = await run<View>('state', { code: g.code, token: g.aina.token })
+    expect(vAina.feed[0].text).toBe('Toyol stole a power-up!')
+    expect(vAina.hand).toEqual([])
+    expect(vAina.activePowerUp).toBeNull()
+  })
+
+  it('a taken card frees the victim to claim again', async () => {
+    const g = await chasing()
+    await give(g.gameId, g.ben.playerId, 'flare')
+    const toyol = await give(g.gameId, g.aina.playerId, 'toyol')
+    await use(g, g.aina.token, toyol.id)
+    const r = await run('claim', { code: g.code, token: g.ben.token, qr: stationQr(1), lat: S1.lat, lng: S1.lng, accuracy_m: 8 })
+    expect(r.ok).toBe(true)
+  })
+
+  it('Toyol with nothing to steal refuses and keeps the card', async () => {
+    const g = await chasing()
+    const toyol = await give(g.gameId, g.aina.playerId, 'toyol')
+    expect(await use(g, g.aina.token, toyol.id)).toEqual({ ok: false, reason: 'nothing-to-steal' })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === toyol.id)!.used_at).toBeNull()
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'stolen')).toHaveLength(0)
+  })
+
+  it('never takes a sealed, Dato Seri, used or already-taken card', async () => {
+    const g = await chasing()
+    await give(g.gameId, g.ben.playerId, 'flare', { sealed: true })
+    await give(g.gameId, g.ben.playerId, 'dato')
+    await give(g.gameId, g.ben.playerId, 'focus', { used_at: new Date(now).toISOString() })
+    await give(g.gameId, g.ben.playerId, 'focus', { taken_at: new Date(now).toISOString() })
+    const toyol = await give(g.gameId, g.aina.playerId, 'toyol')
+    expect(await use(g, g.aina.token, toyol.id)).toEqual({ ok: false, reason: 'nothing-to-steal' })
+  })
+
+  it('Ah Long takes from a free runner and the feed says so without names', async () => {
+    const g = await chasing()
+    const along = await give(g.gameId, g.ben.playerId, 'along')
+    const durian = await give(g.gameId, g.aina.playerId, 'shield')
+    const r = await use(g, g.ben.token, along.id)
+    expect(r).toMatchObject({ ok: true, kind: 'along', stolenFrom: g.aina.playerId, takenKind: 'shield', powerupId: durian.id })
+    expect((await run<View>('state', { code: g.code, token: g.aina.token })).feed[0].text).toBe('Ah Long took your Durian!')
+    expect((await run<View>('state', { code: g.code, token: g.ben.token })).feed[0].text).toBe('Ah Long came to collect!')
+  })
+
+  it('Ah Long never takes from a jailed runner', async () => {
+    const g = await chasing()
+    const along = await give(g.gameId, g.ben.playerId, 'along')
+    await give(g.gameId, g.hafiz.playerId, 'shield')
+    await store.updatePlayers([{ id: g.hafiz.playerId, patch: { jailed: true } }])
+    expect(await use(g, g.ben.token, along.id)).toEqual({ ok: false, reason: 'nothing-to-steal' })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === along.id)!.used_at).toBeNull()
+  })
+
+  it('two simultaneous Toyols never take the same card, and only one is spent', async () => {
+    const g = await chasing()
+    await give(g.gameId, g.ben.playerId, 'flare')
+    const t1 = await give(g.gameId, g.aina.playerId, 'toyol')
+    const t2 = await give(g.gameId, g.hafiz.playerId, 'toyol')
+    const [a, b] = await Promise.all([use(g, g.aina.token, t1.id), use(g, g.hafiz.token, t2.id)])
+    expect([a, b].filter((r) => r.ok)).toHaveLength(1)
+    const rows = await store.powerUps(g.gameId)
+    expect(rows.filter((u) => u.taken_at)).toHaveLength(1)
+    expect(rows.filter((u) => u.kind === 'toyol' && u.used_at)).toHaveLength(1)
+  })
+
+  it('a card that was taken can no longer be used by its owner', async () => {
+    const g = await chasing()
+    const flare = await give(g.gameId, g.ben.playerId, 'flare')
+    const toyol = await give(g.gameId, g.aina.playerId, 'toyol')
+    await use(g, g.aina.token, toyol.id)
+    expect(await use(g, g.ben.token, flare.id)).toEqual({ ok: false, reason: 'already-used' })
+    expect(await store.markUsed(flare.id)).toBe(false)
+  })
+
+  it('a double-tapped Toyol takes one card', async () => {
+    const g = await chasing()
+    await give(g.gameId, g.ben.playerId, 'flare')
+    await give(g.gameId, g.ben.playerId, 'focus')
+    const t = await give(g.gameId, g.aina.playerId, 'toyol')
+    const rs = await Promise.all([use(g, g.aina.token, t.id), use(g, g.aina.token, t.id)])
+    expect(rs.filter((r) => r.ok)).toHaveLength(1)
+    expect((await store.powerUps(g.gameId)).filter((u) => u.taken_at)).toHaveLength(1)
+  })
+})
+
 describe('cloak secrecy at the ping', () => {
   it('the ping count leaves out a cloaked runner', async () => {
     const g = await readyGame()

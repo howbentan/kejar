@@ -18,6 +18,8 @@ const decoy: PowerUp = {
   claimed_at: '',
   used_at: null,
   consumed_at: null,
+  sealed: false,
+  taken_at: null,
 }
 
 beforeEach(() => {

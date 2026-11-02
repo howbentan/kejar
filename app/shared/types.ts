@@ -125,8 +125,9 @@ export type EventType =
   | 'sos-details'
   | 'sos-responding'
   | 'rated'
+  | 'stolen'
 
-export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus'
+export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along'
 
 export interface PowerUp {
   id: string
@@ -137,6 +138,10 @@ export interface PowerUp {
   claimed_at: string
   used_at: string | null
   consumed_at: string | null
+  /** Delivered by Abang Grab: can't be stolen (power-ups §6.3). */
+  sealed: boolean
+  /** Set when Toyol or Ah Long took this card; a taken card is gone from every hand. */
+  taken_at: string | null
 }
 
 export interface GameEvent {

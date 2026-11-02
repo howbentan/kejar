@@ -64,7 +64,10 @@ export function judgeClaim(i: {
  */
 export function slotBusy(powerUps: PowerUp[], playerId: string, pings: Ping[], now: number): { kind: PowerUpKind; running: boolean } | null {
   for (const u of powerUps.filter((x) => x.player_id === playerId)) {
+    if (u.taken_at !== null) continue // Toyol or Ah Long took it: gone from the hand
     if (u.used_at === null) return { kind: u.kind, running: false }
+    // Done the moment they succeed (power-ups §5a): nothing keeps running.
+    if (u.kind === 'toyol' || u.kind === 'along') continue
     const usedAt = Date.parse(u.used_at)
     const revealedAfter = (bonusOnly: boolean) =>
       pings.some((p) =>
