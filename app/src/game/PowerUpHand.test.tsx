@@ -56,7 +56,7 @@ describe('PowerUpHand', () => {
     ['toyol', 'Toyol', 'Toyol stole a power-up!'],
     ['along', 'Ah Long', 'Ah Long came to collect!'],
   ] as const)('a %s that steals shows its used line and nothing else', async (kind, name, line) => {
-    call.mockResolvedValue({ ok: true, kind, takenKind: 'shield', stolenFrom: 'c1', powerupId: 'u9' })
+    call.mockResolvedValue({ ok: true, kind })
     render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind }] })} />)
     fireEvent.click(screen.getByRole('button', { name: new RegExp(name, 'i') }))
     fireEvent.click(screen.getByRole('button', { name: `Use ${name}` }))

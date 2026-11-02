@@ -947,7 +947,8 @@ const usePowerup: Action = async (ctx, body) => {
       target_id: stolen.stolenFrom,
       data: { kind: u.kind, takenKind: stolen.kind },
     })
-    return { ok: true, kind: u.kind, stolenFrom: stolen.stolenFrom, takenKind: stolen.kind, powerupId: stolen.powerupId }
+    // Only that it worked: whose card it was and what it was stay secret, even from the thief (power-ups §6.2).
+    return { ok: true, kind: u.kind }
   }
   if (u.kind === 'flare') {
     // The next surprise-ping number is a claim: if two Mat Rempits land at once, only one gets it.

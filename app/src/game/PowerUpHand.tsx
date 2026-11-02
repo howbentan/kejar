@@ -14,7 +14,7 @@ import { ErrorText } from './ui'
 
 export type ClaimResult = ({ ok: true; kind: PowerUpKind } | Exclude<ClaimJudgement, { ok: true }>)
 type UseResult =
-  | { ok: true; kind: PowerUpKind; offer?: PowerUpKind[]; takenKind?: PowerUpKind }
+  | { ok: true; kind: PowerUpKind; offer?: PowerUpKind[] }
   | { ok: false; reason: string; readyInMs?: number }
 
 const CLAIM_REJECTIONS: Record<string, string> = {

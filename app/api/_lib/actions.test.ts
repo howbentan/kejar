@@ -696,7 +696,8 @@ describe('Toyol and Ah Long', () => {
     const flare = await give(g.gameId, g.ben.playerId, 'flare')
     const toyol = await give(g.gameId, g.aina.playerId, 'toyol')
     const r = await use(g, g.aina.token, toyol.id)
-    expect(r).toEqual({ ok: true, kind: 'toyol', stolenFrom: g.ben.playerId, takenKind: 'flare', powerupId: flare.id })
+    // The thief learns only that it worked, never whose card or what it was (power-ups §6.2).
+    expect(r).toEqual({ ok: true, kind: 'toyol' })
     const rows = await store.powerUps(g.gameId)
     expect(rows.find((u) => u.id === flare.id)!.taken_at).not.toBeNull()
     expect(rows.filter((u) => u.player_id === g.aina.playerId && u.id !== toyol.id)).toHaveLength(0)
@@ -742,7 +743,7 @@ describe('Toyol and Ah Long', () => {
     const along = await give(g.gameId, g.ben.playerId, 'along')
     const durian = await give(g.gameId, g.aina.playerId, 'shield')
     const r = await use(g, g.ben.token, along.id)
-    expect(r).toMatchObject({ ok: true, kind: 'along', stolenFrom: g.aina.playerId, takenKind: 'shield', powerupId: durian.id })
+    expect(r).toEqual({ ok: true, kind: 'along' })
     expect((await run<View>('state', { code: g.code, token: g.aina.token })).feed[0].text).toBe('Ah Long took your Durian!')
     expect((await run<View>('state', { code: g.code, token: g.ben.token })).feed[0].text).toBe('Ah Long came to collect!')
   })
