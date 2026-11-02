@@ -3,6 +3,7 @@ import maplibregl, { type GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useEffect, useRef, useState } from 'react'
 import * as m from 'motion/react-m'
+import { useReducedMotion } from 'motion/react'
 import { circlePolygon, distanceM } from '../../shared/geo.js'
 import type { Arena, LatLng } from '../../shared/types.js'
 import { FUZZ_RADIUS_M, type MapDot } from '../../shared/views.js'
@@ -13,6 +14,17 @@ import { SlideTracker } from './slideOff'
 const VOLT = '#C6FF3D'
 const WHITE = '#F5F5F3'
 const BLACK = '#0A0A0B'
+
+type LegendaryZone = { lat: number; lng: number; radiusM: number }
+
+/** Dato Seri's yellow (tokens.css --legendary-*); MapLibre can't read CSS variables, so read them once, with the same values as fallback. */
+function legendaryYellow() {
+  const css = typeof document === 'undefined' ? null : getComputedStyle(document.documentElement)
+  const token = (name: string, fallback: string) => css?.getPropertyValue(name).trim() || fallback
+  return { fill: token('--legendary-1', '#FFF27A'), main: token('--legendary-2', '#FFD60A'), deep: token('--legendary-3', '#F5B800'), ink: token('--legendary-ink', '#1A1400') }
+}
+
+const ZONE_RIPPLE_MS = 3200
 
 type Feature = GeoFeature<Geometry, Record<string, unknown>>
 const collection = (features: Feature[]): FeatureCollection => ({ type: 'FeatureCollection', features })
@@ -65,6 +77,16 @@ function pinFeatures(pins: Pin[]): FeatureCollection {
   )
 }
 
+/** The hint zone's circle, its ?-badge point, and (when `grow` is set) a ripple ring at that fraction of the radius. No names anywhere (secret, jail design §4c). */
+function zoneFeatures(z: LegendaryZone | null, grow = 0) {
+  const circle = (r: number): Feature => ({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring(circlePolygon(z!, r))] } })
+  return {
+    zone: collection(z ? [circle(z.radiusM)] : []),
+    ripple: collection(z && grow > 0 ? [circle(z.radiusM * grow)] : []),
+    badge: collection(z ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [z.lng, z.lat] } }] : []),
+  }
+}
+
 function routeFeatures(route: { from: LatLng; to: LatLng } | null) {
   if (!route) return collection([])
   return collection([
@@ -96,6 +118,7 @@ export default function GameMap({
   ripple = null,
   showJailAndStart = true,
   fit = null,
+  legendaryZone = null,
 }: {
   arena: Arena
   dots: MapDot[]
@@ -119,7 +142,13 @@ export default function GameMap({
    * Re-framed as they move, without rebuilding the map.
    */
   fit?: LatLng[] | null
+  /** Dato Seri's hint zone: a dashed yellow circle with a twinkling ? and a slow ripple, never a name (jail design §4a, §4c). */
+  legendaryZone?: LegendaryZone | null
 }) {
+  const reduce = useReducedMotion()
+  const [loaded, setLoaded] = useState(false)
+  const latestZone = useRef(legendaryZone)
+  latestZone.current = legendaryZone
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
   const ready = useRef(false)
@@ -202,6 +231,28 @@ export default function GameMap({
         type: 'line',
         source: 'holes',
         paint: { 'line-color': WHITE, 'line-width': 1.2, 'line-opacity': 0.6, 'line-dasharray': [2, 2] },
+      })
+      // Dato Seri's hint zone sits under the players and station marks. Unlabelled on purpose.
+      const y = legendaryYellow()
+      const zone = zoneFeatures(latestZone.current)
+      m.addSource('legendary', { type: 'geojson', data: zone.zone })
+      m.addSource('legendary-ripple', { type: 'geojson', data: zone.ripple })
+      m.addSource('legendary-badge', { type: 'geojson', data: zone.badge })
+      m.addLayer({ id: 'legendary-fill', type: 'fill', source: 'legendary', paint: { 'fill-color': y.main, 'fill-opacity': 0.12 } })
+      m.addLayer({ id: 'legendary-line', type: 'line', source: 'legendary', paint: { 'line-color': y.main, 'line-width': 2, 'line-dasharray': [2, 2] } })
+      m.addLayer({ id: 'legendary-ripple', type: 'line', source: 'legendary-ripple', paint: { 'line-color': y.main, 'line-width': 1.5, 'line-opacity': 0.5 } })
+      m.addLayer({
+        id: 'legendary-badge',
+        type: 'circle',
+        source: 'legendary-badge',
+        paint: { 'circle-radius': 11, 'circle-color': y.main, 'circle-stroke-color': y.deep, 'circle-stroke-width': 2, 'circle-opacity': 1 },
+      })
+      m.addLayer({
+        id: 'legendary-mark',
+        type: 'symbol',
+        source: 'legendary-badge',
+        layout: { 'text-field': '?', 'text-font': ['Noto Sans Regular'], 'text-size': 14, 'text-allow-overlap': true },
+        paint: { 'text-color': y.ink },
       })
       m.addSource('toilets', {
         type: 'geojson',
@@ -306,9 +357,11 @@ export default function GameMap({
       })
       fitTo(m, latestFit.current)
       ready.current = true
+      setLoaded(true)
     })
     return () => {
       ready.current = false
+      setLoaded(false)
       m.remove()
       map.current = null
     }
@@ -325,6 +378,33 @@ export default function GameMap({
     if (!ready.current || !map.current) return
     ;(map.current.getSource('route') as GeoJSONSource | undefined)?.setData(routeFeatures(latestRoute.current))
   }, [routeKey])
+
+  // The hint zone follows the prop; the twinkle and ripple run only while there is a zone and motion is allowed.
+  const zoneKey = JSON.stringify(legendaryZone)
+  useEffect(() => {
+    const mp = map.current
+    if (!ready.current || !mp) return
+    const set = (id: string, d: FeatureCollection) => (mp.getSource(id) as GeoJSONSource | undefined)?.setData(d)
+    const { zone, ripple: rp, badge } = zoneFeatures(latestZone.current)
+    set('legendary', zone)
+    set('legendary-ripple', rp)
+    set('legendary-badge', badge)
+    if (!latestZone.current || reduce) return
+    const start = performance.now()
+    let frame = 0
+    const tick = () => {
+      if (map.current !== mp || !latestZone.current) return
+      const t = (performance.now() - start) / 1000
+      const grow = ((t * 1000) % ZONE_RIPPLE_MS) / ZONE_RIPPLE_MS
+      mp.setPaintProperty('legendary-badge', 'circle-opacity', 0.8 + 0.2 * Math.sin(t * 4))
+      mp.setPaintProperty('legendary-badge', 'circle-radius', 11 + Math.sin(t * 4))
+      mp.setPaintProperty('legendary-ripple', 'line-opacity', 0.5 * (1 - grow))
+      set('legendary-ripple', zoneFeatures(latestZone.current, grow).ripple)
+      frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [zoneKey, reduce, loaded])
 
   const fitKey = JSON.stringify(fit)
   useEffect(() => {

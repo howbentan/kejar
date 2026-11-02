@@ -2,6 +2,11 @@
 
 :root {
   --volt: #C6FF3D;
+  /* Dato Seri's legendary yellow (jail design §4a): the only colour besides lime, never on any other card. */
+  --legendary-1: #FFF27A;
+  --legendary-2: #FFD60A;
+  --legendary-3: #F5B800;
+  --legendary-ink: #1A1400;
   --black: #0A0A0B;
   --white: #F5F5F3;
   --dim: rgba(245, 245, 243, 0.55);
@@ -214,6 +219,16 @@ select.input option { background: #141614; color: var(--white); }
 .slot:disabled { cursor: default; border-style: dashed; opacity: 0.85; }
 .slot.live { background: rgba(198, 255, 61, 0.1); cursor: default; }
 .slot.empty { border-style: dashed; border-color: #444; color: var(--dim); cursor: default; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; line-height: 1.25; }
+/* Dato Seri in the slot: the same legendary yellow as its card, with the foil underneath the text. */
+.slot.legendary {
+  position: relative; overflow: hidden; border-color: var(--legendary-3); color: var(--legendary-ink);
+  background: linear-gradient(155deg, var(--legendary-1), var(--legendary-2) 55%, var(--legendary-3));
+  box-shadow: 0 0 12px rgba(255, 214, 10, 0.45); animation: legendary-glow 3.2s ease-in-out infinite;
+}
+.slot.legendary > span, .slot.legendary svg { position: relative; z-index: 2; }
+.slot.legendary b, .slot.legendary .slot-deck { color: var(--legendary-ink); }
+.slot.legendary > span > span { color: rgba(26, 20, 0, 0.75); }
+@media (prefers-reduced-motion: reduce) { .slot.legendary { animation: none; } }
 .slot-deck { flex: none; font: 500 8px var(--mono); letter-spacing: 0.1em; color: var(--volt); }
 .scan {
   appearance: none; border: 0; border-radius: 14px; cursor: pointer; font: 800 14px var(--font); letter-spacing: -0.02em;
@@ -273,6 +288,27 @@ select.input option { background: #141614; color: var(--white); }
   background-color: var(--black); border: 2px solid var(--volt); justify-content: center;
   background-image: repeating-linear-gradient(45deg, rgba(198, 255, 61, 0.07) 0 1px, transparent 1px 10px),
     repeating-linear-gradient(-45deg, rgba(198, 255, 61, 0.07) 0 1px, transparent 1px 10px);
+}
+.power-card.legendary {
+  background: linear-gradient(155deg, var(--legendary-1), var(--legendary-2) 55%, var(--legendary-3)); border-color: var(--legendary-3);
+  color: var(--legendary-ink); box-shadow: 0 0 14px rgba(255, 214, 10, 0.45); animation: legendary-glow 3.2s ease-in-out infinite;
+}
+.power-card.legendary::before { border-color: rgba(26, 20, 0, 0.35); z-index: 2; }
+.power-card.legendary .pc-eyebrow { color: var(--legendary-ink); font-weight: 600; line-height: 1.25; letter-spacing: 0.08em; text-align: center; position: relative; z-index: 2; }
+.power-card.legendary .pc-art { background: rgba(26, 20, 0, 0.1); position: relative; z-index: 2; }
+.power-card.legendary .pc-name, .power-card.legendary .pc-effect { position: relative; z-index: 2; }
+.power-card.legendary .pc-effect { opacity: 0.85; }
+.pc-foil {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none; mix-blend-mode: soft-light; opacity: 0.85;
+  background:
+    radial-gradient(circle at var(--foil-x, 50%) var(--foil-y, 30%), rgba(255, 255, 255, 0.95), transparent 45%),
+    linear-gradient(115deg, rgba(255, 90, 200, 0.5), rgba(90, 220, 255, 0.5) 35%, rgba(255, 255, 120, 0.5) 65%, rgba(190, 120, 255, 0.5));
+}
+.pc-foil:not([data-still='true']) { animation: foil-drift 6s ease-in-out infinite alternate; }
+@keyframes legendary-glow { 50% { box-shadow: 0 0 24px rgba(255, 214, 10, 0.8); } }
+@keyframes foil-drift { from { filter: hue-rotate(0deg); } to { filter: hue-rotate(40deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .power-card.legendary, .pc-foil { animation: none; }
 }
 .pc-corner { position: absolute; width: 10px; height: 10px; border: 0 solid var(--volt); }
 .pc-corner.tl { top: 8px; left: 8px; border-top-width: 2px; border-left-width: 2px; }

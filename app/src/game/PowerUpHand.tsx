@@ -7,6 +7,7 @@ import { call } from './api'
 import { loadSession } from './session'
 import { clock, useServerNow } from './time'
 import { INFO } from './powerInfo'
+import { Foil } from './PowerCard'
 import Sticker from './Sticker'
 import { ErrorText } from './ui'
 
@@ -111,13 +112,14 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
             <m.button
               key={u.id}
               type="button"
-              className="slot"
+              className={u.kind === 'dato' ? 'slot legendary' : 'slot'}
               disabled={cooling}
               initial={{ y: -16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ type: 'spring', stiffness: 500, damping: 18 }}
               onClick={() => setConfirm(u)}
             >
+              {u.kind === 'dato' && <Foil />}
               <Sticker kind={u.kind} size={40} tilt={-4} />
               <span>
                 <b>{INFO[u.kind].name}</b>

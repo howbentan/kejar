@@ -8,7 +8,10 @@ const created = vi.hoisted(() => ({
   load: null as null | (() => void),
   layers: [] as { id: string; source: string }[],
   data: {} as Record<string, unknown>,
+  paints: [] as unknown[][],
 }))
+const reduce = vi.hoisted(() => ({ on: false }))
+vi.mock('motion/react', async (orig) => ({ ...(await orig<typeof import('motion/react')>()), useReducedMotion: () => reduce.on }))
 vi.mock('maplibre-gl', () => ({
   default: {
     Map: class {
@@ -43,6 +46,9 @@ vi.mock('maplibre-gl', () => ({
       }
       getSource(id: string) {
         return created.data[id] === undefined ? undefined : { setData: (d: unknown) => (created.data[id] = d) }
+      }
+      setPaintProperty(...args: unknown[]) {
+        created.paints.push(args)
       }
       flyTo(opts: unknown) {
         created.flights.push(opts)
@@ -228,5 +234,59 @@ describe('GameMap', () => {
     await new Promise((r) => setTimeout(r, 1_300))
     rerender(<GameMap arena={arena} dots={[...dots]} />)
     expect(created.data.points).toMatchObject({ features: [] })
+  })
+
+  describe("Dato Seri's hint zone", () => {
+    const zone = { lat: 3.1, lng: 101.1, radiusM: 150 }
+    const layer = (id: string) => created.layers.find((l) => l.id === id) as unknown as { paint: Record<string, unknown>; layout?: Record<string, unknown> }
+
+    it('is a dashed legendary-yellow circle, never lime, with an unlabelled ? badge', () => {
+      created.layers = []
+      created.data = {}
+      render(<GameMap arena={arena} dots={[]} legendaryZone={zone} />)
+      created.load!()
+      expect(layer('legendary-line').paint['line-color']).toBe('#FFD60A')
+      expect(layer('legendary-line').paint['line-dasharray']).toBeTruthy()
+      expect(layer('legendary-badge').paint['circle-color']).toBe('#FFD60A')
+      expect(layer('legendary-mark').layout!['text-field']).toBe('?')
+      for (const id of ['legendary-fill', 'legendary-line', 'legendary-ripple', 'legendary-badge', 'legendary-mark']) {
+        expect(JSON.stringify(layer(id).paint)).not.toMatch(/C6FF3D/i)
+      }
+      expect(created.data.legendary).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
+      expect(created.data['legendary-badge']).toMatchObject({ features: [{ geometry: { coordinates: [101.1, 3.1] } }] })
+      // Secret (§4c): nothing in the zone names it.
+      expect(JSON.stringify([created.data.legendary, created.data['legendary-badge']])).not.toMatch(/dato|legendary|seri/i)
+    })
+
+    it('draws nothing with no zone, and follows the prop when it appears and goes', () => {
+      created.layers = []
+      created.data = {}
+      const { rerender } = render(<GameMap arena={arena} dots={[]} />)
+      created.load!()
+      expect(created.data.legendary).toMatchObject({ features: [] })
+      rerender(<GameMap arena={arena} dots={[]} legendaryZone={zone} />)
+      expect(created.data.legendary).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
+      rerender(<GameMap arena={arena} dots={[]} legendaryZone={null} />)
+      expect(created.data.legendary).toMatchObject({ features: [] })
+    })
+
+    it('twinkles when motion is allowed, and keeps still (colours stay) under reduced motion', async () => {
+      created.layers = []
+      created.data = {}
+      created.paints = []
+      reduce.on = false
+      const a = render(<GameMap arena={arena} dots={[]} legendaryZone={zone} />)
+      created.load!()
+      await vi.waitFor(() => expect(created.paints.length).toBeGreaterThan(0))
+      a.unmount()
+      created.paints = []
+      reduce.on = true
+      render(<GameMap arena={arena} dots={[]} legendaryZone={zone} />)
+      created.load!()
+      await new Promise((r) => setTimeout(r, 80))
+      expect(created.paints).toEqual([])
+      expect(layer('legendary-line').paint['line-color']).toBe('#FFD60A')
+      reduce.on = false
+    })
   })
 })
