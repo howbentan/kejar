@@ -186,6 +186,13 @@ export interface ChaserSnapshot {
   positions: { name: string; lat: number; lng: number; stale: boolean }[]
 }
 
+/**
+ * Seed for fuzz that must not be undone by players: the deck's secret seed (set at start, never sent to
+ * players), not the game id, which reaches them (e.g. `PowerUp.game_id` in their hand) along with `hash`,
+ * `fuzz` and `offset` in the client bundle. Games from before the seed existed fall back to the id.
+ */
+const secretSeed = (g: Game) => g.deck_seed ?? g.id
+
 export const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 const tagLabel = (p: Player) => (p.tag_id === null ? p.name : `#${String(p.tag_id).padStart(2, '0')}`)
@@ -459,7 +466,7 @@ function chaserSnapshotFor(i: ViewInput): ChaserSnapshot | null {
     if (p.role !== 'chaser' || p.removed_at) return []
     const at = latestAtOrBefore(i.positions[p.id], w.alertAt)
     if (!at) return []
-    const spot = fuzz(at, CHASER_SNAPSHOT_FUZZ_M, `${i.game.id}:${p.id}:snapshot:${w.seq}`)
+    const spot = fuzz(at, CHASER_SNAPSHOT_FUZZ_M, `${secretSeed(i.game)}:${p.id}:snapshot:${w.seq}`)
     return [{ name: p.name, lat: spot.lat, lng: spot.lng, stale: w.alertAt - Date.parse(at.at) > FRESH_MS }]
   })
   return { positions }
@@ -483,14 +490,14 @@ function snapshotLines(i: ViewInput, phase: Phase, endsAt: number | null): { at:
 
 /**
  * The hint zone around an unclaimed stash, for runners and chasers during a Full game's chase (jail design §4b).
- * Its centre is the stash moved 30–80% of the radius in a direction seeded by the game id, so it never moves
+ * Its centre is the stash moved 30–80% of the radius in a direction seeded by the secret deck seed, so it never moves
  * during the game, the stash is always well inside, and the centre never gives the spot away. No label.
  */
 function legendaryZoneFor(i: ViewInput, phase: Phase): View['legendaryZone'] {
   const s = i.game.dato_stash
   if (i.game.settings.mode !== 'full' || phase !== 'chasing' || !s || s.claimedBy !== null) return null
   if (i.me.role !== 'runner' && i.me.role !== 'chaser') return null
-  const h = hash(`${i.game.id}:legendary-zone`)
+  const h = hash(`${secretSeed(i.game)}:legendary-zone`)
   const angle = ((h & 0xffff) / 0x10000) * 2 * Math.PI
   const dist = (0.3 + ((h >>> 16) / 0x10000) * 0.5) * LEGENDARY_ZONE_M
   const c = offset({ lat: s.lat, lng: s.lng }, dist, angle)
@@ -498,8 +505,8 @@ function legendaryZoneFor(i: ViewInput, phase: Phase): View['legendaryZone'] {
 }
 
 /** The Settle picker's choices, the same eligibility `judgeSettle` applies. */
-function settleFor(i: ViewInput): View['settle'] {
-  if (i.me.role !== 'runner' || !i.me.jailed) return null
+function settleFor(i: ViewInput, phase: Phase): View['settle'] {
+  if (phase !== 'chasing' || i.game.paused_at || i.me.role !== 'runner' || !i.me.jailed) return null
   const holds = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'dato' && u.used_at === null && u.taken_at === null)
   if (!holds) return null
   const options = i.players
@@ -769,7 +776,7 @@ function fullView(i: ViewInput): View {
       return busy?.running ? busy.kind : null
     })(),
     legendaryZone: legendaryZoneFor(i, phase),
-    settle: settleFor(i),
+    settle: settleFor(i, phase),
     ...(role === 'marshal' ? { datoStash: i.game.dato_stash ?? null } : {}),
     results: i.results,
   }

@@ -569,6 +569,13 @@ describe('the chaser snapshot at check-in (checkins design §5)', () => {
     expect(snap(aina, aina2, { now: T0 + 17 * MIN })).toEqual(first)
   })
 
+  it("is fuzzed with the game's secret seed, so knowing the game and player ids can't undo it", () => {
+    const aina2 = [pos(A.lat, A.lng, alertAt(2) + 10_000)]
+    const at = (deck_seed: string) => snap(aina, aina2, { now: alertAt(2) + 20_000, game: { ...on, deck_seed } })!.positions[0]
+    expect(at('secret-one')).not.toEqual(at('secret-two'))
+    expect(at('secret-one')).toEqual(at('secret-one'))
+  })
+
   it('a chaser whose last position is over 60 s old at the alert is marked stale', () => {
     const at = (ms: number) => snap(aina, [pos(A.lat, A.lng, alertAt(2) + 10_000)], { now: alertAt(2) + 20_000, positions: { c1: [pos(BEN_2.lat, BEN_2.lng, alertAt(2) - ms)], r1: [pos(A.lat, A.lng, alertAt(2) + 10_000)] } })
     expect(at(61_000)?.positions[0].stale).toBe(true)
@@ -689,6 +696,12 @@ describe("Dato Seri's hint zone (jail design §4b)", () => {
     }
   })
 
+  it("is placed with the game's secret seed, not the game id players can see", () => {
+    const zone = (deck_seed: string) => view(aina, { game: { ...full('g1'), deck_seed } }).legendaryZone
+    expect(zone('secret-one')).not.toEqual(zone('secret-two'))
+    expect(zone('secret-one')).toEqual(zone('secret-one'))
+  })
+
   it('is the same for runners and chasers, jailed or free; marshals get the exact stash instead', () => {
     const z = view(aina, { game: full('g1') }).legendaryZone
     expect(view(chaser, { game: full('g1') }).legendaryZone).toEqual(z)
@@ -696,6 +709,16 @@ describe("Dato Seri's hint zone (jail design §4b)", () => {
     const m = view(siti, { game: full('g1') })
     expect(m.legendaryZone).toBeNull()
     expect(m.datoStash).toEqual(stash)
+  })
+
+  it("the Settle picker is offered only during the chase, and not while paused", () => {
+    const holder = { ...aina, jailed: true }
+    const dato: PowerUp = { id: 'u1', game_id: 'g1', player_id: 'r1', kind: 'dato', station: null, claimed_at: iso(NOW), used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null }
+    const over = { players: [chaser, holder, hafiz, wei, siti], powerUps: [dato] }
+    expect(view(holder, over).settle).toEqual({ canFreeSelf: true, options: [] })
+    expect(view(holder, { ...over, game: game({ paused_at: iso(NOW - MIN) }) }).settle).toBeNull()
+    expect(view(holder, { ...over, game: game({ ended_at: iso(NOW - MIN) }) }).settle).toBeNull()
+    expect(view(holder, { ...over, now: T0 + 2 * MIN }).settle).toBeNull()
   })
 
   it('is gone once claimed, and outside the chase', () => {
