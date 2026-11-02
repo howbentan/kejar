@@ -26,6 +26,7 @@ const baseAlert: Alert = {
   handled: false,
   respondingName: null,
   outcome: null,
+  closedByName: null,
 }
 
 describe('SosTakeover', () => {

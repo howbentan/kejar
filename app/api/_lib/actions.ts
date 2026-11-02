@@ -4,6 +4,7 @@ import {
   OUTSIDE_MARGIN_M,
   REASON_LABEL,
   SOS_DETAILS_MS,
+  SOS_OUTCOME_LABEL,
   SOS_REASON_LABEL,
   SOS_REPEAT_MS,
   START_RADIUS_M,
@@ -28,7 +29,7 @@ import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '
 import { MARSHAL_INVITE_TTL_MS, ORGANISER_INVITE_TTL_MS } from '../../shared/invites.js'
 import { OSM_CACHE_MS, parkFeatures as lookupParkFeatures, searchParks as lookupParks, type FetchJson } from './osm.js'
 import { hashToken, newToken } from './secrets.js'
-import type { GameRow, GameStore, OrganiserRow, SavedArenaRow } from './store.js'
+import type { GameRow, GameStore, OrganiserRow, SafetyRecord, SavedArenaRow } from './store.js'
 
 export class ActionError extends Error {
   status: number
@@ -143,6 +144,14 @@ async function requireMarshal(ctx: Ctx, game: GameRow, body: Body): Promise<Play
   const p = await requirePlayer(ctx, game, body)
   if (p.role !== 'marshal') throw new ActionError(403, 'Marshals only')
   return p
+}
+
+/**
+ * Who a marshal action is by, for display: the marshal's own name, or the organiser's when `requireMarshal`
+ * returned null for them (organisers aren't players, so they have no `Player.name`).
+ */
+async function marshalName(ctx: Ctx, game: GameRow, body: Body, marshal: Player | null): Promise<string> {
+  return marshal ? marshal.name : (await requireOrganiser(ctx, game, body)).name
 }
 
 function requireLobby(game: Game, now: number) {
@@ -845,7 +854,8 @@ const report: Action = async (ctx, body) => {
 const rate: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
-  if (phaseAt(game, ctx.now).phase === 'lobby') throw new ActionError(409, 'The game is not running')
+  // Post-game only (unlike `report`, which also works mid-game): `ratingsFor` in views.ts relies on this.
+  if (phaseAt(game, ctx.now).phase !== 'ended') throw new ActionError(409, 'Rate the game once it has ended')
   const rating = Number(body.rating)
   if (!Number.isInteger(rating) || rating < 1 || rating > 5) throw new ActionError(400, 'Pick a rating from 1 to 5')
   const note = str(body.note).trim()
@@ -858,33 +868,44 @@ const rate: Action = async (ctx, body) => {
 const respondToSos: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const marshal = await requireMarshal(ctx, game, body)
+  const name = await marshalName(ctx, game, body, marshal)
   await ctx.store.addEvent({
     game_id: game.id,
     type: 'sos-responding',
     actor_id: marshal?.id ?? null,
     target_id: null,
-    data: { sosId: str(body.eventId), name: marshal?.name ?? '' },
+    data: { sosId: str(body.eventId), name },
   })
   return { ok: true }
 }
 
-/** A marshal closes an alert; an SOS can carry an outcome (e.g. "sorted"), recorded on the event and as a safety record. */
+/** The event types whose closing outcome belongs in `safety_records` (its `type` check allows only these). */
+const OUTCOME_RECORD_TYPES: readonly string[] = ['sos', 'report'] satisfies SafetyRecord['type'][]
+
+/**
+ * A marshal closes an alert. An SOS must carry an outcome (one of the takeover's chips), recorded on the event
+ * and as a safety record; other alerts may close without one. The closer's name goes on the event either way.
+ */
 const handleAlert: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const marshal = await requireMarshal(ctx, game, body)
   const eventId = str(body.eventId)
-  const outcome = typeof body.outcome === 'string' ? body.outcome : null
+  const outcome = body.outcome === undefined || body.outcome === null ? null : str(body.outcome)
+  if (outcome !== null && !Object.hasOwn(SOS_OUTCOME_LABEL, outcome)) throw new ActionError(400, 'Pick what happened')
+  const closing = (await ctx.store.events(game.id)).find((e) => e.id === eventId)
+  if (closing?.type === 'sos' && outcome === null) throw new ActionError(400, 'Pick what happened before closing an SOS')
+  const name = await marshalName(ctx, game, body, marshal)
   await ctx.store.addEvent({
     game_id: game.id,
     type: 'handled',
     actor_id: marshal?.id ?? null,
     target_id: null,
-    data: { eventId, ...(outcome ? { outcome } : {}) },
+    data: { eventId, name, ...(outcome ? { outcome } : {}) },
   })
-  if (outcome) {
+  if (outcome && closing && OUTCOME_RECORD_TYPES.includes(closing.type)) {
     await ctx.store.addSafetyRecord({
       game_id: game.id,
-      type: 'sos',
+      type: closing.type as SafetyRecord['type'],
       player_id: marshal?.id ?? null,
       target_id: null,
       lat: null,
@@ -908,7 +929,8 @@ const undoAutoJail: Action = async (ctx, body) => {
   // Atomic, so two marshals tapping at once (or a racing release) free the runner only once.
   if (!undoable || !(await ctx.store.releaseAutoJailed(target.id, iso(ctx.now)))) return { ok: false, reason: 'not-undoable' }
   await ctx.store.addEvent({ game_id: game.id, type: 'auto-jail-undone', actor_id: marshal?.id ?? null, target_id: target.id, data: { eventId } })
-  await ctx.store.addEvent({ game_id: game.id, type: 'handled', actor_id: marshal?.id ?? null, target_id: null, data: { eventId } })
+  const name = await marshalName(ctx, game, body, marshal)
+  await ctx.store.addEvent({ game_id: game.id, type: 'handled', actor_id: marshal?.id ?? null, target_id: null, data: { eventId, name } })
   await ctx.store.addSafetyRecord({
     game_id: game.id,
     type: 'auto-jail-undone',

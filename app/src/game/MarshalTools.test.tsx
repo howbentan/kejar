@@ -25,6 +25,7 @@ const alert = (id: string, kind: Alert['kind'], text: string, handled = false, t
   handled,
   respondingName: null,
   outcome: null,
+  closedByName: null,
 })
 
 const roster = [

@@ -878,21 +878,30 @@ describe('SOS and reports', () => {
     expect(await run('report', { code: g.code, token: g.aina.token, targetId: g.ben.playerId, reason: 'dispute', note: '' })).toEqual({ ok: true, notified: 1 })
   })
 
-  it('rate validates the rating range and note length, and is refused in the lobby but works once ended', async () => {
-    const lobby = await readyGame()
-    await rejects(run('rate', { code: lobby.code, token: lobby.aina.token, rating: 4 }), 409)
+  it('rate validates the rating range and note length, and works once ended', async () => {
     const g = await safetyGame()
+    now = T0 + 51 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
     const base = { code: g.code, token: g.aina.token }
     await rejects(run('rate', { ...base, rating: 0 }), 400)
     await rejects(run('rate', { ...base, rating: 6 }), 400)
     await rejects(run('rate', { ...base, rating: 3.5 }), 400)
     await rejects(run('rate', { ...base, rating: 4, note: 'x'.repeat(141) }), 400)
     expect(await run('rate', { ...base, rating: 4, note: 'fun!' })).toEqual({ ok: true })
-    now = T0 + 51 * MIN
-    await run('state', { code: g.code, organiserToken: g.organiserToken })
     expect(await run('rate', { code: g.code, token: g.hafiz.token, rating: 5, note: '' })).toEqual({ ok: true })
     const events = await store.events(g.gameId)
     expect(events.filter((e) => e.type === 'rated')).toHaveLength(2)
+  })
+
+  it('rate is refused before the game ends: in the lobby, the hide phase and the chase', async () => {
+    const lobby = await readyGame()
+    await rejects(run('rate', { code: lobby.code, token: lobby.aina.token, rating: 4 }), 409)
+    await run('start', { code: lobby.code, organiserToken: lobby.organiserToken })
+    now = T0 + 1 * MIN // still hiding
+    await rejects(run('rate', { code: lobby.code, token: lobby.aina.token, rating: 4 }), 409)
+    const g = await safetyGame() // 2 minutes into the chase
+    await rejects(run('rate', { code: g.code, token: g.aina.token, rating: 4 }), 409)
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'rated')).toEqual([])
   })
 
   it("marshals and the organiser see post-end reports and ratings in their view, but players don't", async () => {
@@ -941,8 +950,8 @@ describe('SOS and reports', () => {
     const g = await safetyGame()
     await run('sos', { code: g.code, token: g.aina.token })
     const [alert] = (await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts
-    await rejects(run('handleAlert', { code: g.code, token: g.ben.token, eventId: alert.id }), 403)
-    expect(await run('handleAlert', { code: g.code, token: g.siti.token, eventId: alert.id })).toEqual({ ok: true })
+    await rejects(run('handleAlert', { code: g.code, token: g.ben.token, eventId: alert.id, outcome: 'sorted' }), 403)
+    expect(await run('handleAlert', { code: g.code, token: g.siti.token, eventId: alert.id, outcome: 'sorted' })).toEqual({ ok: true })
     expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts[0].handled).toBe(true)
   })
 
@@ -956,6 +965,47 @@ describe('SOS and reports', () => {
     const after = (await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts[0]
     expect(after).toMatchObject({ handled: true, outcome: 'sorted' })
     expect(store.safetyRows.at(-1)).toMatchObject({ type: 'sos', player_id: g.siti.playerId, data: expect.objectContaining({ event_id: alert.id, outcome: 'sorted' }) })
+  })
+
+  it('an SOS cannot be closed without an outcome, or with one that is not a takeover chip', async () => {
+    const g = await safetyGame()
+    const { sosId } = await run<{ sosId: string }>('sos', { code: g.code, token: g.aina.token })
+    const rowsBefore = store.safetyRows.length
+    await rejects(run('handleAlert', { code: g.code, token: g.siti.token, eventId: sosId }), 400)
+    await rejects(run('handleAlert', { code: g.code, token: g.siti.token, eventId: sosId, outcome: '' }), 400)
+    await rejects(run('handleAlert', { code: g.code, token: g.siti.token, eventId: sosId, outcome: 'whatever' }), 400)
+    await rejects(run('handleAlert', { code: g.code, token: g.siti.token, eventId: sosId, outcome: 'x'.repeat(5000) }), 400)
+    await rejects(run('handleAlert', { code: g.code, organiserToken: g.organiserToken, eventId: sosId }), 400)
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'handled')).toEqual([])
+    expect(store.safetyRows).toHaveLength(rowsBefore)
+    for (const outcome of ['first-aid', 'left', 'false-alarm']) {
+      const other = await run<{ sosId: string }>('sos', { code: g.code, token: g.hafiz.token })
+      now += 31_000
+      expect(await run('handleAlert', { code: g.code, token: g.siti.token, eventId: other.sosId, outcome })).toEqual({ ok: true })
+    }
+  })
+
+  it("the safety record for a closed alert carries the closed event's real type, and only for safety events", async () => {
+    const g = await safetyGame()
+    await run('report', { code: g.code, token: g.hafiz.token, targetId: g.ben.playerId, reason: 'other' })
+    const [report] = (await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts
+    expect(await run('handleAlert', { code: g.code, token: g.siti.token, eventId: report.id, outcome: 'sorted' })).toEqual({ ok: true })
+    expect(store.safetyRows.at(-1)).toMatchObject({ type: 'report', data: expect.objectContaining({ event_id: report.id, outcome: 'sorted' }) })
+    const outside = await store.addEvent({ game_id: g.gameId, type: 'outside', actor_id: g.aina.playerId, target_id: null, data: { who: 'Aina #07' } })
+    const rowsBefore = store.safetyRows.length
+    expect(await run('handleAlert', { code: g.code, token: g.siti.token, eventId: outside.id, outcome: 'sorted' })).toEqual({ ok: true })
+    expect(store.safetyRows).toHaveLength(rowsBefore)
+  })
+
+  it('records who closed an alert, the organiser included', async () => {
+    const g = await safetyGame()
+    const first = await run<{ sosId: string }>('sos', { code: g.code, token: g.aina.token })
+    const second = await run<{ sosId: string }>('sos', { code: g.code, token: g.hafiz.token })
+    await run('handleAlert', { code: g.code, token: g.siti.token, eventId: first.sosId, outcome: 'sorted' })
+    await run('handleAlert', { code: g.code, organiserToken: g.organiserToken, eventId: second.sosId, outcome: 'false-alarm' })
+    const alerts = (await run<View>('state', { code: g.code, token: g.siti.token })).alerts
+    expect(alerts.find((a) => a.id === first.sosId)?.closedByName).toBe('Siti')
+    expect(alerts.find((a) => a.id === second.sosId)?.closedByName).toBe('Owner')
   })
 
   it('handleAlert without an outcome still works for non-SOS alerts, unchanged', async () => {
@@ -982,6 +1032,22 @@ describe('SOS and reports', () => {
     expect(await run('respondToSos', { code: g.code, token: dina.token, eventId: sosId })).toEqual({ ok: true })
     const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     expect(v.alerts.find((a) => a.id === sosId)?.respondingName).toBe('Dina')
+  })
+
+  it('the organiser tapping "I\'m going" shows their name, rather than blanking an earlier marshal\'s', async () => {
+    const g = await safetyGame()
+    const { sosId } = await run<{ sosId: string }>('sos', { code: g.code, token: g.aina.token })
+    await run('respondToSos', { code: g.code, token: g.siti.token, eventId: sosId })
+    expect(await run('respondToSos', { code: g.code, organiserToken: g.organiserToken, eventId: sosId })).toEqual({ ok: true })
+    const v = await run<View>('state', { code: g.code, token: g.siti.token })
+    expect(v.alerts.find((a) => a.id === sosId)?.respondingName).toBe('Owner')
+  })
+
+  it("an organiser from another game can't respond to this game's SOS", async () => {
+    const g = await safetyGame()
+    const other = await readyGame()
+    const { sosId } = await run<{ sosId: string }>('sos', { code: g.code, token: g.aina.token })
+    await rejects(run('respondToSos', { code: g.code, organiserToken: other.organiserToken, eventId: sosId }), 403)
   })
 })
 

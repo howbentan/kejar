@@ -72,6 +72,18 @@ describe('alertsFrom', () => {
     expect(closed.outcome).toBeNull()
   })
 
+  it('resolves who closed it from the handled event, newest wins, and null while open or unnamed', () => {
+    const sos = event('sos', T0 + 1 * MIN, { id: 'e1', data: { who: 'Aina' } })
+    expect(alertsFrom([sos])[0].closedByName).toBeNull()
+    expect(alertsFrom([sos, event('handled', T0 + 2 * MIN, { data: { eventId: 'e1' } })])[0].closedByName).toBeNull()
+    const [a] = alertsFrom([
+      sos,
+      event('handled', T0 + 2 * MIN, { data: { eventId: 'e1', name: 'Siti' } }),
+      event('handled', T0 + 3 * MIN, { data: { eventId: 'e1', name: 'Owner' } }),
+    ])
+    expect(a.closedByName).toBe('Owner')
+  })
+
   it('ignores everything that is not an alert', () => {
     expect(
       alertsFrom([event('ping', T0), event('caught', T0, { data: { flagged: false } }), event('paused', T0), event('joined', T0)]),

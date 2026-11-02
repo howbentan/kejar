@@ -20,6 +20,15 @@ export const SOS_REASON_LABEL: Record<SosReason, string> = {
   other: 'Something else',
 }
 
+/** What a marshal records when closing an SOS (the takeover's chips); `handleAlert` refuses to close an SOS without one. */
+export type SosOutcome = 'sorted' | 'first-aid' | 'left' | 'false-alarm'
+export const SOS_OUTCOME_LABEL: Record<SosOutcome, string> = {
+  sorted: 'Sorted, all good',
+  'first-aid': 'First aid given',
+  left: 'Player left the game',
+  'false-alarm': 'False alarm',
+}
+
 export const REASON_LABEL: Record<ReportReason, string> = {
   unsafe: 'Unsafe play',
   dispute: 'Catch dispute',
@@ -40,6 +49,8 @@ export interface Alert {
   respondingName: string | null
   /** What a marshal recorded when closing this alert, or null if it's still open or was closed without one. */
   outcome: string | null
+  /** The marshal (or organiser) who closed this alert, or null if it's still open or the close carried no name. */
+  closedByName: string | null
 }
 
 /** 'Aina #07' for a runner with a tag, otherwise the name. */
@@ -62,6 +73,7 @@ function toAlert(e: GameEvent, details: Map<string, GameEvent>, responding: Map<
     targetId: null as string | null,
     respondingName: null as string | null,
     outcome: null as string | null,
+    closedByName: null as string | null,
   }
   switch (e.type) {
     case 'sos': {
@@ -103,6 +115,9 @@ export function alertsFrom(events: GameEvent[]): Alert[] {
   // The outcome recorded when each alert was closed, keyed by the alert's event id.
   const outcomes = new Map<string, string>()
   for (const e of events) if (e.type === 'handled' && s(e.data.outcome)) outcomes.set(s(e.data.eventId), s(e.data.outcome))
+  // Who closed each alert, newest wins (events arrive oldest first), the same way as the outcome.
+  const closers = new Map<string, string>()
+  for (const e of events) if (e.type === 'handled' && s(e.data.name)) closers.set(s(e.data.eventId), s(e.data.name))
   // The latest "What's happening?" for each SOS (events arrive oldest first).
   const details = new Map<string, GameEvent>()
   for (const e of events) if (e.type === 'sos-details') details.set(s(e.data.sosId), e)
@@ -111,7 +126,7 @@ export function alertsFrom(events: GameEvent[]): Alert[] {
   for (const e of events) if (e.type === 'sos-responding') responding.set(s(e.data.sosId), e)
   const all = events.flatMap((e) => {
     const a = toAlert(e, details, responding)
-    return a ? [{ ...a, handled: handled.has(a.id), outcome: outcomes.get(a.id) ?? null }] : []
+    return a ? [{ ...a, handled: handled.has(a.id), outcome: outcomes.get(a.id) ?? null, closedByName: closers.get(a.id) ?? null }] : []
   })
   const newest = (x: Alert, y: Alert) => Date.parse(y.at) - Date.parse(x.at)
   return [...all.filter((a) => !a.handled).sort(newest), ...all.filter((a) => a.handled).sort(newest)]
