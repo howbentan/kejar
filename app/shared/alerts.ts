@@ -38,6 +38,8 @@ export interface Alert {
   handled: boolean
   /** The latest marshal who tapped "I'm going" on an SOS, or null. Only set on `sos` alerts. */
   respondingName: string | null
+  /** What a marshal recorded when closing this alert, or null if it's still open or was closed without one. */
+  outcome: string | null
 }
 
 /** 'Aina #07' for a runner with a tag, otherwise the name. */
@@ -53,7 +55,14 @@ function place(data: Record<string, unknown>): LatLng | null {
 
 function toAlert(e: GameEvent, details: Map<string, GameEvent>, responding: Map<string, GameEvent>): Omit<Alert, 'handled'> | null {
   const d = e.data
-  const base = { id: e.id, at: e.at, where: null as LatLng | null, targetId: null as string | null, respondingName: null as string | null }
+  const base = {
+    id: e.id,
+    at: e.at,
+    where: null as LatLng | null,
+    targetId: null as string | null,
+    respondingName: null as string | null,
+    outcome: null as string | null,
+  }
   switch (e.type) {
     case 'sos': {
       const more = details.get(e.id)?.data
@@ -91,6 +100,9 @@ function toAlert(e: GameEvent, details: Map<string, GameEvent>, responding: Map<
 /** Marshal alerts from the game's events: open ones newest first, then handled ones newest first. */
 export function alertsFrom(events: GameEvent[]): Alert[] {
   const handled = new Set(events.filter((e) => e.type === 'handled').map((e) => s(e.data.eventId)))
+  // The outcome recorded when each alert was closed, keyed by the alert's event id.
+  const outcomes = new Map<string, string>()
+  for (const e of events) if (e.type === 'handled' && s(e.data.outcome)) outcomes.set(s(e.data.eventId), s(e.data.outcome))
   // The latest "What's happening?" for each SOS (events arrive oldest first).
   const details = new Map<string, GameEvent>()
   for (const e of events) if (e.type === 'sos-details') details.set(s(e.data.sosId), e)
@@ -99,7 +111,7 @@ export function alertsFrom(events: GameEvent[]): Alert[] {
   for (const e of events) if (e.type === 'sos-responding') responding.set(s(e.data.sosId), e)
   const all = events.flatMap((e) => {
     const a = toAlert(e, details, responding)
-    return a ? [{ ...a, handled: handled.has(a.id) }] : []
+    return a ? [{ ...a, handled: handled.has(a.id), outcome: outcomes.get(a.id) ?? null }] : []
   })
   const newest = (x: Alert, y: Alert) => Date.parse(y.at) - Date.parse(x.at)
   return [...all.filter((a) => !a.handled).sort(newest), ...all.filter((a) => a.handled).sort(newest)]

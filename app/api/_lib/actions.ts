@@ -854,16 +854,30 @@ const respondToSos: Action = async (ctx, body) => {
   return { ok: true }
 }
 
+/** A marshal closes an alert; an SOS can carry an outcome (e.g. "sorted"), recorded on the event and as a safety record. */
 const handleAlert: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const marshal = await requireMarshal(ctx, game, body)
+  const eventId = str(body.eventId)
+  const outcome = typeof body.outcome === 'string' ? body.outcome : null
   await ctx.store.addEvent({
     game_id: game.id,
     type: 'handled',
     actor_id: marshal?.id ?? null,
     target_id: null,
-    data: { eventId: str(body.eventId) },
+    data: { eventId, ...(outcome ? { outcome } : {}) },
   })
+  if (outcome) {
+    await ctx.store.addSafetyRecord({
+      game_id: game.id,
+      type: 'sos',
+      player_id: marshal?.id ?? null,
+      target_id: null,
+      lat: null,
+      lng: null,
+      data: { game_code: game.code, event_id: eventId, outcome },
+    })
+  }
   return { ok: true }
 }
 

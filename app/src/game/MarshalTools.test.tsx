@@ -24,6 +24,7 @@ const alert = (id: string, kind: Alert['kind'], text: string, handled = false, t
   targetId,
   handled,
   respondingName: null,
+  outcome: null,
 })
 
 const roster = [

@@ -903,6 +903,29 @@ describe('SOS and reports', () => {
     expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts[0].handled).toBe(true)
   })
 
+  it('closing an SOS with an outcome writes it to the alert and the safety record', async () => {
+    const g = await safetyGame()
+    await run('sos', { code: g.code, token: g.aina.token })
+    const [alert] = (await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts
+    expect(await run('handleAlert', { code: g.code, token: g.siti.token, eventId: alert.id, outcome: 'sorted' })).toEqual({ ok: true })
+    const events = await store.events(g.gameId)
+    expect(events.find((e) => e.type === 'handled')?.data.outcome).toBe('sorted')
+    const after = (await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts[0]
+    expect(after).toMatchObject({ handled: true, outcome: 'sorted' })
+    expect(store.safetyRows.at(-1)).toMatchObject({ type: 'sos', player_id: g.siti.playerId, data: expect.objectContaining({ event_id: alert.id, outcome: 'sorted' }) })
+  })
+
+  it('handleAlert without an outcome still works for non-SOS alerts, unchanged', async () => {
+    const g = await safetyGame()
+    await run('report', { code: g.code, token: g.hafiz.token, targetId: g.ben.playerId, reason: 'other' })
+    const rowsBefore = store.safetyRows.length
+    const [alert] = (await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts
+    expect(await run('handleAlert', { code: g.code, token: g.siti.token, eventId: alert.id })).toEqual({ ok: true })
+    const after = (await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts[0]
+    expect(after).toMatchObject({ handled: true, outcome: null })
+    expect(store.safetyRows).toHaveLength(rowsBefore)
+  })
+
   it('a second marshal can still respond after the first', async () => {
     const g = await readyGame()
     const dinaInvite = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })

@@ -56,6 +56,22 @@ describe('alertsFrom', () => {
     ])
   })
 
+  it('resolves the outcome from the matching handled event', () => {
+    const sos = event('sos', T0 + 1 * MIN, { id: 'e1', data: { who: 'Aina' } })
+    const handled = event('handled', T0 + 2 * MIN, { data: { eventId: 'e1', outcome: 'sorted' } })
+    const [a] = alertsFrom([sos, handled])
+    expect(a).toMatchObject({ handled: true, outcome: 'sorted' })
+  })
+
+  it('defaults outcome to null when the alert is open or handled without one', () => {
+    const [open] = alertsFrom([event('sos', T0, { id: 'e1', data: { who: 'Aina' } })])
+    expect(open.outcome).toBeNull()
+    const sos = event('sos', T0 + 1 * MIN, { id: 'e2', data: { who: 'Wei' } })
+    const handled = event('handled', T0 + 2 * MIN, { data: { eventId: 'e2' } })
+    const [closed] = alertsFrom([sos, handled])
+    expect(closed.outcome).toBeNull()
+  })
+
   it('ignores everything that is not an alert', () => {
     expect(
       alertsFrom([event('ping', T0), event('caught', T0, { data: { flagged: false } }), event('paused', T0), event('joined', T0)]),
