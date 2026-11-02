@@ -51,7 +51,7 @@ begin
         order by random()
         limit 1
         for update)
-       and used_at is null and taken_at is null
+       and used_at is null and consumed_at is null and taken_at is null and not sealed
     returning * into card;
     if found then
       return next card;
@@ -59,6 +59,7 @@ begin
     end if;
     -- The owner used the card at the same moment: pick again.
   end loop;
+  -- Gave up after 3 lost races: returns nothing, so the stealer is not charged (the app gives the card back).
 end;
 $$;
 

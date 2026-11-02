@@ -41,6 +41,17 @@ describe('PowerUpHand', () => {
     expect(await screen.findByText('Gostan set for your next ping')).toBeInTheDocument()
   })
 
+  it.each([
+    ['toyol', 'Toyol'],
+    ['along', 'Ah Long'],
+  ] as const)('a %s with nothing to steal says you keep it', async (kind, name) => {
+    call.mockResolvedValue({ ok: false, reason: 'nothing-to-steal' })
+    render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind }] })} />)
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(name, 'i') }))
+    fireEvent.click(screen.getByRole('button', { name: `Use ${name}` }))
+    expect(await screen.findByText(`Nothing to steal — you keep your ${name}.`)).toBeInTheDocument()
+  })
+
   it('shows the Malaysian name and plain-English effect of each card', () => {
     const card = (kind: PowerUp['kind']) => ({ ...decoy, id: kind, kind })
     render(<PowerUpHand code="ABC234" view={testView({ hand: [card('shield'), card('cloak'), card('flare'), card('focus')] })} />)
