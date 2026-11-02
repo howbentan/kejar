@@ -53,12 +53,36 @@ describe('GameScreen safety routing', () => {
     expect(screen.queryByRole('button', { name: 'SOS' })).toBeNull()
   })
 
-  it('sends a marshal to MarshalLive once the game has ended too, not to Results', () => {
+  it('sends a marshal to MarshalLive once the game has ended too, with the results shown there', () => {
     const base = testView()
-    state.view = testView({ phase: 'ended', me: { ...base.me, id: 'm1', role: 'marshal', tag_id: null } })
+    state.view = testView({
+      phase: 'ended',
+      me: { ...base.me, id: 'm1', role: 'marshal', tag_id: null },
+      results: { winner: 'chasers', survivors: [], longestSurvivor: null, mostCatches: null, jailbreakHero: null },
+    })
     render(<GameScreen code="ABC234" />)
     expect(screen.getByText('Marshal · live')).toBeInTheDocument()
-    expect(screen.queryByText('Game over')).toBeNull()
+    expect(screen.getByRole('tab', { name: /after game/i })).toBeInTheDocument()
+    expect(screen.getByText('Game over')).toBeInTheDocument()
+    expect(screen.getByText('Kejar win.')).toBeInTheDocument()
+    // The post-game rating and report are for players, not marshals.
+    expect(screen.queryByText('How fun was it?')).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Play again' })).toBeNull()
+  })
+
+  it('sends the organiser to MarshalLive once ended, with the results and Play again', () => {
+    const base = testView()
+    localStorage.clear()
+    localStorage.setItem('kejar.organiser', JSON.stringify({ organiserToken: 'h1', name: 'Owner' }))
+    state.view = testView({
+      phase: 'ended',
+      me: { ...base.me, id: 'host', name: 'Owner', role: 'marshal', tag_id: null },
+      results: { winner: 'runners', survivors: ['r1'], longestSurvivor: null, mostCatches: null, jailbreakHero: null },
+    })
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByText('Dikejar escaped.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Play again' })).toHaveAttribute('href', '/host/new')
+    expect(screen.getByRole('tab', { name: /after game/i })).toBeInTheDocument()
   })
 
   it('sends a non-marshal to Results once the game has ended', () => {

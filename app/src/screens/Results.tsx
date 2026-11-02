@@ -3,7 +3,8 @@ import { clock } from '../game/time'
 import { Screen, Wordmark } from '../game/ui'
 import PostGameFeedback from './PostGameFeedback'
 
-export default function Results({ code, view, isHost }: { code: string; view: View; isHost: boolean }) {
+/** "Game over", who won, and the awards card. Shared with MarshalLive, where marshals and the organiser see it post-game. */
+export function ResultsSummary({ view }: { view: View }) {
   const r = view.results
   const name = (id: string) => view.roster.find((p) => p.id === id)?.name ?? 'Someone'
   const awards = r
@@ -15,8 +16,7 @@ export default function Results({ code, view, isHost }: { code: string; view: Vi
     : []
 
   return (
-    <Screen>
-      <Wordmark size={28} />
+    <>
       <p className="eyebrow">Game over</p>
       <h1 style={{ fontSize: 44, fontWeight: 700, letterSpacing: '-0.05em', lineHeight: 1 }}>
         {r?.winner === 'chasers' ? 'Kejar win.' : 'Dikejar escaped.'}
@@ -36,12 +36,26 @@ export default function Results({ code, view, isHost }: { code: string; view: Vi
           ))}
         </div>
       )}
+    </>
+  )
+}
+
+/** The organiser's way into the next game. */
+export function PlayAgain() {
+  return (
+    <a className="btn" href="/host/new" style={{ textAlign: 'center', textDecoration: 'none' }}>
+      Play again
+    </a>
+  )
+}
+
+export default function Results({ code, view, isHost }: { code: string; view: View; isHost: boolean }) {
+  return (
+    <Screen>
+      <Wordmark size={28} />
+      <ResultsSummary view={view} />
       <PostGameFeedback code={code} view={view} />
-      {isHost && (
-        <a className="btn" href="/host/new" style={{ textAlign: 'center', textDecoration: 'none' }}>
-          Play again
-        </a>
-      )}
+      {isHost && <PlayAgain />}
     </Screen>
   )
 }

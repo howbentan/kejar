@@ -10,8 +10,12 @@ import { useServerNow } from '../game/time'
 import { Screen } from '../game/ui'
 import { GameClock } from '../game/ChaseLayout'
 import { Feed } from './RunnerChase'
+import { PlayAgain, ResultsSummary } from './Results'
 
-/** Everyone live, plus the safety tools: alerts, pause and removing players. */
+/**
+ * Everyone live, plus the safety tools: alerts, pause and removing players. Marshals and the organiser stay
+ * here after the whistle too (so the After game inbox is still in reach), with the results summary on top.
+ */
 export default function MarshalLive({ code, view, refresh }: { code: string; view: View; refresh: () => void }) {
   const now = useServerNow(view.now)
   // SOS takeovers this marshal stepped out of with "See the map first"; the pinned SOS row brings one back.
@@ -26,9 +30,16 @@ export default function MarshalLive({ code, view, refresh }: { code: string; vie
   const myPos = view.dots.find((d) => d.kind === 'me')
   const senderPositions = Object.values(view.sosPositions)
   const senderPos = senderPositions.length === 1 ? senderPositions[0] : null
+  const ended = view.phase === 'ended'
 
   return (
     <Screen eyebrow={view.phase === 'hiding' ? 'Marshal · hide phase' : 'Marshal · live'}>
+      {ended && (
+        <>
+          <ResultsSummary view={view} />
+          {view.me.id === 'host' && <PlayAgain />}
+        </>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <GameClock view={view} />

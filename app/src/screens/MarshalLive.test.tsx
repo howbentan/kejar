@@ -112,3 +112,38 @@ describe('MarshalLive SOS takeover', () => {
     expect(refresh).not.toHaveBeenCalled()
   })
 })
+
+describe('MarshalLive after the game', () => {
+  const results = {
+    winner: 'chasers' as const,
+    survivors: [],
+    longestSurvivor: { id: 'r1', ms: 25 * 60_000 },
+    mostCatches: { id: 'c1', count: 2 },
+    jailbreakHero: null,
+  }
+  const roster = [
+    { id: 'r1', name: 'Aina', role: 'runner' as const, tag_id: 7, jailed: true },
+    { id: 'c1', name: 'Ben', role: 'chaser' as const, tag_id: null, jailed: false },
+  ]
+
+  it('shows the winner and awards, with the marshal tools and After game tab still in reach', () => {
+    render(<MarshalLive code="ABC234" view={marshal({ phase: 'ended', results, roster })} refresh={refresh} />)
+    expect(screen.getByText('Game over')).toBeInTheDocument()
+    expect(screen.getByText('Kejar win.')).toBeInTheDocument()
+    expect(screen.getByText('Aina · 25:00')).toBeInTheDocument()
+    expect(screen.getByText('Ben · 2')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /after game/i })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Play again' })).toBeNull()
+  })
+
+  it('gives the organiser Play again', () => {
+    render(<MarshalLive code="ABC234" view={organiser({ phase: 'ended', results, roster })} refresh={refresh} />)
+    expect(screen.getByRole('link', { name: 'Play again' })).toHaveAttribute('href', '/host/new')
+  })
+
+  it('shows no results while the game is still on', () => {
+    render(<MarshalLive code="ABC234" view={organiser({ results, roster })} refresh={refresh} />)
+    expect(screen.queryByText('Game over')).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Play again' })).toBeNull()
+  })
+})
