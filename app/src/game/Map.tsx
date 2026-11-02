@@ -79,6 +79,7 @@ export default function GameMap({
   height = 320,
   route = null,
   ripple = null,
+  showJailAndStart = true,
 }: {
   arena: Arena
   dots: MapDot[]
@@ -91,6 +92,12 @@ export default function GameMap({
   route?: { from: LatLng; to: LatLng } | null
   /** The last ping: a lime wave rolls out from `origin`, revealing circles as it passes (motion design §8.1). */
   ripple?: { at: number; origin: LatLng } | null
+  /**
+   * False when `arena.jail`/`arena.start` aren't really the jail and start (e.g. a scoped-down stub arena,
+   * built just so this map has something to centre on) — skips the jail circle + "PENJARA" label and the
+   * start circle + "S" label, which would otherwise float on top of whatever `arena.jail`/`arena.start` is.
+   */
+  showJailAndStart?: boolean
 }) {
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
@@ -103,6 +110,8 @@ export default function GameMap({
   latestPins.current = pins
   const latestRoute = useRef(route)
   latestRoute.current = route
+  const showJailAndStartRef = useRef(showJailAndStart)
+  showJailAndStartRef.current = showJailAndStart
   // Polls return a fresh arena object every 3 s; rebuild the map only when its content changes.
   const arenaKey = JSON.stringify(arena)
   const arenaRef = useRef(arena)
@@ -127,23 +136,25 @@ export default function GameMap({
         data: collection([{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: ring(arena.boundary) } }]),
       })
       m.addLayer({ id: 'arena', type: 'line', source: 'arena', paint: { 'line-color': WHITE, 'line-width': 1.5, 'line-opacity': 0.6 } })
-      m.addSource('jail', {
-        type: 'geojson',
-        data: collection([{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [arena.jail.lng, arena.jail.lat] } }]),
-      })
-      m.addLayer({
-        id: 'jail',
-        type: 'circle',
-        source: 'jail',
-        paint: { 'circle-radius': 9, 'circle-color': BLACK, 'circle-stroke-color': WHITE, 'circle-stroke-width': 1.5 },
-      })
-      m.addLayer({
-        id: 'jail-label',
-        type: 'symbol',
-        source: 'jail',
-        layout: { 'text-field': 'PENJARA', 'text-font': ['Noto Sans Regular'], 'text-size': 11, 'text-offset': [0, 1.5], 'text-letter-spacing': 0.15 },
-        paint: { 'text-color': VOLT, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
-      })
+      if (showJailAndStartRef.current) {
+        m.addSource('jail', {
+          type: 'geojson',
+          data: collection([{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [arena.jail.lng, arena.jail.lat] } }]),
+        })
+        m.addLayer({
+          id: 'jail',
+          type: 'circle',
+          source: 'jail',
+          paint: { 'circle-radius': 9, 'circle-color': BLACK, 'circle-stroke-color': WHITE, 'circle-stroke-width': 1.5 },
+        })
+        m.addLayer({
+          id: 'jail-label',
+          type: 'symbol',
+          source: 'jail',
+          layout: { 'text-field': 'PENJARA', 'text-font': ['Noto Sans Regular'], 'text-size': 11, 'text-offset': [0, 1.5], 'text-letter-spacing': 0.15 },
+          paint: { 'text-color': VOLT, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
+        })
+      }
       m.addSource('route', { type: 'geojson', data: routeFeatures(latestRoute.current) })
       m.addLayer({
         id: 'route',
@@ -178,23 +189,25 @@ export default function GameMap({
         layout: { 'text-field': 'WC', 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
         paint: { 'text-color': WHITE },
       })
-      m.addSource('start', {
-        type: 'geojson',
-        data: collection([{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [arena.start.lng, arena.start.lat] } }]),
-      })
-      m.addLayer({
-        id: 'start',
-        type: 'circle',
-        source: 'start',
-        paint: { 'circle-radius': 9, 'circle-color': BLACK, 'circle-stroke-color': WHITE, 'circle-stroke-width': 1.5 },
-      })
-      m.addLayer({
-        id: 'start-label',
-        type: 'symbol',
-        source: 'start',
-        layout: { 'text-field': 'S', 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
-        paint: { 'text-color': WHITE },
-      })
+      if (showJailAndStartRef.current) {
+        m.addSource('start', {
+          type: 'geojson',
+          data: collection([{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [arena.start.lng, arena.start.lat] } }]),
+        })
+        m.addLayer({
+          id: 'start',
+          type: 'circle',
+          source: 'start',
+          paint: { 'circle-radius': 9, 'circle-color': BLACK, 'circle-stroke-color': WHITE, 'circle-stroke-width': 1.5 },
+        })
+        m.addLayer({
+          id: 'start-label',
+          type: 'symbol',
+          source: 'start',
+          layout: { 'text-field': 'S', 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
+          paint: { 'text-color': WHITE },
+        })
+      }
       m.addSource('stations', { type: 'geojson', data: stationFeatures(latestStations.current) })
       m.addLayer({
         id: 'stations',

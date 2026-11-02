@@ -2,10 +2,19 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Alert } from '../../shared/alerts.js'
 
-vi.mock('./Map', () => ({ default: () => <div data-testid="map" /> }))
+const mapCalls = vi.hoisted(() => [] as unknown[])
+vi.mock('./Map', () => ({
+  default: (props: unknown) => {
+    mapCalls.push(props)
+    return <div data-testid="map" />
+  },
+}))
 import SosTakeover from './SosTakeover'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  mapCalls.length = 0
+})
 
 const baseAlert: Alert = {
   id: 'e1',
@@ -34,6 +43,20 @@ describe('SosTakeover', () => {
     expect(screen.getByText(/Aina #07/)).toBeInTheDocument()
     expect(screen.getByText(/Catch dispute/)).toBeInTheDocument()
     expect(screen.getByText(/M$/)).toBeInTheDocument() // the distance readout, e.g. "111 M"
+  })
+
+  it("tells GameMap not to draw jail/start labels on its scoped-down stub arena (they'd float on the sender's/marshal's own dot)", () => {
+    render(
+      <SosTakeover
+        alert={baseAlert}
+        myPos={{ lat: 3, lng: 101 }}
+        senderPos={{ lat: 3.001, lng: 101 }}
+        onRespond={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(mapCalls).toHaveLength(1)
+    expect((mapCalls[0] as { showJailAndStart?: boolean }).showJailAndStart).toBe(false)
   })
 
   it('shows the waiting copy until the alert carries a reason', () => {

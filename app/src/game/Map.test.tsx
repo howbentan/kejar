@@ -127,4 +127,24 @@ describe('GameMap', () => {
     expect(created.data.toilets).toMatchObject({ features: [{ geometry: { coordinates: [101.003, 3.003] } }] })
     expect(created.data.start).toMatchObject({ features: [{ geometry: { coordinates: [101.004, 3.004] } }] })
   })
+
+  it('draws the jail and start circles and labels by default', () => {
+    created.layers = []
+    created.data = {}
+    render(<GameMap arena={arena} dots={[]} />)
+    created.load!()
+    const ids = created.layers.map((l) => l.id)
+    expect(ids).toEqual(expect.arrayContaining(['jail', 'jail-label', 'start', 'start-label']))
+  })
+
+  it('showJailAndStart={false} skips the jail/start circles and labels entirely (e.g. a scoped-down stub arena)', () => {
+    created.layers = []
+    created.data = {}
+    render(<GameMap arena={arena} dots={[]} showJailAndStart={false} />)
+    created.load!()
+    const ids = created.layers.map((l) => l.id)
+    expect(ids).not.toEqual(expect.arrayContaining(['jail', 'jail-label', 'start', 'start-label']))
+    expect(created.data.jail).toBeUndefined()
+    expect(created.data.start).toBeUndefined()
+  })
 })

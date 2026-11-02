@@ -71,6 +71,9 @@ export default function SosTakeover({
             pins={[{ id: alert.id, lat: senderPos.lat, lng: senderPos.lng }]}
             route={{ from: myPos, to: senderPos }}
             height={200}
+            // `arena` here is a stub scoped to just these two points, not a real jail/start — don't let
+            // GameMap draw a "PENJARA"/"S" label on top of the sender's or marshal's own dot.
+            showJailAndStart={false}
           />
           <p className="sos-takeover-distance mono">{`${Math.round(distanceM(myPos, senderPos))} M`}</p>
         </div>
