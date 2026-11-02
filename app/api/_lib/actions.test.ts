@@ -4,7 +4,7 @@ import { MIN, T0 } from '../../shared/fixtures.js'
 import { BONUS_SEQ_BASE } from '../../shared/clock.js'
 import { cardAt, deckFor } from '../../shared/deck.js'
 import { distanceM } from '../../shared/geo.js'
-import { JAIL_QR, stationQr, tagQr } from '../../shared/ids.js'
+import { datoQr, JAIL_QR, stationQr, tagQr } from '../../shared/ids.js'
 import { seeded } from '../../shared/testing.js'
 import type { PowerUpKind, Role } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
@@ -2058,24 +2058,71 @@ describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
     await run('state', { code: g.code, organiserToken: g.organiserToken })
     return g
   }
-  const scan = (g: { code: string }, token: string, where: object = atStash) =>
-    run('claim', { code: g.code, token, qr: 'KEJAR:DATO', ...where })
   const stash = async (g: { code: string }) => (await store.gameByCode(g.code))!.dato_stash
+  /** This game's own ★ card code (ruling R15). */
+  const cardCode = async (g: { code: string }) => (await stash(g))!.code!
+  const scanQr = (g: { code: string }, token: string, qr: string, where: object = atStash) => run('claim', { code: g.code, token, qr, ...where })
+  const scan = async (g: { code: string }, token: string, where: object = atStash) => scanQr(g, token, datoQr(await cardCode(g)), where)
+  const CODE = expect.stringMatching(/^[A-Za-z0-9_-]{22}$/)
+
+  it("a Full game gets its own secret card code when it's made; Core has no stash at all", async () => {
+    const g = await lobby()
+    expect(await stash(g)).toEqual({ code: CODE, lat: null, lng: null, claimedBy: null, claimedAt: null })
+    const other = await lobby()
+    expect(await cardCode(other)).not.toBe(await cardCode(g))
+    expect((await store.gameByCode((await readyGame()).code))!.dato_stash ?? null).toBeNull()
+  })
+
+  it("only this game's card claims: a bare, another game's or a made-up card gets the same answer as no stash", async () => {
+    const g = await chasing()
+    const other = await lobby()
+    for (const qr of ['KEJAR:DATO', datoQr(await cardCode(other)), datoQr('x'.repeat(22)), 'KEJAR:DATO:'])
+      expect(await scanQr(g, g.aina.token, qr)).toEqual({ ok: false, reason: 'no-stash' })
+    // Even for a chaser, or far away: a wrong card says nothing about where or whose the stash is.
+    expect(await scanQr(g, g.ben.token, 'KEJAR:DATO')).toEqual({ ok: false, reason: 'no-stash' })
+    expect(await scanQr(g, g.aina.token, 'KEJAR:DATO', { lat: CENTER.lat, lng: CENTER.lng, accuracy_m: 8 })).toEqual({ ok: false, reason: 'no-stash' })
+    expect((await stash(g))!.claimedBy).toBeNull()
+    expect(await scan(g, g.aina.token)).toEqual({ ok: true, kind: 'dato' })
+  })
+
+  it('a stash made but not yet dropped claims nothing and shows no zone', async () => {
+    const g = await chasing(false)
+    expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'no-stash' })
+    expect((await run<View>('state', { code: g.code, token: g.aina.token })).legendaryZone).toBeNull()
+  })
+
+  it("the card's code never reaches a player; the organiser and marshals get it to print the card", async () => {
+    const g = await chasing()
+    const code = await cardCode(g)
+    for (const token of [g.aina.token, g.hafiz.token, g.ben.token]) {
+      const v = await run<View>('state', { code: g.code, token })
+      expect(JSON.stringify(v)).not.toContain(code)
+      expect(v).not.toHaveProperty('datoCode')
+    }
+    for (const who of [{ token: g.siti.token }, { organiserToken: g.organiserToken }]) {
+      expect((await run<View>('state', { code: g.code, ...who })).datoCode).toBe(code)
+    }
+    const claimed = await scan(g, g.aina.token)
+    expect(JSON.stringify(claimed)).not.toContain(code)
+    expect(JSON.stringify(await run<View>('state', { code: g.code, token: g.aina.token }))).not.toContain(code)
+  })
 
   it('the organiser or a marshal drops it, and dropping again before the start moves it', async () => {
     const g = await lobby()
+    const code = await cardCode(g)
     expect(await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })).toEqual({ ok: true })
-    expect(await stash(g)).toEqual({ ...STASH, claimedBy: null, claimedAt: null })
+    expect(await stash(g)).toEqual({ code, ...STASH, claimedBy: null, claimedAt: null })
     const moved = { lat: CENTER.lat - 50 / 111_195, lng: CENTER.lng }
     expect(await run('dropDatoSeri', { code: g.code, token: g.siti.token, ...moved })).toEqual({ ok: true })
-    expect(await stash(g)).toEqual({ ...moved, claimedBy: null, claimedAt: null })
+    // The printed card keeps working: moving it never changes its code.
+    expect(await stash(g)).toEqual({ code, ...moved, claimedBy: null, claimedAt: null })
   })
 
   it('players cannot drop it', async () => {
     const g = await lobby()
     await rejects(run('dropDatoSeri', { code: g.code, token: g.aina.token, ...STASH }), 403)
     await rejects(run('dropDatoSeri', { code: g.code, token: g.ben.token, ...STASH }), 403)
-    expect(await stash(g)).toBeFalsy()
+    expect(await stash(g)).toMatchObject({ lat: null, lng: null })
   })
 
   it('is Full mode only, inside the play area only, and fixed once the game starts', async () => {
@@ -2094,7 +2141,7 @@ describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
   it('the first runner to scan the stash claims Dato Seri; it stops working after', async () => {
     const g = await chasing()
     expect(await scan(g, g.aina.token)).toEqual({ ok: true, kind: 'dato' })
-    expect(await stash(g)).toEqual({ ...STASH, claimedBy: g.aina.playerId, claimedAt: new Date(now).toISOString() })
+    expect(await stash(g)).toEqual({ code: CODE, ...STASH, claimedBy: g.aina.playerId, claimedAt: new Date(now).toISOString() })
     const held = (await store.powerUps(g.gameId)).filter((u) => u.kind === 'dato')
     expect(held).toEqual([expect.objectContaining({ player_id: g.aina.playerId, station: null, used_at: null, sealed: false })])
     expect(await scan(g, g.hafiz.token)).toEqual({ ok: false, reason: 'no-stash' })

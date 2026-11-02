@@ -6,7 +6,7 @@ import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { MOMENT_WINDOW_MS } from './moments.js'
 import { POWER_NAME } from './powerNames.js'
 import { activeShield, decoySpot, flareBlocked, SHIELD_MS, slotBusy } from './powerups.js'
-import type { Arena, DatoStash, Game, GameEvent, LatLng, Phase, Ping, Player, Position, PowerUp, PowerUpKind, Results, Role, Settings } from './types.js'
+import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
 
 /** Spec §4.5–4.6 constants. */
 export const FUZZ_RADIUS_M = 15
@@ -144,7 +144,12 @@ export interface View {
    * Marshals and the organiser: exactly where the stash is (null if none), and who claimed it. Left out of
    * players' views entirely, so not even the key's name reaches their phones (rules doc §9b).
    */
-  datoStash?: DatoStash | null
+  datoStash?: PlacedStash | null
+  /**
+   * Marshals and the organiser in a Full game: the secret code on this game's ★ card, to print it (ruling R15);
+   * null if the game has none. Left out of players' views entirely, like `datoStash`.
+   */
+  datoCode?: string | null
   results: Results | null
 }
 
@@ -503,7 +508,7 @@ function snapshotLines(i: ViewInput, phase: Phase, endsAt: number | null): { at:
  * during the game, the stash is always well inside, and the centre never gives the spot away. No label.
  */
 function legendaryZoneFor(i: ViewInput, phase: Phase): View['legendaryZone'] {
-  const s = i.game.dato_stash
+  const s = placedStash(i.game.dato_stash)
   if (i.game.settings.mode !== 'full' || phase !== 'chasing' || !s || s.claimedBy !== null) return null
   if (i.me.role !== 'runner' && i.me.role !== 'chaser') return null
   const h = hash(`${secretSeed(i.game)}:legendary-zone`)
@@ -679,7 +684,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, settle: null, datoStash: undefined, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, settle: null, datoStash: undefined, datoCode: undefined, reports: [], ratings: [] }
   }
   return v
 }
@@ -787,7 +792,8 @@ function fullView(i: ViewInput): View {
     })(),
     legendaryZone: legendaryZoneFor(i, phase),
     settle: settleFor(i, phase),
-    ...(role === 'marshal' ? { datoStash: i.game.dato_stash ?? null } : {}),
+    // The card's secret code goes only to marshals and the organiser, who print the card (ruling R15).
+    ...(role === 'marshal' ? { datoStash: placedStash(i.game.dato_stash), datoCode: i.game.dato_stash?.code ?? null } : {}),
     results: i.results,
   }
 }

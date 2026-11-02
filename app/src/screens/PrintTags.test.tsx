@@ -18,22 +18,11 @@ describe('PrintTags', () => {
     expect(screen.getByText('#01')).toBeInTheDocument()
   })
 
-  it('Core prints no hidden-stash card', async () => {
+  it('the public sheet never prints a hidden-stash card: each game prints its own from the organiser tools (ruling R15)', async () => {
     render(<PrintTags />)
     await waitFor(() => expect(encoded).toContain('KEJAR:JAIL'))
-    expect(encoded).not.toContain('KEJAR:DATO')
+    expect(encoded.filter((t) => t.startsWith('KEJAR:DATO'))).toEqual([])
     expect(screen.queryByTestId('stash-card')).toBeNull()
-  })
-
-  it('Full prints the hidden-stash card, showing only a star and kejar.', async () => {
-    render(<PrintTags full />)
-    await waitFor(() => expect(screen.getByAltText('★')).toHaveAttribute('src', 'data:KEJAR:DATO'))
-    const card = screen.getByTestId('stash-card')
-    expect(card.textContent).toBe('★kejar.')
-    // The printed card itself never says what it is (rules doc §9b).
-    expect(card.outerHTML.replace('data:KEJAR:DATO', '')).not.toMatch(/dato|seri|legend|power|scan/i)
-    // Nor does the on-screen note for the organiser: the page can be seen over their shoulder.
-    expect(document.body.textContent).not.toMatch(/dato|seri/i)
-    expect(screen.getByText(/Organiser only · show hidden card/)).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/★|dato|seri|hidden/i)
   })
 })

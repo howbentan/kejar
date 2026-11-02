@@ -81,10 +81,31 @@ export interface Game {
 }
 
 export interface DatoStash {
+  /**
+   * The secret on this game's printed ★ card (QR `datoQr(code)`), made when the Full game is created, so a copy
+   * of another game's card (or of the public sheet) never claims it (ruling R15). Never sent to players. Games
+   * made before it existed have none, and their card claims nothing until a drop gives them one.
+   */
+  code?: string
+  /** Where the card was dropped; null until the organiser or a marshal drops it. */
+  lat: number | null
+  lng: number | null
+  claimedBy: string | null
+  claimedAt: string | null
+}
+
+/** A stash that has been dropped somewhere, without its secret code. */
+export interface PlacedStash {
   lat: number
   lng: number
   claimedBy: string | null
   claimedAt: string | null
+}
+
+/** The dropped stash's spot and claim, or null when there's no stash or it hasn't been dropped yet. */
+export function placedStash(s: DatoStash | null | undefined): PlacedStash | null {
+  if (!s || typeof s.lat !== 'number' || typeof s.lng !== 'number') return null
+  return { lat: s.lat, lng: s.lng, claimedBy: s.claimedBy, claimedAt: s.claimedAt }
 }
 
 export interface Player {

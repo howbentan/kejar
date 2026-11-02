@@ -79,7 +79,7 @@ describe('HostLobby', () => {
       action === 'state' ? { ...lobbyView, settings: { ...DEFAULT_SETTINGS, mode: 'full' }, datoStash: stash } : {},
     )
     render(<HostLobby code="ABC234" />)
-    const toggle = await screen.findByRole('button', { name: 'Organiser only · show hidden card' })
+    const toggle = await screen.findByRole('button', { name: 'Organiser tools' })
     expect(document.body.textContent).not.toMatch(/dato|legendary|yellow pin/i)
     expect(screen.queryByRole('button', { name: 'Drop the ★ card here' })).toBeNull()
     const join = screen.getByText('Scan to join')

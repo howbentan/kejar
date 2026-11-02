@@ -373,7 +373,7 @@ export default function HostNew() {
       <button className="btn" disabled={busy} onClick={create}>
         {busy ? 'Creating…' : 'Create game'}
       </button>
-      <a className="muted" href={settings.mode === 'full' ? '/print/tags?mode=full' : '/print/tags'}>
+      <a className="muted" href="/print/tags">
         Print runner tags and the Penjara code →
       </a>
     </Screen>

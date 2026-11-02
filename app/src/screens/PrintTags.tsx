@@ -1,22 +1,21 @@
 import { useEffect, useState } from 'react'
-import { DATO_QR, JAIL_QR, MAX_STATIONS, stationQr, tagQr } from '../../shared/ids.js'
+import { JAIL_QR, MAX_STATIONS, stationQr, tagQr } from '../../shared/ids.js'
 import { qrDataUrl } from '../game/qr'
 
 const TAGS = Array.from({ length: 30 }, (_, i) => i + 1)
 const STATIONS = Array.from({ length: MAX_STATIONS }, (_, i) => i + 1)
 
 /**
- * Printable sheet: 30 runner tags plus the jail code. Black on white, no lime text (spec §9). In Full mode it adds
- * Dato Seri's card for the hidden stash, which shows only a ★ and kejar. so a passer-by can't tell what it is
- * (rules doc §9b).
+ * Printable sheet: 30 runner tags plus the jail code. Black on white, no lime text (spec §9). It's public, so it
+ * never has Full mode's hidden ★ card: each game prints its own from Organiser tools (`PrintCard`, ruling R15).
  */
-export default function PrintTags({ full = false }: { full?: boolean }) {
+export default function PrintTags() {
   const [codes, setCodes] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    const texts = [...TAGS.map((n) => tagQr(n)), ...STATIONS.map((n) => stationQr(n)), JAIL_QR, ...(full ? [DATO_QR] : [])]
+    const texts = [...TAGS.map((n) => tagQr(n)), ...STATIONS.map((n) => stationQr(n)), JAIL_QR]
     void Promise.all(texts.map(async (t) => [t, await qrDataUrl(t)] as const)).then((pairs) => setCodes(Object.fromEntries(pairs)))
-  }, [full])
+  }, [])
 
   return (
     <div style={{ background: '#fff', color: '#0A0A0B', minHeight: '100dvh', padding: 16 }}>
@@ -51,19 +50,6 @@ export default function PrintTags({ full = false }: { full?: boolean }) {
         <div style={{ fontWeight: 800, fontSize: 40 }}>PENJARA</div>
         <div>Free runners: scan this to break everyone out (once each).</div>
       </div>
-      {full && (
-        <>
-          <p className="no-print" style={{ marginTop: 24, fontWeight: 700 }}>
-            The ★ card is the hidden legendary. Hide it in the play area, stand by it, then in the lobby tap Organiser only ·
-            show hidden card, and Drop the ★ card here. Don&apos;t tell the players.
-          </p>
-          <div data-testid="stash-card" className="tag" style={{ marginTop: 8, width: '70mm', border: '2px solid #0A0A0B', padding: 12, textAlign: 'center' }}>
-            {codes[DATO_QR] && <img src={codes[DATO_QR]} alt="★" style={{ width: '55mm', height: '55mm' }} />}
-            <div style={{ fontWeight: 800, fontSize: 28 }}>★</div>
-            <div style={{ fontWeight: 800, letterSpacing: '-0.05em' }}>kejar.</div>
-          </div>
-        </>
-      )}
     </div>
   )
 }

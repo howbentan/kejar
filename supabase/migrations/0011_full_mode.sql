@@ -1,22 +1,26 @@
 -- Kejar Full mode (Plan D). One migration for the whole plan; each task appends what it needs.
+-- Safe to run again: it is one transaction (a failure part-way leaves nothing behind), and every step is guarded
+-- (if exists / if not exists / create or replace), so re-running after a success changes nothing.
+
+begin;
 
 -- Task 1: Toyol and Ah Long (power-ups design §6.2).
 -- Every new card kind is allowed now (Toyol, Ah Long, Abang Grab, Dato Seri), so later tasks leave the constraint alone.
-alter table powerups drop constraint powerups_kind_check;
+alter table powerups drop constraint if exists powerups_kind_check;
 alter table powerups
   add constraint powerups_kind_check
   check (kind in ('decoy', 'shield', 'cloak', 'flare', 'focus', 'toyol', 'along', 'grab', 'dato'));
 
 -- A card Toyol or Ah Long took: gone from every hand. Sealed = delivered by Abang Grab, can't be stolen.
 alter table powerups
-  add column taken_at timestamptz,
-  add column sealed boolean not null default false;
+  add column if not exists taken_at timestamptz,
+  add column if not exists sealed boolean not null default false;
 
 -- Takes one random card from a random eligible player on p_side: player first, then card (§6.2).
 -- Runners must be free (not jailed); cards must be unused, unconsumed, untaken, unsealed and not Dato Seri.
 -- Thefts in one game are serialised by an advisory lock (like claim_station), and the card row is locked
 -- and re-checked when it is taken, so two thieves never take the same card. Returns the card, or nothing.
-create function steal_card(p_game uuid, p_side text, p_at timestamptz) returns setof powerups
+create or replace function steal_card(p_game uuid, p_side text, p_at timestamptz) returns setof powerups
 language plpgsql
 as $$
 declare
@@ -74,13 +78,13 @@ grant execute on function steal_card(uuid, text, timestamptz) to service_role;
 alter table powerups alter column station drop not null;
 -- offer_from: the first of the 3 draw numbers the Grab reserved; offer: the 3 kinds the app worked out from them.
 alter table powerups
-  add column offer_from int,
-  add column offer jsonb;
+  add column if not exists offer_from int,
+  add column if not exists offer jsonb;
 
 -- On use: locks the Grab, and if it's still held and hasn't reserved yet, bumps the side's draw counter by p_n
 -- in the same transaction and remembers the first number. A Grab that already reserved returns the same first
 -- number and its offer (re-opened screen, double-tap) without drawing again. Nothing if the Grab is gone.
-create function open_grab(p_powerup uuid, p_side text, p_n int) returns table (first_draw int, offer jsonb)
+create or replace function open_grab(p_powerup uuid, p_side text, p_n int) returns table (first_draw int, offer jsonb)
 language plpgsql
 as $$
 declare
@@ -108,7 +112,7 @@ $$;
 -- On pick: locks the Grab, re-checks it (this player's, still held, has an offer, choice in range), marks it
 -- used and inserts the chosen card sealed with no station, all in one transaction. The other two offered
 -- cards aren't reinserted: their draw numbers are spent, so they come back at the next reshuffle.
-create function pick_grab(p_powerup uuid, p_player uuid, p_choice int, p_at timestamptz)
+create or replace function pick_grab(p_powerup uuid, p_player uuid, p_choice int, p_at timestamptz)
 returns table (result text, powerup jsonb)
 language plpgsql
 as $$
@@ -153,13 +157,15 @@ revoke execute on function pick_grab(uuid, uuid, int, timestamptz) from public, 
 grant execute on function pick_grab(uuid, uuid, int, timestamptz) to service_role;
 
 -- Task 7: Dato Seri's hidden stash (jail design §4b). Where the organiser or a marshal dropped the card,
--- and who scanned it first: { lat, lng, claimedBy, claimedAt }. Null = no stash this game.
-alter table games add column dato_stash jsonb;
+-- and who scanned it first: { code, lat, lng, claimedBy, claimedAt }. A Full game gets it when it's made, with
+-- its own secret card code (ruling R15) and lat/lng null until the card is dropped. Null = no stash this game.
+alter table games add column if not exists dato_stash jsonb;
 
--- The first free runner to scan the stash: locks the game row, re-checks nobody has claimed it, marks it
--- claimed and inserts the 'dato' card (no station) in one transaction, so two scans at once give one card.
--- The app has already checked the scanner (a free runner, close enough, empty slot). Returns the card, or nothing.
-create function claim_dato(p_game uuid, p_player uuid, p_at timestamptz) returns setof powerups
+-- The first free runner to scan the stash: locks the game row, re-checks it was dropped and nobody has claimed
+-- it, marks it claimed and inserts the 'dato' card (no station) in one transaction, so two scans at once give one
+-- card. The app has already checked the card's code and the scanner (a free runner, close enough, empty slot).
+-- Returns the card, or nothing.
+create or replace function claim_dato(p_game uuid, p_player uuid, p_at timestamptz) returns setof powerups
 language plpgsql
 as $$
 declare
@@ -168,6 +174,7 @@ declare
 begin
   select * into g from games where id = p_game for update;
   if not found or g.dato_stash is null or jsonb_typeof(g.dato_stash) <> 'object'
+     or coalesce(jsonb_typeof(g.dato_stash -> 'lat'), 'missing') <> 'number'
      or (g.dato_stash ->> 'claimedBy') is not null then
     return;
   end if;
@@ -185,3 +192,5 @@ $$;
 
 revoke execute on function claim_dato(uuid, uuid, timestamptz) from public, anon, authenticated;
 grant execute on function claim_dato(uuid, uuid, timestamptz) to service_role;
+
+commit;

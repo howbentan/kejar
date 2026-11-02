@@ -119,7 +119,8 @@ describe('HostNew', () => {
     expect(screen.getByText('Everything in Core, plus Gostan, Toyol, Ah Long and Abang Grab: more power-ups, and ways to steal them. For regulars.')).toBeInTheDocument()
     // Dato Seri is a secret (rules doc §9b): never on the setup screen.
     expect(document.body.textContent).not.toMatch(/dato|legendary/i)
-    expect(screen.getByRole('link', { name: /print/i })).toHaveAttribute('href', '/print/tags?mode=full')
+    // The public sheet has no hidden card: each game prints its own from Organiser tools (ruling R15).
+    expect(screen.getByRole('link', { name: /print/i })).toHaveAttribute('href', '/print/tags')
     fireEvent.click(screen.getByRole('button', { name: /create game/i }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ settings: expect.objectContaining({ mode: 'full' }) })))
   })

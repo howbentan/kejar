@@ -26,7 +26,7 @@ beforeEach(() => {
 })
 afterEach(cleanup)
 
-const open = () => fireEvent.click(screen.getByRole('button', { name: 'Organiser only · show hidden card' }))
+const open = () => fireEvent.click(screen.getByRole('button', { name: 'Organiser tools' }))
 
 describe('SetupMap', () => {
   it('never shows the stash, even in a Full lobby with it dropped', () => {
@@ -43,7 +43,8 @@ describe('HiddenCard: dropping Dato Seri', () => {
     mapProps.last = null
     render(<HiddenCard view={lobby({ datoStash })} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={() => {}} />)
     expect(mapProps.last).toBeNull()
-    expect(document.body.textContent).not.toMatch(/dato|legendary/i)
+    // Closed, it doesn't even say a hidden card exists (rules doc §9b).
+    expect(document.body.textContent).toBe('Organiser tools')
     expect(screen.queryByRole('button', { name: 'Drop the ★ card here' })).toBeNull()
     open()
     expect((mapProps.last as { stash?: unknown } | null)?.stash).toEqual({ lat: 3.02, lng: 101.02 })
@@ -78,6 +79,19 @@ describe('HiddenCard: dropping Dato Seri', () => {
     expect(document.body.textContent).not.toMatch(/dato/i)
   })
 
+  it("opened, it links to a print page for this game's own card, with the code kept out of the server's logs", () => {
+    render(<HiddenCard view={lobby({ datoCode: 'Zx9_q-4abc' })} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={() => {}} />)
+    expect(screen.queryByRole('link', { name: 'Print the ★ card' })).toBeNull()
+    open()
+    expect(screen.getByRole('link', { name: 'Print the ★ card' })).toHaveAttribute('href', '/print/card#Zx9_q-4abc')
+  })
+
+  it('no print link when the game has no card code', () => {
+    render(<HiddenCard view={lobby({ datoCode: null })} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={() => {}} />)
+    open()
+    expect(screen.queryByRole('link', { name: 'Print the ★ card' })).toBeNull()
+  })
+
   it('without a location fix, says so and calls nothing', async () => {
     here.coords = {}
     render(<HiddenCard view={lobby()} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={() => {}} />)
@@ -97,7 +111,7 @@ describe('HiddenCard: dropping Dato Seri', () => {
 
   it('not in Core, not after the start, and never for players', () => {
     const creds = { code: 'ABC234', credentials: { organiserToken: 'h1' }, refresh: () => {} }
-    const toggle = () => screen.queryByRole('button', { name: 'Organiser only · show hidden card' })
+    const toggle = () => screen.queryByRole('button', { name: 'Organiser tools' })
     const { rerender } = render(<HiddenCard view={lobby({ settings: { ...DEFAULT_SETTINGS, mode: 'core' } })} {...creds} />)
     expect(toggle()).toBeNull()
     rerender(<HiddenCard view={lobby({ phase: 'hiding' })} {...creds} />)

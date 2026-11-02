@@ -18,11 +18,11 @@ import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/are
 import { arenaAroundPoint } from '../../shared/arenas.js'
 import { judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
-import { isDatoQr, JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
+import { datoCodeFromQr, isDatoQr, JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, flareBlocked, judgeClaim, judgeDatoClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { computeResults } from '../../shared/results.js'
 import { validateTeams } from '../../shared/teams.js'
-import { DEFAULT_SETTINGS, type Arena, type Game, type LatLng, type Player, type Position, type PowerUpKind, type Role, type Settings } from '../../shared/types.js'
+import { DEFAULT_SETTINGS, type Arena, type DatoStash, type Game, type LatLng, type Player, type Position, type PowerUpKind, type Role, type Settings } from '../../shared/types.js'
 import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
 import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
@@ -360,9 +360,24 @@ const create: Action = async (ctx, body) => {
   const settings = settingsFrom(body.settings)
   let code = newGameCode(ctx.rng)
   while (await ctx.store.gameByCode(code)) code = newGameCode(ctx.rng)
-  await ctx.store.createGame({ code, arena, settings, started_at: null, ended_at: null, winner: null, paused_at: null, pauses: [], organiser_id: organiser.id })
+  await ctx.store.createGame({
+    code,
+    arena,
+    settings,
+    started_at: null,
+    ended_at: null,
+    winner: null,
+    paused_at: null,
+    pauses: [],
+    organiser_id: organiser.id,
+    // Full: Dato Seri's card gets its secret code now, so the organiser can print it before hiding it (ruling R15).
+    ...(settings.mode === 'full' ? { dato_stash: { code: newDatoCode(), lat: null, lng: null, claimedBy: null, claimedAt: null } } : {}),
+  })
   return { code }
 }
+
+/** A fresh secret for a game's ★ card: 22 base64url characters (about 130 random bits), short enough for a clear QR. */
+const newDatoCode = () => newToken().slice(0, 22)
 
 const join: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
@@ -793,7 +808,7 @@ const claim: Action = async (ctx, body) => {
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
   if (fresh.paused_at) return { ok: false, reason: 'paused' }
-  if (isDatoQr(str(body.qr))) return claimDato(ctx, fresh, me)
+  if (isDatoQr(str(body.qr))) return claimDato(ctx, fresh, me, str(body.qr))
   const station = stationFromQr(str(body.qr))
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeClaim({
@@ -827,7 +842,12 @@ const claim: Action = async (ctx, body) => {
  * The store claims it atomically: two runners scanning at once get one card. No 'powerup' event, which would
  * name the finder: the feed only ever says `Something legendary was found.` (§4c).
  */
-async function claimDato(ctx: Ctx, game: Game, me: Player) {
+async function claimDato(ctx: Ctx, game: Game, me: Player, qr: string) {
+  // Only this game's own card (ruling R15). Any other ★ card, bare or another game's, gets the same answer as no
+  // stash before anything else is judged, so it can't tell anyone how near they are or whether a stash exists.
+  const scanned = datoCodeFromQr(qr)
+  const secret = game.dato_stash?.code
+  if (!scanned || !secret || hashToken(scanned) !== hashToken(secret)) return { ok: false, reason: 'no-stash' }
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeDatoClaim({
     phase: phaseAt(game, ctx.now).phase,
@@ -856,7 +876,9 @@ const dropDatoSeri: Action = async (ctx, body) => {
   const at = coordsOf(body)
   if (!at) throw new ActionError(400, 'Invalid location')
   if (!inPlayArea(at, game.arena)) throw new ActionError(400, 'Drop it inside the play area')
-  await ctx.store.updateGame(game.id, { dato_stash: { lat: at.lat, lng: at.lng, claimedBy: null, claimedAt: null } })
+  // Moving it keeps the code, so the card already printed still works. A game made before codes gets one now.
+  const stash: DatoStash = { code: game.dato_stash?.code ?? newDatoCode(), lat: at.lat, lng: at.lng, claimedBy: null, claimedAt: null }
+  await ctx.store.updateGame(game.id, { dato_stash: stash })
   return { ok: true }
 }
 

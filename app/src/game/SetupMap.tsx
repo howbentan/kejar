@@ -9,10 +9,10 @@ import { ErrorText } from './ui'
 export type SetupCredentials = { organiserToken: string } | { token: string }
 
 /**
- * Dato Seri's hidden stash, for the organiser and marshals in a Full lobby (jail design §4b): stand by the hidden
- * ★ card and save the spot. Dropping again before the start moves it. The lobby is the screen organisers show to
- * players, so it stays behind a closed, neutrally worded toggle: nothing names the card or shows the pin until it's
- * opened (rules doc §9b). No marker scribble here (marshal screen).
+ * Dato Seri's hidden stash, for the organiser and marshals in a Full lobby (jail design §4b): print this game's own
+ * ★ card (ruling R15), hide it, stand by it and save the spot. Dropping again before the start moves it. The lobby
+ * is the screen organisers show to players, so it stays behind a closed, neutrally worded toggle: nothing says a
+ * hidden card exists, names it or shows the pin until it's opened (rules doc §9b). No marker scribble here (marshal screen).
  */
 export function HiddenCard({ view, code, credentials, refresh }: { view: View; code: string; credentials: SetupCredentials; refresh: () => void }) {
   const [open, setOpen] = useState(false)
@@ -38,7 +38,7 @@ export function HiddenCard({ view, code, credentials, refresh }: { view: View; c
   if (!open) {
     return (
       <button type="button" className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen(true)}>
-        Organiser only · show hidden card
+        Organiser tools
       </button>
     )
   }
@@ -53,8 +53,14 @@ export function HiddenCard({ view, code, credentials, refresh }: { view: View; c
       <p className="muted">
         {stash
           ? 'The ★ card is hidden at the yellow pin. Players only see a ? zone round it. Drop again to move it.'
-          : 'Hide the ★ card somewhere in the play area, stand next to it, then drop it here. Players only see a ? zone round it.'}
+          : 'Print the ★ card, hide it somewhere in the play area, stand next to it, then drop it here. Players only see a ? zone round it.'}
       </p>
+      {view.datoCode && (
+        // The code goes after #, so it never reaches the server or its logs. Only this game's card claims.
+        <a className="muted" href={`/print/card#${encodeURIComponent(view.datoCode)}`} target="_blank" rel="noopener noreferrer">
+          Print the ★ card
+        </a>
+      )}
       <GameMap arena={view.arena} dots={[]} height={200} stash={stash ? { lat: stash.lat, lng: stash.lng } : null} />
       <button type="button" className="btn btn-legendary" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={drop}>
         Drop the ★ card here

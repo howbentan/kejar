@@ -1,7 +1,7 @@
 import { distanceM, hash, offset } from './geo.js'
 import { inPlayArea } from './playArea.js'
 import { BONUS_SEQ_BASE } from './clock.js'
-import type { Arena, DatoStash, LatLng, Phase, Ping, Player, Position, PowerUp, PowerUpKind } from './types.js'
+import { placedStash, type Arena, type DatoStash, type LatLng, type Phase, type Ping, type Player, type Position, type PowerUp, type PowerUpKind } from './types.js'
 
 /** Spec §4.8.1. */
 export const CLAIM_RADIUS_M = 30
@@ -79,8 +79,9 @@ export function judgeDatoClaim(i: {
 }): DatoClaimJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (i.me.role !== 'runner' || i.me.jailed) return { ok: false, reason: 'cannot-claim' }
-  if (!i.stash || i.stash.claimedBy !== null) return { ok: false, reason: 'no-stash' }
-  if (!withinClaimReach(i.myPos, i.stash, i.now)) return { ok: false, reason: 'too-far' }
+  const stash = placedStash(i.stash) // made with the game, but not dropped yet: nothing to find
+  if (!stash || stash.claimedBy !== null) return { ok: false, reason: 'no-stash' }
+  if (!withinClaimReach(i.myPos, stash, i.now)) return { ok: false, reason: 'too-far' }
   if (slotBusy(i.powerUps, i.me.id, i.pings, i.now)) return { ok: false, reason: 'hand-full' }
   return { ok: true }
 }

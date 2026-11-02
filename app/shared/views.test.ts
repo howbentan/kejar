@@ -735,6 +735,24 @@ describe("Dato Seri's hint zone (jail design §4b)", () => {
     expect(m.datoStash).toEqual(stash)
   })
 
+  it("the card's code is for marshals only, never in a player's view (ruling R15)", () => {
+    const g = { ...full('g1'), dato_stash: { ...stash, code: 'Secret-card-code-12345' } }
+    expect(view(siti, { game: g }).datoCode).toBe('Secret-card-code-12345')
+    expect(view(siti, { game: g }).datoStash).toEqual(stash)
+    for (const me of [aina, chaser, { ...aina, jailed: true }]) {
+      const v = view(me, { game: g })
+      expect(v).not.toHaveProperty('datoCode')
+      expect(JSON.stringify(v)).not.toContain('Secret-card-code-12345')
+    }
+  })
+
+  it('a stash made with the game but not dropped yet has no zone, and no pin for marshals', () => {
+    const g = { ...full('g1'), dato_stash: { code: 'c0de', lat: null, lng: null, claimedBy: null, claimedAt: null } }
+    expect(view(aina, { game: g }).legendaryZone).toBeNull()
+    expect(view(siti, { game: g }).datoStash).toBeNull()
+    expect(view(siti, { game: g }).datoCode).toBe('c0de')
+  })
+
   it("the Settle picker is offered only during the chase, and not while paused", () => {
     const holder = { ...aina, jailed: true }
     const dato: PowerUp = { id: 'u1', game_id: 'g1', player_id: 'r1', kind: 'dato', station: null, claimed_at: iso(NOW), used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null }

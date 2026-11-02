@@ -423,7 +423,8 @@ export class MemoryStore implements GameStore {
   }
   async claimDato(gameId: string, playerId: string) {
     const g = this.games.find((x) => x.id === gameId)
-    if (!g?.dato_stash || g.dato_stash.claimedBy !== null) return null
+    // Not dropped yet (no spot), or already claimed: nothing to take.
+    if (!g?.dato_stash || typeof g.dato_stash.lat !== 'number' || g.dato_stash.claimedBy !== null) return null
     // A fresh object: gameByCode hands out shallow copies that share the old one.
     g.dato_stash = { ...g.dato_stash, claimedBy: playerId, claimedAt: this.nowIso() }
     const row: PowerUp = {

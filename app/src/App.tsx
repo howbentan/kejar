@@ -8,6 +8,7 @@ import HostNew from './screens/HostNew'
 import Join from './screens/Join'
 import MarshalRedeem from './screens/MarshalRedeem'
 import OrganiserRedeem from './screens/OrganiserRedeem'
+import PrintCard from './screens/PrintCard'
 import PrintTags from './screens/PrintTags'
 import SpikeAdmin from './spike/SpikeAdmin'
 import SpikeJoin from './spike/SpikeJoin'
@@ -35,7 +36,9 @@ function Routed() {
     case 'game':
       return <GameScreen code={code!} />
     case 'print-tags':
-      return <PrintTags full={new URLSearchParams(window.location.search).get('mode') === 'full'} />
+      return <PrintTags />
+    case 'print-card':
+      return <PrintCard cardCode={decodeURIComponent(window.location.hash.slice(1))} />
     case 'organiser-redeem':
       return <OrganiserRedeem token={token!} />
     case 'marshal-redeem':
