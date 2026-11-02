@@ -840,6 +840,20 @@ const report: Action = async (ctx, body) => {
   return { ok: true, notified: await alertMarshals(ctx, game, alertsFrom([e])[0].text) }
 }
 
+/** A marshal taps "I'm going" on an SOS; everyone sees who's responding on the alert. No uniqueness check — a second marshal can still respond. */
+const respondToSos: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const marshal = await requireMarshal(ctx, game, body)
+  await ctx.store.addEvent({
+    game_id: game.id,
+    type: 'sos-responding',
+    actor_id: marshal?.id ?? null,
+    target_id: null,
+    data: { sosId: str(body.eventId), name: marshal?.name ?? '' },
+  })
+  return { ok: true }
+}
+
 const handleAlert: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const marshal = await requireMarshal(ctx, game, body)
@@ -1073,6 +1087,7 @@ export const actions = {
   sosDetails,
   report,
   handleAlert,
+  respondToSos,
   undoAutoJail,
   removePlayer,
   searchParks,

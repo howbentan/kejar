@@ -36,6 +36,8 @@ export interface Alert {
   /** The player the alert is about, when an action (like undoing an auto-jail) needs it. */
   targetId: string | null
   handled: boolean
+  /** The latest marshal who tapped "I'm going" on an SOS, or null. Only set on `sos` alerts. */
+  respondingName: string | null
 }
 
 /** 'Aina #07' for a runner with a tag, otherwise the name. */
@@ -49,15 +51,21 @@ function place(data: Record<string, unknown>): LatLng | null {
   return typeof data.lat === 'number' && typeof data.lng === 'number' ? { lat: data.lat, lng: data.lng } : null
 }
 
-function toAlert(e: GameEvent, details: Map<string, GameEvent>): Omit<Alert, 'handled'> | null {
+function toAlert(e: GameEvent, details: Map<string, GameEvent>, responding: Map<string, GameEvent>): Omit<Alert, 'handled'> | null {
   const d = e.data
-  const base = { id: e.id, at: e.at, where: null as LatLng | null, targetId: null as string | null }
+  const base = { id: e.id, at: e.at, where: null as LatLng | null, targetId: null as string | null, respondingName: null as string | null }
   switch (e.type) {
     case 'sos': {
       const more = details.get(e.id)?.data
       const label = more ? SOS_REASON_LABEL[more.reason as SosReason] : undefined
       const withWho = more && s(more.withName) ? ` with ${s(more.withName)}` : ''
-      return { ...base, kind: 'sos', text: `SOS from ${s(d.who)}${label ? `: ${label}${withWho}` : ''}`, where: place(d) }
+      return {
+        ...base,
+        kind: 'sos',
+        text: `SOS from ${s(d.who)}${label ? `: ${label}${withWho}` : ''}`,
+        where: place(d),
+        respondingName: s(responding.get(e.id)?.data.name) || null,
+      }
     }
     case 'report': {
       const label = REASON_LABEL[d.reason as ReportReason] ?? REASON_LABEL.other
@@ -86,8 +94,11 @@ export function alertsFrom(events: GameEvent[]): Alert[] {
   // The latest "What's happening?" for each SOS (events arrive oldest first).
   const details = new Map<string, GameEvent>()
   for (const e of events) if (e.type === 'sos-details') details.set(s(e.data.sosId), e)
+  // The latest marshal responding to each SOS (events arrive oldest first).
+  const responding = new Map<string, GameEvent>()
+  for (const e of events) if (e.type === 'sos-responding') responding.set(s(e.data.sosId), e)
   const all = events.flatMap((e) => {
-    const a = toAlert(e, details)
+    const a = toAlert(e, details, responding)
     return a ? [{ ...a, handled: handled.has(a.id) }] : []
   })
   const newest = (x: Alert, y: Alert) => Date.parse(y.at) - Date.parse(x.at)

@@ -80,6 +80,29 @@ describe('SOS details', () => {
   })
 })
 
+describe('SOS responding', () => {
+  it('a marshal tapping "I\'m going" shows on the alert for everyone', () => {
+    const events = [event('sos', T0, { id: 'e1', data: { who: 'Aina #07' } }), event('sos-responding', T0 + MIN, { data: { sosId: 'e1', name: 'Hafiz' } })]
+    const alert = alertsFrom(events).find((a) => a.id === 'e1')
+    expect(alert?.respondingName).toBe('Hafiz')
+  })
+
+  it('defaults to null when nobody has responded', () => {
+    const [a] = alertsFrom([event('sos', T0, { id: 'e1', data: { who: 'Aina #07' } })])
+    expect(a.respondingName).toBeNull()
+  })
+
+  it('uses the latest responder for that SOS', () => {
+    const events = [
+      event('sos', T0, { id: 'e1', data: { who: 'Aina #07' } }),
+      event('sos-responding', T0 + MIN, { data: { sosId: 'e1', name: 'Hafiz' } }),
+      event('sos-responding', T0 + 2 * MIN, { data: { sosId: 'e1', name: 'Siti' } }),
+    ]
+    const alert = alertsFrom(events).find((a) => a.id === 'e1')
+    expect(alert?.respondingName).toBe('Siti')
+  })
+})
+
 describe('auto-jail alert', () => {
   it('has its own kind and names the runner it is about', () => {
     const [a] = alertsFrom([event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2', data: { who: 'Hafiz #03' } })])

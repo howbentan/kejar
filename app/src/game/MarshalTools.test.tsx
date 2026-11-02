@@ -23,6 +23,7 @@ const alert = (id: string, kind: Alert['kind'], text: string, handled = false, t
   where: null,
   targetId,
   handled,
+  respondingName: null,
 })
 
 const roster = [

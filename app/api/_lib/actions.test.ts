@@ -902,6 +902,21 @@ describe('SOS and reports', () => {
     expect(await run('handleAlert', { code: g.code, token: g.siti.token, eventId: alert.id })).toEqual({ ok: true })
     expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).alerts[0].handled).toBe(true)
   })
+
+  it('a second marshal can still respond after the first', async () => {
+    const g = await readyGame()
+    const dinaInvite = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const dina = await run('redeemMarshalInvite', { code: g.code, inviteToken: dinaInvite.inviteToken, name: 'Dina' })
+    const sitiInvite = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken: sitiInvite.inviteToken, name: 'Siti' })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    const { sosId } = await run<{ sosId: string }>('sos', { code: g.code, token: g.aina.token })
+    expect(await run('respondToSos', { code: g.code, token: siti.token, eventId: sosId })).toEqual({ ok: true })
+    expect(await run('respondToSos', { code: g.code, token: dina.token, eventId: sosId })).toEqual({ ok: true })
+    const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(v.alerts.find((a) => a.id === sosId)?.respondingName).toBe('Dina')
+  })
 })
 
 describe('organiser invites', () => {
