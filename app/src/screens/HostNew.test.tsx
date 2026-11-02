@@ -120,6 +120,21 @@ describe('HostNew', () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ settings: expect.objectContaining({ mode: 'full' }) })))
   })
 
+  it('the chaser-snapshot switch is off by default and can be turned on', async () => {
+    const { unmount } = render(<HostNew />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Use KLCC' }))
+    expect(screen.getByRole('radio', { name: 'Dikejar can see Kejar at check-in: Off' })).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(screen.getByRole('button', { name: /create game/i }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ settings: expect.objectContaining({ chaserSnapshot: false }) })))
+    unmount()
+    call.mockClear()
+    render(<HostNew />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Use KLCC' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Dikejar can see Kejar at check-in: On' }))
+    fireEvent.click(screen.getByRole('button', { name: /create game/i }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ settings: expect.objectContaining({ chaserSnapshot: true }) })))
+  })
+
   it('creating from an untouched saved park sends no overrides', async () => {
     render(<HostNew />)
     fireEvent.click(await screen.findByRole('button', { name: 'Use KLCC' }))

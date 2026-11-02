@@ -167,6 +167,7 @@ function settingsFrom(input: unknown): Settings {
   if (!inRange(s.spectatorDelayMin, 0, 5)) throw new ActionError(400, 'Spectator delay must be 0–5 minutes')
   if (s.checkinMode !== 'push' && s.checkinMode !== 'schedule') throw new ActionError(400, 'Unknown check-in mode')
   if (s.mode !== 'core' && s.mode !== 'full') throw new ActionError(400, 'Unknown game mode')
+  if (typeof s.chaserSnapshot !== 'boolean') throw new ActionError(400, 'Chaser snapshot must be on or off')
   return s
 }
 

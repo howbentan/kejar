@@ -980,6 +980,22 @@ describe('game mode', () => {
     expect((await store.gameByCode(full.code))!.settings.mode).toBe('full')
   })
 
+  it('chaserSnapshot defaults to false and can be turned on at creation', async () => {
+    const off = await readyGame()
+    expect((await store.gameByCode(off.code))!.settings.chaserSnapshot).toBe(false)
+    const on = await readyGame({ chaserSnapshot: true })
+    expect((await store.gameByCode(on.code))!.settings.chaserSnapshot).toBe(true)
+  })
+
+  it('rejects a chaserSnapshot that is not true or false', async () => {
+    const organiserToken = await createOrganiser()
+    await rejects(
+      run('create', { arenaId: 'around-me', center: CENTER, settings: { chaserSnapshot: 'yes' }, organiserToken }),
+      400,
+      'Chaser snapshot must be on or off',
+    )
+  })
+
   it('rejects an unknown mode', async () => {
     const organiserToken = await createOrganiser()
     await rejects(run('create', { arenaId: 'around-me', center: CENTER, settings: { mode: 'party' }, organiserToken }), 400, 'Unknown game mode')

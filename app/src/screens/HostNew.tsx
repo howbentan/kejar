@@ -352,6 +352,18 @@ export default function HostNew() {
             onChange={(v) => set({ checkinMode: v })}
           />
         </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>Dikejar can see Kejar at check-in</span>
+          <Pills<'off' | 'on'>
+            label="Dikejar can see Kejar at check-in"
+            value={settings.chaserSnapshot ? 'on' : 'off'}
+            options={[
+              { value: 'off', text: 'Off' },
+              { value: 'on', text: 'On' },
+            ]}
+            onChange={(v) => set({ chaserSnapshot: v === 'on' })}
+          />
+        </div>
       </div>
 
       <ErrorText>{error}</ErrorText>

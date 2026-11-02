@@ -22,6 +22,11 @@ export interface Settings {
   spectatorDelayMin: number
   checkinMode: CheckinMode
   mode: GameMode
+  /**
+   * Dikejar can see Kejar at check-in (chaser-snapshot design ง5). Off by default. Games stored before this
+   * setting existed have no value, so readers must test `settings.chaserSnapshot === true`.
+   */
+  chaserSnapshot: boolean
 }
 
 /** Spec ยง4.3 defaults. */
@@ -32,6 +37,7 @@ export const DEFAULT_SETTINGS: Settings = {
   spectatorDelayMin: 2,
   checkinMode: 'push',
   mode: 'core',
+  chaserSnapshot: false,
 }
 
 export interface Arena {
