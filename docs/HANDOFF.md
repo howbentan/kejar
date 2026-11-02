@@ -96,6 +96,14 @@ Also floated: surprise missions, a bounty on the longest survivor. **Malaysian p
 - A slot stays busy while its effect runs.
 - Mat Rempit is one at a time, with a 3-minute team cooldown.
 
+**Plan D (branch `plan-d-full-mode`, 2026-11-03): Full mode's extras.** **Before merging to main: run `supabase/migrations/0011_full_mode.sql` in Supabase first.** The app now reads and writes `games.dato_stash` (every new game is created through it) and `powerups.taken_at`/`sealed`/`offer`, and calls its `steal_card`, `open_grab`, `pick_grab` and `claim_dato` functions, so without it every game breaks, Core included. It runs in one transaction and is safe to run again.
+- Toyol (runners) and Ah Long (chasers) take one random unused card from a random free player on the other side. The feed never names who; the victim gets their own line. Nothing to take: the stealer keeps theirs.
+- Abang Grab shows the top 3 cards of your side's deck; you keep one, sealed (it can't be stolen), and the other two go to the bottom.
+- The chaser-snapshot switch (Full only, off by default): at check-in, runners see where the chasers were at the alert, fuzzed 30 m. Chasers get a `SNAPSHOT TAKEN` chip, and chasers and marshals get a feed line.
+- Dato Seri's hidden stash: each Full game gets its own secret card code, printed from Organiser tools in the lobby (never the public tag sheet). The organiser or a marshal drops it at the card. Runners and chasers see an unlabelled yellow `?` zone; the first free runner to scan it gets Dato Seri, and the feed only says `Something legendary was found.`
+- Settle: a jailed Dato Seri holder frees themselves plus up to 2 others from the Penjara screen.
+- **Follow-up (from before Plan D, not fixed here):** the runner ping fuzz (and the Gostan decoy spot) is seeded from public values, the player id and ping number (`app/shared/views.ts`, runner dots), so a chaser could undo it and spot Gostan decoys. Seed it with the secret deck seed, as the snapshot and the Dato zone already are.
+
 **Plan C2 (branch `plan-c2-moments`, 2026-11-02): the big moments.** **No migration is needed.**
 - Doodle stickers on every Core power-up, and the lime-framed card front and ornate card back.
 - The marker scribble (shapes only, lime, drawn in under 2 s; appears already drawn with reduced motion), including a black tick across "Checked in".

@@ -76,6 +76,10 @@ describe('slotBusy', () => {
   it('a card that was taken (Toyol / Ah Long) no longer fills the slot', () => {
     expect(slotBusy([pu({ kind: 'cloak', taken_at: iso(NOW - 1_000) })], 'r1', [], NOW)).toBeNull()
   })
+  it('a card row from before migration 0011 (no taken_at at all) still fills the slot', () => {
+    const { taken_at: _, ...old } = pu({ kind: 'cloak' })
+    expect(slotBusy([old as PowerUp], 'r1', [], NOW)).toEqual({ kind: 'cloak', running: false })
+  })
   it('Toyol and Ah Long are done the moment they are used', () => {
     expect(slotBusy([pu({ kind: 'toyol', used_at: iso(NOW - 1_000) })], 'r1', [], NOW)).toBeNull()
     expect(slotBusy([pu({ kind: 'along', used_at: iso(NOW - 1_000) })], 'c1', [], NOW)).toBeNull()

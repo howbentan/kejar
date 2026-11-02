@@ -654,7 +654,7 @@ const settle: Action = async (ctx, body) => {
   const fresh = (await loadGame(ctx, body)) as Game
   if (fresh.paused_at) return { ok: false, reason: 'paused' }
   const dato = (await ctx.store.powerUps(game.id)).find(
-    (u) => u.player_id === me.id && u.kind === 'dato' && u.used_at === null && u.taken_at === null,
+    (u) => u.player_id === me.id && u.kind === 'dato' && u.used_at === null && !u.taken_at,
   )
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeSettle({

@@ -348,6 +348,14 @@ describe('Toyol and Ah Long', () => {
     expect(view(chaser, { powerUps: [c({})] }).hand).toHaveLength(1)
     expect(view(chaser, { powerUps: [c({ taken_at: new Date(NOW).toISOString() })] }).hand).toEqual([])
   })
+  it('a card row from before migration 0011 (no taken_at at all) still counts as in the hand', () => {
+    const { taken_at: _, ...old } = { id: 'u9', game_id: 'g1', player_id: 'c1', kind: 'flare' as const, station: 1, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null }
+    expect(view(chaser, { powerUps: [old as PowerUp] }).hand).toHaveLength(1)
+    // And a jailed holder of such a Dato Seri can still Settle.
+    const holder = { ...aina, jailed: true }
+    const dato = { ...old, player_id: 'r1', kind: 'dato' as const, station: null }
+    expect(view(holder, { players: [chaser, holder, hafiz, wei, siti], powerUps: [dato as PowerUp] }).settle).not.toBeNull()
+  })
 })
 
 describe('jail reason', () => {

@@ -521,7 +521,7 @@ function legendaryZoneFor(i: ViewInput, phase: Phase): View['legendaryZone'] {
 /** The Settle picker's choices, the same eligibility `judgeSettle` applies. */
 function settleFor(i: ViewInput, phase: Phase): View['settle'] {
   if (phase !== 'chasing' || i.game.paused_at || i.me.role !== 'runner' || !i.me.jailed) return null
-  const holds = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'dato' && u.used_at === null && u.taken_at === null)
+  const holds = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'dato' && u.used_at === null && !u.taken_at)
   if (!holds) return null
   const options = i.players
     .filter((p) => p.role === 'runner' && p.jailed && p.id !== i.me.id && !p.removed_at)
@@ -763,7 +763,7 @@ function fullView(i: ViewInput): View {
       return shield?.used_at ? Date.parse(shield.used_at) + SHIELD_MS : null
     })(),
     flareReadyAt: (() => {
-      const holding = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'flare' && u.used_at === null && u.taken_at === null)
+      const holding = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'flare' && u.used_at === null && !u.taken_at)
       const blocked = holding ? flareBlocked(i.pings, i.now) : null
       return blocked ? i.now + blocked.readyInMs : null
     })(),
@@ -783,7 +783,8 @@ function fullView(i: ViewInput): View {
     reports: postGameReportsFor(i),
     ratings: ratingsFor(i),
     stations: (i.game.arena.stations ?? []).map((s, k) => ({ n: k + 1, lat: s.lat, lng: s.lng })),
-    hand: i.powerUps.filter((u) => u.player_id === i.me.id && u.used_at === null && u.taken_at === null),
+    // `!taken_at`, not `=== null`: a row read before migration 0011 has no taken_at at all (undefined).
+    hand: i.powerUps.filter((u) => u.player_id === i.me.id && u.used_at === null && !u.taken_at),
     shieldActive: activeShield(i.powerUps, i.me.id, i.now) !== null,
     deckLeft: deckLeftFor(i),
     activePowerUp: (() => {

@@ -161,7 +161,8 @@ export class SupabaseStore implements GameStore {
     return (rows ?? []).length > 0
   }
   async stealFrom(gameId: string, side: 'runner' | 'chaser'): Promise<StolenCard | null> {
-    // The database function locks the candidate card (skip locked), so two thieves never take the same one.
+    // The database function takes a per-game advisory lock (thefts in one game run one at a time), then locks the
+    // chosen card row `for update` and re-checks it before marking it taken, so two thieves never take the same one.
     const rows = check(await this.db.rpc('steal_card', { p_game: gameId, p_side: side, p_at: this.nowIso() })) as
       | { id: string; player_id: string; kind: PowerUp['kind'] }[]
       | null

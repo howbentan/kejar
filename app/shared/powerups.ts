@@ -93,7 +93,8 @@ export function judgeDatoClaim(i: {
  */
 export function slotBusy(powerUps: PowerUp[], playerId: string, pings: Ping[], now: number): { kind: PowerUpKind; running: boolean } | null {
   for (const u of powerUps.filter((x) => x.player_id === playerId)) {
-    if (u.taken_at !== null) continue // Toyol or Ah Long took it: gone from the hand
+    // Toyol or Ah Long took it: gone from the hand. Truthy, not `!== null`: before migration 0011 it's undefined.
+    if (u.taken_at) continue
     if (u.used_at === null) return { kind: u.kind, running: false }
     // Done the moment they succeed (power-ups §5a): nothing keeps running.
     if (u.kind === 'toyol' || u.kind === 'along' || u.kind === 'grab' || u.kind === 'dato') continue
