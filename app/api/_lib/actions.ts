@@ -868,7 +868,9 @@ const usePowerup: Action = async (ctx, body) => {
   const all = await ctx.store.powerUps(game.id)
   const u = all.find((x) => x.id === str(body.powerupId))
   if (!u || u.player_id !== me.id) return { ok: false, reason: 'not-yours' }
-  if (u.used_at || u.taken_at) return { ok: false, reason: 'already-used' }
+  // Taken by Toyol or Ah Long (e.g. a Grab with its offer open): the owner is told it was taken.
+  if (u.taken_at) return { ok: false, reason: 'taken' }
+  if (u.used_at) return { ok: false, reason: 'already-used' }
   if (phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (me.jailed) return { ok: false, reason: 'cannot-use' }
   // Dato Seri is only ever used through Settle, at Penjara (jail design §4b).

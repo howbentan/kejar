@@ -773,7 +773,7 @@ describe('Toyol and Ah Long', () => {
     const flare = await give(g.gameId, g.ben.playerId, 'flare')
     const toyol = await give(g.gameId, g.aina.playerId, 'toyol')
     await use(g, g.aina.token, toyol.id)
-    expect(await use(g, g.ben.token, flare.id)).toEqual({ ok: false, reason: 'already-used' })
+    expect(await use(g, g.ben.token, flare.id)).toEqual({ ok: false, reason: 'taken' })
     expect(await store.markUsed(flare.id)).toBe(false)
   })
 

@@ -189,7 +189,7 @@ export type StationClaim =
 
 export type GrabPick =
   | { ok: true; powerUp: PowerUp }
-  | { ok: false; reason: 'not-yours' | 'already-used' | 'no-offer' | 'bad-choice' }
+  | { ok: false; reason: 'not-yours' | 'already-used' | 'taken' | 'no-offer' | 'bad-choice' }
 
 export type NewPowerUp = Omit<PowerUp, 'id' | 'claimed_at' | 'used_at' | 'consumed_at' | 'sealed' | 'taken_at' | 'offer'>
 
@@ -399,7 +399,9 @@ export class MemoryStore implements GameStore {
   async pickGrab(powerupId: string, playerId: string, choice: number): Promise<GrabPick> {
     const u = this.powerUpRows.find((x) => x.id === powerupId)
     if (!u || u.player_id !== playerId) return { ok: false, reason: 'not-yours' }
-    if (u.used_at || u.taken_at) return { ok: false, reason: 'already-used' }
+    // Toyol or Ah Long took it while its offer was open: say so, rather than "already used".
+    if (u.taken_at) return { ok: false, reason: 'taken' }
+    if (u.used_at) return { ok: false, reason: 'already-used' }
     if (!u.offer) return { ok: false, reason: 'no-offer' }
     if (!Number.isInteger(choice) || choice < 0 || choice >= u.offer.length) return { ok: false, reason: 'bad-choice' }
     u.used_at = this.nowIso()

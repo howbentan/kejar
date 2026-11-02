@@ -185,7 +185,7 @@ export class SupabaseStore implements GameStore {
     const row = rows?.[0]
     if (row?.result === 'ok' && row.powerup) return { ok: true, powerUp: row.powerup }
     const reason = row?.result
-    return { ok: false, reason: reason === 'already-used' || reason === 'no-offer' || reason === 'bad-choice' ? reason : 'not-yours' }
+    return { ok: false, reason: reason === 'already-used' || reason === 'taken' || reason === 'no-offer' || reason === 'bad-choice' ? reason : 'not-yours' }
   }
   async claimDato(gameId: string, playerId: string): Promise<PowerUp | null> {
     // The database function locks the game row, re-checks the stash is unclaimed, marks it and inserts the card.

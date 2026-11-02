@@ -61,7 +61,7 @@ describe('SupabaseStore', () => {
 
   it('picks through pick_grab, stamped with the game clock, and passes refusals on', async () => {
     const rpcs: { fn: string; args: Record<string, unknown> }[] = []
-    const replies = [[{ result: 'ok', powerup: { id: 'u2', kind: 'shield', sealed: true } }], [{ result: 'already-used', powerup: null }]]
+    const replies = [[{ result: 'ok', powerup: { id: 'u2', kind: 'shield', sealed: true } }], [{ result: 'already-used', powerup: null }], [{ result: 'taken', powerup: null }]]
     const db = {
       rpc: async (fn: string, args: Record<string, unknown>) => (rpcs.push({ fn, args }), { data: replies.shift(), error: null }),
     } as unknown as SupabaseClient
@@ -69,8 +69,9 @@ describe('SupabaseStore', () => {
     expect(await store.pickGrab('u1', 'p1', 2)).toEqual({ ok: true, powerUp: { id: 'u2', kind: 'shield', sealed: true } })
     expect(await store.pickGrab('u1', 'p1', 0)).toEqual({ ok: false, reason: 'already-used' })
     expect(await store.pickGrab('u1', 'p1', 0.5)).toEqual({ ok: false, reason: 'bad-choice' })
+    expect(await store.pickGrab('u1', 'p1', 0)).toEqual({ ok: false, reason: 'taken' })
     expect(rpcs[0]).toEqual({ fn: 'pick_grab', args: { p_powerup: 'u1', p_player: 'p1', p_choice: 2, p_at: '2026-10-25T09:07:00.000Z' } })
-    expect(rpcs).toHaveLength(2)
+    expect(rpcs).toHaveLength(3)
   })
 
   it('osmCachePut upserts on key with the store clock', async () => {

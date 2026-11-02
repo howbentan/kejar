@@ -121,7 +121,12 @@ begin
     return query select 'not-yours'::text, null::jsonb;
     return;
   end if;
-  if g.used_at is not null or g.taken_at is not null then
+  -- Toyol or Ah Long took it while its offer was open: say so, rather than "already used".
+  if g.taken_at is not null then
+    return query select 'taken'::text, null::jsonb;
+    return;
+  end if;
+  if g.used_at is not null then
     return query select 'already-used'::text, null::jsonb;
     return;
   end if;

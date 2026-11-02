@@ -295,6 +295,12 @@ describe('Abang Grab', () => {
     expect(await store.drawCard(g.id, 'chaser')).toBe(3)
   })
 
+  it('a pick on a Grab that Toyol or Ah Long took says taken', async () => {
+    const { u } = await grab()
+    await store.updatePowerUp(u.id, { offer: ['shield', 'cloak', 'decoy'], taken_at: iso(T0) })
+    expect(await store.pickGrab(u.id, 'p1', 0)).toEqual({ ok: false, reason: 'taken' })
+  })
+
   it("won't open a Grab that was used or taken", async () => {
     const { u } = await grab()
     await store.updatePowerUp(u.id, { taken_at: iso(T0) })
