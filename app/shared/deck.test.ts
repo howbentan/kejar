@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cardAt, cardsLeft, deckFor, setsFor } from './deck.js'
+import { cardAt, cardsLeft, deckFor, setsFor, SET } from './deck.js'
 import type { PowerUpKind } from './types.js'
 
 const count = (cards: PowerUpKind[]) => cards.reduce<Record<string, number>>((m, k) => ({ ...m, [k]: (m[k] ?? 0) + 1 }), {})
@@ -21,11 +21,17 @@ describe('deckFor', () => {
   it('Core chasers: Mat Rempit x2 and Pak Guard x2 per set', () => {
     expect(count(deckFor('core', 'chaser', 1))).toEqual({ flare: 2, focus: 2 })
   })
-  it('Full runners (until Plan D): Gostan, Durian and Ponteng x2 each', () => {
-    expect(count(deckFor('full', 'runner', 1))).toEqual({ decoy: 2, shield: 2, cloak: 2 })
+  it('Full runners: Gostan x2, Durian x2, Ponteng x2, Toyol x1, Abang Grab x1 per set (8 cards)', () => {
+    expect(SET.full.runner).toEqual(['decoy', 'decoy', 'shield', 'shield', 'cloak', 'cloak', 'toyol', 'grab'])
+    expect(count(deckFor('full', 'runner', 1))).toEqual({ decoy: 2, shield: 2, cloak: 2, toyol: 1, grab: 1 })
   })
-  it('Full chasers (until Plan D): Mat Rempit and Pak Guard x2 each', () => {
-    expect(count(deckFor('full', 'chaser', 1))).toEqual({ flare: 2, focus: 2 })
+  it('Full chasers: Mat Rempit x2, Pak Guard x2, Ah Long x1, Abang Grab x1 per set (6 cards)', () => {
+    expect(SET.full.chaser).toEqual(['flare', 'flare', 'focus', 'focus', 'along', 'grab'])
+    expect(count(deckFor('full', 'chaser', 1))).toEqual({ flare: 2, focus: 2, along: 1, grab: 1 })
+  })
+  it('Core is unchanged: no Toyol, Ah Long or Abang Grab', () => {
+    expect([...SET.core.runner, ...SET.core.chaser]).not.toEqual(expect.arrayContaining(['toyol']))
+    expect(count([...SET.core.runner, ...SET.core.chaser])).toEqual({ shield: 3, cloak: 3, flare: 2, focus: 2 })
   })
 })
 
