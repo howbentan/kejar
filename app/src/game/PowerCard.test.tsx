@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import PowerCard from './PowerCard'
 
@@ -49,13 +49,13 @@ describe('PowerCard', () => {
     expect(screen.queryByTestId('foil')).toBeNull()
   })
 
-  it('the foil highlight follows device tilt, and stays still under reduced motion', () => {
+  it('the foil highlight follows device tilt, and stays still under reduced motion', async () => {
     render(<PowerCard kind="dato" />)
     const foil = screen.getByTestId('foil')
     act(() => {
       window.dispatchEvent(Object.assign(new Event('deviceorientation'), { gamma: 30, beta: 45 }))
     })
-    expect(foil.style.getPropertyValue('--foil-x')).toBe('83%')
+    await waitFor(() => expect(foil.style.getPropertyValue('--foil-x')).toBe('83%'))
     cleanup()
     reduce.on = true
     render(<PowerCard kind="dato" />)
@@ -63,6 +63,7 @@ describe('PowerCard', () => {
     act(() => {
       window.dispatchEvent(Object.assign(new Event('deviceorientation'), { gamma: 30, beta: 45 }))
     })
+    await new Promise((r) => setTimeout(r, 50))
     expect(still.style.getPropertyValue('--foil-x')).toBe('')
     expect(still).toHaveAttribute('data-still', 'true')
   })

@@ -310,6 +310,16 @@ select.input option { background: #141614; color: var(--white); }
 @media (prefers-reduced-motion: reduce) {
   .power-card.legendary, .pc-foil { animation: none; }
 }
+.legendary-marker { position: relative; width: 24px; height: 24px; pointer-events: none; }
+.legendary-marker b {
+  position: absolute; inset: 0; display: grid; place-items: center; border-radius: 50%; background: var(--legendary-2);
+  border: 2px solid var(--legendary-3); color: var(--legendary-ink); font: 800 14px var(--font); animation: legendary-twinkle 1.6s ease-in-out infinite;
+}
+.legendary-ring { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--legendary-2); animation: legendary-ripple 3.2s ease-out infinite; }
+@keyframes legendary-twinkle { 50% { opacity: 0.75; transform: scale(0.92); } }
+@keyframes legendary-ripple { from { transform: scale(1); opacity: 0.6; } to { transform: scale(4.5); opacity: 0; } }
+.legendary-marker[data-still='true'] b, .legendary-marker[data-still='true'] .legendary-ring { animation: none; }
+.legendary-marker[data-still='true'] .legendary-ring { display: none; }
 .pc-corner { position: absolute; width: 10px; height: 10px; border: 0 solid var(--volt); }
 .pc-corner.tl { top: 8px; left: 8px; border-top-width: 2px; border-left-width: 2px; }
 .pc-corner.tr { top: 8px; right: 8px; border-top-width: 2px; border-right-width: 2px; }

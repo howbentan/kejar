@@ -16,14 +16,27 @@ export function Foil() {
   const reduce = useReducedMotion()
   useEffect(() => {
     if (reduce) return
+    let frame = 0
+    let next: { x: string; y: string } | null = null
+    const flush = () => {
+      frame = 0
+      if (!next) return
+      el.current?.style.setProperty('--foil-x', next.x)
+      el.current?.style.setProperty('--foil-y', next.y)
+      next = null
+    }
+    // Orientation events can arrive faster than frames: keep the latest and write once per frame.
     const tilt = (e: Event) => {
       const { gamma, beta } = e as DeviceOrientationEvent
       if (typeof gamma !== 'number' || typeof beta !== 'number') return
-      el.current?.style.setProperty('--foil-x', `${Math.round(50 + (clamp(gamma, -45, 45) / 45) * 50)}%`)
-      el.current?.style.setProperty('--foil-y', `${Math.round(50 + (clamp(beta - 45, -45, 45) / 45) * 50)}%`)
+      next = { x: `${Math.round(50 + (clamp(gamma, -45, 45) / 45) * 50)}%`, y: `${Math.round(50 + (clamp(beta - 45, -45, 45) / 45) * 50)}%` }
+      if (!frame) frame = requestAnimationFrame(flush)
     }
     window.addEventListener('deviceorientation', tilt)
-    return () => window.removeEventListener('deviceorientation', tilt)
+    return () => {
+      window.removeEventListener('deviceorientation', tilt)
+      cancelAnimationFrame(frame)
+    }
   }, [reduce])
   return <span ref={el} className="pc-foil" data-testid="foil" data-still={reduce ? 'true' : 'false'} aria-hidden="true" />
 }

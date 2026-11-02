@@ -71,6 +71,15 @@ describe('PowerUpHand', () => {
     expect(screen.getByText('READY')).toBeInTheDocument()
   })
 
+  it('the Dato Seri slot is legendary with a foil; every other kind gets a plain slot', () => {
+    const { rerender } = render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'dato' }] })} />)
+    expect(screen.getByRole('button', { name: /dato seri/i })).toHaveClass('legendary')
+    expect(screen.getByTestId('foil')).toBeInTheDocument()
+    rerender(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'shield' }] })} />)
+    expect(screen.getByRole('button', { name: /durian/i })).not.toHaveClass('legendary')
+    expect(screen.queryByTestId('foil')).toBeNull()
+  })
+
   it('a running Durian counts down; other effects wait for the next ping', () => {
     const { rerender } = render(<PowerUpHand code="ABC234" view={testView({ activePowerUp: 'shield', activeEndsAt: 100_000 + 582_000 })} />)
     expect(screen.getByText('Durian')).toBeInTheDocument()
