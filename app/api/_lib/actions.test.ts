@@ -984,8 +984,13 @@ describe('game mode', () => {
   it('chaserSnapshot defaults to false and can be turned on at creation', async () => {
     const off = await readyGame()
     expect((await store.gameByCode(off.code))!.settings.chaserSnapshot).toBe(false)
-    const on = await readyGame({ chaserSnapshot: true })
+    const on = await readyGame({ mode: 'full', chaserSnapshot: true })
     expect((await store.gameByCode(on.code))!.settings.chaserSnapshot).toBe(true)
+  })
+
+  it('a Core game always has the chaser snapshot off, even if the switch was sent on (rules §3)', async () => {
+    const core = await readyGame({ mode: 'core', chaserSnapshot: true })
+    expect((await store.gameByCode(core.code))!.settings.chaserSnapshot).toBe(false)
   })
 
   it('rejects a chaserSnapshot that is not true or false', async () => {
@@ -1976,7 +1981,7 @@ describe('saved arenas', () => {
 
 describe('the chaser snapshot at check-in (checkins design §5)', () => {
   it("a runner who missed the last ping still sees the chasers from the alert of the one she checked into", async () => {
-    const g = await safetyGame({ checkinMode: 'schedule', chaserSnapshot: true })
+    const g = await safetyGame({ checkinMode: 'schedule', mode: 'full', chaserSnapshot: true })
     // Ben stands 50 m north at ping 1's alert (+9:15), then walks off.
     now = T0 + 9 * MIN
     await run('location', { code: g.code, token: g.ben.token, ...at(50) })
@@ -2003,7 +2008,7 @@ describe('the chaser snapshot at check-in (checkins design §5)', () => {
   })
 
   it('a runner freed after the alert has not checked in for that window, even with a location inside it', async () => {
-    const g = await safetyGame({ checkinMode: 'schedule', chaserSnapshot: true })
+    const g = await safetyGame({ checkinMode: 'schedule', mode: 'full', chaserSnapshot: true })
     now = T0 + 9.75 * MIN // Aina checks in for ping 1; Hafiz doesn't
     await run('location', { code: g.code, token: g.aina.token, ...at(10) })
     now = T0 + 12 * MIN

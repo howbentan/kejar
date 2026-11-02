@@ -124,9 +124,12 @@ describe('HostNew', () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ settings: expect.objectContaining({ mode: 'full' }) })))
   })
 
-  it('the chaser-snapshot switch is off by default and can be turned on', async () => {
+  it('the chaser-snapshot switch is Full only, off by default, and can be turned on', async () => {
     const { unmount } = render(<HostNew />)
     fireEvent.click(await screen.findByRole('button', { name: 'Use KLCC' }))
+    // Core: no switch at all (rules §3).
+    expect(screen.queryByRole('radio', { name: /Dikejar can see Kejar at check-in/ })).toBeNull()
+    fireEvent.click(screen.getByRole('radio', { name: 'Game: Full' }))
     expect(screen.getByRole('radio', { name: 'Dikejar can see Kejar at check-in: Off' })).toHaveAttribute('aria-checked', 'true')
     fireEvent.click(screen.getByRole('button', { name: /create game/i }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ settings: expect.objectContaining({ chaserSnapshot: false }) })))
@@ -134,9 +137,23 @@ describe('HostNew', () => {
     call.mockClear()
     render(<HostNew />)
     fireEvent.click(await screen.findByRole('button', { name: 'Use KLCC' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Game: Full' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Dikejar can see Kejar at check-in: On' }))
     fireEvent.click(screen.getByRole('button', { name: /create game/i }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ settings: expect.objectContaining({ chaserSnapshot: true }) })))
+  })
+
+  it('switching back to Core turns the chaser-snapshot switch off', async () => {
+    render(<HostNew />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Use KLCC' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Game: Full' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Dikejar can see Kejar at check-in: On' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Game: Core' }))
+    expect(screen.queryByRole('radio', { name: /Dikejar can see Kejar at check-in/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /create game/i }))
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith('create', expect.objectContaining({ settings: expect.objectContaining({ mode: 'core', chaserSnapshot: false }) })),
+    )
   })
 
   it('creating from an untouched saved park sends no overrides', async () => {

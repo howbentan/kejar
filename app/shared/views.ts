@@ -432,6 +432,9 @@ function sinceRelease(i: Pick<ViewInput, 'game' | 'me' | 'now'>): number {
 
 export type SnapshotInput = Pick<ViewInput, 'game' | 'me' | 'positions' | 'events' | 'now'>
 
+/** The check-in switch only exists in Full: always off in Core, whatever was stored (rules §3). */
+const snapshotOn = (g: Game) => g.settings.mode === 'full' && g.settings.chaserSnapshot === true
+
 /**
  * The scheduled ping whose alert-time snapshot a free runner sees: the most recent one they checked into
  * (checkins design §5.4), the same 45 s window test as auto-jail (`checkedIn`). Mat Rempit's bonus pings
@@ -440,7 +443,7 @@ export type SnapshotInput = Pick<ViewInput, 'game' | 'me' | 'positions' | 'event
  * view only loads positions at a few moments. Null with the switch off, or before a first check-in.
  */
 export function snapshotWindow(i: SnapshotInput): { seq: number; alertAt: number; revealAt: number } | null {
-  if (i.game.settings.chaserSnapshot !== true) return null
+  if (!snapshotOn(i.game)) return null
   if (i.me.role !== 'runner' || i.me.jailed || phaseAt(i.game, i.now).phase !== 'chasing') return null
   const recorded = new Set(
     i.events
@@ -473,7 +476,7 @@ function chaserSnapshotFor(i: ViewInput): ChaserSnapshot | null {
 }
 
 function snapshottedFor(i: ViewInput, phase: Phase): boolean {
-  if (i.game.settings.chaserSnapshot !== true || i.me.role !== 'chaser' || phase !== 'chasing') return false
+  if (!snapshotOn(i.game) || i.me.role !== 'chaser' || phase !== 'chasing') return false
   return pingTimes(i.game, i.now).some((t) => t.alertAt <= i.now && i.now < t.revealAt)
 }
 
@@ -485,7 +488,8 @@ export const SNAPSHOT_TAKEN = 'Snapshot taken — Dikejar can see where you were
  * and each repeat says nothing new, so they collapse into the most recent one.
  */
 function snapshotLines(i: ViewInput, phase: Phase, endsAt: number | null): { at: string; text: string }[] {
-  if (i.game.settings.chaserSnapshot !== true) return []
+  // Chasers and marshals only (ruling R16): a runner already sees the snapshot itself.
+  if (!snapshotOn(i.game) || (i.me.role !== 'chaser' && i.me.role !== 'marshal')) return []
   const until = phase === 'ended' && endsAt !== null ? Math.min(endsAt, i.now) : i.now
   return pingTimes(i.game, i.now)
     .filter((t) => t.alertAt <= until)
