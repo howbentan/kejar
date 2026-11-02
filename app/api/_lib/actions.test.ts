@@ -2220,3 +2220,163 @@ describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
     expect((await run<View>('state', { code: g.code, token: g.aina.token })).legendaryZone).toBeNull()
   })
 })
+
+describe('Settle: Dato Seri frees its holder and up to 2 others at Penjara (jail design §4, §4b, §4d)', () => {
+  /**
+   * A Full game in the chase: Ben chases; Aina #07 holds Dato Seri; Aina, Hafiz #03, Wei #14 and Mei #21 are
+   * in Penjara; Raj #05 is still free.
+   */
+  async function inPenjara() {
+    const g = await readyGame({ mode: 'full' })
+    const join = async (name: string, tagId: number) => {
+      const r = await run('join', { code: g.code, name, accepted: true })
+      await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [r.playerId]: 'runner' } })
+      await run('linkTag', { code: g.code, token: r.token, tagId })
+      return r
+    }
+    const wei = await join('Wei', 14)
+    const mei = await join('Mei', 21)
+    const raj = await join('Raj', 5)
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    const gameId = (await store.gameByCode(g.code))!.id
+    const dato = await store.addPowerUp({ game_id: gameId, player_id: g.aina.playerId, kind: 'dato', station: null })
+    const jailed = { jailed: true, caught_at: new Date(now).toISOString(), caught_by: g.ben.playerId }
+    await store.updatePlayers([g.aina, g.hafiz, wei, mei].map((p) => ({ id: p.playerId, patch: jailed })))
+    return { ...g, wei, mei, raj, gameId, dato }
+  }
+  const settle = (g: { code: string; aina: { token: string } }, targetIds: string[], extra: object = {}) =>
+    run('settle', { code: g.code, token: g.aina.token, qr: JAIL_QR, targetIds, ...at(10), ...extra })
+  const player = async (g: { gameId: string }, id: string) => (await store.players(g.gameId)).find((p) => p.id === id)!
+  const datoRow = async (g: { gameId: string; dato: { id: string } }) => (await store.powerUps(g.gameId)).find((u) => u.id === g.dato.id)!
+
+  it('frees the holder and two chosen friends, spends the card, and tells everyone the real count', async () => {
+    const g = await inPenjara()
+    const r = await settle(g, [g.hafiz.playerId, g.wei.playerId])
+    expect(r).toEqual({ ok: true, freedIds: [g.aina.playerId, g.hafiz.playerId, g.wei.playerId] })
+    for (const id of r.freedIds) {
+      expect(await player(g, id)).toMatchObject({ jailed: false, freed_once: true, freed_at: new Date(now).toISOString() })
+    }
+    expect(await player(g, g.mei.playerId)).toMatchObject({ jailed: true, freed_once: false })
+    expect((await datoRow(g)).used_at).toBe(new Date(now).toISOString())
+    for (const who of [{ token: g.ben.token }, { token: g.raj.token }, { token: g.mei.token }, { organiserToken: g.organiserToken }]) {
+      const v = await run<View>('state', { code: g.code, ...who })
+      expect(v.feed[0].text).toBe('Something legendary freed 3 Dikejar!')
+      expect(v.feed.map((f) => `${f.text} ${f.means ?? ''} ${f.label ?? ''}`).join(' ')).not.toMatch(/Dato/)
+    }
+  })
+
+  it('a holder who already used their one escape frees only their friends', async () => {
+    const g = await inPenjara()
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { freed_once: true } }])
+    expect(await settle(g, [g.hafiz.playerId])).toEqual({ ok: true, freedIds: [g.hafiz.playerId] })
+    expect(await player(g, g.aina.playerId)).toMatchObject({ jailed: true })
+    expect((await run<View>('state', { code: g.code, token: g.ben.token })).feed[0].text).toBe('Something legendary freed 1 Dikejar!')
+  })
+
+  it('with nobody picked, frees the holder alone', async () => {
+    const g = await inPenjara()
+    expect(await settle(g, [])).toEqual({ ok: true, freedIds: [g.aina.playerId] })
+    expect(await run('settle', { code: g.code, token: g.hafiz.token, qr: JAIL_QR, ...at(10) })).toEqual({ ok: false, reason: 'no-dato' })
+  })
+
+  it('refuses, keeping the card, when nobody would be freed', async () => {
+    const g = await inPenjara()
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { freed_once: true } }])
+    expect(await settle(g, [])).toEqual({ ok: false, reason: 'nobody-to-free' })
+    expect((await datoRow(g)).used_at).toBeNull()
+  })
+
+  it('refuses the whole Settle for a target who already used their escape, rather than dropping them', async () => {
+    const g = await inPenjara()
+    await store.updatePlayers([{ id: g.mei.playerId, patch: { freed_once: true } }])
+    expect(await settle(g, [g.hafiz.playerId, g.mei.playerId])).toEqual({ ok: false, reason: 'target-already-freed', targetId: g.mei.playerId })
+    expect(await player(g, g.hafiz.playerId)).toMatchObject({ jailed: true, freed_once: false })
+    expect(await player(g, g.aina.playerId)).toMatchObject({ jailed: true, freed_once: false })
+    expect((await datoRow(g)).used_at).toBeNull()
+  })
+
+  it('refuses unknown, free, chaser, duplicate or self targets, and more than two', async () => {
+    const g = await inPenjara()
+    for (const bad of ['nobody', g.raj.playerId, g.ben.playerId, g.aina.playerId]) {
+      expect(await settle(g, [bad])).toEqual({ ok: false, reason: 'unknown-target', targetId: bad })
+    }
+    expect(await settle(g, [g.hafiz.playerId, g.hafiz.playerId])).toEqual({ ok: false, reason: 'unknown-target', targetId: g.hafiz.playerId })
+    expect(await settle(g, [g.hafiz.playerId, g.wei.playerId, g.mei.playerId])).toEqual({ ok: false, reason: 'too-many-targets' })
+    await rejects(run('settle', { code: g.code, token: g.aina.token, qr: JAIL_QR, targetIds: 'x', ...at(10) }), 400)
+    expect((await datoRow(g)).used_at).toBeNull()
+    expect((await store.players(g.gameId)).filter((p) => p.jailed)).toHaveLength(4)
+  })
+
+  it('needs the Penjara scan and a fresh position at Penjara, like a jailbreak', async () => {
+    const g = await inPenjara()
+    await rejects(settle(g, [], { qr: tagQr(7) }), 400, 'Penjara')
+    expect(await settle(g, [], at(80))).toEqual({ ok: false, reason: 'too-far-from-jail' })
+    now += 31_000
+    expect(await run('settle', { code: g.code, token: g.aina.token, qr: JAIL_QR, targetIds: [] })).toEqual({ ok: false, reason: 'too-far-from-jail' })
+    expect((await datoRow(g)).used_at).toBeNull()
+  })
+
+  it('is for a jailed holder, during the chase, while not paused', async () => {
+    const g = await inPenjara()
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: false } }])
+    expect(await settle(g, [g.hafiz.playerId])).toEqual({ ok: false, reason: 'not-jailed' })
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: true } }])
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    expect(await settle(g, [])).toEqual({ ok: false, reason: 'paused' })
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 60 * MIN
+    expect(await settle(g, [])).toEqual({ ok: false, reason: 'not-chasing' })
+  })
+
+  it('a double tap settles once', async () => {
+    const g = await inPenjara()
+    const rs = await Promise.all([settle(g, [g.hafiz.playerId]), settle(g, [g.hafiz.playerId])])
+    expect(rs.filter((r) => r.ok)).toHaveLength(1)
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'settled')).toHaveLength(1)
+  })
+
+  it('gives the card back if freeing fails', async () => {
+    const g = await inPenjara()
+    const real = store.updatePlayers.bind(store)
+    store.updatePlayers = async () => {
+      throw new Error('database down')
+    }
+    await expect(settle(g, [g.hafiz.playerId])).rejects.toThrow('database down')
+    store.updatePlayers = real
+    expect((await datoRow(g)).used_at).toBeNull()
+  })
+
+  it("the jailed holder's view lists who Settle could free; nobody else gets the picker", async () => {
+    const g = await inPenjara()
+    await store.updatePlayers([{ id: g.mei.playerId, patch: { freed_once: true } }])
+    const v = await run<View>('state', { code: g.code, token: g.aina.token })
+    expect(v.settle).toEqual({
+      canFreeSelf: true,
+      options: [
+        { id: g.hafiz.playerId, name: 'Hafiz', eligible: true },
+        { id: g.wei.playerId, name: 'Wei', eligible: true },
+        { id: g.mei.playerId, name: 'Mei', eligible: false },
+      ],
+    })
+    for (const token of [g.hafiz.token, g.raj.token, g.ben.token]) {
+      expect((await run<View>('state', { code: g.code, token })).settle).toBeNull()
+    }
+    await settle(g, [g.hafiz.playerId])
+    // Free again, and the card is spent: no picker, and the slot is empty.
+    const after = await run<View>('state', { code: g.code, token: g.aina.token })
+    expect(after.settle).toBeNull()
+    expect(after.hand).toEqual([])
+    expect(after.activePowerUp).toBeNull()
+  })
+
+  it('Ah Long can never take a held Dato Seri', async () => {
+    const g = await inPenjara()
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: false } }])
+    const along = await store.addPowerUp({ game_id: g.gameId, player_id: g.ben.playerId, kind: 'along', station: 1 })
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: along.id })).toEqual({ ok: false, reason: 'nothing-to-steal' })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === along.id)!.used_at).toBeNull()
+    expect((await datoRow(g)).taken_at).toBeNull()
+  })
+})

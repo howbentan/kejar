@@ -54,6 +54,7 @@ export function testView(over: Partial<View> = {}): View {
     activePowerUp: null,
     shieldActive: false,
     legendaryZone: null,
+    settle: null,
     results: null,
     ...over,
   }

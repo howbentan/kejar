@@ -146,6 +146,8 @@ export type EventType =
   | 'stolen'
   /** Someone scanned Dato Seri's stash. The feed never says who, or what it was (jail design §4c). */
   | 'legendary'
+  /** Dato Seri's Settle freed `data.freed` runners. Visible, but never names the card (jail design §4). */
+  | 'settled'
 
 export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along' | 'grab' | 'dato'
 

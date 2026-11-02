@@ -135,6 +135,12 @@ export interface View {
    */
   legendaryZone: { lat: number; lng: number; radiusM: number } | null
   /**
+   * What Settle could do, for a jailed runner holding an unused Dato Seri (jail design §4b, §4d); null for
+   * everyone else. `options` are the other runners in Penjara; those who already used their one escape are
+   * listed as not eligible (greyed out).
+   */
+  settle: { canFreeSelf: boolean; options: { id: string; name: string; eligible: boolean }[] } | null
+  /**
    * Marshals and the organiser: exactly where the stash is (null if none), and who claimed it. Left out of
    * players' views entirely, so not even the key's name reaches their phones (rules doc §9b).
    */
@@ -491,6 +497,17 @@ function legendaryZoneFor(i: ViewInput, phase: Phase): View['legendaryZone'] {
   return { lat: c.lat, lng: c.lng, radiusM: LEGENDARY_ZONE_M }
 }
 
+/** The Settle picker's choices, the same eligibility `judgeSettle` applies. */
+function settleFor(i: ViewInput): View['settle'] {
+  if (i.me.role !== 'runner' || !i.me.jailed) return null
+  const holds = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'dato' && u.used_at === null && u.taken_at === null)
+  if (!holds) return null
+  const options = i.players
+    .filter((p) => p.role === 'runner' && p.jailed && p.id !== i.me.id && !p.removed_at)
+    .map((p) => ({ id: p.id, name: p.name, eligible: !p.freed_once }))
+  return { canFreeSelf: !i.me.freed_once, options }
+}
+
 function jailCheckinsFor(i: ViewInput, reason: View['jailReason']): View['jailCheckins'] {
   if (reason !== 'missed-checkins') return null
   const latest = i.events.filter((e) => e.type === 'auto-jailed' && e.target_id === i.me.id).at(-1)
@@ -559,6 +576,16 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
     case 'legendary':
       // Never the card's name or the finder's (jail design §4c, rules doc §9b).
       return plain('Something legendary was found.')
+    case 'settled': {
+      // Visible to everyone, a lime-box line for Kejar, with the real count (rules doc §9c); still no card name.
+      const n = Number(e.data.freed ?? 0)
+      return two(
+        `Something legendary freed ${n} Dikejar!`,
+        'FREE',
+        ctx.jailedNow === 0 ? 'Penjara is empty again.' : `${ctx.jailedNow} still inside.`,
+        `${n} more Dikejar ${n === 1 ? 'is' : 'are'} loose near Penjara.`,
+      )
+    }
     case 'caught':
       if (!actor || !target) return plain('A Dikejar was caught.')
       return two(`${actor.name} caught ${tag}.`, 'CATCH', `${tag} is walking to Penjara. ${ctx.freeNow} Dikejar still free.`, `Nice. ${ctx.freeNow} Dikejar left to find.`)
@@ -635,7 +662,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, datoStash: undefined, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, settle: null, datoStash: undefined, reports: [], ratings: [] }
   }
   return v
 }
@@ -742,6 +769,7 @@ function fullView(i: ViewInput): View {
       return busy?.running ? busy.kind : null
     })(),
     legendaryZone: legendaryZoneFor(i, phase),
+    settle: settleFor(i),
     ...(role === 'marshal' ? { datoStash: i.game.dato_stash ?? null } : {}),
     results: i.results,
   }

@@ -16,7 +16,7 @@ import { autoJailDue, checkinsSince, countedCheckIn } from '../../shared/checkin
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
-import { judgeCatch, judgeJailbreak } from '../../shared/catch.js'
+import { judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
 import { isDatoQr, JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, flareBlocked, judgeClaim, judgeDatoClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
@@ -618,6 +618,47 @@ const jailbreak: Action = async (ctx, body) => {
     target_id: null,
     data: { freed: verdict.freedIds.length },
   })
+  return verdict
+}
+
+/**
+ * Settle (jail design §4b, §4d): the jailed Dato Seri holder scans the Penjara code and picks up to 2 jailed
+ * friends. Frees whoever is eligible exactly as a jailbreak does. The card is spent first, atomically, so a
+ * double tap settles once, and given back if the freeing fails. Visible to everyone, without naming the card.
+ */
+const settle: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  if (str(body.qr).trim() !== JAIL_QR) throw new ActionError(400, "That's not the Penjara code")
+  const targetIds = body.targetIds ?? []
+  if (!Array.isArray(targetIds) || !targetIds.every((t) => typeof t === 'string')) throw new ActionError(400, 'Pick who to free')
+  await recordScanLocation(ctx, game, me, body)
+  await advance(ctx, game)
+  const fresh = (await loadGame(ctx, body)) as Game
+  if (fresh.paused_at) return { ok: false, reason: 'paused' }
+  const dato = (await ctx.store.powerUps(game.id)).find(
+    (u) => u.player_id === me.id && u.kind === 'dato' && u.used_at === null && u.taken_at === null,
+  )
+  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
+  const verdict = judgeSettle({
+    phase: phaseAt(fresh, ctx.now).phase,
+    holder: me,
+    holdsDato: !!dato,
+    players: await ctx.store.players(game.id),
+    holderPos: latest(positions[me.id]),
+    jail: game.arena.jail,
+    targetIds,
+    now: ctx.now,
+  })
+  if (!verdict.ok) return verdict
+  if (!(await ctx.store.markUsed(dato!.id))) return { ok: false, reason: 'already-used' }
+  try {
+    await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now) } })))
+  } catch (e) {
+    await ctx.store.updatePowerUp(dato!.id, { used_at: null }) // give Dato Seri back
+    throw e
+  }
+  await ctx.store.addEvent({ game_id: game.id, type: 'settled', actor_id: me.id, target_id: null, data: { freed: verdict.freedIds.length } })
   return verdict
 }
 
@@ -1285,6 +1326,7 @@ export const actions = {
   location,
   catch: catchAction,
   jailbreak,
+  settle,
   subscribe,
   claim,
   usePowerup,
