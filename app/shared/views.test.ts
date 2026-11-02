@@ -636,3 +636,41 @@ describe('the chaser snapshot at check-in (checkins design §5)', () => {
     expect(snap(siti, aina2, { now: alertAt(2) + 20_000 })).toBeNull()
   })
 })
+
+describe("the snapshot marker on a chaser's own screen (checkins design §5.4)", () => {
+  const on = game({ settings: { ...DEFAULT_SETTINGS, chaserSnapshot: true } })
+  const alertAt = (k: number) => T0 + (5 + 5 * k) * MIN - SCHEDULED_ALERT_LEAD_MS
+  const SNAP = 'Snapshot taken — Dikejar can see where you were'
+
+  it('a chaser is snapshotted from a scheduled alert until that ping reveals', () => {
+    expect(view(chaser, { game: on, now: alertAt(3) + 1_000 }).snapshotted).toBe(true)
+    expect(view(chaser, { game: on, now: T0 + 20 * MIN - 1 }).snapshotted).toBe(true)
+    expect(view(chaser, { game: on, now: T0 + 16 * MIN }).snapshotted).toBe(false)
+  })
+
+  it('a Mat Rempit bonus ping never snapshots anyone', () => {
+    const bonus = ping(BONUS_SEQ_BASE, T0 + 17 * MIN, { revealed: false })
+    expect(view(chaser, { game: on, pings: [...pings, bonus], now: T0 + 16.8 * MIN }).snapshotted).toBe(false)
+  })
+
+  it('with the switch off, or for anyone but a chaser, snapshotted is false', () => {
+    expect(view(chaser, { now: alertAt(3) + 1_000 }).snapshotted).toBe(false)
+    expect(view(aina, { game: on, now: alertAt(3) + 1_000 }).snapshotted).toBe(false)
+    expect(view(siti, { game: on, now: alertAt(3) + 1_000 }).snapshotted).toBe(false)
+  })
+
+  it('the feed tells everyone at each scheduled alert, in plain English', () => {
+    for (const me of [aina, chaser, siti]) {
+      const lines = view(me, { game: on }).feed.filter((f) => f.text === SNAP)
+      expect(lines.map((f) => f.at)).toEqual([iso(alertAt(2)), iso(alertAt(1))])
+    }
+  })
+
+  it('no snapshot lines with the switch off, for bonus pings, or after the game ended', () => {
+    expect(view(aina).feed.some((f) => f.text === SNAP)).toBe(false)
+    const bonus = ping(BONUS_SEQ_BASE, T0 + 17 * MIN)
+    expect(view(aina, { game: on, pings: [...pings, bonus], now: T0 + 18 * MIN }).feed.filter((f) => f.text === SNAP)).toHaveLength(2)
+    const ended = game({ settings: on.settings, ended_at: iso(T0 + 12 * MIN) })
+    expect(view(aina, { game: ended, now: T0 + 30 * MIN }).feed.filter((f) => f.text === SNAP).map((f) => f.at)).toEqual([iso(alertAt(1))])
+  })
+})

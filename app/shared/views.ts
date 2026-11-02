@@ -105,6 +105,11 @@ export interface View {
    * runner's first check-in.
    */
   chaserSnapshot: ChaserSnapshot | null
+  /**
+   * A chaser, with the switch on, between a scheduled ping's alert and its reveal: runners checking in can
+   * see where they were at the alert, so their unseen window has started (checkins design §5.4).
+   */
+  snapshotted: boolean
   feed: FeedItem[]
   counts: { runnersFree: number; runnersJailed: number; chasers: number }
   /** Everyone in the game: shown in the lobby and to marshals; empty for players mid-game. */
@@ -442,6 +447,22 @@ function chaserSnapshotFor(i: ViewInput): ChaserSnapshot | null {
   return { positions }
 }
 
+function snapshottedFor(i: ViewInput, phase: Phase): boolean {
+  if (i.game.settings.chaserSnapshot !== true || i.me.role !== 'chaser' || phase !== 'chasing') return false
+  return pingTimes(i.game, i.now).some((t) => t.alertAt <= i.now && i.now < t.revealAt)
+}
+
+export const SNAPSHOT_TAKEN = 'Snapshot taken — Dikejar can see where you were'
+
+/** One feed line per scheduled alert so far while the switch is on, derived from the schedule (§5.4). */
+function snapshotLines(i: ViewInput, phase: Phase, endsAt: number | null): { at: string; text: string }[] {
+  if (i.game.settings.chaserSnapshot !== true) return []
+  const until = phase === 'ended' && endsAt !== null ? Math.min(endsAt, i.now) : i.now
+  return pingTimes(i.game, i.now)
+    .filter((t) => t.alertAt <= until)
+    .map((t) => ({ at: new Date(t.alertAt).toISOString(), text: SNAPSHOT_TAKEN }))
+}
+
 function jailCheckinsFor(i: ViewInput, reason: View['jailReason']): View['jailCheckins'] {
   if (reason !== 'missed-checkins') return null
   const latest = i.events.filter((e) => e.type === 'auto-jailed' && e.target_id === i.me.id).at(-1)
@@ -583,7 +604,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, deckLeft: null, activePowerUp: null, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, reports: [], ratings: [] }
   }
   return v
 }
@@ -629,7 +650,7 @@ function fullView(i: ViewInput): View {
       const line = feedLine(e, byId, feedContext)
       return line ? [{ at: e.at, ...line }] : []
     }),
-    ...notes.map((n) => ({ ...n, means: null, act: false, label: null })),
+    ...[...notes, ...snapshotLines(i, phase, endsAt)].map((n) => ({ ...n, means: null, act: false, label: null })),
   ]
     .map((entry, order) => ({ entry, order }))
     .sort((a, b) => Date.parse(b.entry.at) - Date.parse(a.entry.at) || b.order - a.order)
@@ -669,6 +690,7 @@ function fullView(i: ViewInput): View {
     jailCheckins: jailCheckinsFor(i, jailReasonFor(i)),
     checkin: checkinFor(i, phase),
     chaserSnapshot: chaserSnapshotFor(i),
+    snapshotted: snapshottedFor(i, phase),
     feed,
     counts: {
       runnersFree: runners.filter((p) => !p.jailed).length,
