@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { View } from '../../shared/views.js'
 import Marker from '../game/Marker'
 import PenjaraArrival from '../game/PenjaraArrival'
+import SettlePanel from '../game/SettlePanel'
 import Stamp from '../game/Stamp'
 import { WalkGuide } from '../game/WalkGuide'
 import { shouldPlay } from '../game/moments'
@@ -30,8 +31,13 @@ function CheckinRow({ checkins }: { checkins: { at: number; ok: boolean }[] }) {
   )
 }
 
+/** Dato Seri's holder in Penjara: Settle sits here, on the Penjara screen, where the Penjara code gets scanned. */
+function Settle({ code, view }: { code: string; view: View }) {
+  return view.settle ? <SettlePanel code={code} settle={view.settle} /> : null
+}
+
 /** Sent to Penjara for missing two check-ins in a row: says why, and points to a marshal for a phone fault. */
-function AutoJailed({ view }: { view: View }) {
+function AutoJailed({ code, view }: { code: string; view: View }) {
   const [playing, setPlaying] = useState(() => shouldPlay('auto', view.me.caught_at, view.now, sessionStorage))
   useEffect(() => {
     if (playing) navigator.vibrate?.([300, 100, 300])
@@ -58,6 +64,7 @@ function AutoJailed({ view }: { view: View }) {
         {outForGood ? 'You were already freed once, so you stay in Penjara until the end. Watch the chase from here.' : lineFor(view.me.id)}
       </p>
       {view.jailCheckins && view.jailCheckins.length > 0 && <CheckinRow checkins={view.jailCheckins} />}
+      <Settle code={code} view={view} />
       {outForGood ? (
         <>
           <GameMap arena={view.arena} dots={view.dots} height={240} />
@@ -106,7 +113,7 @@ function WalkThenWatch({ view }: { view: View }) {
 }
 
 /** Caught by a chaser (motion design §5): the bars and the plated stamp, then who got you and the walk. */
-function Caught({ view }: { view: View }) {
+function Caught({ code, view }: { code: string; view: View }) {
   const [playing, setPlaying] = useState(() => shouldPlay('caught', view.me.caught_at, view.now, sessionStorage))
   const name = useRef<HTMLSpanElement>(null)
   useEffect(() => {
@@ -134,13 +141,14 @@ function Caught({ view }: { view: View }) {
           ? 'You’ve already been broken out once, so you stay in Penjara this time.'
           : 'A free runner can still break you out — once. A marshal will give your tag back.'}
       </p>
+      <Settle code={code} view={view} />
       <WalkThenWatch view={view} />
       <Feed view={view} />
     </Screen>
   )
 }
 
-export default function Jail({ view }: { code: string; view: View }) {
-  if (view.jailReason === 'missed-checkins') return <AutoJailed view={view} />
-  return <Caught view={view} />
+export default function Jail({ code, view }: { code: string; view: View }) {
+  if (view.jailReason === 'missed-checkins') return <AutoJailed code={code} view={view} />
+  return <Caught code={code} view={view} />
 }
