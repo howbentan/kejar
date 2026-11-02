@@ -341,3 +341,26 @@ select.input option { background: #141614; color: var(--white); }
 .alert-sos { border-color: var(--volt); box-shadow: 0 0 0 1px var(--volt) inset; }
 .alert-handled { opacity: 0.45; }
 .alert-btn { padding: 8px 12px; font-size: 13px; }
+
+/* Marshal SOS takeover (motion design §6.5): lime fills the screen because it needs you now. No red anywhere. */
+.sos-takeover {
+  position: fixed; inset: 0; z-index: 60; overflow-y: auto;
+  background: var(--volt); color: var(--black);
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 28px 20px calc(28px + env(safe-area-inset-bottom)); text-align: center;
+}
+.sos-takeover .eyebrow { color: var(--black); opacity: 0.7; }
+.sos-takeover-big { font-size: 46px; font-weight: 800; letter-spacing: -0.06em; line-height: 1; }
+.sos-takeover-sender { font: 700 18px var(--font); }
+.sos-takeover-panel { width: 100%; max-width: 380px; background: var(--black); color: var(--white); border-radius: 16px; padding: 12px 14px; }
+.sos-takeover-panel p { font-size: 14px; line-height: 1.4; }
+.sos-takeover-map { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 6px; }
+.sos-takeover-distance { font: 700 13px var(--mono); letter-spacing: 0.1em; }
+.sos-takeover-status { font: 700 13px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.sos-takeover-actions { display: flex; gap: 8px; width: 100%; max-width: 380px; }
+.sos-takeover-actions .btn { flex: 1; background: var(--black); color: var(--volt); }
+.sos-takeover-actions .btn-ghost { flex: 1; background: transparent; color: var(--black); border: 1.5px solid var(--black); }
+.sos-takeover .sos-chips { justify-content: center; }
+.sos-takeover .sos-chips button { border-color: var(--black); color: var(--black); }
+.sos-takeover .sos-chips button.on { background: var(--black); border-color: var(--black); color: var(--volt); }
+.sos-takeover-close { width: 100%; max-width: 380px; background: var(--black); color: var(--volt); }
