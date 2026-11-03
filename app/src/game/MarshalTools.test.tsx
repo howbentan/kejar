@@ -100,6 +100,35 @@ describe('MarshalTools', () => {
     expect(screen.queryByRole('button', { name: 'It stands' })).toBeNull()
   })
 
+  it('shows who caught a jailed runner and when, not just "in Penjara"', () => {
+    const caughtRoster = [
+      { id: 'r1', name: 'Aina', role: 'runner' as const, tag_id: 7, jailed: true, caught_by: 'Ben', caught_at: new Date(100_000 - 120_000).toISOString() },
+    ]
+    render(<MarshalTools code="ABC234" view={testView({ roster: caughtRoster })} refresh={refresh} />)
+    expect(screen.getByText('PENJARA')).toBeInTheDocument()
+    expect(screen.getByText('caught by Ben · 2 min ago')).toBeInTheDocument()
+  })
+
+  it('shows auto-jail distinctly from a chaser catch, with no caught-by name', () => {
+    const autoRoster = [{ id: 'r1', name: 'Aina', role: 'runner' as const, tag_id: 7, jailed: true, caught_by: null }]
+    render(<MarshalTools code="ABC234" view={testView({ roster: autoRoster })} refresh={refresh} />)
+    expect(screen.getByText('PENJARA · AUTO')).toBeInTheDocument()
+    expect(screen.getByText('2 missed check-ins')).toBeInTheDocument()
+    expect(screen.queryByText(/caught by/)).toBeNull()
+  })
+
+  it('flags a jailed runner who has already used their one escape', () => {
+    const freedRoster = [{ id: 'r1', name: 'Aina', role: 'runner' as const, tag_id: 7, jailed: true, caught_by: 'Ben', freed_once: true }]
+    render(<MarshalTools code="ABC234" view={testView({ roster: freedRoster })} refresh={refresh} />)
+    expect(screen.getByText('Already escaped once')).toBeInTheDocument()
+  })
+
+  it('shows nothing in the status column for a free player', () => {
+    render(<MarshalTools code="ABC234" view={testView({ roster })} refresh={refresh} />)
+    expect(screen.queryByText('PENJARA')).toBeNull()
+    expect(screen.queryByText('PENJARA · AUTO')).toBeNull()
+  })
+
   it('Remove needs confirming before it calls removePlayer', async () => {
     render(<MarshalTools code="ABC234" view={testView({ roster })} refresh={refresh} />)
     fireEvent.click(screen.getByRole('button', { name: 'Remove Aina' }))

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { REASON_LABEL } from '../../shared/alerts.js'
 import type { Alert } from '../../shared/alerts.js'
+import type { Player } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
 import { currentPushEnv, NotificationsDeniedError, pushSupport, subscribe } from '../spike/push'
 import { call } from './api'
@@ -20,6 +21,22 @@ const KIND_LABEL: Record<Alert['kind'], string> = {
 const ago = (at: string, now: number) => {
   const min = Math.max(0, Math.floor((now - Date.parse(at)) / 60_000))
   return min === 0 ? 'now' : `${min} min ago`
+}
+
+/**
+ * A jailed player's roster status: caught by a chaser (named, timed) or auto-jailed (no `caught_by`), plus
+ * whether they've already used their one Settle/jailbreak escape — the two things a marshal gets asked about
+ * that "in Penjara" alone didn't answer. Luar Garisan has no row here yet: `disqualified` isn't on `Player`.
+ */
+function JailStatus({ p, now }: { p: Player; now: number }) {
+  const auto = !p.caught_by
+  return (
+    <>
+      <span className={auto ? 'status-pill auto' : 'status-pill jailed'}>{auto ? 'PENJARA · AUTO' : 'PENJARA'}</span>
+      <span className="status-reason">{auto ? '2 missed check-ins' : `caught by ${p.caught_by}${p.caught_at ? ` · ${ago(p.caught_at, now)}` : ''}`}</span>
+      {p.freed_once && <span className="status-freed">Already escaped once</span>}
+    </>
+  )
 }
 
 /** Lets a marshal or the organiser get SOS and report alerts on this phone, until they're on. */
@@ -278,7 +295,7 @@ export default function MarshalTools({
               <td>{p.name}</td>
               <td>{p.role}</td>
               <td className="mono">{p.role === 'runner' ? tagText(p.tag_id) : ''}</td>
-              <td>{p.jailed ? 'in Penjara' : ''}</td>
+              <td>{p.jailed && <JailStatus p={p} now={view.now} />}</td>
               <td style={{ textAlign: 'right' }}>
                 <button
                   type="button"
