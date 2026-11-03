@@ -2,7 +2,7 @@
 
 > **Current rules:** `docs/superpowers/specs/2026-10-30-kejar-rules.md` is the single source of truth for the game as a whole. Where this doc disagrees with it, the rules doc wins.
 
-**Status:** Locked in with the owner, 2026-11-04, after an extended mockup-exploration pass (carnival ticket, booking slip, system receipt, jail-bars motion, organic-tear edge, queue-number ticket, toll/parking ticket — all built and clicked through as static HTML before converging) and one builder-check round (§6a, §7.1, and the "jailed for good" case in §5 all resolved from its findings). Ready for `superpowers:writing-plans`. Not built.
+**Status:** Built, 2026-11-04. Locked in after an extended mockup-exploration pass (carnival ticket, booking slip, system receipt, jail-bars motion, organic-tear edge, queue-number ticket, toll/parking ticket — all built and clicked through as static HTML before converging) and one builder-check round (§6a, §7.1, and the "jailed for good" case in §5 all resolved from its findings). §6a's full cross-player version shipped too, including a real bug the GameScreen tests caught (an effect-driven state update left one real render where Jail unmounted, before `showingFreed` caught up) — fixed by moving it to render-phase state instead. 876/876 tests passing.
 **Builds on:**
 - `app/src/screens/Jail.tsx` — `Caught` and `AutoJailed`, the two screens this replaces the body of.
 - `app/src/game/PenjaraArrival.tsx` / `Bars.tsx` / `Stamp.tsx` — the existing "dikejar!" catch motion, kept as-is (see §5, non-goal).
