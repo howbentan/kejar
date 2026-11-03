@@ -447,6 +447,18 @@ describe('power-up effects', () => {
     expect(d).toBeLessThanOrEqual(181)
   })
 
+  it("decoy and ordinary fuzz are seeded with the game's secret seed, not just the public player id and ping number", () => {
+    // Same player, same ping, same real position — only the game's secret seed differs.
+    const decoyAt = (deck_seed: string) =>
+      view(chaser, { game: { ...g, deck_seed }, powerUps: [used('u1', 'r1', 'decoy', T0 + 14 * MIN)] }).dots.find((d) => d.id === 'r1')
+    expect(decoyAt('secret-one')).not.toEqual(decoyAt('secret-two'))
+    expect(decoyAt('secret-one')).toEqual(decoyAt('secret-one'))
+
+    const fuzzAt = (deck_seed: string) => view(chaser, { game: { ...g, deck_seed } }).dots.find((d) => d.id === 'r1')
+    expect(fuzzAt('secret-one')).not.toEqual(fuzzAt('secret-two'))
+    expect(fuzzAt('secret-one')).toEqual(fuzzAt('secret-one'))
+  })
+
   it('focus shows nearby runners exactly at the next reveal', () => {
     const ps = { ...positions, c1: [pos(A.lat + 0.0005, A.lng, T0 + 14.8 * MIN)] } // ~56 m from Aina
     const dot = view(chaser, { positions: ps, powerUps: [used('u1', 'c1', 'focus', T0 + 14 * MIN)] }).dots.find(

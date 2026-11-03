@@ -343,7 +343,10 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
       notes.push({ at: last.reveal_at, text: `${tagLabel(p)} never checked in` })
       continue
     }
-    const seed = `${p.id}:${last.seq}`
+    // Seeded with the game's secret deck seed (never sent to players), same as the chaser snapshot and
+    // Dato Seri's zone — otherwise the player id and ping number alone are public, so a chaser who reads
+    // this file's own client-shipped code could recompute the fuzz/decoy offset and recover exact spots.
+    const seed = `${secretSeed(i.game)}:${p.id}:${last.seq}`
     const focused = focusers.some((f) => distanceM(f, at) <= FOCUS_M)
     let dot: MapDot
     if (decoyed.has(p.id)) {
