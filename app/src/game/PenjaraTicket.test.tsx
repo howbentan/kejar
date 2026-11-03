@@ -37,9 +37,9 @@ describe('PenjaraTicket', () => {
     expect(screen.queryByText('BELUM BAYAR')).toBeNull()
   })
 
-  it('shows the LEPAS stamp and flips STATUS to FREE once settled', () => {
+  it('shows the SETTLE stamp and flips STATUS to FREE once settled', () => {
     render(<PenjaraTicket playerId="r1" variant={{ kind: 'catch', caughtBy: 'Ben', caughtAtMs: null }} distanceM={null} outForGood={false} settled={true} />)
-    expect(screen.getByText('LEPAS')).toBeInTheDocument()
+    expect(screen.getByText('SETTLE')).toBeInTheDocument()
     expect(screen.getByText('FREE')).toBeInTheDocument()
   })
 

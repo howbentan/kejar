@@ -472,8 +472,8 @@ select.input option { background: #141614; color: var(--white); }
 .toll-ticket-status { margin-top: 12px; display: flex; flex-direction: column; align-items: flex-end; }
 .toll-ticket-status-value { margin: 0; font-size: 13px; font-weight: 800; align-self: flex-start; }
 .toll-ticket-footer { margin: 12px 0 0; font-size: 9px; letter-spacing: 0.04em; color: rgba(10, 10, 11, 0.5); text-align: center; }
-.toll-ticket-barcode { display: flex; align-items: center; height: 26px; margin-top: 10px; justify-content: space-between; }
-.toll-ticket-barcode span { height: 100%; background: var(--black); display: inline-block; }
+.toll-ticket-barcode { display: flex; align-items: center; height: 26px; margin-top: 10px; gap: 2px; }
+.toll-ticket-barcode span { height: 100%; background: var(--black); display: block; }
 .toll-ticket-stamp {
   position: absolute; top: 50%; left: 50%; pointer-events: none;
   transform: translate(-50%, -50%) rotate(-10deg); opacity: 0.85;

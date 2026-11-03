@@ -34,7 +34,7 @@ export default function PenjaraTicket({
   distanceM: number | null
   /** Already used their one escape and got caught again: there is no gate left to clear this round (design doc §5). */
   outForGood: boolean
-  /** Settle just resolved for this player: shows the LEPAS stamp and flips STATUS to FREE. */
+  /** Settle just resolved for this player: shows the SETTLE stamp and flips STATUS to FREE. */
   settled: boolean
 }) {
   const number = pick(TICKET_NUMBERS, playerId)
@@ -87,7 +87,7 @@ export default function PenjaraTicket({
 
       <Barcode />
 
-      {settled && <span className="toll-ticket-stamp">LEPAS</span>}
+      {settled && <span className="toll-ticket-stamp">SETTLE</span>}
     </div>
   )
 }
@@ -101,13 +101,17 @@ function Field({ label, value }: { label: string; value: string }) {
   )
 }
 
-/** Uniform-height bars, varying only in width, spanning the full printable width -- not a height-varying "equaliser" (design doc §5). */
+/**
+ * Uniform-height bars, varying only in width, packed densely edge to edge -- not a height-varying "equaliser"
+ * and not evenly spaced apart (design doc §5). Each bar's width is a flex-grow weight, not a fixed pixel size,
+ * so the bars themselves fill the ticket's full printable width; the only gap is the fixed, tight one between them.
+ */
 function Barcode() {
-  const widths = [2, 1, 3, 1, 2, 1, 2, 3, 1, 2, 1, 2, 1, 3, 1, 2]
+  const weights = [2, 1, 3, 1, 2, 1, 2, 3, 1, 2, 1, 2, 1, 3, 1, 2, 1, 3, 2, 1]
   return (
     <div className="toll-ticket-barcode" aria-hidden="true">
-      {widths.map((w, i) => (
-        <span key={i} style={{ width: w }} />
+      {weights.map((w, i) => (
+        <span key={i} style={{ flex: w }} />
       ))}
     </div>
   )
