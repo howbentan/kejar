@@ -41,12 +41,15 @@ function Settle({ code, view, onSettled }: { code: string; view: View; onSettled
 function AutoJailed({ code, view }: { code: string; view: View }) {
   const [playing, setPlaying] = useState(() => shouldPlay('auto', view.me.caught_at, view.now, sessionStorage))
   const [distanceM, setDistanceM] = useState<number | null>(null)
-  const [settled, setSettled] = useState(false)
+  const [localSettled, setLocalSettled] = useState(false)
   useEffect(() => {
     if (playing) navigator.vibrate?.([300, 100, 300])
   }, [playing])
   if (playing) return <PenjaraArrival plate={<div className="stamp stamp-plate">2× MISSED</div>} onDone={() => setPlaying(false)} />
 
+  // Not jailed any more but GameScreen is still showing this screen: Settle just freed them (self-scanned or
+  // one of the up to 2 others picked alongside the holder), and the SETTLE stamp is why it's still up.
+  const settled = localSettled || !view.me.jailed
   const outForGood = view.me.freed_once
   const lastOk = view.jailCheckins?.filter((c) => c.ok).at(-1) ?? null
   // Opens the SOS sheet with Something else picked: a marshal can undo an auto-jail for a phone fault (§5b).
@@ -75,7 +78,7 @@ function AutoJailed({ code, view }: { code: string; view: View }) {
         outForGood={outForGood}
         settled={settled}
       />
-      <Settle code={code} view={view} onSettled={() => setSettled(true)} />
+      <Settle code={code} view={view} onSettled={() => setLocalSettled(true)} />
       {outForGood ? (
         <>
           <GameMap arena={view.arena} dots={view.dots} height={240} />
@@ -83,12 +86,12 @@ function AutoJailed({ code, view }: { code: string; view: View }) {
             {`Spectator view · ${view.settings.spectatorDelayMin} min delayed`}
           </p>
         </>
-      ) : (
+      ) : view.me.jailed ? (
         <>
           <p className="muted">A free runner can still break you out — once.</p>
           <WalkThenWatch view={view} onDistance={setDistanceM} />
         </>
-      )}
+      ) : null}
       <button type="button" className="sos-link" style={{ alignSelf: 'flex-start' }} onClick={tellMarshal}>
         Phone died or no buzz? Tell a marshal →
       </button>
@@ -127,13 +130,16 @@ function WalkThenWatch({ view, onDistance }: { view: View; onDistance?: (m: numb
 function Caught({ code, view }: { code: string; view: View }) {
   const [playing, setPlaying] = useState(() => shouldPlay('caught', view.me.caught_at, view.now, sessionStorage))
   const [distanceM, setDistanceM] = useState<number | null>(null)
-  const [settled, setSettled] = useState(false)
+  const [localSettled, setLocalSettled] = useState(false)
   const name = useRef<HTMLSpanElement>(null)
   useEffect(() => {
     if (playing) navigator.vibrate?.([100, 50, 300])
   }, [playing])
 
   if (playing) return <PenjaraArrival plate={<Stamp text="dikejar!" plate />} onDone={() => setPlaying(false)} />
+  // Not jailed any more but GameScreen is still showing this screen: Settle just freed them (self-scanned or
+  // one of the up to 2 others picked alongside the holder), and the SETTLE stamp is why it's still up.
+  const settled = localSettled || !view.me.jailed
   return (
     <Screen eyebrow="PENJARA">
       <h1 className="jail-title">
@@ -161,14 +167,19 @@ function Caught({ code, view }: { code: string; view: View }) {
         outForGood={view.me.freed_once}
         settled={settled}
       />
-      <Settle code={code} view={view} onSettled={() => setSettled(true)} />
-      <WalkThenWatch view={view} onDistance={setDistanceM} />
+      <Settle code={code} view={view} onSettled={() => setLocalSettled(true)} />
+      {view.me.jailed && <WalkThenWatch view={view} onDistance={setDistanceM} />}
       <Feed view={view} />
     </Screen>
   )
 }
 
 export default function Jail({ code, view }: { code: string; view: View }) {
-  if (view.jailReason === 'missed-checkins') return <AutoJailed code={code} view={view} />
+  // `jailReason` goes null the instant `jailed` flips false (views.ts), so once Settle frees this player,
+  // relying on it live would misroute every freed player to Caught -- remember which one they actually were.
+  const lastReason = useRef<View['jailReason']>(view.jailReason)
+  if (view.jailReason) lastReason.current = view.jailReason
+  const reason = view.jailed ? view.jailReason : lastReason.current
+  if (reason === 'missed-checkins') return <AutoJailed code={code} view={view} />
   return <Caught code={code} view={view} />
 }

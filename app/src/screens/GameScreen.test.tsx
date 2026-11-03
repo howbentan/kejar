@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { View } from '../../shared/views.js'
 import { testView } from './testView'
@@ -17,10 +17,14 @@ vi.mock('../spike/push', () => ({
 
 import GameScreen from './GameScreen'
 
-beforeEach(() => localStorage.setItem('kejar.game.ABC234', JSON.stringify({ token: 't1' })))
+beforeEach(() => {
+  localStorage.setItem('kejar.game.ABC234', JSON.stringify({ token: 't1' }))
+  sessionStorage.clear() // shouldPlay('freed', ...) marks itself played here; a stale mark would leak between tests.
+})
 afterEach(() => {
   cleanup()
   localStorage.clear()
+  vi.useRealTimers()
 })
 
 describe('GameScreen safety routing', () => {
@@ -90,5 +94,41 @@ describe('GameScreen safety routing', () => {
     render(<GameScreen code="ABC234" />)
     expect(screen.getByText('Game over')).toBeInTheDocument()
     expect(screen.queryByText('Marshal · live')).toBeNull()
+  })
+})
+
+describe('GameScreen: the freed-moment window (design doc §6a)', () => {
+  const base = testView()
+  const freedAt = new Date(base.now).toISOString() // fresh relative to testView's own clock
+
+  it('keeps showing Penjara for a beat after Settle frees this player, then hands off to the runner chase', () => {
+    vi.useFakeTimers()
+    state.view = testView({ me: { ...base.me, jailed: true, caught_by: 'c1' }, caughtBy: 'Ben', jailReason: 'caught' })
+    const { rerender } = render(<GameScreen code="ABC234" />)
+    expect(screen.getByText('PENJARA', { selector: 'p.eyebrow' })).toBeInTheDocument()
+
+    // The next poll: Settle resolved, jailed flips false, but the player hasn't seen the stamp yet.
+    state.view = testView({ me: { ...base.me, jailed: false, freed_at: freedAt } })
+    act(() => rerender(<GameScreen code="ABC234" />))
+    expect(screen.getByText('PENJARA', { selector: 'p.eyebrow' })).toBeInTheDocument()
+
+    act(() => vi.advanceTimersByTime(2_500))
+    expect(screen.queryByText('PENJARA', { selector: 'p.eyebrow' })).toBeNull()
+  })
+
+  it('an auto-jailed player who gets freed still shows as auto-jailed, not misrouted to the catch screen', () => {
+    state.view = testView({ me: { ...base.me, jailed: true }, jailReason: 'missed-checkins' })
+    const { rerender } = render(<GameScreen code="ABC234" />)
+    expect(screen.getByText('PENJARA · AUTO', { selector: 'p.eyebrow' })).toBeInTheDocument()
+
+    state.view = testView({ me: { ...base.me, jailed: false, freed_at: freedAt } })
+    rerender(<GameScreen code="ABC234" />)
+    expect(screen.getByText('PENJARA · AUTO', { selector: 'p.eyebrow' })).toBeInTheDocument()
+  })
+
+  it('an old freed_at, well outside the moment window, does not hold the screen open', () => {
+    state.view = testView({ me: { ...base.me, jailed: false, freed_at: new Date(base.now - 10 * 60_000).toISOString() } })
+    render(<GameScreen code="ABC234" />)
+    expect(screen.queryByText('PENJARA', { selector: 'p.eyebrow' })).toBeNull()
   })
 })

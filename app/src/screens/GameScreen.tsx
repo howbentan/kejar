@@ -1,5 +1,6 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { loadOrganiserSession } from '../game/organiserSession'
+import { shouldPlay } from '../game/moments'
 import { loadSession } from '../game/session'
 import SosIcon from '../game/SosIcon'
 import { ErrorText, Screen } from '../game/ui'
@@ -21,6 +22,12 @@ function locationMode(view: View | null): LocationMode {
   return view.me.jailed ? 'never' : 'when-open'
 }
 
+/**
+ * How long the Penjara screen stays up after Settle frees this player, so the ticket's SETTLE stamp (design doc
+ * §6) actually gets seen, instead of the next 3s poll yanking `jailed: false` straight to RunnerChase.
+ */
+const FREED_MOMENT_MS = 2_500
+
 export default function GameScreen({ code }: { code: string }) {
   const session = loadSession(localStorage, code)
   const signedIn = !!(session.token || loadOrganiserSession(localStorage))
@@ -33,6 +40,26 @@ export default function GameScreen({ code }: { code: string }) {
   useEffect(() => {
     if (hostInLobby) window.location.assign(`/host/${code}`)
   }, [hostInLobby, code])
+
+  // Settle freed this player -- themself by scanning, or one of the up to 2 others picked alongside them --
+  // either way their own poll is what tells them. Hold the Penjara screen a beat longer so they actually see it.
+  // Computed during render (React's "adjusting state when a prop changes" pattern), not in a useEffect: an
+  // effect-driven update runs after commit, so there would be one real render in between with jailed: false
+  // and showingFreed still false -- Jail would actually unmount for that render, losing its own state (the
+  // lastReason ref in Jail.tsx that remembers whether this was a catch or an auto-jail) before the effect had
+  // a chance to bring it back.
+  const [showingFreed, setShowingFreed] = useState(false)
+  const playedFreedAt = useRef<string | null>(null)
+  const freedAt = current?.me.freed_at ?? null
+  if (current && freedAt && freedAt !== playedFreedAt.current) {
+    playedFreedAt.current = freedAt
+    if (shouldPlay('freed', freedAt, current.now, sessionStorage)) setShowingFreed(true)
+  }
+  useEffect(() => {
+    if (!showingFreed) return
+    const t = window.setTimeout(() => setShowingFreed(false), FREED_MOMENT_MS)
+    return () => window.clearTimeout(t)
+  }, [showingFreed])
 
   if (!current) {
     return (
@@ -51,7 +78,7 @@ export default function GameScreen({ code }: { code: string }) {
   let screen: ReactNode
   if (current.paused) screen = <Paused view={current} />
   else if (current.phase === 'hiding') screen = <Hide view={current} />
-  else if (current.me.role === 'runner' && current.me.jailed) screen = <Jail code={code} view={current} />
+  else if (current.me.role === 'runner' && (current.me.jailed || showingFreed)) screen = <Jail code={code} view={current} />
   else if (current.me.role === 'chaser') screen = <ChaserChase code={code} view={current} refresh={refresh} />
   else screen = <RunnerChase code={code} view={current} locationOff={locationOff} />
   return (
