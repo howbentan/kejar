@@ -34,7 +34,18 @@ function names(list: string[]): string {
  * the Penjara code: the scan is the confirm, and it sends the location the server checks (30 m, under 30 s old),
  * exactly like a jailbreak. Those who already used their one escape are greyed out.
  */
-export default function SettlePanel({ code, meId, settle }: { code: string; meId: string; settle: NonNullable<View['settle']> }) {
+export default function SettlePanel({
+  code,
+  meId,
+  settle,
+  onSettled,
+}: {
+  code: string
+  meId: string
+  settle: NonNullable<View['settle']>
+  /** Fires once, only when this scan frees the holder themselves (not when it only frees others picked alongside them). */
+  onSettled?: () => void
+}) {
   const [picked, setPicked] = useState<string[]>([])
   // Settled: the card is spent, so nothing more to scan (and a second scan can't overwrite the result).
   const [done, setDone] = useState(false)
@@ -62,6 +73,7 @@ export default function SettlePanel({ code, meId, settle }: { code: string; meId
         navigator.vibrate?.([60, 40, 300])
         // "You" is the holder's own id only; others by name, and anyone not in the list as "N more".
         const self = r.freedIds.includes(meId) ? ['You'] : []
+        if (self.length > 0) onSettled?.()
         const others = r.freedIds.filter((id) => id !== meId).map((id) => settle.options.find((o) => o.id === id)?.name ?? null)
         const named = others.filter((n): n is string => n !== null)
         const unknown = others.length - named.length

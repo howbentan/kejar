@@ -12,7 +12,20 @@ const NO_FIX_MS = 10_000
  * Walk to Penjara (motion design §5): worked out on this phone only. It watches the phone's own GPS and never
  * sends it, so a jailed runner still isn't tracked (base spec §6).
  */
-export function WalkGuide({ jail, arena, onArrived, onLost }: { jail: LatLng; arena?: Arena; onArrived: () => void; onLost?: () => void }) {
+export function WalkGuide({
+  jail,
+  arena,
+  onArrived,
+  onLost,
+  onDistance,
+}: {
+  jail: LatLng
+  arena?: Arena
+  onArrived: () => void
+  onLost?: () => void
+  /** The live distance, for a caller that wants to show it somewhere other than this component's own line (e.g. a ticket). */
+  onDistance?: (m: number | null) => void
+}) {
   const [here, setHere] = useState<LatLng | null>(null)
   const [lost, setLost] = useState(false)
   const arrived = useRef(false)
@@ -53,6 +66,11 @@ export function WalkGuide({ jail, arena, onArrived, onLost }: { jail: LatLng; ar
       onArrived()
     }
   }, [metres, onArrived])
+  useEffect(() => {
+    onDistance?.(metres)
+    // Only the value matters to the caller; a new onDistance identity each render shouldn't re-fire this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [metres])
 
   return (
     <div className="walk-guide">

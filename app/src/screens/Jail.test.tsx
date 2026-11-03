@@ -156,7 +156,7 @@ describe('Jail', () => {
   it('an old catch shows no moment', () => {
     render(<Jail code="ABC234" view={caught(60_000)} />)
     expect(screen.queryByText('dikejar!')).toBeNull()
-    expect(screen.getByText('PENJARA')).toBeInTheDocument()
+    expect(screen.getByText('PENJARA', { selector: 'p.eyebrow' })).toBeInTheDocument()
   })
 
   it('with no location, points at the pin and keeps the spectator view', () => {

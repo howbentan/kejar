@@ -2,6 +2,8 @@
 
 :root {
   --volt: #C6FF3D;
+  /* The LEPAS stamp's ink (Penjara toll ticket, `docs/superpowers/specs/2026-11-03-kejar-penjara-toll-ticket-design.md`). */
+  --ink: #B6291E;
   /* Dato Seri's legendary yellow (jail design §4a): the only colour besides lime, never on any other card. */
   --legendary-1: #FFF27A;
   --legendary-2: #FFD60A;
@@ -447,6 +449,40 @@ select.input option { background: #141614; color: var(--white); }
 
 /* The chasers' frozen snapshot shows on runners' maps; a chaser just sees that it happened. */
 .chip.snap { border-color: var(--volt); color: var(--white); letter-spacing: 0.08em; }
+
+/* The Penjara toll/parking entry ticket (`docs/superpowers/specs/2026-11-03-kejar-penjara-toll-ticket-design.md`).
+   A short, wide white card on the Black background -- deliberately not the usual dark card look, since a
+   printed ticket is paper. */
+.toll-ticket {
+  position: relative; background: var(--white); color: var(--black); border-radius: 10px;
+  padding: 16px 16px 16px 26px; box-shadow: 0 16px 34px rgba(0, 0, 0, 0.45); overflow: hidden;
+}
+.toll-ticket-strip {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 16px; opacity: 0.18;
+  background: repeating-linear-gradient(135deg, var(--black) 0 2px, transparent 2px 6px);
+}
+.toll-ticket-head { display: flex; justify-content: space-between; align-items: flex-start; }
+.toll-ticket-brand { margin: 0; font-weight: 800; font-size: 13px; letter-spacing: -0.01em; }
+.toll-ticket-kind, .toll-ticket-label { margin: 1px 0 0; font-size: 9px; letter-spacing: 0.08em; color: rgba(10, 10, 11, 0.5); }
+.toll-ticket-echo { margin: 0; font-size: 8px; letter-spacing: 0.04em; color: rgba(10, 10, 11, 0.5); font-style: italic; }
+.toll-ticket-gate { margin: 0; font-size: 14px; font-weight: 800; }
+.toll-ticket-number { margin: 12px 0 2px; font-size: 32px; font-weight: 900; letter-spacing: -0.01em; line-height: 1; }
+.toll-ticket-fields { display: flex; gap: 22px; margin-top: 12px; }
+.toll-ticket-value { margin: 0; font-size: 13px; font-weight: 700; }
+.toll-ticket-status { margin-top: 12px; display: flex; flex-direction: column; align-items: flex-end; }
+.toll-ticket-status-value { margin: 0; font-size: 13px; font-weight: 800; align-self: flex-start; }
+.toll-ticket-footer { margin: 12px 0 0; font-size: 9px; letter-spacing: 0.04em; color: rgba(10, 10, 11, 0.5); text-align: center; }
+.toll-ticket-barcode { display: flex; align-items: center; height: 26px; margin-top: 10px; justify-content: space-between; }
+.toll-ticket-barcode span { height: 100%; background: var(--black); display: inline-block; }
+.toll-ticket-stamp {
+  position: absolute; top: 50%; left: 50%; pointer-events: none;
+  transform: translate(-50%, -50%) rotate(-10deg); opacity: 0.85;
+  color: var(--ink); font: 800 26px var(--mono); letter-spacing: 0.08em;
+  border: 4px double var(--ink); border-radius: 3px; padding: 3px 14px;
+  mix-blend-mode: multiply; animation: toll-stamp-land 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes toll-stamp-land { from { opacity: 0; transform: translate(-50%, -50%) rotate(-10deg) scale(0.5); } to { opacity: 0.85; transform: translate(-50%, -50%) rotate(-10deg) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .toll-ticket-stamp { animation: none; } }
 
 /* Settle at Penjara (jail design §4b, §4d): pick up to 2, then scan the Penjara code. */
 .settle { display: flex; flex-direction: column; gap: 10px; border-color: var(--legendary-3); }
