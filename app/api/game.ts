@@ -19,13 +19,21 @@ function clientIp(req: VercelRequest): string | null {
 /** POST /api/game { action, ...body } — the single entry point for every game action. */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' })
+  // @vercel/node parses a JSON body lazily, so reading req.body throws on a malformed one: that's the
+  // caller's mistake (400), not a setup failure, and there's nothing worth logging.
+  let raw: unknown
+  try {
+    raw = req.body
+  } catch {
+    return res.status(400).json({ error: 'Bad request' })
+  }
   // One clock for the whole request: game rules and stored timestamps must agree.
   const now = Date.now()
   let result
   try {
     // Built inside the try: a missing Supabase setting must answer our JSON 500, not the platform's page.
     const store = new SupabaseStore(serverDb(), () => now)
-    result = await handle(req.body, {
+    result = await handle(raw, {
       ip: clientIp(req),
       ctx: {
         store,
