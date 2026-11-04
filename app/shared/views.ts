@@ -47,6 +47,10 @@ export interface RosterEntry {
   role: Role | null
   tag_id: number | null
   jailed: boolean
+  /** The catching chaser's name; null when auto-jailed for missed check-ins (or never caught). */
+  caught_by?: string | null
+  caught_at?: string | null
+  freed_once?: boolean
 }
 
 /** A report made once the game had already ended; marshal/organiser-only, for the inbox's After game tab. */
@@ -781,7 +785,16 @@ function fullView(i: ViewInput): View {
       chasers: i.players.filter((p) => p.role === 'chaser').length,
     },
     roster: showRoster
-      ? i.players.map((p) => ({ id: p.id, name: p.name, role: p.role, tag_id: p.tag_id, jailed: p.jailed }))
+      ? i.players.map((p) => ({
+          id: p.id,
+          name: p.name,
+          role: p.role,
+          tag_id: p.tag_id,
+          jailed: p.jailed,
+          caught_by: p.caught_by ? (i.players.find((c) => c.id === p.caught_by)?.name ?? null) : null,
+          caught_at: p.caught_at,
+          freed_once: p.freed_once,
+        }))
       : [],
     reports: postGameReportsFor(i),
     ratings: ratingsFor(i),

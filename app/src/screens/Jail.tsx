@@ -179,7 +179,7 @@ export default function Jail({ code, view }: { code: string; view: View }) {
   // relying on it live would misroute every freed player to Caught -- remember which one they actually were.
   const lastReason = useRef<View['jailReason']>(view.jailReason)
   if (view.jailReason) lastReason.current = view.jailReason
-  const reason = view.jailed ? view.jailReason : lastReason.current
+  const reason = view.me.jailed ? view.jailReason : lastReason.current
   if (reason === 'missed-checkins') return <AutoJailed code={code} view={view} />
   return <Caught code={code} view={view} />
 }

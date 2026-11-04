@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { REASON_LABEL } from '../../shared/alerts.js'
 import type { Alert } from '../../shared/alerts.js'
-import type { Player } from '../../shared/types.js'
-import type { View } from '../../shared/views.js'
-import { currentPushEnv, NotificationsDeniedError, pushSupport, subscribe } from '../spike/push'
+import type { RosterEntry, View } from '../../shared/views.js'
+import { currentPushEnv, NotificationsDeniedError, pushSupport, subscribe } from './push'
 import { call } from './api'
 import { credentials } from './auth'
 import { ErrorText, tagText } from './ui'
@@ -28,7 +27,7 @@ const ago = (at: string, now: number) => {
  * whether they've already used their one Settle/jailbreak escape — the two things a marshal gets asked about
  * that "in Penjara" alone didn't answer. Luar Garisan has no row here yet: `disqualified` isn't on `Player`.
  */
-function JailStatus({ p, now }: { p: Player; now: number }) {
+function JailStatus({ p, now }: { p: RosterEntry; now: number }) {
   const auto = !p.caught_by
   return (
     <>
