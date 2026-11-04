@@ -352,4 +352,7 @@ export class SupabaseStore implements GameStore {
   async osmCachePut(key: string, body: unknown) {
     check(await this.db.from('osm_cache').upsert({ key, body, fetched_at: this.nowIso() }, { onConflict: 'key' }))
   }
+  async hitRateLimit(key: string, windowMs: number, limit: number) {
+    return check(await this.db.rpc('hit_rate_limit', { p_key: key, p_window_ms: windowMs, p_limit: limit })) as boolean
+  }
 }

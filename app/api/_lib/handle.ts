@@ -1,3 +1,4 @@
+import { limitKey, LIMIT_WINDOW_MS } from './limits.js'
 import { ActionError, actions, type ActionName, type Ctx } from './actions.js'
 
 export interface HandleDeps {
@@ -23,6 +24,14 @@ export async function handle(raw: unknown, deps: HandleDeps): Promise<HandleResu
       return { status: 400, json: { error: 'Unknown action' } }
     }
     name = fields.action
+    try {
+      const { key, limit } = limitKey(fields, deps.ip)
+      if (!(await deps.ctx.store.hitRateLimit(key, LIMIT_WINDOW_MS, limit))) {
+        return { status: 429, json: { error: 'Too many requests — wait a moment and try again' } }
+      }
+    } catch (e) {
+      console.error('[api/game]', name, 'rate limit check failed, running the action anyway', e)
+    }
     const result = await actions[name as ActionName](deps.ctx, fields)
     return { status: 200, json: result }
   } catch (e) {

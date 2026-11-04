@@ -150,6 +150,8 @@ export interface GameStore {
   osmCacheGet(key: string, maxAgeMs: number): Promise<unknown | null>
   /** fetched_at = store clock; replaces any earlier entry. */
   osmCachePut(key: string, body: unknown): Promise<void>
+  /** Counts this request in the current window for `key`; true while it is within `limit`. */
+  hitRateLimit(key: string, windowMs: number, limit: number): Promise<boolean>
 }
 
 /** A park set up once and reused (Plan 4b). Games copy `arena`; the saved row is never changed by a game. */
@@ -212,6 +214,7 @@ export class MemoryStore implements GameStore {
   private marshalInviteRows: MarshalInviteRow[] = []
   private arenaRows: SavedArenaRow[] = []
   private osmCacheRows = new Map<string, { body: unknown; fetched_at: number }>()
+  private rateRows = new Map<string, number>()
 
   constructor(clock: () => number) {
     this.clock = clock
@@ -574,5 +577,13 @@ export class MemoryStore implements GameStore {
   }
   async osmCachePut(key: string, body: unknown) {
     this.osmCacheRows.set(key, { body: structuredClone(body), fetched_at: this.clock() })
+  }
+  async hitRateLimit(key: string, windowMs: number, limit: number) {
+    const windowStart = Math.floor(this.clock() / windowMs) * windowMs
+    for (const k of this.rateRows.keys()) if (!k.endsWith(`|${windowStart}`)) this.rateRows.delete(k)
+    const id = `${key}|${windowStart}`
+    const count = (this.rateRows.get(id) ?? 0) + 1
+    this.rateRows.set(id, count)
+    return count <= limit
   }
 }

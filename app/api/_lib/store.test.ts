@@ -320,3 +320,23 @@ describe('Abang Grab', () => {
     expect(rows).toHaveLength(2)
   })
 })
+
+describe('MemoryStore.hitRateLimit', () => {
+  it('allows the 120th call in a window and refuses the 121st', async () => {
+    for (let i = 1; i <= 120; i++) expect(await store.hitRateLimit('k', 60_000, 120)).toBe(true)
+    expect(await store.hitRateLimit('k', 60_000, 120)).toBe(false)
+  })
+
+  it('starts again at 1 in a new window', async () => {
+    for (let i = 0; i < 121; i++) await store.hitRateLimit('k', 60_000, 120)
+    now += 60_000
+    expect(await store.hitRateLimit('k', 60_000, 1)).toBe(true)
+    expect(await store.hitRateLimit('k', 60_000, 1)).toBe(false)
+  })
+
+  it('counts different keys separately', async () => {
+    expect(await store.hitRateLimit('a', 60_000, 1)).toBe(true)
+    expect(await store.hitRateLimit('a', 60_000, 1)).toBe(false)
+    expect(await store.hitRateLimit('b', 60_000, 1)).toBe(true)
+  })
+})

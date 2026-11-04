@@ -4,6 +4,7 @@ import { T0 } from '../../shared/fixtures.js'
 import { seeded } from '../../shared/testing.js'
 import { ActionError } from './actions.js'
 import { handle } from './handle.js'
+import { hashToken } from './secrets.js'
 import { MemoryStore } from './store.js'
 
 const makeDeps = (store = new MemoryStore(() => T0)) => ({
@@ -57,6 +58,63 @@ describe('handle', () => {
     expect(await handle({ action: 'state', code: 'ABCDEF' }, makeDeps(store))).toEqual({
       status: 503,
       json: { error: 'Maps are down' },
+    })
+  })
+
+  describe('request limits', () => {
+    it('lets a phone poll normally all minute', async () => {
+      const deps = makeDeps()
+      for (let i = 0; i < 20; i++) {
+        expect((await handle({ action: 'state', code: 'ZZZZZZ', token: 'phone' }, deps)).status).not.toBe(429)
+      }
+      for (let i = 0; i < 12; i++) {
+        expect((await handle({ action: 'location', code: 'ZZZZZZ', token: 'phone' }, deps)).status).not.toBe(429)
+      }
+    })
+
+    it('answers 429 past the limit', async () => {
+      const deps = makeDeps()
+      for (let i = 0; i < 120; i++) {
+        expect((await handle({ action: 'state', code: 'ZZZZZZ', token: 'phone' }, deps)).status).not.toBe(429)
+      }
+      expect(await handle({ action: 'state', code: 'ZZZZZZ', token: 'phone' }, deps)).toEqual({
+        status: 429,
+        json: { error: 'Too many requests — wait a moment and try again' },
+      })
+    })
+
+    it('lets a group join from one IP', async () => {
+      const store = new MemoryStore(() => T0)
+      const deps = { ...makeDeps(store), ip: '5.6.7.8' }
+      const org = await store.createOrganisation({ name: 'kejar.', created_at: new Date(T0).toISOString() })
+      await store.createOrganiser({
+        organisation_id: org.id,
+        name: 'Owner',
+        created_at: new Date(T0).toISOString(),
+        session_token_hash: hashToken('org-tok'),
+        session_created_at: new Date(T0).toISOString(),
+      })
+      const created = await handle(
+        { action: 'create', arenaId: 'around-me', center: { lat: 3, lng: 101 }, settings: {}, organiserToken: 'org-tok' },
+        makeDeps(store),
+      )
+      expect(created.status).toBe(200)
+      const { code } = created.json as { code: string }
+      for (let i = 0; i < 30; i++) {
+        const r = await handle({ action: 'join', code, name: `P${i}`, accepted: true }, deps)
+        expect(r.status).toBe(200)
+      }
+    })
+
+    it('runs the action when the limiter itself fails', async () => {
+      const store = new MemoryStore(() => T0)
+      vi.spyOn(store, 'hitRateLimit').mockRejectedValue(new Error('db down'))
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      expect(await handle({ action: 'state', code: 'ZZZZZZ' }, makeDeps(store))).toEqual({
+        status: 404,
+        json: { error: 'Game not found' },
+      })
+      expect(spy).toHaveBeenCalled()
     })
   })
 })
