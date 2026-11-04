@@ -92,4 +92,25 @@ describe('useGameState', () => {
     act(() => onFix({ coords: { latitude: 3, longitude: 101, accuracy: 8 } }))
     expect(result.current.locationOff).toBe(false)
   })
+
+  it('retries quietly on the next poll when a poll is limited (429)', async () => {
+    const limited = Object.assign(new Error('Too many requests — wait a moment and try again'), { status: 429 })
+    call.mockRejectedValueOnce(limited)
+    const { result } = renderHook(() => useGameState('ABC234', { sendLocation: 'never' }))
+    await act(async () => {})
+    expect(result.current.error).toBeNull()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+    expect(stateCalls()).toHaveLength(2)
+    expect(result.current.error).toBeNull()
+    expect(result.current.view).not.toBeNull()
+  })
+
+  it('still shows other poll errors', async () => {
+    call.mockRejectedValueOnce(Object.assign(new Error('Something went wrong'), { status: 500 }))
+    const { result } = renderHook(() => useGameState('ABC234', { sendLocation: 'never' }))
+    await act(async () => {})
+    expect(result.current.error).toBe('Something went wrong')
+  })
 })

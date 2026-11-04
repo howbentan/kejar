@@ -96,6 +96,12 @@ Also floated: surprise missions, a bounty on the longest survivor. **Malaysian p
 - A slot stays busy while its effect runs.
 - Mat Rempit is one at a time, with a 3-minute team cooldown.
 
+**API hardening (branch `api-hardening`, 2026-11-04): the game API holds up against abuse.** **Before merging: run `supabase/migrations/0012_rate_limits.sql` in Supabase.** Without it the request limiter fails open and logs an error on every request, and the `location` action breaks because its `add_position` function is missing. The migration is safe to run again.
+- Bad request bodies get a clean 400 `Bad request`; unexpected errors are logged (`[api/game]`) and answer 500 `Something went wrong — try again`. Game codes and card draws use crypto randomness.
+- Request limits: 120 per minute per token, 60 per minute per IP for joining and redeeming invites, and 30 per minute per IP for refused (401/403/404) answers. Over a limit the answer is 429 `Too many requests — wait a moment and try again`. A poll that gets a 429 retries quietly on the next poll.
+- Lobbies are capped at 80 players (`This game is full`; organiser marshal invites aren't capped). Location writes must be at least 2 s apart, and accuracy must be a number of 0 or more (clamped to 5,000).
+- Security headers on every page (`app/vercel.json`): nosniff, strict-origin-when-cross-origin referrer, no framing, camera and location allowed for the site only, microphone off. A full script CSP is left for later: it needs a browser check of the map tiles, OpenStreetMap, the QR worker and the fonts.
+
 **Plan D (branch `plan-d-full-mode`, 2026-11-03): Full mode's extras.** Migration `0011_full_mode.sql` has been run in Supabase (2026-11-03), so it's ready to merge. The app now reads and writes `games.dato_stash` (every new game is created through it) and `powerups.taken_at`/`sealed`/`offer`, and calls its `steal_card`, `open_grab`, `pick_grab` and `claim_dato` functions, so without it every game breaks, Core included. It runs in one transaction and is safe to run again.
 - Toyol (runners) and Ah Long (chasers) take one random unused card from a random free player on the other side. The feed never names who; the victim gets their own line. Nothing to take: the stealer keeps theirs.
 - Abang Grab shows the top 3 cards of your side's deck; you keep one, sealed (it can't be stolen), and the other two go to the bottom.
