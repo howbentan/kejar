@@ -1,12 +1,13 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { hashToken } from './secrets.js'
-import { FAIL_LIMIT_PER_MIN, IP_KEYED_ACTIONS, IP_LIMIT_PER_MIN, LIMIT_WINDOW_MS, limitKey, TOKEN_LIMIT_PER_MIN } from './limits.js'
+import { FAIL_LIMIT_PER_MIN, IP_KEYED_ACTIONS, IP_KEYED_LIMIT_PER_MIN, IP_LIMIT_PER_MIN, LIMIT_WINDOW_MS, limitKey, TOKEN_LIMIT_PER_MIN } from './limits.js'
 
 describe('limitKey', () => {
   it('has the agreed limits', () => {
     expect(TOKEN_LIMIT_PER_MIN).toBe(120)
     expect(IP_LIMIT_PER_MIN).toBe(60)
+    expect(IP_KEYED_LIMIT_PER_MIN).toBe(200)
     expect(LIMIT_WINDOW_MS).toBe(60_000)
   })
 
@@ -35,11 +36,12 @@ describe('limitKey', () => {
     expect(limitKey('state', { token: 'super-secret-token' }, null).key).not.toContain('super-secret-token')
   })
 
-  it('keys join and the invite redeems by IP even with a token', () => {
+  it('keys join and the invite redeems by IP with 200 a minute, even with a token', () => {
     expect(FAIL_LIMIT_PER_MIN).toBe(30)
     for (const a of ['join', 'redeemOrganiserInvite', 'redeemMarshalInvite']) {
       expect(IP_KEYED_ACTIONS).toContain(a)
-      expect(limitKey(a, { token: 'forged', organiserToken: 'x' }, '1.2.3.4')).toEqual({ key: 'ip:1.2.3.4', limit: 60 })
+      expect(limitKey(a, { token: 'forged', organiserToken: 'x' }, '1.2.3.4')).toEqual({ key: 'join-ip:1.2.3.4', limit: 200 })
+      expect(limitKey(a, {}, null)).toEqual({ key: 'join-ip:unknown', limit: 200 })
     }
   })
 })

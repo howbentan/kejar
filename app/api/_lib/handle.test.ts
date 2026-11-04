@@ -128,6 +128,27 @@ describe('handle', () => {
       }
     })
 
+    it('lets a group of 60 join from one IP in a minute', async () => {
+      const store = new MemoryStore(() => T0)
+      const { code } = await lobby(store)
+      const deps = { ...makeDeps(store), ip: '5.6.7.9' }
+      for (let i = 0; i < 60; i++) {
+        const r = await handle({ action: 'join', code, name: `P${i}`, accepted: true }, deps)
+        expect(r.status).toBe(200)
+      }
+      // Joins have their own bucket, so the IP's other tokenless requests aren't used up.
+      expect((await handle({ action: 'state', code }, deps)).status).not.toBe(429)
+    })
+
+    it('keeps other tokenless requests at 60 a minute per IP', async () => {
+      const store = new MemoryStore(() => T0)
+      const { code } = await lobby(store)
+      const deps = { ...makeDeps(store), ip: '5.6.7.10' }
+      const spy = vi.spyOn(store, 'hitRateLimit')
+      await handle({ action: 'state', code }, deps)
+      expect(spy).toHaveBeenCalledWith('ip:5.6.7.10', 60_000, 60)
+    })
+
     it('runs the action when the limiter itself fails', async () => {
       const store = new MemoryStore(() => T0)
       vi.spyOn(store, 'hitRateLimit').mockRejectedValue(new Error('db down'))
@@ -144,9 +165,9 @@ describe('handle', () => {
       const { code } = await lobby(store)
       const deps = { ...makeDeps(store), ip: '9.9.9.9' }
       let last: { status: number } = { status: 0 }
-      for (let i = 0; i < 61; i++) {
+      for (let i = 0; i < 201; i++) {
         last = await handle({ action: 'join', code, name: 'x', accepted: true, token: `forged-${i}` }, deps)
-        if (i < 60) expect(last.status).not.toBe(429)
+        if (i < 200) expect(last.status).not.toBe(429)
       }
       expect(last.status).toBe(429)
     })
