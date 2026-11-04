@@ -76,8 +76,24 @@ export class SupabaseStore implements GameStore {
     )
     return (rows ?? []).length > 0
   }
-  async addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>) {
+  async addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>, minGapMs?: number) {
+    if (minGapMs !== undefined) {
+      return (
+        check(
+          await this.db.rpc('add_position', {
+            p_game: gameId,
+            p_player: playerId,
+            p_lat: p.lat,
+            p_lng: p.lng,
+            p_accuracy: p.accuracy_m,
+            p_at: this.nowIso(),
+            p_min_gap_ms: minGapMs,
+          }),
+        ) !== false
+      )
+    }
     check(await this.db.from('locations').insert({ game_id: gameId, player_id: playerId, ...p, at: this.nowIso() }))
+    return true
   }
   async latestPositions(gameId: string, atIsos: string[]) {
     const out: Record<string, Position[]> = {}

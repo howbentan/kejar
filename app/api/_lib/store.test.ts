@@ -340,3 +340,20 @@ describe('MemoryStore.hitRateLimit', () => {
     expect(await store.hitRateLimit('b', 60_000, 1)).toBe(true)
   })
 })
+
+describe('MemoryStore.addPosition gap', () => {
+  const pos = { lat: 3, lng: 101, accuracy_m: 5 }
+  it('refuses a second fix inside the gap, accepts one after it, and always accepts with no gap', async () => {
+    expect(await store.addPosition('g', 'p', pos, 2_000)).toBe(true)
+    now += 1_000
+    expect(await store.addPosition('g', 'p', pos, 2_000)).toBe(false)
+    expect(await store.addPosition('g', 'p', pos)).toBe(true)
+    now += 2_000
+    expect(await store.addPosition('g', 'p', pos, 2_000)).toBe(true)
+  })
+
+  it('lets two simultaneous calls through only once', async () => {
+    const r = await Promise.all([store.addPosition('g', 'p', pos, 2_000), store.addPosition('g', 'p', pos, 2_000)])
+    expect(r.filter(Boolean)).toHaveLength(1)
+  })
+})

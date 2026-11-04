@@ -379,6 +379,11 @@ const create: Action = async (ctx, body) => {
 /** A fresh secret for a game's ★ card: 22 base64url characters (about 130 random bits), short enough for a clear QR. */
 const newDatoCode = () => newToken().slice(0, 22)
 
+/** Most players one game takes; the lobby refuses more. */
+export const MAX_PLAYERS_PER_GAME = 80
+/** A player's streamed location is stored at most once this often; scans always record their own fix. */
+export const LOCATION_MIN_GAP_MS = 2_000
+
 const join: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   if (body.token) {
@@ -387,6 +392,7 @@ const join: Action = async (ctx, body) => {
   }
   requireLobby(game, ctx.now)
   if (body.accepted !== true) throw new ActionError(400, 'Accept the code of conduct and waiver to join')
+  if ((await ctx.store.players(game.id)).length >= MAX_PLAYERS_PER_GAME) throw new ActionError(409, 'This game is full')
   const name = str(body.name).trim()
   if (name.length < 1 || name.length > 24) throw new ActionError(400, 'Name must be 1–24 characters')
   const token = newToken()
@@ -538,8 +544,11 @@ const location: Action = async (ctx, body) => {
   if (typeof lat !== 'number' || typeof lng !== 'number' || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
     throw new ActionError(400, 'Invalid location')
   }
-  const accuracy = typeof accuracy_m === 'number' ? accuracy_m : 0
-  await ctx.store.addPosition(game.id, me.id, { lat, lng, accuracy_m: accuracy })
+  if (accuracy_m !== undefined && (typeof accuracy_m !== 'number' || !Number.isFinite(accuracy_m) || accuracy_m < 0)) {
+    throw new ActionError(400, 'Invalid location')
+  }
+  const accuracy = Math.min(accuracy_m ?? 0, 5_000)
+  await ctx.store.addPosition(game.id, me.id, { lat, lng, accuracy_m: accuracy }, LOCATION_MIN_GAP_MS)
   await checkWhere(ctx, game, me, { lat, lng }, accuracy)
   return { ok: true }
 }

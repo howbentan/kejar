@@ -35,4 +35,29 @@ $$;
 revoke execute on function hit_rate_limit(text, int, int) from public, anon, authenticated;
 grant execute on function hit_rate_limit(text, int, int) to service_role;
 
+-- Stores one location fix unless that player already has one newer than p_min_gap_ms (Task 3).
+-- Says whether it stored. The check and the insert are one statement, so two requests can't both pass.
+create or replace function add_position(
+  p_game uuid, p_player uuid, p_lat float8, p_lng float8, p_accuracy float8, p_at timestamptz, p_min_gap_ms int
+) returns boolean
+language plpgsql
+as $$
+declare
+  stored int;
+begin
+  insert into locations (game_id, player_id, lat, lng, accuracy_m, at)
+  select p_game, p_player, p_lat, p_lng, p_accuracy, p_at
+  where not exists (
+    select 1 from locations l
+    where l.game_id = p_game and l.player_id = p_player
+      and l.at > p_at - make_interval(secs => p_min_gap_ms / 1000.0)
+  );
+  get diagnostics stored = row_count;
+  return stored > 0;
+end;
+$$;
+
+revoke execute on function add_position(uuid, uuid, float8, float8, float8, timestamptz, int) from public, anon, authenticated;
+grant execute on function add_position(uuid, uuid, float8, float8, float8, timestamptz, int) to service_role;
+
 commit;
