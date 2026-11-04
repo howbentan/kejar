@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { T0 } from '../../shared/fixtures.js'
 import { seeded } from '../../shared/testing.js'
+import { ActionError } from './actions.js'
 import { handle } from './handle.js'
 import { MemoryStore } from './store.js'
 
@@ -44,5 +45,18 @@ describe('handle', () => {
       json: { error: 'Something went wrong — try again' },
     })
     expect(spy).toHaveBeenCalledWith('[api/game]', 'state', boom)
+  })
+
+  it('answers Unknown action when there is no body at all', async () => {
+    expect(await handle(undefined, makeDeps())).toEqual({ status: 400, json: { error: 'Unknown action' } })
+  })
+
+  it('passes a 5xx ActionError through with its message', async () => {
+    const store = new MemoryStore(() => T0)
+    vi.spyOn(store, 'gameByCode').mockRejectedValue(new ActionError(503, 'Maps are down'))
+    expect(await handle({ action: 'state', code: 'ABCDEF' }, makeDeps(store))).toEqual({
+      status: 503,
+      json: { error: 'Maps are down' },
+    })
   })
 })

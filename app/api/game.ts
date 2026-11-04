@@ -21,22 +21,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' })
   // One clock for the whole request: game rules and stored timestamps must agree.
   const now = Date.now()
-  const { status, json } = await handle(req.body, {
-    ip: clientIp(req),
-    ctx: {
-      store: new SupabaseStore(serverDb(), () => now),
-      now,
-      rng: cryptoRng,
-      push: async (sub, payload) => {
-        await configuredWebPush().sendNotification(sub as PushSubscription, payload, { TTL: 60, urgency: 'high' })
+  let result
+  try {
+    // Built inside the try: a missing Supabase setting must answer our JSON 500, not the platform's page.
+    const store = new SupabaseStore(serverDb(), () => now)
+    result = await handle(req.body, {
+      ip: clientIp(req),
+      ctx: {
+        store,
+        now,
+        rng: cryptoRng,
+        push: async (sub, payload) => {
+          let webpush
+          try {
+            webpush = configuredWebPush()
+          } catch (e) {
+            console.error('[api/game] web-push not configured', e)
+            throw e
+          }
+          await webpush.sendNotification(sub as PushSubscription, payload, { TTL: 60, urgency: 'high' })
+        },
+        // OpenStreetMap lookups for park setup; a slow public service mustn't hang the request.
+        fetchJson: async (url, init) => {
+          const r = await fetch(url, { ...init, signal: AbortSignal.timeout(OSM_TIMEOUT_MS) })
+          if (!r.ok) throw new Error(`${new URL(url).host} answered ${r.status}`)
+          return r.json()
+        },
       },
-      // OpenStreetMap lookups for park setup; a slow public service mustn't hang the request.
-      fetchJson: async (url, init) => {
-        const r = await fetch(url, { ...init, signal: AbortSignal.timeout(OSM_TIMEOUT_MS) })
-        if (!r.ok) throw new Error(`${new URL(url).host} answered ${r.status}`)
-        return r.json()
-      },
-    },
-  })
+    })
+  } catch (e) {
+    console.error('[api/game]', 'setup', e)
+    result = { status: 500, json: { error: 'Something went wrong — try again' } }
+  }
+  const { status, json } = result
   return res.status(status).json(json)
 }
