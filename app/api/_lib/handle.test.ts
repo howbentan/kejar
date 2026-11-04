@@ -12,6 +12,24 @@ const makeDeps = (store = new MemoryStore(() => T0)) => ({
   ip: null,
 })
 
+async function lobby(store: MemoryStore) {
+  const org = await store.createOrganisation({ name: 'kejar.', created_at: new Date(T0).toISOString() })
+  await store.createOrganiser({
+    organisation_id: org.id,
+    name: 'Owner',
+    created_at: new Date(T0).toISOString(),
+    session_token_hash: hashToken('org-tok'),
+    session_created_at: new Date(T0).toISOString(),
+  })
+  const created = await handle(
+    { action: 'create', arenaId: 'around-me', center: { lat: 3, lng: 101 }, settings: {}, organiserToken: 'org-tok' },
+    { ...makeDeps(store), ip: '0.0.0.0' },
+  )
+  const { code } = created.json as { code: string }
+  const joined = await handle({ action: 'join', code, name: 'Ben', accepted: true }, { ...makeDeps(store), ip: '0.0.0.0' })
+  return { code, token: (joined.json as { token: string }).token }
+}
+
 afterEach(() => vi.restoreAllMocks())
 
 describe('handle', () => {
@@ -63,21 +81,25 @@ describe('handle', () => {
 
   describe('request limits', () => {
     it('lets a phone poll normally all minute', async () => {
-      const deps = makeDeps()
+      const store = new MemoryStore(() => T0)
+      const { code, token } = await lobby(store)
+      const deps = makeDeps(store)
       for (let i = 0; i < 20; i++) {
-        expect((await handle({ action: 'state', code: 'ZZZZZZ', token: 'phone' }, deps)).status).not.toBe(429)
+        expect((await handle({ action: 'state', code, token }, deps)).status).not.toBe(429)
       }
       for (let i = 0; i < 12; i++) {
-        expect((await handle({ action: 'location', code: 'ZZZZZZ', token: 'phone' }, deps)).status).not.toBe(429)
+        expect((await handle({ action: 'location', code, token }, deps)).status).not.toBe(429)
       }
     })
 
     it('answers 429 past the limit', async () => {
-      const deps = makeDeps()
+      const store = new MemoryStore(() => T0)
+      const { code, token } = await lobby(store)
+      const deps = makeDeps(store)
       for (let i = 0; i < 120; i++) {
-        expect((await handle({ action: 'state', code: 'ZZZZZZ', token: 'phone' }, deps)).status).not.toBe(429)
+        expect((await handle({ action: 'state', code, token }, deps)).status).not.toBe(429)
       }
-      expect(await handle({ action: 'state', code: 'ZZZZZZ', token: 'phone' }, deps)).toEqual({
+      expect(await handle({ action: 'state', code, token }, deps)).toEqual({
         status: 429,
         json: { error: 'Too many requests — wait a moment and try again' },
       })
@@ -109,6 +131,44 @@ describe('handle', () => {
     it('runs the action when the limiter itself fails', async () => {
       const store = new MemoryStore(() => T0)
       vi.spyOn(store, 'hitRateLimit').mockRejectedValue(new Error('db down'))
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      expect(await handle({ action: 'state', code: 'ZZZZZZ' }, makeDeps(store))).toEqual({
+        status: 404,
+        json: { error: 'Game not found' },
+      })
+      expect(spy).toHaveBeenCalled()
+    })
+
+    it('counts a join with a forged token against the IP', async () => {
+      const store = new MemoryStore(() => T0)
+      const { code } = await lobby(store)
+      const deps = { ...makeDeps(store), ip: '9.9.9.9' }
+      let last: { status: number } = { status: 0 }
+      for (let i = 0; i < 61; i++) {
+        last = await handle({ action: 'join', code, name: 'x', accepted: true, token: `forged-${i}` }, deps)
+        if (i < 60) expect(last.status).not.toBe(429)
+      }
+      expect(last.status).toBe(429)
+    })
+
+    it('answers 429 instead of 404 after 30 wrong guesses a minute', async () => {
+      const deps = { ...makeDeps(), ip: '8.8.8.8' }
+      for (let i = 0; i < 30; i++) {
+        expect((await handle({ action: 'state', code: 'ZZZZZZ' }, deps)).status).toBe(404)
+      }
+      expect(await handle({ action: 'state', code: 'ZZZZZZ' }, deps)).toEqual({
+        status: 429,
+        json: { error: 'Too many requests — wait a moment and try again' },
+      })
+    })
+
+    it('still answers the original 404 when the failed-guess check fails', async () => {
+      const store = new MemoryStore(() => T0)
+      const real = store.hitRateLimit.bind(store)
+      vi.spyOn(store, 'hitRateLimit').mockImplementation(async (k, w, l) => {
+        if (k.startsWith('fail:')) throw new Error('db down')
+        return real(k, w, l)
+      })
       const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
       expect(await handle({ action: 'state', code: 'ZZZZZZ' }, makeDeps(store))).toEqual({
         status: 404,
