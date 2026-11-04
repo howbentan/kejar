@@ -180,6 +180,14 @@ describe('end of game and jail details', () => {
   it('hides the roster from players mid-game', () => {
     expect(view(aina).roster).toEqual([])
   })
+  it("gives marshals each runner's Penjara details, naming the catcher rather than their id", () => {
+    const caughtAt = iso(NOW - 2 * MIN)
+    const caught = { ...aina, jailed: true, caught_by: 'c1', caught_at: caughtAt }
+    const auto = { ...hafiz, jailed: true, freed_once: true }
+    const roster = view(siti, { players: [chaser, caught, auto, wei, siti] }).roster
+    expect(roster.find((r) => r.id === 'r1')).toMatchObject({ caught_by: 'Ben', caught_at: caughtAt, freed_once: false })
+    expect(roster.find((r) => r.id === 'r2')).toMatchObject({ caught_by: null, freed_once: true })
+  })
   it('tells a jailed runner who caught them', () => {
     const jailed = { ...aina, jailed: true, caught_by: 'c1' }
     expect(view(jailed, { players: [chaser, jailed, hafiz, wei, siti] }).caughtBy).toBe('Ben')

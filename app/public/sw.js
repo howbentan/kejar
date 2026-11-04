@@ -1,5 +1,5 @@
-// Kejar service worker: check-in alerts for runners, safety alerts for marshals (and the old ping spike).
-// Push payload: { "pingId": string, "deviceId": string }
+// Kejar service worker: check-in alerts for runners, safety alerts for marshals.
+// Push payload: { "type": "checkin" | "alert", "code": string, ... }
 
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
@@ -48,30 +48,13 @@ self.addEventListener('push', (event) => {
     )
     return
   }
-  const { pingId, deviceId } = data
-  const ack = pingId && deviceId
-    ? fetch('/api/ack', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pingId, deviceId }),
-      }).catch(() => undefined)
-    : Promise.resolve()
-  const show = self.registration.showNotification('kejar.', {
-    body: 'Ping in 30s — check in!',
-    tag: 'kejar-ping',
-    renotify: true,
-    requireInteraction: true,
-    icon: '/icon-192.png',
-    badge: '/icon-192.png',
-    data: { pingId },
-  })
-  event.waitUntil(Promise.all([ack, show]))
+  // Anything else isn't a Kejar push; show nothing.
 })
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const data = event.notification.data || {}
-  const url = data.url || (data.pingId ? `/spike?ping=${encodeURIComponent(data.pingId)}` : '/spike')
+  const url = data.url || '/'
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     const client = windows.find((c) => 'focus' in c)

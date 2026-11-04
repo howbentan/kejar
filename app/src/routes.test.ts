@@ -2,13 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { routeFor } from './routes'
 
 describe('routeFor', () => {
-  it('maps the spike pages', () => {
-    expect(routeFor('/spike')).toEqual({ route: 'spike-join' })
-    expect(routeFor('/spike/')).toEqual({ route: 'spike-join' })
-    expect(routeFor('/spike/admin')).toEqual({ route: 'spike-admin' })
-    expect(routeFor('/spike/report')).toEqual({ route: 'spike-report' })
-  })
-
   it('maps the game pages with their codes', () => {
     expect(routeFor('/')).toEqual({ route: 'home' })
     expect(routeFor('/host/new')).toEqual({ route: 'host-new' })
@@ -22,6 +15,9 @@ describe('routeFor', () => {
   it('returns not-found for unknown paths', () => {
     expect(routeFor('/nope')).toEqual({ route: 'not-found' })
     expect(routeFor('/g/')).toEqual({ route: 'not-found' })
+    // The October ping-spike pages are gone.
+    expect(routeFor('/spike')).toEqual({ route: 'not-found' })
+    expect(routeFor('/spike/admin')).toEqual({ route: 'not-found' })
   })
 
   it('maps an organiser invite link, keeping the token case-sensitive', () => {

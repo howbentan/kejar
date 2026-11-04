@@ -8,9 +8,6 @@ export type Route =
   | 'print-card'
   | 'organiser-redeem'
   | 'marshal-redeem'
-  | 'spike-join'
-  | 'spike-admin'
-  | 'spike-report'
   | 'not-found'
 
 const FIXED: Record<string, Route> = {
@@ -18,9 +15,6 @@ const FIXED: Record<string, Route> = {
   '/host/new': 'host-new',
   '/print/tags': 'print-tags',
   '/print/card': 'print-card',
-  '/spike': 'spike-join',
-  '/spike/admin': 'spike-admin',
-  '/spike/report': 'spike-report',
 }
 
 const WITH_CODE: [RegExp, Route][] = [
