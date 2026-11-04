@@ -6,3 +6,4 @@ dist/
 .vercel/
 .vercel
 .worktrees/
+.playwright-mcp/
