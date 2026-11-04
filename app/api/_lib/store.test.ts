@@ -356,4 +356,17 @@ describe('MemoryStore.addPosition gap', () => {
     const r = await Promise.all([store.addPosition('g', 'p', pos, 2_000), store.addPosition('g', 'p', pos, 2_000)])
     expect(r.filter(Boolean)).toHaveLength(1)
   })
+
+  it('only counts rows at or after `since` against the gap', async () => {
+    const t0 = now
+    expect(await store.addPosition('g', 'p', pos, 2_000)).toBe(true)
+    now += 1_000
+    // The earlier row is before `since`, so it doesn't block this one.
+    expect(await store.addPosition('g', 'p', pos, 2_000, t0 + 500)).toBe(true)
+    now += 500
+    // Now a row sits at or after `since`, so the gap applies again.
+    expect(await store.addPosition('g', 'p', pos, 2_000, t0 + 500)).toBe(false)
+    // A row exactly at `since` counts too.
+    expect(await store.addPosition('g', 'p', pos, 2_000, t0 + 1_000)).toBe(false)
+  })
 })

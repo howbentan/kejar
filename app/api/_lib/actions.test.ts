@@ -196,6 +196,57 @@ describe('lobby cap, location gap and accuracy', () => {
     await run('location', { code: g.code, token: g.aina.token, ...at(0), accuracy_m: 90_000 })
     expect((store as any).locs.at(-1).accuracy_m).toBe(5_000)
   })
+
+  it('clamps the accuracy sent with a scan instead of refusing it', async () => {
+    const g = await readyGame()
+    const stored: number[] = []
+    for (const accuracy_m of [-5, NaN, Infinity, 90_000, 12]) {
+      now += 1_000
+      await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7), ...at(0), accuracy_m }).catch(() => undefined)
+      stored.push((store as any).locs.filter((l: any) => l.player_id === g.ben.playerId).at(-1).accuracy_m)
+    }
+    expect(stored).toEqual([0, 0, 0, 5_000, 12])
+  })
+
+  it('the first fix inside a check-in window always lands, even within 2 s of the last one', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    const alertAt = T0 + 10 * MIN - 45_000 // hide 5 + ping 5, minus the 45 s scheduled alert
+    now = alertAt - 1_000
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    now = alertAt + 500 // the phone re-sends its last fix on the first poll after the alert
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    expect(rowCount()).toBe(2)
+    // Inside the window, once that first fix has landed, the gap applies again.
+    now += 1_000
+    await run('location', { code: g.code, token: g.aina.token, ...at(21) })
+    expect(rowCount()).toBe(2)
+    const v = await run<View>('state', { code: g.code, token: g.aina.token })
+    expect(v.checkin?.state).toBe('in')
+  })
+
+  it('outside a check-in window the 2 s gap still applies during the chase', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    now += 1_500
+    await run('location', { code: g.code, token: g.aina.token, ...at(21) })
+    expect(rowCount()).toBe(1)
+  })
+
+  it('the first fix inside a bonus (Flare) ping window always lands too', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    const game = (await store.gameByCode(g.code))!
+    const alertAt = T0 + 7 * MIN
+    await store.addBonusPing(game.id, BONUS_SEQ_BASE + 1, new Date(alertAt).toISOString(), new Date(alertAt + 30_000).toISOString())
+    now = alertAt - 1_000
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    now = alertAt + 500
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    expect(rowCount()).toBe(2)
+  })
 })
 
 describe('organiser controls', () => {
@@ -391,7 +442,7 @@ describe('long games', () => {
     for (let i = 0; i < 1200; i++) {
       now = T0 + 6 * MIN + i * 2000
       await run('location', { code: g.code, token: g.ben.token, ...at(i) })
-      // The runners check in every minute, so nobody is auto-jailed and the game keeps going.
+      // The runners send a location every 2 minutes (every 60th 2 s step), so nobody is auto-jailed and the game keeps going.
       if (i % 60 === 0) {
         await run('location', { code: g.code, token: g.aina.token, ...at(20) })
         await run('location', { code: g.code, token: g.hafiz.token, ...at(30) })

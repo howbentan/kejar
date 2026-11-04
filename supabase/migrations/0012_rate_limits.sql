@@ -36,9 +36,14 @@ revoke execute on function hit_rate_limit(text, int, int) from public, anon, aut
 grant execute on function hit_rate_limit(text, int, int) to service_role;
 
 -- Stores one location fix unless that player already has one newer than p_min_gap_ms (Task 3).
--- Says whether it stored. The check and the insert are one statement, so two requests can't both pass.
+-- With p_since (the alert of an open check-in window), only fixes at or after it count, so the first fix
+-- inside the window always lands; null means no bound. Says whether it stored. The check and the insert
+-- are one statement, so a race is rare, and the odd duplicate row it lets through is harmless.
+-- An early draft of this file had no p_since; drop that overload if it was ever run.
+drop function if exists add_position(uuid, uuid, float8, float8, float8, timestamptz, int);
 create or replace function add_position(
-  p_game uuid, p_player uuid, p_lat float8, p_lng float8, p_accuracy float8, p_at timestamptz, p_min_gap_ms int
+  p_game uuid, p_player uuid, p_lat float8, p_lng float8, p_accuracy float8, p_at timestamptz, p_min_gap_ms int,
+  p_since timestamptz
 ) returns boolean
 language plpgsql
 as $$
@@ -51,13 +56,14 @@ begin
     select 1 from locations l
     where l.game_id = p_game and l.player_id = p_player
       and l.at > p_at - make_interval(secs => p_min_gap_ms / 1000.0)
+      and (p_since is null or l.at >= p_since)
   );
   get diagnostics stored = row_count;
   return stored > 0;
 end;
 $$;
 
-revoke execute on function add_position(uuid, uuid, float8, float8, float8, timestamptz, int) from public, anon, authenticated;
-grant execute on function add_position(uuid, uuid, float8, float8, float8, timestamptz, int) to service_role;
+revoke execute on function add_position(uuid, uuid, float8, float8, float8, timestamptz, int, timestamptz) from public, anon, authenticated;
+grant execute on function add_position(uuid, uuid, float8, float8, float8, timestamptz, int, timestamptz) to service_role;
 
 commit;

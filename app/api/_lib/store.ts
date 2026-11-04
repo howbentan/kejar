@@ -60,8 +60,12 @@ export interface GameStore {
   drawCard(gameId: string, side: 'runner' | 'chaser'): Promise<number>
   /** Frees an auto-jailed runner (jailed, no chaser) only if still in that state; true for the first caller. */
   releaseAutoJailed(id: string, atIso: string): Promise<boolean>
-  /** With `minGapMs`, writes nothing and returns false when the player already has a fix newer than that. */
-  addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>, minGapMs?: number): Promise<boolean>
+  /**
+   * With `minGapMs`, writes nothing and returns false when the player already has a fix newer than that.
+   * With `since` (ms) too, only fixes at or after `since` count against the gap, so the first fix inside an
+   * open check-in window always lands.
+   */
+  addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>, minGapMs?: number, since?: number): Promise<boolean>
   /**
    * Each player's latest position at or before each of the given times (deduplicated, ascending).
    * Bounded by players × times, so it stays small however long the game runs.
@@ -284,11 +288,12 @@ export class MemoryStore implements GameStore {
     Object.assign(p, { jailed: true, caught_at: this.nowIso(), caught_by: by })
     return true
   }
-  async addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>, minGapMs?: number) {
+  async addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>, minGapMs?: number, since?: number) {
     // No await between the check and the push, so two calls can't both pass the gap.
     if (minGapMs !== undefined) {
       const cutoff = new Date(this.clock() - minGapMs).toISOString()
-      if (this.locs.some((l) => l.player_id === playerId && l.at > cutoff)) return false
+      const from = since === undefined ? null : new Date(since).toISOString()
+      if (this.locs.some((l) => l.player_id === playerId && l.at > cutoff && (from === null || l.at >= from))) return false
     }
     this.locs.push({ ...p, at: this.nowIso(), game_id: gameId, player_id: playerId })
     return true
