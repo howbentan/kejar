@@ -8,7 +8,7 @@ import { datoQr, JAIL_QR, stationQr, tagQr } from '../../shared/ids.js'
 import { seeded } from '../../shared/testing.js'
 import type { PowerUpKind, Role } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
-import { ActionError, actions, type ActionName } from './actions.js'
+import { ActionError, actions, MAX_PLAYERS_PER_GAME, type ActionName } from './actions.js'
 import { hashToken } from './secrets.js'
 import { MemoryStore } from './store.js'
 
@@ -129,6 +129,123 @@ describe('joining', () => {
 
   it('unknown game code is a 404', async () => {
     await rejects(run('join', { code: 'NOPE22', name: 'A', accepted: true }), 404, 'Game not found')
+  })
+})
+
+describe('lobby cap, location gap and accuracy', () => {
+  const fill = async (gameId: string, n: number) => {
+    const ids: string[] = []
+    for (let i = 0; i < n; i++) {
+      const p = await store.addPlayer({
+        game_id: gameId, name: `P${i}`, role: null, tag_id: null, accepted_at: new Date(now).toISOString(),
+        caught_at: null, caught_by: null, jailed: false, freed_once: false, freed_at: null, push: null,
+        removed_at: null, outside: false, left_start: false, token_hash: `h${i}`,
+      })
+      ids.push(p.id)
+    }
+    return ids
+  }
+  const rowCount = () => (store as any).locs.length as number
+
+  it('refuses to join a full lobby', async () => {
+    const organiserToken = await createOrganiser()
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, organiserToken })
+    const first = await run('join', { code, name: 'Aina', accepted: true })
+    await fill((await store.gameByCode(code))!.id, MAX_PLAYERS_PER_GAME - 1)
+    await rejects(run('join', { code, name: 'Late', accepted: true }), 409, 'This game is full')
+    expect(await run('join', { code, name: 'Aina', accepted: true, token: first.token })).toEqual(first)
+  })
+
+  it('removed players do not count towards the cap', async () => {
+    const organiserToken = await createOrganiser()
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, organiserToken })
+    const ids = await fill((await store.gameByCode(code))!.id, MAX_PLAYERS_PER_GAME)
+    await rejects(run('join', { code, name: 'Late', accepted: true }), 409, 'This game is full')
+    await run('removePlayer', { code, organiserToken, playerId: ids[0] })
+    expect(await run('join', { code, name: 'Late', accepted: true })).toMatchObject({ playerId: expect.any(String) })
+  })
+
+  it('drops a location sent within 2 s of the last one', async () => {
+    const g = await readyGame()
+    await run('location', { code: g.code, token: g.aina.token, ...at(0) })
+    now += 1_000
+    await run('location', { code: g.code, token: g.aina.token, ...at(5) })
+    expect(rowCount()).toBe(1)
+    now += 1_000
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    expect(rowCount()).toBe(2)
+  })
+
+  it('a scan right after a location still records its own fix', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    now += 500
+    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7), ...at(3) })
+    const latest = (store as any).locs.filter((l: any) => l.player_id === g.ben.playerId).at(-1)
+    expect(latest.lat).toBeCloseTo(at(3).lat, 8)
+  })
+
+  it('refuses a location with a nonsense accuracy', async () => {
+    const g = await readyGame()
+    for (const accuracy_m of [-5, NaN, Infinity]) {
+      await rejects(run('location', { code: g.code, token: g.aina.token, ...at(0), accuracy_m }), 400, 'Invalid location')
+    }
+    await run('location', { code: g.code, token: g.aina.token, ...at(0), accuracy_m: 90_000 })
+    expect((store as any).locs.at(-1).accuracy_m).toBe(5_000)
+  })
+
+  it('clamps the accuracy sent with a scan instead of refusing it', async () => {
+    const g = await readyGame()
+    const stored: number[] = []
+    for (const accuracy_m of [-5, NaN, Infinity, 90_000, 12]) {
+      now += 1_000
+      await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7), ...at(0), accuracy_m }).catch(() => undefined)
+      stored.push((store as any).locs.filter((l: any) => l.player_id === g.ben.playerId).at(-1).accuracy_m)
+    }
+    expect(stored).toEqual([0, 0, 0, 5_000, 12])
+  })
+
+  it('the first fix inside a check-in window always lands, even within 2 s of the last one', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    const alertAt = T0 + 10 * MIN - 45_000 // hide 5 + ping 5, minus the 45 s scheduled alert
+    now = alertAt - 1_000
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    now = alertAt + 500 // the phone re-sends its last fix on the first poll after the alert
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    expect(rowCount()).toBe(2)
+    // Inside the window, once that first fix has landed, the gap applies again.
+    now += 1_000
+    await run('location', { code: g.code, token: g.aina.token, ...at(21) })
+    expect(rowCount()).toBe(2)
+    const v = await run<View>('state', { code: g.code, token: g.aina.token })
+    expect(v.checkin?.state).toBe('in')
+  })
+
+  it('outside a check-in window the 2 s gap still applies during the chase', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    now += 1_500
+    await run('location', { code: g.code, token: g.aina.token, ...at(21) })
+    expect(rowCount()).toBe(1)
+  })
+
+  it('the first fix inside a bonus (Flare) ping window always lands too', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    const game = (await store.gameByCode(g.code))!
+    const alertAt = T0 + 7 * MIN
+    await store.addBonusPing(game.id, BONUS_SEQ_BASE + 1, new Date(alertAt).toISOString(), new Date(alertAt + 30_000).toISOString())
+    now = alertAt - 1_000
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    now = alertAt + 500
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    expect(rowCount()).toBe(2)
   })
 })
 
@@ -323,9 +440,9 @@ describe('long games', () => {
     const g = await readyGame()
     await run('start', { code: g.code, organiserToken: g.organiserToken })
     for (let i = 0; i < 1200; i++) {
-      now = T0 + 6 * MIN + i * 1000
+      now = T0 + 6 * MIN + i * 2000
       await run('location', { code: g.code, token: g.ben.token, ...at(i) })
-      // The runners check in every minute, so nobody is auto-jailed and the game keeps going.
+      // The runners send a location every 2 minutes (every 60th 2 s step), so nobody is auto-jailed and the game keeps going.
       if (i % 60 === 0) {
         await run('location', { code: g.code, token: g.aina.token, ...at(20) })
         await run('location', { code: g.code, token: g.hafiz.token, ...at(30) })

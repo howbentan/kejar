@@ -189,11 +189,25 @@ function viewTimes(game: Game, pings: { seq: number; revealed: boolean; reveal_a
   return times
 }
 
+/** The worst accuracy stored for a fix, in metres. */
+export const MAX_ACCURACY_M = 5_000
+
+/**
+ * A fix's accuracy as stored: missing is 0, and anything over 5,000 m is held at 5,000 m. Null when it isn't
+ * a finite, non-negative number. Shared by `location` (which refuses a null) and scans (which store 0).
+ */
+function cleanAccuracy(v: unknown): number | null {
+  if (v === undefined) return 0
+  if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) return null
+  return Math.min(v, MAX_ACCURACY_M)
+}
+
 /** Records coordinates sent along with a scan, so judging uses where the phone is right now. */
 async function recordScanLocation(ctx: Ctx, game: Game, me: Player, body: Body) {
   const { lat, lng, accuracy_m } = body as { lat?: unknown; lng?: unknown; accuracy_m?: unknown }
   if (typeof lat !== 'number' || typeof lng !== 'number' || Math.abs(lat) > 90 || Math.abs(lng) > 180) return
-  await ctx.store.addPosition(game.id, me.id, { lat, lng, accuracy_m: typeof accuracy_m === 'number' ? accuracy_m : 0 })
+  // A scan is never refused over its accuracy: a bad value is just stored as 0.
+  await ctx.store.addPosition(game.id, me.id, { lat, lng, accuracy_m: cleanAccuracy(accuracy_m) ?? 0 })
 }
 
 const latest = (list: Position[] | undefined) => (list && list.length ? list[list.length - 1] : null)
@@ -379,6 +393,11 @@ const create: Action = async (ctx, body) => {
 /** A fresh secret for a game's ★ card: 22 base64url characters (about 130 random bits), short enough for a clear QR. */
 const newDatoCode = () => newToken().slice(0, 22)
 
+/** Most players one game takes; the lobby refuses more. */
+export const MAX_PLAYERS_PER_GAME = 80
+/** A player's streamed location is stored at most once this often; scans always record their own fix. */
+export const LOCATION_MIN_GAP_MS = 2_000
+
 const join: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   if (body.token) {
@@ -387,6 +406,7 @@ const join: Action = async (ctx, body) => {
   }
   requireLobby(game, ctx.now)
   if (body.accepted !== true) throw new ActionError(400, 'Accept the code of conduct and waiver to join')
+  if ((await ctx.store.players(game.id)).length >= MAX_PLAYERS_PER_GAME) throw new ActionError(409, 'This game is full')
   const name = str(body.name).trim()
   if (name.length < 1 || name.length > 24) throw new ActionError(400, 'Name must be 1–24 characters')
   const token = newToken()
@@ -538,10 +558,36 @@ const location: Action = async (ctx, body) => {
   if (typeof lat !== 'number' || typeof lng !== 'number' || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
     throw new ActionError(400, 'Invalid location')
   }
-  const accuracy = typeof accuracy_m === 'number' ? accuracy_m : 0
-  await ctx.store.addPosition(game.id, me.id, { lat, lng, accuracy_m: accuracy })
+  const accuracy = cleanAccuracy(accuracy_m)
+  if (accuracy === null) throw new ActionError(400, 'Invalid location')
+  const fix = { lat, lng, accuracy_m: accuracy }
+  // The gap never drops the first fix inside an open check-in window (a still phone re-sends its last fix
+  // right after the alert), so only rows since the window's alert count against it.
+  const since = openWindowAlert(pingTimes(game, ctx.now), ctx.now)
+  const stored = await ctx.store.addPosition(game.id, me.id, fix, LOCATION_MIN_GAP_MS, since)
+  if (!stored) {
+    // Bonus (Flare) windows live in the pings table, so it is read only when the gap dropped this fix.
+    const bonus = openWindowAlert(
+      (await ctx.store.pings(game.id))
+        .filter((r) => r.seq >= BONUS_SEQ_BASE)
+        .map((r) => ({ alertAt: Date.parse(r.alert_at), revealAt: Date.parse(r.reveal_at) })),
+      ctx.now,
+    )
+    if (bonus !== undefined && (since === undefined || bonus > since)) {
+      await ctx.store.addPosition(game.id, me.id, fix, LOCATION_MIN_GAP_MS, bonus)
+    }
+  }
   await checkWhere(ctx, game, me, { lat, lng }, accuracy)
   return { ok: true }
+}
+
+/**
+ * The alert time of the latest check-in window open at `now` (alert to reveal, as `checkedIn` judges it),
+ * or undefined when none is open.
+ */
+function openWindowAlert(windows: { alertAt: number; revealAt: number }[], now: number): number | undefined {
+  const open = windows.filter((w) => w.alertAt <= now && now <= w.revealAt).map((w) => w.alertAt)
+  return open.length ? Math.max(...open) : undefined
 }
 
 /** Raises marshal alerts for leaving the play area, or a chaser leaving the start early (spec §5.1). */

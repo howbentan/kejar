@@ -8,3 +8,8 @@ export function newToken(): string {
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }
+
+/** Uniform value in [0, 1) from the system's secure random source (48 bits, 6 random bytes). */
+export function cryptoRng(): number {
+  return randomBytes(6).readUIntBE(0, 6) / 2 ** 48
+}

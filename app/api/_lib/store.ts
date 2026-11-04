@@ -60,7 +60,12 @@ export interface GameStore {
   drawCard(gameId: string, side: 'runner' | 'chaser'): Promise<number>
   /** Frees an auto-jailed runner (jailed, no chaser) only if still in that state; true for the first caller. */
   releaseAutoJailed(id: string, atIso: string): Promise<boolean>
-  addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>): Promise<void>
+  /**
+   * With `minGapMs`, writes nothing and returns false when the player already has a fix newer than that.
+   * With `since` (ms) too, only fixes at or after `since` count against the gap, so the first fix inside an
+   * open check-in window always lands.
+   */
+  addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>, minGapMs?: number, since?: number): Promise<boolean>
   /**
    * Each player's latest position at or before each of the given times (deduplicated, ascending).
    * Bounded by players × times, so it stays small however long the game runs.
@@ -150,6 +155,8 @@ export interface GameStore {
   osmCacheGet(key: string, maxAgeMs: number): Promise<unknown | null>
   /** fetched_at = store clock; replaces any earlier entry. */
   osmCachePut(key: string, body: unknown): Promise<void>
+  /** Counts this request in the current window for `key`; true while it is within `limit`. */
+  hitRateLimit(key: string, windowMs: number, limit: number): Promise<boolean>
 }
 
 /** A park set up once and reused (Plan 4b). Games copy `arena`; the saved row is never changed by a game. */
@@ -212,6 +219,7 @@ export class MemoryStore implements GameStore {
   private marshalInviteRows: MarshalInviteRow[] = []
   private arenaRows: SavedArenaRow[] = []
   private osmCacheRows = new Map<string, { body: unknown; fetched_at: number }>()
+  private rateRows = new Map<string, number>()
 
   constructor(clock: () => number) {
     this.clock = clock
@@ -280,8 +288,15 @@ export class MemoryStore implements GameStore {
     Object.assign(p, { jailed: true, caught_at: this.nowIso(), caught_by: by })
     return true
   }
-  async addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>) {
+  async addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>, minGapMs?: number, since?: number) {
+    // No await between the check and the push, so two calls can't both pass the gap.
+    if (minGapMs !== undefined) {
+      const cutoff = new Date(this.clock() - minGapMs).toISOString()
+      const from = since === undefined ? null : new Date(since).toISOString()
+      if (this.locs.some((l) => l.player_id === playerId && l.at > cutoff && (from === null || l.at >= from))) return false
+    }
     this.locs.push({ ...p, at: this.nowIso(), game_id: gameId, player_id: playerId })
+    return true
   }
   async latestPositions(gameId: string, atIsos: string[]) {
     const out: Record<string, Position[]> = {}
@@ -574,5 +589,13 @@ export class MemoryStore implements GameStore {
   }
   async osmCachePut(key: string, body: unknown) {
     this.osmCacheRows.set(key, { body: structuredClone(body), fetched_at: this.clock() })
+  }
+  async hitRateLimit(key: string, windowMs: number, limit: number) {
+    const windowStart = Math.floor(this.clock() / windowMs) * windowMs
+    for (const k of this.rateRows.keys()) if (!k.endsWith(`|${windowStart}`)) this.rateRows.delete(k)
+    const id = `${key}|${windowStart}`
+    const count = (this.rateRows.get(id) ?? 0) + 1
+    this.rateRows.set(id, count)
+    return count <= limit
   }
 }

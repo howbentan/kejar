@@ -49,6 +49,8 @@ export function useGameState(
         )
       }
     } catch (e) {
+      // Limited for a moment: say nothing and let the next poll try again.
+      if ((e as { status?: number }).status === 429) return
       setError(e instanceof Error ? e.message : String(e))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

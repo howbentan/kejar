@@ -1,26 +1,52 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type { PushSubscription } from 'web-push'
-import { ActionError, actions, type ActionName } from './_lib/actions.js'
+import { handle } from './_lib/handle.js'
 import { OSM_TIMEOUT_MS } from './_lib/osm.js'
+import { cryptoRng } from './_lib/secrets.js'
 import { configuredWebPush, serverDb } from './_lib/server.js'
 import { SupabaseStore } from './_lib/supabaseStore.js'
+
+const header = (req: VercelRequest, name: string) => {
+  const v = req.headers[name]
+  return (Array.isArray(v) ? v[0] : v)?.trim() || null
+}
+
+/** The caller's address: Vercel's x-real-ip, else the first x-forwarded-for entry. */
+function clientIp(req: VercelRequest): string | null {
+  return header(req, 'x-real-ip') ?? header(req, 'x-forwarded-for')?.split(',')[0]?.trim() ?? null
+}
 
 /** POST /api/game { action, ...body } — the single entry point for every game action. */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' })
-  const body = (typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body ?? {})) as Record<string, unknown>
-  const name = body.action as ActionName
-  if (typeof name !== 'string' || !Object.hasOwn(actions, name)) return res.status(400).json({ error: 'Unknown action' })
+  // @vercel/node parses a JSON body lazily, so reading req.body throws on a malformed one: that's the
+  // caller's mistake (400), not a setup failure, and there's nothing worth logging.
+  let raw: unknown
   try {
-    const webpush = configuredWebPush()
-    // One clock for the whole request: game rules and stored timestamps must agree.
-    const now = Date.now()
-    const result = await actions[name](
-      {
-        store: new SupabaseStore(serverDb(), () => now),
+    raw = req.body
+  } catch {
+    return res.status(400).json({ error: 'Bad request' })
+  }
+  // One clock for the whole request: game rules and stored timestamps must agree.
+  const now = Date.now()
+  let result
+  try {
+    // Built inside the try: a missing Supabase setting must answer our JSON 500, not the platform's page.
+    const store = new SupabaseStore(serverDb(), () => now)
+    result = await handle(raw, {
+      ip: clientIp(req),
+      ctx: {
+        store,
         now,
-        rng: Math.random,
+        rng: cryptoRng,
         push: async (sub, payload) => {
+          let webpush
+          try {
+            webpush = configuredWebPush()
+          } catch (e) {
+            console.error('[api/game] web-push not configured', e)
+            throw e
+          }
           await webpush.sendNotification(sub as PushSubscription, payload, { TTL: 60, urgency: 'high' })
         },
         // OpenStreetMap lookups for park setup; a slow public service mustn't hang the request.
@@ -30,11 +56,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return r.json()
         },
       },
-      body,
-    )
-    return res.status(200).json(result)
+    })
   } catch (e) {
-    if (e instanceof ActionError) return res.status(e.status).json({ error: e.message })
-    return res.status(500).json({ error: e instanceof Error ? e.message : String(e) })
+    console.error('[api/game]', 'setup', e)
+    result = { status: 500, json: { error: 'Something went wrong — try again' } }
   }
+  const { status, json } = result
+  return res.status(status).json(json)
 }

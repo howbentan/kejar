@@ -10,6 +10,11 @@ function check<T>(res: { data: T; error: { message: string } | null }): T {
   return res.data
 }
 
+/** PostgREST's "no such function" (PGRST202) or Postgres's undefined_function (42883). */
+const isMissingFunction = (error: { code?: string } | null) => error?.code === 'PGRST202' || error?.code === '42883'
+
+let warnedMissingAddPosition = false
+
 /** Production store. Uses the secret key; the game tables deny the anon role entirely. */
 export class SupabaseStore implements GameStore {
   private db: SupabaseClient
@@ -76,8 +81,27 @@ export class SupabaseStore implements GameStore {
     )
     return (rows ?? []).length > 0
   }
-  async addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>) {
+  async addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>, minGapMs?: number, since?: number) {
+    if (minGapMs !== undefined) {
+      const res = await this.db.rpc('add_position', {
+        p_game: gameId,
+        p_player: playerId,
+        p_lat: p.lat,
+        p_lng: p.lng,
+        p_accuracy: p.accuracy_m,
+        p_at: this.nowIso(),
+        p_min_gap_ms: minGapMs,
+        p_since: since === undefined ? null : new Date(since).toISOString(),
+      })
+      // Deployed before 0012 ran: keep storing locations (without the gap) rather than break every game.
+      if (!isMissingFunction(res.error)) return check(res) !== false
+      if (!warnedMissingAddPosition) {
+        warnedMissingAddPosition = true
+        console.error('[api/game] add_position missing — run 0012')
+      }
+    }
     check(await this.db.from('locations').insert({ game_id: gameId, player_id: playerId, ...p, at: this.nowIso() }))
+    return true
   }
   async latestPositions(gameId: string, atIsos: string[]) {
     const out: Record<string, Position[]> = {}
@@ -351,5 +375,8 @@ export class SupabaseStore implements GameStore {
   }
   async osmCachePut(key: string, body: unknown) {
     check(await this.db.from('osm_cache').upsert({ key, body, fetched_at: this.nowIso() }, { onConflict: 'key' }))
+  }
+  async hitRateLimit(key: string, windowMs: number, limit: number) {
+    return check(await this.db.rpc('hit_rate_limit', { p_key: key, p_window_ms: windowMs, p_limit: limit })) !== false
   }
 }

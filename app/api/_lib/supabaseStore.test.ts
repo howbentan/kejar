@@ -1,6 +1,6 @@
 // @vitest-environment node
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { SupabaseStore } from './supabaseStore.js'
 
 function fakeDb() {
@@ -34,6 +34,54 @@ describe('SupabaseStore', () => {
     expect(inserts[0]).toEqual({
       table: 'locations',
       row: { game_id: 'g1', player_id: 'p1', lat: 3, lng: 101, accuracy_m: 8, at: '2026-10-25T09:07:00.000Z' },
+    })
+  })
+
+  describe('addPosition with a gap', () => {
+    const now = Date.parse('2026-10-25T09:07:00.000Z')
+    const pos = { lat: 3, lng: 101, accuracy_m: 8 }
+    function rpcDb(replies: { data: unknown; error: { message: string; code?: string } | null }[]) {
+      const inserts: Record<string, unknown>[] = []
+      const rpcs: { fn: string; args: Record<string, unknown> }[] = []
+      const db = {
+        rpc: async (fn: string, args: Record<string, unknown>) => (rpcs.push({ fn, args }), replies.shift()),
+        from: () => ({ insert: async (row: Record<string, unknown>) => (inserts.push(row), { data: null, error: null }) }),
+      } as unknown as SupabaseClient
+      return { db, inserts, rpcs }
+    }
+
+    it('calls add_position with the window bound, or null without one', async () => {
+      const { db, rpcs } = rpcDb([{ data: true, error: null }, { data: false, error: null }])
+      const store = new SupabaseStore(db, () => now)
+      expect(await store.addPosition('g1', 'p1', pos, 2_000)).toBe(true)
+      expect(await store.addPosition('g1', 'p1', pos, 2_000, now - 500)).toBe(false)
+      const base = { p_game: 'g1', p_player: 'p1', p_lat: 3, p_lng: 101, p_accuracy: 8, p_at: '2026-10-25T09:07:00.000Z', p_min_gap_ms: 2_000 }
+      expect(rpcs).toEqual([
+        { fn: 'add_position', args: { ...base, p_since: null } },
+        { fn: 'add_position', args: { ...base, p_since: '2026-10-25T09:06:59.500Z' } },
+      ])
+    })
+
+    it('falls back to a plain insert when add_position is missing, logging only once', async () => {
+      const { db, inserts } = rpcDb([
+        { data: null, error: { message: 'Could not find the function public.add_position', code: 'PGRST202' } },
+        { data: null, error: { message: 'function add_position(...) does not exist', code: '42883' } },
+      ])
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const store = new SupabaseStore(db, () => now)
+      expect(await store.addPosition('g1', 'p1', pos, 2_000)).toBe(true)
+      expect(await store.addPosition('g1', 'p1', pos, 2_000)).toBe(true)
+      expect(inserts).toHaveLength(2)
+      expect(inserts[0]).toEqual({ game_id: 'g1', player_id: 'p1', ...pos, at: '2026-10-25T09:07:00.000Z' })
+      expect(spy).toHaveBeenCalledTimes(1)
+      expect(spy).toHaveBeenCalledWith('[api/game] add_position missing — run 0012')
+      spy.mockRestore()
+    })
+
+    it('still throws any other add_position error', async () => {
+      const { db, inserts } = rpcDb([{ data: null, error: { message: 'connection reset', code: '08006' } }])
+      await expect(new SupabaseStore(db, () => now).addPosition('g1', 'p1', pos, 2_000)).rejects.toThrow('connection reset')
+      expect(inserts).toEqual([])
     })
   })
 
