@@ -16,7 +16,7 @@ vi.mock('../game/api', async () => {
 })
 
 // jsdom has no matchMedia; the alerts button is covered by MarshalTools tests.
-vi.mock('../spike/push', () => ({
+vi.mock('../game/push', () => ({
   subscribe: vi.fn(),
   pushSupport: () => 'unsupported',
   currentPushEnv: () => ({}),

@@ -6,7 +6,7 @@ import { call } from '../game/api'
 import { loadOrganiserSession } from '../game/organiserSession'
 import PlaceMap from '../game/PlaceMap'
 import { ErrorText, Pills, Screen } from '../game/ui'
-import { platformOf } from '../spike/device'
+import { platformOf } from '../game/device'
 import ArenaSetup, { type SavedArenaForEdit } from './ArenaSetup'
 
 /** A saved park as listArenas returns it. */

@@ -8,7 +8,7 @@ vi.mock('../game/useGameState', () => ({ useGameState: () => ({ view: state.view
 vi.mock('../game/api', () => ({ call: vi.fn(), ApiError: class extends Error {} }))
 vi.mock('../game/Map', () => ({ default: () => null }))
 // jsdom has no matchMedia, which the marshal alerts card checks.
-vi.mock('../spike/push', () => ({
+vi.mock('../game/push', () => ({
   subscribe: vi.fn(),
   pushSupport: () => 'unsupported',
   currentPushEnv: () => ({}),

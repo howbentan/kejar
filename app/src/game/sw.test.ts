@@ -22,10 +22,10 @@ function loadWorker(windows: unknown[]) {
   return { self, listeners }
 }
 
-async function click(listeners: Record<string, Listener>, pingId: string) {
+async function click(listeners: Record<string, Listener>, url: string) {
   const pending: Promise<unknown>[] = []
   listeners.notificationclick({
-    notification: { close: vi.fn(), data: { pingId } },
+    notification: { close: vi.fn(), data: { url } },
     waitUntil: (p: Promise<unknown>) => pending.push(p),
   })
   await Promise.all(pending)
@@ -45,9 +45,9 @@ describe('service worker notification tap', () => {
       }),
     }
     const { self, listeners } = loadWorker([tab])
-    await click(listeners, 'p1')
+    await click(listeners, '/g/ABC234?checkin=1')
     expect(order).toEqual(['focus', 'navigate'])
-    expect(tab.navigate).toHaveBeenCalledWith('/spike?ping=p1')
+    expect(tab.navigate).toHaveBeenCalledWith('/g/ABC234?checkin=1')
     expect(self.clients.openWindow).not.toHaveBeenCalled()
   })
 
@@ -59,14 +59,14 @@ describe('service worker notification tap', () => {
       }),
     }
     const { self, listeners } = loadWorker([tab])
-    await click(listeners, 'p1')
-    expect(self.clients.openWindow).toHaveBeenCalledWith('/spike?ping=p1')
+    await click(listeners, '/g/ABC234?checkin=1')
+    expect(self.clients.openWindow).toHaveBeenCalledWith('/g/ABC234?checkin=1')
   })
 
   it('opens a new window when no tab is open', async () => {
     const { self, listeners } = loadWorker([])
-    await click(listeners, 'p1')
-    expect(self.clients.openWindow).toHaveBeenCalledWith('/spike?ping=p1')
+    await click(listeners, '/g/ABC234?checkin=1')
+    expect(self.clients.openWindow).toHaveBeenCalledWith('/g/ABC234?checkin=1')
   })
 })
 

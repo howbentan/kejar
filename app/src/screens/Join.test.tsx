@@ -5,8 +5,8 @@ vi.mock('../game/api', () => ({ call: vi.fn(), ApiError: class extends Error {} 
 const env = vi.hoisted(() => ({
   current: { ua: 'Mozilla/5.0 (Linux; Android 14)', standalone: false, hasPushManager: true, permission: 'default' as NotificationPermission },
 }))
-vi.mock('../spike/push', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../spike/push')>()),
+vi.mock('../game/push', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../game/push')>()),
   currentPushEnv: () => env.current,
 }))
 import Join from './Join'

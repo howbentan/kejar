@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { call } from '../game/api'
-import { currentPushEnv, pushSupport } from '../spike/push'
+import { currentPushEnv, pushSupport } from '../game/push'
 import { loadSession, saveSession } from '../game/session'
 import { ErrorText, Screen } from '../game/ui'
 

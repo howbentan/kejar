@@ -6,7 +6,7 @@ import { testView } from '../screens/testView'
 const call = vi.hoisted(() => vi.fn())
 vi.mock('./api', () => ({ call, ApiError: class extends Error {} }))
 const subscribe = vi.hoisted(() => vi.fn())
-vi.mock('../spike/push', () => ({
+vi.mock('./push', () => ({
   subscribe,
   pushSupport: () => 'ok',
   currentPushEnv: () => ({}),

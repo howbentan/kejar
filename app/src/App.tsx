@@ -10,9 +10,6 @@ import MarshalRedeem from './screens/MarshalRedeem'
 import OrganiserRedeem from './screens/OrganiserRedeem'
 import PrintCard from './screens/PrintCard'
 import PrintTags from './screens/PrintTags'
-import SpikeAdmin from './spike/SpikeAdmin'
-import SpikeJoin from './spike/SpikeJoin'
-import SpikeReport from './spike/SpikeReport'
 
 export default function App() {
   return (
@@ -43,12 +40,6 @@ function Routed() {
       return <OrganiserRedeem token={token!} />
     case 'marshal-redeem':
       return <MarshalRedeem code={code!} token={token!} />
-    case 'spike-join':
-      return <SpikeJoin />
-    case 'spike-admin':
-      return <SpikeAdmin />
-    case 'spike-report':
-      return <SpikeReport />
     default:
       return <Screen eyebrow="Not found">{null}</Screen>
   }

@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
 import { tagIdFromQr } from '../../shared/ids.js'
 import type { View } from '../../shared/views.js'
-import { currentPushEnv, NotificationsDeniedError, pushSupport, subscribe } from '../spike/push'
+import { currentPushEnv, NotificationsDeniedError, pushSupport, subscribe } from '../game/push'
 import { call } from '../game/api'
 import { loadSession } from '../game/session'
 import Scanner from '../game/Scanner'
