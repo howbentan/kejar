@@ -27,6 +27,16 @@ export interface Settings {
    * setting existed have no value, so readers must test `settings.chaserSnapshot === true`.
    */
   chaserSnapshot: boolean
+  /**
+   * How many players the organiser expects: only sets the crew suggestion and the vest count (the printed kit is
+   * always armbands #01–#40). Games stored before this setting existed have none, so readers default to 20.
+   */
+  playersBand: 20 | 30 | 40
+  /**
+   * Which legendary cards this game uses. Only Full mode reads it. Bomoh isn't built yet, so it stays 'off'.
+   * Older games have none: read them as the defaults.
+   */
+  legendaries: { dato: 'off' | 'stash'; bomoh: 'off' | 'stash' }
 }
 
 /** Spec §4.3 defaults. */
@@ -38,6 +48,8 @@ export const DEFAULT_SETTINGS: Settings = {
   checkinMode: 'push',
   mode: 'core',
   chaserSnapshot: false,
+  playersBand: 20,
+  legendaries: { dato: 'stash', bomoh: 'off' },
 }
 
 export interface Arena {
@@ -78,6 +90,11 @@ export interface Game {
    * scanned it first. Never sent to players as is: they get a fuzzy, unlabelled zone. Older games have none.
    */
   dato_stash?: DatoStash | null
+  /**
+   * The organiser's packing list: `ticks` maps an item id to the label it was ticked under (the item un-ticks
+   * itself if its label changes), and `placed` is which cards are taped up. Older games have none.
+   */
+  kit?: { ticks: Record<string, string>; placed: Record<string, boolean> }
 }
 
 export interface DatoStash {

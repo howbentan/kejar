@@ -147,6 +147,14 @@ describe('lobby cap, location gap and accuracy', () => {
   }
   const rowCount = () => (store as any).locs.length as number
 
+  it('the lobby holds 40 players, and the 41st gets This game is full', async () => {
+    expect(MAX_PLAYERS_PER_GAME).toBe(40)
+    const organiserToken = await createOrganiser()
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, organiserToken })
+    await fill((await store.gameByCode(code))!.id, 40)
+    await rejects(run('join', { code, name: 'Forty-one', accepted: true }), 409, 'This game is full')
+  })
+
   it('refuses to join a full lobby', async () => {
     const organiserToken = await createOrganiser()
     const { code } = await run('create', { arenaId: 'around-me', center: CENTER, organiserToken })
@@ -2876,5 +2884,109 @@ describe('Settle: Dato Seri frees its holder and up to 2 others at Penjara (jail
     expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: along.id })).toEqual({ ok: false, reason: 'nothing-to-steal' })
     expect((await store.powerUps(g.gameId)).find((u) => u.id === along.id)!.used_at).toBeNull()
     expect((await datoRow(g)).taken_at).toBeNull()
+  })
+})
+
+describe('setup settings and the packing list', () => {
+  const create = async (settings: object = {}) => {
+    const organiserToken = await createOrganiser()
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, settings, organiserToken, stations: [CENTER] })
+    return { code, organiserToken }
+  }
+
+  it('settingsFrom gives playersBand 20 and Dato Seri on a hidden stash, Bomoh off', async () => {
+    const { code } = await create()
+    expect((await store.gameByCode(code))!.settings).toMatchObject({ playersBand: 20, legendaries: { dato: 'stash', bomoh: 'off' } })
+  })
+
+  it('accepts the 30 and 40 bands and Dato Seri off', async () => {
+    const { code } = await create({ playersBand: 40, legendaries: { dato: 'off' } })
+    expect((await store.gameByCode(code))!.settings).toMatchObject({ playersBand: 40, legendaries: { dato: 'off', bomoh: 'off' } })
+  })
+
+  it('rejects a band or legendary value that is not allowed (400)', async () => {
+    const organiserToken = await createOrganiser()
+    const bad = (settings: object) => run('create', { arenaId: 'around-me', center: CENTER, settings, organiserToken })
+    await rejects(bad({ playersBand: 25 }), 400, 'Expected players')
+    await rejects(bad({ legendaries: { dato: 'yes' } }), 400, 'Legendary')
+    await rejects(bad({ legendaries: 'all' }), 400, 'Legendary')
+  })
+
+  it('forces Bomoh off while it is not built', async () => {
+    const { code } = await create({ legendaries: { dato: 'stash', bomoh: 'stash' } })
+    expect((await store.gameByCode(code))!.settings.legendaries.bomoh).toBe('off')
+  })
+
+  it('setKit ticks and unticks, storing the label it was ticked under', async () => {
+    const { code, organiserToken } = await create()
+    await run('setKit', { code, organiserToken, tick: { id: 'tape', on: true } })
+    expect((await store.gameByCode(code))!.kit!.ticks).toEqual({ tape: 'Tape, zip bags, power bank' })
+    await run('setKit', { code, organiserToken, tick: { id: 'tape', on: false } })
+    expect((await store.gameByCode(code))!.kit!.ticks).toEqual({})
+  })
+
+  it('ticks one after the other both stay, and placed flags are saved', async () => {
+    const { code, organiserToken } = await create()
+    await run('setKit', { code, organiserToken, tick: { id: 'tape', on: true } })
+    await run('setKit', { code, organiserToken, tick: { id: 'penjara', on: true } })
+    await run('setKit', { code, organiserToken, placed: { id: 'station-1', on: true } })
+    const kit = (await store.gameByCode(code))!.kit!
+    expect(Object.keys(kit.ticks).sort()).toEqual(['penjara', 'tape'])
+    expect(kit.placed).toEqual({ 'station-1': true })
+  })
+
+  it('a tick goes stale when the band changes the label', async () => {
+    const { code, organiserToken } = await create()
+    await run('setKit', { code, organiserToken, tick: { id: 'vests-kejar', on: true } })
+    expect((await run<View>('state', { code, organiserToken })).kit!.items.find((i) => i.id === 'vests-kejar')!.ticked).toBe(true)
+    const g = (await store.gameByCode(code))!
+    await store.updateGame(g.id, { settings: { ...g.settings, playersBand: 30 } })
+    const item = (await run<View>('state', { code, organiserToken })).kit!.items.find((i) => i.id === 'vests-kejar')!
+    expect(item.label).toBe('6 lime vests')
+    expect(item.ticked).toBe(false)
+  })
+
+  it('refuses an unknown item (400)', async () => {
+    const { code, organiserToken } = await create()
+    await rejects(run('setKit', { code, organiserToken, tick: { id: 'nope', on: true } }), 400)
+    await rejects(run('setKit', { code, organiserToken, placed: { id: 'station-99', on: true } }), 400)
+  })
+
+  it('a marshal can tick the shared items but never the secret ones (403)', async () => {
+    const { code, organiserToken } = await create({ mode: 'full' })
+    const { inviteToken } = await run('createMarshalInvite', { code, organiserToken })
+    const m = await run('redeemMarshalInvite', { code, inviteToken, name: 'Siti' })
+    await run('setKit', { code, token: m.token, tick: { id: 'tape', on: true } })
+    await rejects(run('setKit', { code, token: m.token, tick: { id: 'dato-card', on: true } }), 403)
+    await rejects(run('setKit', { code, token: m.token, placed: { id: 'dato', on: true } }), 403)
+  })
+
+  it('a player cannot touch the kit (403)', async () => {
+    const { code } = await create()
+    const p = await run('join', { code, name: 'Aina', accepted: true })
+    await rejects(run('setKit', { code, token: p.token, tick: { id: 'tape', on: true } }), 403)
+  })
+
+  it('setKit answers 409 after the game starts', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    await rejects(run('setKit', { code: g.code, organiserToken: g.organiserToken, tick: { id: 'tape', on: true } }), 409)
+  })
+
+  it('setMode switches the mode in the lobby', async () => {
+    const { code, organiserToken } = await create()
+    await run('setMode', { code, organiserToken, mode: 'full' })
+    expect((await store.gameByCode(code))!.settings.mode).toBe('full')
+    await run('setMode', { code, organiserToken, mode: 'core' })
+    expect((await store.gameByCode(code))!.settings).toMatchObject({ mode: 'core', chaserSnapshot: false })
+  })
+
+  it('setMode refuses an unknown mode (400), a player (403) and a started game (409)', async () => {
+    const g = await readyGame()
+    await rejects(run('setMode', { code: g.code, organiserToken: g.organiserToken, mode: 'party' }), 400)
+    await rejects(run('setMode', { code: g.code, token: g.ben.token, mode: 'full' }), 403)
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    await rejects(run('setMode', { code: g.code, organiserToken: g.organiserToken, mode: 'full' }), 409)
+    expect((await store.gameByCode(g.code))!.settings.mode).toBe('core')
   })
 })

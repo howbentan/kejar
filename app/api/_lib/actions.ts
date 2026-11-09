@@ -24,6 +24,7 @@ import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTime
 import { datoCodeFromQr, isDatoQr, JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, flareBlocked, judgeClaim, judgeDatoClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { computeResults } from '../../shared/results.js'
+import { kitOf, packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
 import { validateTeams } from '../../shared/teams.js'
 import { DEFAULT_SETTINGS, type Arena, type DatoStash, type Game, type LatLng, type Player, type Position, type PowerUpKind, type Role, type Settings } from '../../shared/types.js'
 import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
@@ -157,6 +158,11 @@ async function marshalName(ctx: Ctx, game: GameRow, body: Body, marshal: Player 
   return marshal ? marshal.name : (await requireOrganiser(ctx, game, body)).name
 }
 
+/** The card letters of the secret sets assigned to this game. Task 2 (secret card sets) fills these in; none are assigned yet. */
+function secretLettersFor(_game: Game): SecretLetters {
+  return {}
+}
+
 function requireLobby(game: Game, now: number) {
   if (phaseAt(game, now).phase !== 'lobby') throw new ActionError(409, 'Game already started')
 }
@@ -173,6 +179,15 @@ function settingsFrom(input: unknown): Settings {
   if (typeof s.chaserSnapshot !== 'boolean') throw new ActionError(400, 'Chaser snapshot must be on or off')
   // The check-in switch is a Full-mode extra: always off in Core (rules §3).
   if (s.mode === 'core') s.chaserSnapshot = false
+  if (![20, 30, 40].includes(s.playersBand)) throw new ActionError(400, 'Expected players must be 20, 30 or 40')
+  const given = (typeof input === 'object' && input ? (input as { legendaries?: unknown }).legendaries : undefined) ?? {}
+  if (typeof given !== 'object' || Array.isArray(given)) throw new ActionError(400, 'Legendary cards must be off or on a hidden stash')
+  const legendaries = { ...DEFAULT_SETTINGS.legendaries, ...given } as Settings['legendaries']
+  for (const v of [legendaries.dato, legendaries.bomoh]) {
+    if (v !== 'off' && v !== 'stash') throw new ActionError(400, 'Legendary cards must be off or on a hidden stash')
+  }
+  // Bomoh isn't built yet: whatever was sent, it stays off.
+  s.legendaries = { dato: legendaries.dato, bomoh: 'off' }
   return s
 }
 
@@ -397,7 +412,7 @@ const create: Action = async (ctx, body) => {
 const newDatoCode = () => newToken().slice(0, 22)
 
 /** Most players one game takes; the lobby refuses more. */
-export const MAX_PLAYERS_PER_GAME = 80
+export const MAX_PLAYERS_PER_GAME = 40
 /** A player's streamed location is stored at most once this often; scans always record their own fix. */
 export const LOCATION_MIN_GAP_MS = 2_000
 
@@ -550,6 +565,7 @@ const state: Action = async (ctx, body) => {
     now: ctx.now,
     results: ended ? computeResults(game, players, events) : null,
     powerUps: await ctx.store.powerUps(game.id),
+    secretLetters: secretLettersFor(game),
   })
 }
 
@@ -1443,8 +1459,60 @@ const resume: Action = async (ctx, body) => {
   return { ok: true }
 }
 
+/**
+ * The organiser ticks an item off the packing list, or marks a card as taped up. Organiser or marshal, lobby only.
+ * The yellow card and its place are the organiser's alone. A tick stores the item's label at that moment, so it
+ * un-ticks itself if the label changes later. Each write reads the game fresh, so two phones don't drop each other's ticks.
+ */
+const setKit: Action = async (ctx, body) => {
+  const loaded = await loadGame(ctx, body)
+  const marshal = await requireMarshal(ctx, loaded, body)
+  requireLobby(loaded, ctx.now)
+  const organiser = marshal === null
+  const tick = body.tick as { id?: unknown; on?: unknown } | undefined
+  const placed = body.placed as { id?: unknown; on?: unknown } | undefined
+  if (!tick && !placed) throw new ActionError(400, 'Nothing to save')
+  if (!organiser && ((tick && SECRET_PACK_IDS.includes(str(tick.id))) || (placed && SECRET_PLACE_IDS.includes(str(placed.id))))) {
+    throw new ActionError(403, 'Organiser only')
+  }
+  // Read again just before writing, so a tick that landed a moment ago is kept.
+  const game = (await loadGame(ctx, body)) as Game
+  const letters = secretLettersFor(game)
+  const kit = kitOf(game)
+  const ticks = { ...kit.ticks }
+  const flags = { ...kit.placed }
+  if (tick) {
+    if (typeof tick.on !== 'boolean') throw new ActionError(400, 'Tick on or off')
+    const item = packItems(game, letters).find((x) => x.id === tick.id)
+    if (!item) throw new ActionError(400, 'Unknown item')
+    if (tick.on) ticks[item.id] = item.label
+    else delete ticks[item.id]
+  }
+  if (placed) {
+    if (typeof placed.on !== 'boolean') throw new ActionError(400, 'Place on or off')
+    const place = placeItems(game, organiser, letters).find((x) => x.id === placed.id)
+    if (!place) throw new ActionError(400, 'Unknown place')
+    if (placed.on) flags[place.id] = true
+    else delete flags[place.id]
+  }
+  await ctx.store.updateGame(game.id, { kit: { ticks, placed: flags } })
+  return { ok: true }
+}
+
+/** The organiser switches between Core and Full while still in the lobby; never after the start (rules doc §1). */
+const setMode: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  await requireOrganiser(ctx, game, body)
+  requireLobby(game, ctx.now)
+  const settings = settingsFrom({ ...game.settings, mode: body.mode })
+  await ctx.store.updateGame(game.id, { settings })
+  return { ok: true }
+}
+
 export const actions = {
   create,
+  setKit,
+  setMode,
   join,
   setRoles,
   start,

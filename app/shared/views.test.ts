@@ -877,3 +877,41 @@ describe('Luar Garisan on the chasers and the feed', () => {
     }
   })
 })
+
+describe('the packing list in organiser and marshal views', () => {
+  const kitGame = () =>
+    game({
+      settings: { ...DEFAULT_SETTINGS, mode: 'full' },
+      arena: { ...game().arena, stations: [{ lat: 3.001, lng: 101.001 }] },
+      kit: { ticks: { tape: 'Tape, zip bags, power bank' }, placed: { 'station-1': true } },
+    })
+  const host: Player = { ...siti, id: 'host', name: 'Organiser' }
+  const kitView = (me: Player) => view(me, { game: kitGame(), secretLetters: { dato: 'B' } })
+
+  it("the organiser's view has the secret card and its place", () => {
+    const k = kitView(host).kit!
+    expect(k.items.find((i) => i.id === 'dato-card')).toMatchObject({ label: 'Yellow card B', tone: 'yellow', ticked: false })
+    expect(k.items.find((i) => i.id === 'tape')!.ticked).toBe(true)
+    expect(k.placed).toEqual({ 'station-1': true })
+    expect(k.places.map((p) => p.id)).toEqual(['station-1', 'penjara', 'dato'])
+  })
+
+  it("a marshal's view has the list without the secret card, its letter or its place", () => {
+    const v = kitView(siti)
+    expect(v.kit!.items.map((i) => i.id)).not.toContain('dato-card')
+    expect(v.kit!.places.map((p) => p.id)).not.toContain('dato')
+    expect(JSON.stringify(v.kit)).not.toContain('Yellow card')
+  })
+
+  it('a runner or chaser has no kit at all', () => {
+    for (const me of [aina, chaser]) {
+      const v = kitView(me)
+      expect(v).not.toHaveProperty('kit')
+      expect(JSON.stringify(v)).not.toContain('Yellow card')
+    }
+  })
+
+  it('a removed marshal gets no kit', () => {
+    expect(kitView({ ...siti, removed_at: '2026-01-01T00:00:00Z' }).kit).toBeUndefined()
+  })
+})

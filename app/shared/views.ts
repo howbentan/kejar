@@ -3,6 +3,7 @@ import { alertsFrom, type Alert, type ReportReason } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
 import { distanceM, fuzz, hash, offset } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
+import { isTicked, kitOf, packItems, placeItems, type KitItem, type PlaceItem, type SecretLetters } from './kit.js'
 import { MOMENT_WINDOW_MS } from './moments.js'
 import { isOut } from './players.js'
 import { POWER_NAME } from './powerNames.js'
@@ -89,7 +90,8 @@ export interface View {
   reportable: { id: string; name: string }[]
   me: Player
   arena: Arena
-  settings: Settings
+  /** The game's settings. `legendaries` is left out of players' views: even the name of a secret card stays off their phones. */
+  settings: Omit<Settings, 'legendaries'> & { legendaries?: Settings['legendaries'] }
   dots: MapDot[]
   nextRevealAt: number | null
   nextAlertAt: number | null
@@ -159,7 +161,19 @@ export interface View {
    * null if the game has none. Left out of players' views entirely, like `datoStash`.
    */
   datoCode?: string | null
+  /**
+   * The organiser's and marshals' packing list. The yellow card and its place are in the organiser's own view
+   * only (rules doc §9b); players never get this field.
+   */
+  kit?: KitView
   results: Results | null
+}
+
+export interface KitView {
+  items: (KitItem & { ticked: boolean })[]
+  placed: Record<string, boolean>
+  /** The cards to walk to and tape up, with their spots. */
+  places: PlaceItem[]
 }
 
 export interface ViewInput {
@@ -172,6 +186,8 @@ export interface ViewInput {
   now: number
   results: Results | null
   powerUps: PowerUp[]
+  /** The card letters of this game's assigned secret sets; read only for the organiser's own view. */
+  secretLetters?: SecretLetters
 }
 
 /** '1 runner', '3 runners'. */
@@ -701,7 +717,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, settle: null, datoStash: undefined, datoCode: undefined, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, settle: null, datoStash: undefined, datoCode: undefined, kit: undefined, reports: [], ratings: [] }
   }
   return v
 }
@@ -767,7 +783,7 @@ function fullView(i: ViewInput): View {
     reportable: i.players.filter((p) => p.id !== i.me.id).map((p) => ({ id: p.id, name: p.name })),
     me: i.me,
     arena: i.game.arena,
-    settings: i.game.settings,
+    settings: role === 'marshal' ? i.game.settings : withoutLegendaries(i.game.settings),
     dots,
     nextRevealAt: upcoming?.revealAt ?? null,
     nextAlertAt: upcoming?.alertAt ?? null,
@@ -824,6 +840,25 @@ function fullView(i: ViewInput): View {
     settle: settleFor(i, phase),
     // The card's secret code goes only to marshals and the organiser, who print the card (ruling R15).
     ...(role === 'marshal' ? { datoStash: placedStash(i.game.dato_stash), datoCode: i.game.dato_stash?.code ?? null } : {}),
+    // The packing list: marshals get the shared items, and only the organiser's own view adds the secret ones.
+    ...(role === 'marshal' ? { kit: kitFor(i) } : {}),
     results: i.results,
+  }
+}
+
+function withoutLegendaries(s: Settings): Omit<Settings, 'legendaries'> {
+  const { legendaries: _hidden, ...rest } = s
+  return rest
+}
+
+function kitFor(i: ViewInput): KitView {
+  const organiser = i.me.id === 'host'
+  const letters = organiser ? (i.secretLetters ?? {}) : {}
+  const kit = kitOf(i.game)
+  const places = placeItems(i.game, organiser, letters)
+  return {
+    items: packItems(i.game, letters).map((item) => ({ ...item, ticked: isTicked(i.game, item) })),
+    placed: Object.fromEntries(Object.entries(kit.placed).filter(([id]) => places.some((p) => p.id === id))),
+    places,
   }
 }
