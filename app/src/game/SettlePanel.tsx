@@ -22,6 +22,7 @@ const REFUSALS: Record<string, string> = {
   'already-used': 'Already used',
   'not-chasing': 'Settle works during the chase',
   paused: 'Game is paused',
+  disqualified: "You're Luar Garisan, so you can't free anyone this round.",
 }
 
 /** "You", "You and Hafiz", "You, Hafiz and Wei". */

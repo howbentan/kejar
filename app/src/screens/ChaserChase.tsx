@@ -17,6 +17,8 @@ const REJECTIONS: Record<string, string> = {
   'no-location': 'Turn on location to catch',
   shielded: "Durian! That catch doesn't count. Hand the tag back.",
   paused: 'Game is paused',
+  disqualified: "You're Luar Garisan lah, so that catch doesn't count.",
+  'already-out': 'Aiyo, that runner is already out of this round.',
 }
 
 export function catchMessage(text: string, r: CatchJudgement): string {
@@ -71,6 +73,13 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
           {/* From a scheduled alert until that ping reveals (checkins design §5.4); it says what, never how long. */}
           {view.snapshotted && <span className="chip snap">SNAPSHOT TAKEN</span>}
         </>
+      }
+      overlay={
+        view.me.disqualified_at ? (
+          <div role="alert" className="chase-warning">
+            <p style={{ fontWeight: 700 }}>Luar Garisan: your catches don't count this round, boss.</p>
+          </div>
+        ) : undefined
       }
       slot={<PowerUpHand code={code} view={view} />}
       scanLabel="Scan tag"

@@ -807,3 +807,34 @@ describe("Dato Seri's hint zone (jail design §4b)", () => {
     expect(view(aina, { game: { ...full('g1'), ended_at: iso(NOW - MIN) } }).legendaryZone).toBeNull()
   })
 })
+
+describe('Luar Garisan views', () => {
+  const out = { ...hafiz, disqualified_at: iso(T0 + 12 * MIN) }
+
+  it('a disqualified runner gets the delayed spectator dots a jailed runner gets', () => {
+    const ps = { ...positions, c1: [pos(3.001, 101.001, NOW - 3 * MIN), pos(3.009, 101.009, NOW - 1 * MIN)] }
+    const v = view(out, { players: [chaser, aina, out, wei, siti], positions: ps })
+    expect(v.dots.find((d) => d.id === 'c1')).toMatchObject({ lat: 3.001, lng: 101.001 })
+  })
+
+  it('has no check-in, settle or jail reason, and is not caught', () => {
+    const v = view(out, { players: [chaser, aina, out, wei, siti] })
+    expect(v.checkin).toBeNull()
+    expect(v.settle).toBeNull()
+    expect(v.jailReason).toBeNull()
+    expect(v.caughtBy).toBeNull()
+  })
+
+  it('the marshal roster carries disqualified_at', () => {
+    const v = view(siti, { players: [chaser, aina, out, wei, siti] })
+    expect(v.roster.find((r) => r.id === 'r2')?.disqualified_at).toBe(out.disqualified_at)
+    expect(v.roster.find((r) => r.id === 'r1')?.disqualified_at).toBeFalsy()
+  })
+
+  it('marshals get a luar-garisan alert', () => {
+    const events = [event('luar-garisan', T0 + 12 * MIN, { actor_id: 'r2', data: { who: 'Hafiz #03' } })]
+    const v = view(siti, { events })
+    expect(v.alerts.map((a) => a.text)).toEqual(['Hafiz #03 is Luar Garisan (left the play area twice)'])
+    expect(v.alerts[0].kind).toBe('luar-garisan')
+  })
+})

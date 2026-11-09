@@ -8,7 +8,7 @@ export const LUAR_GARISAN_GRACE_MS = 30_000
 export const START_RADIUS_M = 50
 export const NOTE_MAX = 140
 
-export type AlertKind = 'sos' | 'report' | 'outside' | 'missed' | 'auto-jail' | 'left-start' | 'flagged-catch'
+export type AlertKind = 'sos' | 'report' | 'outside' | 'missed' | 'auto-jail' | 'left-start' | 'flagged-catch' | 'luar-garisan'
 export type ReportReason = 'unsafe' | 'dispute' | 'other'
 export type SosReason = 'hurt' | 'lost' | 'unsafe' | 'dispute' | 'other'
 /** How long after an SOS its sender can still add what's happening (motion design §6.0). */
@@ -97,6 +97,8 @@ function toAlert(e: GameEvent, details: Map<string, GameEvent>, responding: Map<
     }
     case 'outside':
       return { ...base, kind: 'outside', text: `${s(d.who)} left the play area` }
+    case 'luar-garisan':
+      return { ...base, kind: 'luar-garisan', text: `${s(d.who)} is Luar Garisan (left the play area twice)` }
     case 'missed':
       return { ...base, kind: 'missed', text: `${s(d.who)} missed 2 check-ins` }
     case 'auto-jailed':

@@ -132,3 +132,21 @@ describe('GameScreen: the freed-moment window (design doc §6a)', () => {
     expect(screen.queryByText('PENJARA', { selector: 'p.eyebrow' })).toBeNull()
   })
 })
+
+describe('GameScreen Luar Garisan routing', () => {
+  it('shows Luar Garisan, not Penjara or the chase, to a disqualified runner', () => {
+    const base = testView()
+    state.view = testView({ me: { ...base.me, disqualified_at: '2026-10-25T09:10:00.000Z' } })
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByRole('heading', { name: /Luar Garisan/ })).toBeInTheDocument()
+    expect(screen.queryByText(/penjara/i)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Scan' })).toBeNull()
+  })
+
+  it('wins over Penjara for a runner who is somehow both', () => {
+    const base = testView()
+    state.view = testView({ me: { ...base.me, jailed: true, disqualified_at: '2026-10-25T09:10:00.000Z' } })
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByRole('heading', { name: /Luar Garisan/ })).toBeInTheDocument()
+  })
+})

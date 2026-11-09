@@ -15,6 +15,7 @@ const KIND_LABEL: Record<Alert['kind'], string> = {
   'auto-jail': 'Check-ins',
   'left-start': 'Start',
   'flagged-catch': 'Catch',
+  'luar-garisan': 'Boundary',
 }
 
 const ago = (at: string, now: number) => {
@@ -22,10 +23,20 @@ const ago = (at: string, now: number) => {
   return min === 0 ? 'now' : `${min} min ago`
 }
 
+/** A disqualified player's roster status: plain English, none of Penjara's furniture. */
+function LuarGarisanStatus() {
+  return (
+    <>
+      <span className="status-pill luar">LUAR GARISAN</span>
+      <span className="status-reason">left the play area</span>
+    </>
+  )
+}
+
 /**
  * A jailed player's roster status: caught by a chaser (named, timed) or auto-jailed (no `caught_by`), plus
  * whether they've already used their one Settle/jailbreak escape — the two things a marshal gets asked about
- * that "in Penjara" alone didn't answer. Luar Garisan has no row here yet: `disqualified` isn't on `Player`.
+ * that "in Penjara" alone didn't answer.
  */
 function JailStatus({ p, now }: { p: RosterEntry; now: number }) {
   const auto = !p.caught_by
@@ -294,7 +305,7 @@ export default function MarshalTools({
               <td>{p.name}</td>
               <td>{p.role}</td>
               <td className="mono">{p.role === 'runner' ? tagText(p.tag_id) : ''}</td>
-              <td>{p.jailed && <JailStatus p={p} now={view.now} />}</td>
+              <td>{p.disqualified_at ? <LuarGarisanStatus /> : p.jailed && <JailStatus p={p} now={view.now} />}</td>
               <td style={{ textAlign: 'right' }}>
                 <button
                   type="button"

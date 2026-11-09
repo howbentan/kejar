@@ -48,6 +48,8 @@ export interface RosterEntry {
   role: Role | null
   tag_id: number | null
   jailed: boolean
+  /** Luar Garisan: set once disqualified for leaving the play area twice. */
+  disqualified_at?: string | null
   /** The catching chaser's name; null when auto-jailed for missed check-ins (or never caught). */
   caught_by?: string | null
   caught_at?: string | null
@@ -712,7 +714,7 @@ function fullView(i: ViewInput): View {
     if (at) dots = [dotFor(i.me, at, 'me')]
   } else if (role === 'marshal') {
     dots = everyoneAt(i, i.now)
-  } else if (role === 'runner' && i.me.jailed) {
+  } else if (role === 'runner' && isOut(i.me)) {
     dots = everyoneAt(i, i.now - delayMs)
   } else if (role === 'chaser') {
     ;({ dots, notes } = chaserDots(i))
@@ -792,6 +794,7 @@ function fullView(i: ViewInput): View {
           role: p.role,
           tag_id: p.tag_id,
           jailed: p.jailed,
+          disqualified_at: p.disqualified_at ?? null,
           caught_by: p.caught_by ? (i.players.find((c) => c.id === p.caught_by)?.name ?? null) : null,
           caught_at: p.caught_at,
           freed_once: p.freed_once,
