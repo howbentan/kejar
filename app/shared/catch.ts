@@ -1,4 +1,5 @@
 import { distanceM } from './geo.js'
+import { isOut } from './players.js'
 import type { LatLng, Phase, Player, Position } from './types.js'
 
 /** Spec §4.6–4.7. */
@@ -18,7 +19,7 @@ const slack = (p: Position) => Math.min(Math.max(p.accuracy_m, 0), MAX_ACCURACY_
 export type CatchJudgement =
   /** `label` names the runner for the chaser's stamp: `#07 Aina` (motion design §4). Added by the catch action. */
   | { ok: true; flagged: boolean; runnerId: string; label?: string }
-  | { ok: false; reason: 'not-chasing' | 'not-a-chaser' | 'unknown-tag' | 'already-caught' | 'too-far' | 'no-location' | 'shielded' }
+  | { ok: false; reason: 'not-chasing' | 'not-a-chaser' | 'unknown-tag' | 'already-caught' | 'too-far' | 'no-location' | 'shielded' | 'disqualified' | 'already-out' }
 
 export function judgeCatch(i: {
   phase: Phase
@@ -31,9 +32,12 @@ export function judgeCatch(i: {
 }): CatchJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (i.chaser.role !== 'chaser') return { ok: false, reason: 'not-a-chaser' }
+  // Luar Garisan: catches are refused outright, never a tag-rip that doesn't count (spec §8).
+  if (i.chaser.disqualified_at) return { ok: false, reason: 'disqualified' }
   const runner = i.tagId === null ? undefined : i.players.find((p) => p.role === 'runner' && p.tag_id === i.tagId)
   if (!runner) return { ok: false, reason: 'unknown-tag' }
   if (runner.jailed) return { ok: false, reason: 'already-caught' }
+  if (runner.disqualified_at) return { ok: false, reason: 'already-out' }
 
   const age = (p: Position) => i.now - Date.parse(p.at)
   if (!i.chaserPos || age(i.chaserPos) > CHASER_FRESH_MS) return { ok: false, reason: 'no-location' }
@@ -59,7 +63,7 @@ export function judgeJailbreak(i: {
   now: number
 }): BreakJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
-  if (i.runner.role !== 'runner' || i.runner.jailed) return { ok: false, reason: 'not-a-free-runner' }
+  if (i.runner.role !== 'runner' || isOut(i.runner)) return { ok: false, reason: 'not-a-free-runner' }
   if (!atJail(i.runnerPos, i.jail, i.now)) return { ok: false, reason: 'too-far-from-jail' }
   const freedIds = i.players.filter((p) => p.role === 'runner' && p.jailed && !p.freed_once).map((p) => p.id)
   if (freedIds.length === 0) return { ok: false, reason: 'nobody-to-free' }

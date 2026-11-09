@@ -4,6 +4,7 @@ import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes
 import { distanceM, fuzz, hash, offset } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { MOMENT_WINDOW_MS } from './moments.js'
+import { isOut } from './players.js'
 import { POWER_NAME } from './powerNames.js'
 import { activeShield, decoySpot, flareBlocked, SHIELD_MS, slotBusy } from './powerups.js'
 import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
@@ -728,7 +729,7 @@ function fullView(i: ViewInput): View {
   const feedContext: FeedContext = {
     meId: i.me.id,
     side: i.me.role === 'runner' || i.me.role === 'chaser' ? i.me.role : null,
-    freeNow: runnersNow.filter((p) => !p.jailed).length,
+    freeNow: runnersNow.filter((p) => !isOut(p)).length,
     jailedNow: runnersNow.filter((p) => p.jailed).length,
   }
   // Newest first; events recorded in the same millisecond keep their recorded order (later first).
@@ -780,7 +781,7 @@ function fullView(i: ViewInput): View {
     snapshotted: snapshottedFor(i, phase),
     feed,
     counts: {
-      runnersFree: runners.filter((p) => !p.jailed).length,
+      runnersFree: runners.filter((p) => !isOut(p)).length,
       runnersJailed: runners.filter((p) => p.jailed).length,
       chasers: i.players.filter((p) => p.role === 'chaser').length,
     },

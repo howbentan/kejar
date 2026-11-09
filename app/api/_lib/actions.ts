@@ -16,6 +16,7 @@ import { autoJailDue, checkinsSince, countedCheckIn } from '../../shared/checkin
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
+import { isOut } from '../../shared/players.js'
 import { judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
 import { datoCodeFromQr, isDatoQr, JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
@@ -258,7 +259,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     if (!(await store.claimPing(game.id, seq, 'alerted'))) continue
     // Skip stale alerts when catching up after a gap: only alert pings still in the future.
     if (game.settings.checkinMode !== 'push' || now >= (times.get(seq)?.revealAt ?? 0)) continue
-    const runners = (await store.players(game.id)).filter((p) => p.role === 'runner' && !p.jailed)
+    const runners = (await store.players(game.id)).filter((p) => p.role === 'runner' && !isOut(p))
     await pushTo(ctx, runners, { type: 'checkin', code: game.code, seq, revealAt: times.get(seq)?.revealAt })
   }
 
@@ -266,7 +267,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     if (!(await store.claimPing(game.id, seq, 'revealed'))) continue
     const revealAt = times.get(seq)?.revealAt ?? now
     const positions = await store.latestPositions(game.id, [iso(revealAt)])
-    const free = (await store.players(game.id)).filter((p) => p.role === 'runner' && !p.jailed)
+    const free = (await store.players(game.id)).filter((p) => p.role === 'runner' && !isOut(p))
     // Cloaked runners don't count as seen, so the feed can't give them away.
     const prevRevealAt = Math.max(
       chaseStartOf(game, now) ?? 0,
@@ -322,7 +323,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
       }
       // Auto-jailing the last free runner ends the game, the same as a catch.
       const runners = (await store.players(game.id)).filter((p) => p.role === 'runner')
-      if (runners.length > 0 && runners.every((p) => p.jailed)) await finish(ctx, game)
+      if (runners.length > 0 && runners.every(isOut)) await finish(ctx, game)
     }
   }
 
@@ -615,6 +616,11 @@ async function luarGaris(ctx: Ctx, game: Game, me: Player) {
     data: { who: who(me) },
   })
   await pushTo(ctx, [me], { type: 'notice', code: game.code, title: warned ? 'Outside the play area' : 'Luar Garisan', body: warned ? copy.warn : copy.out })
+  // Disqualifying the last free runner ends the game, the same as catching them (spec §7a).
+  if (!warned && me.role === 'runner') {
+    const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
+    if (runners.length > 0 && runners.every(isOut)) await finish(ctx, game)
+  }
 }
 
 /** Raises marshal alerts for leaving the play area, or a chaser leaving the start early (spec §5.1). */
@@ -657,7 +663,7 @@ const catchAction: Action = async (ctx, body) => {
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeCatch({
     phase: phaseAt(fresh, ctx.now).phase,
-    chaser: me,
+    chaser: players.find((p) => p.id === me.id) ?? me,
     tagId,
     players,
     chaserPos: latest(positions[me.id]),
@@ -681,7 +687,7 @@ const catchAction: Action = async (ctx, body) => {
     data: { flagged: verdict.flagged, who: tagLabelOf(players, verdict.runnerId), chaser: me.name },
   })
   const after = await ctx.store.players(game.id)
-  if (after.filter((p) => p.role === 'runner').every((p) => p.jailed)) await finish(ctx, fresh)
+  if (after.filter((p) => p.role === 'runner').every(isOut)) await finish(ctx, fresh)
   const caught = players.find((p) => p.id === verdict.runnerId)
   const label = caught?.tag_id ? `#${tag2(caught.tag_id)} ${caught.name}` : (caught?.name ?? '')
   return { ...verdict, label }
@@ -690,6 +696,7 @@ const catchAction: Action = async (ctx, body) => {
 const jailbreak: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
+  if (me.disqualified_at) return { ok: false, reason: 'disqualified' }
   if (str(body.qr).trim() !== JAIL_QR) throw new ActionError(400, "That's not the Penjara code")
   await recordScanLocation(ctx, game, me, body)
   await advance(ctx, game)
@@ -724,6 +731,7 @@ const jailbreak: Action = async (ctx, body) => {
 const settle: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
+  if (me.disqualified_at) return { ok: false, reason: 'disqualified' }
   if (str(body.qr).trim() !== JAIL_QR) throw new ActionError(400, "That's not the Penjara code")
   const targetIds = body.targetIds ?? []
   if (!Array.isArray(targetIds) || !targetIds.every((t) => typeof t === 'string')) throw new ActionError(400, 'Pick who to free')
@@ -882,6 +890,7 @@ const GRAB_OFFER = 3
 const claim: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
+  if (me.disqualified_at) return { ok: false, reason: 'disqualified' }
   await recordScanLocation(ctx, game, me, body)
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
@@ -963,6 +972,7 @@ const dropDatoSeri: Action = async (ctx, body) => {
 const usePowerup: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
+  if (me.disqualified_at) return { ok: false, reason: 'disqualified' }
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
   if (fresh.paused_at) return { ok: false, reason: 'paused' }
@@ -1054,6 +1064,7 @@ const usePowerup: Action = async (ctx, body) => {
 const grabPick: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
+  if (me.disqualified_at) return { ok: false, reason: 'disqualified' }
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
   if (fresh.paused_at) return { ok: false, reason: 'paused' }
@@ -1271,7 +1282,7 @@ const removePlayer: Action = async (ctx, body) => {
   const phase = phaseAt(game, ctx.now).phase
   if (phase === 'hiding' || phase === 'chasing') {
     const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
-    if (runners.every((p) => p.jailed)) await finish(ctx, game)
+    if (runners.every(isOut)) await finish(ctx, game)
   }
   return { ok: true }
 }
