@@ -4,6 +4,7 @@ import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes
 import { distanceM, fuzz, hash, offset } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { MOMENT_WINDOW_MS } from './moments.js'
+import { isOut } from './players.js'
 import { POWER_NAME } from './powerNames.js'
 import { activeShield, decoySpot, flareBlocked, SHIELD_MS, slotBusy } from './powerups.js'
 import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
@@ -47,6 +48,8 @@ export interface RosterEntry {
   role: Role | null
   tag_id: number | null
   jailed: boolean
+  /** Luar Garisan: set once disqualified for leaving the play area twice. */
+  disqualified_at?: string | null
   /** The catching chaser's name; null when auto-jailed for missed check-ins (or never caught). */
   caught_by?: string | null
   caught_at?: string | null
@@ -95,6 +98,8 @@ export interface View {
   chaserNearby: boolean
   /** Name of the chaser who caught me, while I'm jailed. */
   caughtBy: string | null
+  /** Luar Garisan: I've been warned for being outside the play area and have not yet come back or been disqualified. */
+  outWarned: boolean
   /** Why I'm in Penjara: caught by a chaser, or auto-jailed for missing two check-ins. */
   jailReason: 'caught' | 'missed-checkins' | null
   /** My running Durian's end time; null for effects that wait for the next ping (motion design §7b). */
@@ -117,7 +122,7 @@ export interface View {
    */
   snapshotted: boolean
   feed: FeedItem[]
-  counts: { runnersFree: number; runnersJailed: number; chasers: number }
+  counts: { runnersFree: number; runnersJailed: number; runnersLuarGarisan: number; chasers: number }
   /** Everyone in the game: shown in the lobby and to marshals; empty for players mid-game. */
   roster: RosterEntry[]
   /** Reports filed once the game had already ended; marshals and the organiser only, for the After game tab. */
@@ -341,6 +346,8 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
       if (sliding) dots.push(sliding)
       continue
     }
+    // Luar Garisan: out of the round, so neither a target on the map nor a "never checked in" note.
+    if (isOut(p)) continue
     const at = latestAtOrBefore(i.positions[p.id], revealAt)
     // A cloaked runner must look exactly like one who never checked in.
     if (!at || cloaked.has(p.id)) {
@@ -410,7 +417,7 @@ function deckLeftFor(i: ViewInput): number | null {
  * says "Checked in" for a ping the server will count as missed.
  */
 function checkinFor(i: ViewInput, phase: Phase): Checkin | null {
-  if (i.me.role !== 'runner' || i.me.jailed || phase !== 'chasing') return null
+  if (i.me.role !== 'runner' || isOut(i.me) || phase !== 'chasing') return null
   const times = pingTimes(i.game, i.now)
   const next = times.find((t) => t.revealAt > i.now)
   if (!next) return null
@@ -456,7 +463,7 @@ const snapshotOn = (g: Game) => g.settings.mode === 'full' && g.settings.chaserS
  */
 export function snapshotWindow(i: SnapshotInput): { seq: number; alertAt: number; revealAt: number } | null {
   if (!snapshotOn(i.game)) return null
-  if (i.me.role !== 'runner' || i.me.jailed || phaseAt(i.game, i.now).phase !== 'chasing') return null
+  if (i.me.role !== 'runner' || isOut(i.me) || phaseAt(i.game, i.now).phase !== 'chasing') return null
   const recorded = new Set(
     i.events
       .filter((e) => e.type === 'ping' && Array.isArray(e.data.checkedIn) && (e.data.checkedIn as unknown[]).includes(i.me.id))
@@ -636,6 +643,9 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
         `${tag} went to Penjara. Check in when your phone buzzes, or you're next.`,
         `One less to find. ${tag} is in Penjara.`,
       )
+    case 'luar-garisan':
+      // For everyone. The warning (`out-warned`) stays private to the player, so it has no line.
+      return actor ? plain(`${tagLabel(actor)} is Luar Garisan, out of this round.`) : null
     default: {
       const text = feedText(e, byId)
       return text ? plain(text) : null
@@ -711,7 +721,7 @@ function fullView(i: ViewInput): View {
     if (at) dots = [dotFor(i.me, at, 'me')]
   } else if (role === 'marshal') {
     dots = everyoneAt(i, i.now)
-  } else if (role === 'runner' && i.me.jailed) {
+  } else if (role === 'runner' && isOut(i.me)) {
     dots = everyoneAt(i, i.now - delayMs)
   } else if (role === 'chaser') {
     ;({ dots, notes } = chaserDots(i))
@@ -728,7 +738,7 @@ function fullView(i: ViewInput): View {
   const feedContext: FeedContext = {
     meId: i.me.id,
     side: i.me.role === 'runner' || i.me.role === 'chaser' ? i.me.role : null,
-    freeNow: runnersNow.filter((p) => !p.jailed).length,
+    freeNow: runnersNow.filter((p) => !isOut(p)).length,
     jailedNow: runnersNow.filter((p) => p.jailed).length,
   }
   // Newest first; events recorded in the same millisecond keep their recorded order (later first).
@@ -765,6 +775,7 @@ function fullView(i: ViewInput): View {
     chaserNearby,
     caughtBy: i.me.jailed && i.me.caught_by ? (byId.get(i.me.caught_by)?.name ?? null) : null,
     jailReason: jailReasonFor(i),
+    outWarned: !!i.me.out_warned_at && !i.me.disqualified_at,
     activeEndsAt: (() => {
       const shield = activeShield(i.powerUps, i.me.id, i.now)
       return shield?.used_at ? Date.parse(shield.used_at) + SHIELD_MS : null
@@ -780,8 +791,9 @@ function fullView(i: ViewInput): View {
     snapshotted: snapshottedFor(i, phase),
     feed,
     counts: {
-      runnersFree: runners.filter((p) => !p.jailed).length,
+      runnersFree: runners.filter((p) => !isOut(p)).length,
       runnersJailed: runners.filter((p) => p.jailed).length,
+      runnersLuarGarisan: runners.filter((p) => !p.removed_at && !!p.disqualified_at).length,
       chasers: i.players.filter((p) => p.role === 'chaser').length,
     },
     roster: showRoster
@@ -791,6 +803,7 @@ function fullView(i: ViewInput): View {
           role: p.role,
           tag_id: p.tag_id,
           jailed: p.jailed,
+          disqualified_at: p.disqualified_at ?? null,
           caught_by: p.caught_by ? (i.players.find((c) => c.id === p.caught_by)?.name ?? null) : null,
           caught_at: p.caught_at,
           freed_once: p.freed_once,

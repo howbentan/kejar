@@ -40,7 +40,7 @@ const lobbyView = {
   nextAlertAt: null,
   chaserNearby: false,
   feed: [],
-  counts: { runnersFree: 2, runnersJailed: 0, chasers: 0 },
+  counts: { runnersFree: 2, runnersJailed: 0, runnersLuarGarisan: 0, chasers: 0 },
   roster: [
     { id: 'p1', name: 'Aina', role: 'runner', tag_id: 7, jailed: false },
     { id: 'p2', name: 'Hafiz', role: 'runner', tag_id: null, jailed: false },

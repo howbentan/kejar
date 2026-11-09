@@ -97,3 +97,60 @@ describe('removed players', () => {
     expect(computeResults(game(), players, ev).mostCatches).toEqual({ id: 'c1', count: 1 })
   })
 })
+
+describe('Luar Garisan', () => {
+  const out = (id: string, min: number) => event('luar-garisan', T0 + min * MIN, { actor_id: id, data: { who: id } })
+
+  it('a disqualified runner is not a survivor, and their survival ends at Luar Garisan', () => {
+    const players = [ben, player('r1', 'runner', { disqualified_at: iso(T0 + 10 * MIN) })]
+    const r = computeResults(g, players, [out('r1', 10)])
+    expect(r.winner).toBe('chasers')
+    expect(r.survivors).toEqual([])
+    // Out of the running for the award, so a lone disqualified runner leaves nobody to win it.
+    expect(r.longestSurvivor).toBeNull()
+  })
+
+  it('survival ends at Luar Garisan, so a later catch of another runner gives them the award', () => {
+    const players = [
+      ben,
+      player('r1', 'runner', { disqualified_at: iso(T0 + 20 * MIN) }),
+      player('r2', 'runner', { jailed: true }),
+    ]
+    const events = [out('r1', 20), event('caught', T0 + 8 * MIN, { actor_id: 'c1', target_id: 'r2' })]
+    expect(computeResults(g, players, events).longestSurvivor).toEqual({ id: 'r2', ms: 3 * MIN })
+  })
+
+  it('a disqualified runner is not a survivor while another is still free', () => {
+    const players = [ben, player('r1', 'runner', { disqualified_at: iso(T0 + 10 * MIN) }), player('r2', 'runner')]
+    const r = computeResults(g, players, [out('r1', 10)])
+    expect(r.winner).toBe('runners')
+    expect(r.survivors).toEqual(['r2'])
+  })
+
+  it('a disqualified player wins no award', () => {
+    const players = [
+      player('c1', 'chaser', { disqualified_at: iso(T0 + 30 * MIN) }),
+      lee,
+      player('r1', 'runner', { disqualified_at: iso(T0 + 40 * MIN) }),
+      player('r2', 'runner', { jailed: true }),
+      player('r3', 'runner', { jailed: true }),
+    ]
+    const events = [
+      event('caught', T0 + 12 * MIN, { actor_id: 'c1', target_id: 'r2' }),
+      event('caught', T0 + 14 * MIN, { actor_id: 'c1', target_id: 'r3' }),
+      event('caught', T0 + 16 * MIN, { actor_id: 'c2', target_id: 'r3' }),
+      out('c1', 30),
+      out('r1', 40),
+    ]
+    const r = computeResults(g, players, events)
+    expect(r.mostCatches).toEqual({ id: 'c2', count: 1 })
+    expect(r.longestSurvivor?.id).not.toBe('r1')
+    expect(r.longestSurvivor).toEqual({ id: 'r3', ms: 9 * MIN })
+  })
+
+  it('a disqualified jailbreak hero wins nothing', () => {
+    const players = [ben, player('r1', 'runner', { disqualified_at: iso(T0 + 40 * MIN) })]
+    const events = [event('jailbreak', T0 + 20 * MIN, { actor_id: 'r1', data: { freed: 2 } }), out('r1', 40)]
+    expect(computeResults(g, players, events).jailbreakHero).toBeNull()
+  })
+})

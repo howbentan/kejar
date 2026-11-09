@@ -26,6 +26,7 @@ const CLAIM_REJECTIONS: Record<string, string> = {
   // The hidden stash with a full slot (rules doc §9); a station's hand-full names the card instead.
   'hand-full': 'Use or lose your power-up first',
   paused: 'Game is paused',
+  disqualified: "You're Luar Garisan, so no power-ups this round.",
 }
 
 const USE_REJECTIONS: Record<string, string> = {
@@ -37,6 +38,7 @@ const USE_REJECTIONS: Record<string, string> = {
   'no-offer': 'Open Abang Grab first to see the cards',
   'bad-choice': 'Pick one of the three cards',
   paused: 'Game is paused',
+  disqualified: "You're Luar Garisan, so no power-ups this round.",
 }
 
 /**

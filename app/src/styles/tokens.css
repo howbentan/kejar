@@ -386,6 +386,7 @@ select.input option { background: #141614; color: var(--white); }
 /* Player roster status (marshal tools): jailed/auto/freed-once, from data already on Player. */
 .status-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 3px 9px; font: 700 10px var(--mono); letter-spacing: 0.04em; }
 .status-pill.jailed { background: var(--volt); color: var(--black); }
+.status-pill.luar { background: transparent; color: var(--volt); border: 1px solid var(--volt); }
 .status-pill.auto { background: transparent; color: var(--volt); border: 1px solid var(--volt); }
 .status-reason { display: block; font: 500 10px var(--font); color: var(--dim); margin-top: 2px; }
 .status-freed { display: block; font: 700 9px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--volt); margin-top: 2px; }

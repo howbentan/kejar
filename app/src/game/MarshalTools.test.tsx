@@ -239,3 +239,13 @@ describe('MarshalTools', () => {
     expect(screen.queryByRole('button', { name: 'Get SOS alerts on this phone' })).toBeNull()
   })
 })
+
+describe('MarshalTools Luar Garisan', () => {
+  it('shows a plain LUAR GARISAN pill, not the Penjara one', () => {
+    const out = [{ id: 'r1', name: 'Aina', role: 'runner' as const, tag_id: 7, jailed: false, disqualified_at: '2026-10-25T09:10:00.000Z' }]
+    render(<MarshalTools code="ABC234" view={testView({ roster: out })} refresh={() => {}} />)
+    expect(screen.getByText('LUAR GARISAN')).toBeInTheDocument()
+    expect(screen.getByText('left the play area')).toBeInTheDocument()
+    expect(screen.queryByText(/PENJARA/)).toBeNull()
+  })
+})

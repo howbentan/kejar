@@ -46,7 +46,9 @@ export default function MarshalLive({ code, view, refresh }: { code: string; vie
           {view.paused && <span className="pill pill-on">PAUSED</span>}
         </span>
         <span className="muted">
-          {view.counts.runnersFree} free · {view.counts.runnersJailed} in Penjara · {view.counts.chasers} Kejar
+          {view.counts.runnersFree} free · {view.counts.runnersJailed} in Penjara ·{' '}
+          {view.counts.runnersLuarGarisan > 0 && `${view.counts.runnersLuarGarisan} Luar Garisan · `}
+          {view.counts.chasers} Kejar
         </span>
       </div>
       <PingRipple role="marshal" lastRevealAt={view.lastRevealAt} now={now} />

@@ -89,6 +89,48 @@ describe('MemoryStore safety methods', () => {
     expect(await store.setFlag(p.id, 'left_start', false)).toBe(false)
   })
 
+  it('markOutside warns, then disqualifies, then changes nothing; clearOutWarning resets only a warning', async () => {
+    const g = await startedGame()
+    const p = await newPlayer(g.id, 'Aina')
+    const at1 = iso(T0 + MIN)
+    const at2 = iso(T0 + 2 * MIN)
+    expect(await store.markOutside(p.id, at1)).toBe('warned')
+    expect((await store.players(g.id))[0].out_warned_at).toBe(at1)
+    await store.clearOutWarning(p.id)
+    expect((await store.players(g.id))[0].out_warned_at).toBeNull()
+    expect(await store.markOutside(p.id, at1)).toBe('warned')
+    expect(await store.markOutside(p.id, at2)).toBe('disqualified')
+    expect((await store.players(g.id))[0].disqualified_at).toBe(at2)
+    expect(await store.markOutside(p.id, iso(T0 + 3 * MIN))).toBe('unchanged')
+    await store.clearOutWarning(p.id)
+    const after = (await store.players(g.id))[0]
+    expect(after.out_warned_at).toBe(at1)
+    expect(after.disqualified_at).toBe(at2)
+  })
+
+  it('markOutside leaves a jailed player alone, and catchRunner refuses a disqualified one', async () => {
+    const g = await startedGame()
+    const jailed = await newPlayer(g.id, 'Aina')
+    await store.updatePlayers([{ id: jailed.id, patch: { jailed: true } }])
+    expect(await store.markOutside(jailed.id, iso(T0))).toBe('unchanged')
+    expect((await store.players(g.id)).find((p) => p.id === jailed.id)!.out_warned_at).toBeFalsy()
+    const dq = await newPlayer(g.id, 'Ben')
+    await store.markOutside(dq.id, iso(T0))
+    expect(await store.markOutside(dq.id, iso(T0 + 30_000))).toBe('disqualified')
+    expect(await store.catchRunner(dq.id, null)).toBe(false)
+    expect((await store.players(g.id)).find((p) => p.id === dq.id)!.jailed).toBe(false)
+  })
+
+  it('markOutside disqualifies only 30 s or more after the warning', async () => {
+    const g = await startedGame()
+    const p = await newPlayer(g.id, 'Aina')
+    expect(await store.markOutside(p.id, iso(T0))).toBe('warned')
+    expect(await store.markOutside(p.id, iso(T0 + 1_000))).toBe('unchanged')
+    expect(await store.markOutside(p.id, iso(T0 + 29_000))).toBe('unchanged')
+    expect((await store.players(g.id))[0].disqualified_at).toBeFalsy()
+    expect(await store.markOutside(p.id, iso(T0 + 30_000))).toBe('disqualified')
+  })
+
   it('removed players vanish from players() but not from playerByToken()', async () => {
     const g = await startedGame()
     const p = await newPlayer(g.id, 'Aina')

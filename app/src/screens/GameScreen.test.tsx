@@ -132,3 +132,48 @@ describe('GameScreen: the freed-moment window (design doc §6a)', () => {
     expect(screen.queryByText('PENJARA', { selector: 'p.eyebrow' })).toBeNull()
   })
 })
+
+describe('GameScreen Luar Garisan routing', () => {
+  it('shows Luar Garisan, not Penjara or the chase, to a disqualified runner', () => {
+    const base = testView()
+    state.view = testView({ me: { ...base.me, disqualified_at: '2026-10-25T09:10:00.000Z' } })
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByRole('heading', { name: /Luar Garisan/ })).toBeInTheDocument()
+    expect(screen.queryByText(/penjara/i)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Scan' })).toBeNull()
+  })
+
+  it('shows Luar Garisan, not Hide, to a runner disqualified in the hiding phase', () => {
+    const base = testView()
+    state.view = testView({ phase: 'hiding', me: { ...base.me, disqualified_at: '2026-10-25T09:10:00.000Z' } })
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByRole('heading', { name: /Luar Garisan/ })).toBeInTheDocument()
+  })
+
+  it('wins over Penjara for a runner who is somehow both', () => {
+    const base = testView()
+    state.view = testView({ me: { ...base.me, jailed: true, disqualified_at: '2026-10-25T09:10:00.000Z' } })
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByRole('heading', { name: /Luar Garisan/ })).toBeInTheDocument()
+  })
+})
+
+describe('marshal header counts with Luar Garisan', () => {
+  const marshal = (n: number) => {
+    const base = testView()
+    return testView({
+      me: { ...base.me, id: 'm1', role: 'marshal', tag_id: null },
+      counts: { runnersFree: 2, runnersJailed: 1, runnersLuarGarisan: n, chasers: 1 },
+    })
+  }
+  it('adds the Luar Garisan count when there is one', () => {
+    state.view = marshal(2)
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByText(/2 free · 1 in Penjara · 2 Luar Garisan · 1 Kejar/)).toBeInTheDocument()
+  })
+  it('leaves it out at zero', () => {
+    state.view = marshal(0)
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByText(/2 free · 1 in Penjara · 1 Kejar/)).toBeInTheDocument()
+  })
+})

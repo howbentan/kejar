@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BreakJudgement } from '../../shared/catch.js'
+import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
 import { isDatoQr, stationFromQr } from '../../shared/ids.js'
 import ChaseLayout from '../game/ChaseLayout'
@@ -33,6 +34,7 @@ const BREAK_REJECTIONS: Record<string, string> = {
   'not-a-free-runner': 'Only free Dikejar can break people out',
   'not-chasing': 'Jailbreaks only work during the chase',
   paused: 'Game is paused',
+  disqualified: "You're Luar Garisan, so you can't free anyone this round.",
 }
 
 const tagOf = (view: View) => (view.me.tag_id ? `#${String(view.me.tag_id).padStart(2, '0')}` : view.me.name.toUpperCase())
@@ -94,6 +96,11 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
       }
       overlay={
         <>
+          {view.outWarned && (
+            <div role="alert" className="chase-warning">
+              <p style={{ fontWeight: 700 }}>{LUAR_GARISAN_WARN}</p>
+            </div>
+          )}
           {locationOff && (
             <div role="alert" className="chase-warning">
               <p style={{ fontWeight: 700 }}>Location is off, so you'll miss check-ins and be sent to Penjara.</p>

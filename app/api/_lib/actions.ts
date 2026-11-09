@@ -1,6 +1,8 @@
 import {
   alertsFrom,
   NOTE_MAX,
+  LUAR_GARISAN_MAX_ACCURACY_M,
+  LUAR_GARISAN_WARN,
   OUTSIDE_MARGIN_M,
   REASON_LABEL,
   SOS_DETAILS_MS,
@@ -16,6 +18,7 @@ import { autoJailDue, checkinsSince, countedCheckIn } from '../../shared/checkin
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
+import { isOut } from '../../shared/players.js'
 import { judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
 import { datoCodeFromQr, isDatoQr, JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
@@ -258,7 +261,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     if (!(await store.claimPing(game.id, seq, 'alerted'))) continue
     // Skip stale alerts when catching up after a gap: only alert pings still in the future.
     if (game.settings.checkinMode !== 'push' || now >= (times.get(seq)?.revealAt ?? 0)) continue
-    const runners = (await store.players(game.id)).filter((p) => p.role === 'runner' && !p.jailed)
+    const runners = (await store.players(game.id)).filter((p) => p.role === 'runner' && !isOut(p))
     await pushTo(ctx, runners, { type: 'checkin', code: game.code, seq, revealAt: times.get(seq)?.revealAt })
   }
 
@@ -266,7 +269,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     if (!(await store.claimPing(game.id, seq, 'revealed'))) continue
     const revealAt = times.get(seq)?.revealAt ?? now
     const positions = await store.latestPositions(game.id, [iso(revealAt)])
-    const free = (await store.players(game.id)).filter((p) => p.role === 'runner' && !p.jailed)
+    const free = (await store.players(game.id)).filter((p) => p.role === 'runner' && !isOut(p))
     // Cloaked runners don't count as seen, so the feed can't give them away.
     const prevRevealAt = Math.max(
       chaseStartOf(game, now) ?? 0,
@@ -322,7 +325,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
       }
       // Auto-jailing the last free runner ends the game, the same as a catch.
       const runners = (await store.players(game.id)).filter((p) => p.role === 'runner')
-      if (runners.length > 0 && runners.every((p) => p.jailed)) await finish(ctx, game)
+      if (runners.length > 0 && runners.every(isOut)) await finish(ctx, game)
     }
   }
 
@@ -590,10 +593,51 @@ function openWindowAlert(windows: { alertAt: number; revealAt: number }[], now: 
   return open.length ? Math.max(...open) : undefined
 }
 
+const LUAR_GARISAN_COPY = {
+  runner: {
+    warn: LUAR_GARISAN_WARN,
+    out: 'Luar Garisan lah! You left the play area, so no winning this round. You can still play along.',
+  },
+  chaser: {
+    warn: LUAR_GARISAN_WARN,
+    out: "Luar Garisan lah! You left the play area, so no winning this round, and your catches don't count.",
+  },
+}
+
+/** One report clearly outside: the first warns, the second consecutive one disqualifies (spec §5-§6). */
+async function luarGaris(ctx: Ctx, game: Game, me: Player) {
+  const verdict = await ctx.store.markOutside(me.id, iso(ctx.now))
+  if (verdict === 'unchanged') return
+  const copy = LUAR_GARISAN_COPY[me.role === 'chaser' ? 'chaser' : 'runner']
+  const warned = verdict === 'warned'
+  // Order matters: the event, then the end-of-game check, then the push, so a failing push can't stop either.
+  await ctx.store.addEvent({
+    game_id: game.id,
+    type: warned ? 'out-warned' : 'luar-garisan',
+    actor_id: me.id,
+    target_id: null,
+    data: { who: who(me) },
+  })
+  // Disqualifying the last free runner ends the game, the same as catching them (spec §7a).
+  if (!warned && me.role === 'runner') {
+    const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
+    if (runners.length > 0 && runners.every(isOut)) await finish(ctx, game)
+  }
+  try {
+    await pushTo(ctx, [me], { type: 'notice', code: game.code, title: warned ? 'Outside the play area' : 'Luar Garisan', body: warned ? copy.warn : copy.out })
+  } catch {
+    // A push that can't be delivered must not fail the location report; the in-app banner and screen still show it.
+  }
+}
+
 /** Raises marshal alerts for leaving the play area, or a chaser leaving the start early (spec §5.1). */
 async function checkWhere(ctx: Ctx, game: Game, me: Player, here: LatLng, accuracy: number) {
   const phase = phaseAt(game, ctx.now).phase
   if ((phase !== 'hiding' && phase !== 'chasing') || me.jailed || (me.role !== 'runner' && me.role !== 'chaser')) return
+  // Luar Garisan freezes with the game: nothing counts while paused, and a disqualified or removed player is done.
+  // The marshal outside alert below is unchanged and keeps running either way.
+  // A fix worse than LUAR_GARISAN_MAX_ACCURACY_M neither warns, disqualifies nor clears (the raw accuracy, before the slack clamp below).
+  const ruleLive = !game.paused_at && !me.disqualified_at && !me.removed_at && accuracy <= LUAR_GARISAN_MAX_ACCURACY_M
   // Lakes cut out of the park count as outside too (Plan 4b).
   const outsideBy = distanceOutsidePlayArea(here, game.arena)
   // Alert only when clearly outside; re-arm only once back inside, so GPS jitter at the edge can't spam.
@@ -601,8 +645,10 @@ async function checkWhere(ctx: Ctx, game: Game, me: Player, here: LatLng, accura
     if (await ctx.store.setFlag(me.id, 'outside', true)) {
       await ctx.store.addEvent({ game_id: game.id, type: 'outside', actor_id: me.id, target_id: null, data: { who: who(me) } })
     }
-  } else if (outsideBy === 0 && me.outside) {
-    await ctx.store.setFlag(me.id, 'outside', false)
+    if (ruleLive) await luarGaris(ctx, game, me)
+  } else {
+    if (outsideBy === 0 && me.outside) await ctx.store.setFlag(me.id, 'outside', false)
+    if (ruleLive && me.out_warned_at) await ctx.store.clearOutWarning(me.id)
   }
   const slack = Math.min(Math.max(accuracy, 0), 20)
   if (phase === 'hiding' && me.role === 'chaser' && !me.left_start && distanceM(here, game.arena.start) > START_RADIUS_M + slack) {
@@ -625,7 +671,7 @@ const catchAction: Action = async (ctx, body) => {
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeCatch({
     phase: phaseAt(fresh, ctx.now).phase,
-    chaser: me,
+    chaser: players.find((p) => p.id === me.id) ?? me,
     tagId,
     players,
     chaserPos: latest(positions[me.id]),
@@ -649,7 +695,7 @@ const catchAction: Action = async (ctx, body) => {
     data: { flagged: verdict.flagged, who: tagLabelOf(players, verdict.runnerId), chaser: me.name },
   })
   const after = await ctx.store.players(game.id)
-  if (after.filter((p) => p.role === 'runner').every((p) => p.jailed)) await finish(ctx, fresh)
+  if (after.filter((p) => p.role === 'runner').every(isOut)) await finish(ctx, fresh)
   const caught = players.find((p) => p.id === verdict.runnerId)
   const label = caught?.tag_id ? `#${tag2(caught.tag_id)} ${caught.name}` : (caught?.name ?? '')
   return { ...verdict, label }
@@ -658,6 +704,7 @@ const catchAction: Action = async (ctx, body) => {
 const jailbreak: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
+  if (me.disqualified_at) return { ok: false, reason: 'disqualified' }
   if (str(body.qr).trim() !== JAIL_QR) throw new ActionError(400, "That's not the Penjara code")
   await recordScanLocation(ctx, game, me, body)
   await advance(ctx, game)
@@ -673,7 +720,7 @@ const jailbreak: Action = async (ctx, body) => {
     now: ctx.now,
   })
   if (!verdict.ok) return verdict
-  await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now) } })))
+  await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now), out_warned_at: null } })))
   await ctx.store.addEvent({
     game_id: game.id,
     type: 'jailbreak',
@@ -692,6 +739,7 @@ const jailbreak: Action = async (ctx, body) => {
 const settle: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
+  if (me.disqualified_at) return { ok: false, reason: 'disqualified' }
   if (str(body.qr).trim() !== JAIL_QR) throw new ActionError(400, "That's not the Penjara code")
   const targetIds = body.targetIds ?? []
   if (!Array.isArray(targetIds) || !targetIds.every((t) => typeof t === 'string')) throw new ActionError(400, 'Pick who to free')
@@ -716,7 +764,7 @@ const settle: Action = async (ctx, body) => {
   if (!verdict.ok) return verdict
   if (!(await ctx.store.markUsed(dato!.id))) return { ok: false, reason: 'already-used' }
   try {
-    await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now) } })))
+    await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now), out_warned_at: null } })))
   } catch (e) {
     await ctx.store.updatePowerUp(dato!.id, { used_at: null }) // give Dato Seri back
     throw e
@@ -850,6 +898,7 @@ const GRAB_OFFER = 3
 const claim: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
+  if (me.disqualified_at) return { ok: false, reason: 'disqualified' }
   await recordScanLocation(ctx, game, me, body)
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
@@ -931,6 +980,7 @@ const dropDatoSeri: Action = async (ctx, body) => {
 const usePowerup: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
+  if (me.disqualified_at) return { ok: false, reason: 'disqualified' }
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
   if (fresh.paused_at) return { ok: false, reason: 'paused' }
@@ -1022,6 +1072,7 @@ const usePowerup: Action = async (ctx, body) => {
 const grabPick: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
+  if (me.disqualified_at) return { ok: false, reason: 'disqualified' }
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
   if (fresh.paused_at) return { ok: false, reason: 'paused' }
@@ -1239,7 +1290,7 @@ const removePlayer: Action = async (ctx, body) => {
   const phase = phaseAt(game, ctx.now).phase
   if (phase === 'hiding' || phase === 'chasing') {
     const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
-    if (runners.every((p) => p.jailed)) await finish(ctx, game)
+    if (runners.every(isOut)) await finish(ctx, game)
   }
   return { ok: true }
 }
@@ -1385,6 +1436,9 @@ const resume: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const marshal = await requireMarshal(ctx, game, body)
   if ((await ctx.store.resumeGame(game.id)) === null) return { ok: false }
+  // Luar Garisan froze with the pause: a warning given before it must not carry over into the resumed game.
+  const warned = (await ctx.store.players(game.id)).filter((p) => p.out_warned_at && !p.disqualified_at)
+  if (warned.length > 0) await ctx.store.updatePlayers(warned.map((p) => ({ id: p.id, patch: { out_warned_at: null } })))
   await ctx.store.addEvent({ game_id: game.id, type: 'resumed', actor_id: marshal?.id ?? null, target_id: null, data: {} })
   return { ok: true }
 }

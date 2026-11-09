@@ -168,7 +168,7 @@ describe('timers and counts', () => {
   })
   it('counts free and jailed runners', () => {
     const v = view(chaser, { players: [chaser, { ...aina, jailed: true }, hafiz, wei, siti] })
-    expect(v.counts).toEqual({ runnersFree: 2, runnersJailed: 1, chasers: 1 })
+    expect(v.counts).toEqual({ runnersFree: 2, runnersJailed: 1, runnersLuarGarisan: 0, chasers: 1 })
   })
 })
 
@@ -293,6 +293,10 @@ describe('check-in state', () => {
     const jailed = { ...aina, jailed: true }
     expect(checkin(jailed, { players: [chaser, jailed, hafiz, wei, siti] })).toBeNull()
     expect(checkin(aina, { now: T0 + 3 * MIN, pings: [] })).toBeNull()
+  })
+  it('is null for a runner disqualified for Luar Garisan', () => {
+    const out = { ...hafiz, disqualified_at: new Date(T0 + 12 * MIN).toISOString() }
+    expect(checkin(out, { now: T0 + 16 * MIN, players: [chaser, aina, out, wei, siti] })).toBeNull()
   })
   it('a pause inside the window keeps a check-in sent before it', () => {
     const paused = game({ paused_at: new Date(T0 + 19.5 * MIN).toISOString() })
@@ -622,6 +626,11 @@ describe('the chaser snapshot at check-in (checkins design §5)', () => {
     expect(s).toEqual({ positions: [] })
   })
 
+  it('a runner disqualified for Luar Garisan gets no chaser snapshot', () => {
+    const out = { ...aina, disqualified_at: new Date(alertAt(2)).toISOString() }
+    expect(snap(out, [pos(A.lat, A.lng, alertAt(2) + 10_000)], { now: alertAt(2) + 20_000 })).toBeNull()
+  })
+
   it('the switch off means no chaser snapshot, even after checking in', () => {
     const v = view(aina, { positions: { c1: benTrail, r1: [pos(A.lat, A.lng, alertAt(2) + 10_000)] }, now: alertAt(2) + 20_000 })
     expect(v.chaserSnapshot).toBeNull()
@@ -796,5 +805,75 @@ describe("Dato Seri's hint zone (jail design §4b)", () => {
     expect(view(aina, { game: claimed }).legendaryZone).toBeNull()
     expect(view(aina, { game: full('g1'), now: T0 + 2 * MIN }).legendaryZone).toBeNull()
     expect(view(aina, { game: { ...full('g1'), ended_at: iso(NOW - MIN) } }).legendaryZone).toBeNull()
+  })
+})
+
+describe('Luar Garisan views', () => {
+  const out = { ...hafiz, disqualified_at: iso(T0 + 12 * MIN) }
+
+  it('a disqualified runner gets the delayed spectator dots a jailed runner gets', () => {
+    const ps = { ...positions, c1: [pos(3.001, 101.001, NOW - 3 * MIN), pos(3.009, 101.009, NOW - 1 * MIN)] }
+    const v = view(out, { players: [chaser, aina, out, wei, siti], positions: ps })
+    expect(v.dots.find((d) => d.id === 'c1')).toMatchObject({ lat: 3.001, lng: 101.001 })
+  })
+
+  it('has no check-in, settle or jail reason, and is not caught', () => {
+    const v = view(out, { players: [chaser, aina, out, wei, siti] })
+    expect(v.checkin).toBeNull()
+    expect(v.settle).toBeNull()
+    expect(v.jailReason).toBeNull()
+    expect(v.caughtBy).toBeNull()
+  })
+
+  it('outWarned is true for a warned player, and false once disqualified or when never warned', () => {
+    const warned = { ...aina, out_warned_at: iso(T0 + 12 * MIN) }
+    expect(view(warned, { players: [chaser, warned, wei, siti] }).outWarned).toBe(true)
+    expect(view(aina, { players: [chaser, aina, wei, siti] }).outWarned).toBe(false)
+    const gone = { ...warned, disqualified_at: iso(T0 + 13 * MIN) }
+    expect(view(gone, { players: [chaser, gone, wei, siti] }).outWarned).toBe(false)
+  })
+
+  it('the marshal roster carries disqualified_at', () => {
+    const v = view(siti, { players: [chaser, aina, out, wei, siti] })
+    expect(v.roster.find((r) => r.id === 'r2')?.disqualified_at).toBe(out.disqualified_at)
+    expect(v.roster.find((r) => r.id === 'r1')?.disqualified_at).toBeFalsy()
+  })
+
+  it('marshals get a luar-garisan alert', () => {
+    const events = [event('luar-garisan', T0 + 12 * MIN, { actor_id: 'r2', data: { who: 'Hafiz #03' } })]
+    const v = view(siti, { events })
+    expect(v.alerts.map((a) => a.text)).toEqual(['Hafiz #03 is Luar Garisan (left the play area twice)'])
+    expect(v.alerts[0].kind).toBe('luar-garisan')
+  })
+})
+
+describe('Luar Garisan on the chasers and the feed', () => {
+  const out = { ...aina, disqualified_at: iso(T0 + 12 * MIN) }
+  const ps = [chaser, out, hafiz, wei, siti]
+
+  it('a chaser sees no dot and no note for a disqualified runner', () => {
+    const v = view(chaser, { players: ps })
+    expect(v.dots.find((d) => d.id === 'r1')).toBeUndefined()
+    expect(v.feed.map((f) => f.text).join('|')).not.toContain('#07 never checked in')
+    // Still there for a free runner (Hafiz has a position; Wei never checked in).
+    expect(v.dots.find((d) => d.id === 'r2')).toBeDefined()
+  })
+
+  it('counts them separately from Penjara', () => {
+    const v = view(siti, { players: ps })
+    expect(v.counts).toMatchObject({ runnersFree: 2, runnersJailed: 0, runnersLuarGarisan: 1 })
+  })
+
+  it('everyone gets a feed line when someone goes Luar Garisan, and none for the warning', () => {
+    const events = [
+      event('out-warned', T0 + 11 * MIN, { actor_id: 'r1', data: { who: 'Aina #07' } }),
+      event('luar-garisan', T0 + 12 * MIN, { actor_id: 'r1', data: { who: 'Aina #07' } }),
+    ]
+    for (const me of [chaser, hafiz, siti]) {
+      const lines = view(me, { players: ps, events }).feed
+      const line = lines.find((f) => f.text.includes('Luar Garisan'))
+      expect(line).toMatchObject({ text: '#07 is Luar Garisan, out of this round.', means: null, act: false })
+      expect(lines.filter((f) => /outside|warn/i.test(f.text))).toEqual([])
+    }
   })
 })

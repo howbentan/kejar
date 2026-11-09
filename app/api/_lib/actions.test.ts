@@ -1600,6 +1600,334 @@ describe('removing a player', () => {
   })
 })
 
+describe('Luar Garisan', () => {
+  const RUNNER_WARN = "Eh, you're outside the play area! Balik within 30 seconds or you're out."
+  const CHASER_WARN = "Eh, you're outside the play area! Balik within 30 seconds or you're out."
+  const RUNNER_OUT = 'Luar Garisan lah! You left the play area, so no winning this round. You can still play along.'
+  const CHASER_OUT = "Luar Garisan lah! You left the play area, so no winning this round, and your catches don't count."
+  const evs = async (gameId: string, type: string) => (await store.events(gameId)).filter((e) => e.type === type)
+  const notices = (name: string) => pushes.filter((p) => p.endpoint === `https://push/${name}` && (p.payload as any).type === 'notice')
+  const player = async (gameId: string, id: string) => (await store.players(gameId)).find((p) => p.id === id)!
+  const report = async (g: { code: string }, token: string, m: number, stepMs = 30_000) => {
+    now += stepMs
+    await run('location', { code: g.code, token, ...at(m) })
+  }
+
+  it('warns a runner on the first report more than 20 m outside, and pushes the runner warning', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 100)
+    await report(g, g.aina.token, 240)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(1)
+    expect((await evs(g.gameId, 'out-warned'))[0].data).toEqual({ who: 'Aina #07' })
+    expect(notices('Aina').map((p) => p.payload)).toEqual([{ type: 'notice', code: g.code, title: 'Outside the play area', body: RUNNER_WARN }])
+    const me = await player(g.gameId, g.aina.playerId)
+    expect(me.out_warned_at).toBeTruthy()
+    expect(me.disqualified_at).toBeFalsy()
+  })
+
+  it('disqualifies on the second consecutive report outside', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 250)
+    const out = await evs(g.gameId, 'luar-garisan')
+    expect(out).toHaveLength(1)
+    expect(out[0].data).toEqual({ who: 'Aina #07' })
+    expect(out[0].actor_id).toBe(g.aina.playerId)
+    expect((await player(g.gameId, g.aina.playerId)).disqualified_at).toBe(new Date(now).toISOString())
+    expect(notices('Aina').map((p) => (p.payload as any).body)).toEqual([RUNNER_WARN, RUNNER_OUT])
+    await report(g, g.aina.token, 260)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(1)
+  })
+
+  it('a report back within 20 m in between resets the streak', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 210) // 10 m outside: counts as inside
+    expect((await player(g.gameId, g.aina.playerId)).out_warned_at).toBeFalsy()
+    await report(g, g.aina.token, 240)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(2)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
+    expect((await player(g.gameId, g.aina.playerId)).disqualified_at).toBeFalsy()
+  })
+
+  it('two outside reports 1 s apart give a warning only', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 250, 3_000) // a re-sent fix a few seconds later
+    await report(g, g.aina.token, 250, 1_000)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(1)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
+    expect((await player(g.gameId, g.aina.playerId)).disqualified_at).toBeFalsy()
+  })
+
+  it('disqualifies only 30 s or more after the warning', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240) // warned
+    await report(g, g.aina.token, 250, 29_000)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
+    await report(g, g.aina.token, 250, 1_000) // exactly 30 s after the warning
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(1)
+    expect((await player(g.gameId, g.aina.playerId)).disqualified_at).toBe(new Date(now).toISOString())
+  })
+
+  it('a warning does not survive Penjara', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240) // warned
+    await store.catchRunner(g.aina.playerId, g.ben.playerId)
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: false, freed_once: true } }])
+    await report(g, g.aina.token, 240)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(2)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
+  })
+
+  it('uses the chaser copy for chasers', async () => {
+    const g = await safetyGame()
+    await report(g, g.ben.token, 240)
+    await report(g, g.ben.token, 250)
+    expect(notices('Ben').map((p) => (p.payload as any).body)).toEqual([CHASER_WARN, CHASER_OUT])
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(1)
+  })
+
+  it('stays disqualified after coming back inside', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 250)
+    await report(g, g.aina.token, 100)
+    await report(g, g.aina.token, 50)
+    expect((await player(g.gameId, g.aina.playerId)).disqualified_at).toBeTruthy()
+  })
+
+  it('never warns or disqualifies while the game is paused, in the lobby, or after it ends', async () => {
+    const g = await safetyGame()
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 250)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(0)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
+    expect(notices('Aina')).toEqual([])
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 24 * 60 * MIN
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 250)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(0)
+    const lobby = await readyGame()
+    const lobbyId = (await store.gameByCode(lobby.code))!.id
+    await report(lobby, lobby.aina.token, 240)
+    await report(lobby, lobby.aina.token, 250)
+    expect(await evs(lobbyId, 'out-warned')).toHaveLength(0)
+    expect(await evs(lobbyId, 'luar-garisan')).toHaveLength(0)
+  })
+
+  it('never warns or disqualifies a jailed runner, a marshal, or a removed player', async () => {
+    const g = await safetyGame()
+    await store.updatePlayers([{ id: g.hafiz.playerId, patch: { jailed: true } }])
+    await report(g, g.hafiz.token, 240)
+    await report(g, g.hafiz.token, 250)
+    await report(g, g.siti.token, 240)
+    await report(g, g.siti.token, 250)
+    await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.aina.playerId })
+    pushes = []
+    await report(g, g.aina.token, 240).catch(() => {})
+    await report(g, g.aina.token, 250).catch(() => {})
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(0)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
+    expect(notices('Hafiz')).toEqual([])
+    expect(notices('Siti')).toEqual([])
+    expect(notices('Aina')).toEqual([])
+  })
+
+  const reportAcc = async (g: { code: string }, token: string, m: number, accuracy_m: number, stepMs = 30_000) => {
+    now += stepMs
+    await run('location', { code: g.code, token, ...at(m), accuracy_m })
+  }
+
+  it('a warning given before a pause does not carry over: the first outside report after resume warns afresh', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240) // warned
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    now += 5 * MIN
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    expect((await player(g.gameId, g.aina.playerId)).out_warned_at).toBeFalsy()
+    await report(g, g.aina.token, 240)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(2)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
+    expect((await player(g.gameId, g.aina.playerId)).disqualified_at).toBeFalsy()
+  })
+
+  it('resume leaves a disqualification alone', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 250)
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    expect((await player(g.gameId, g.aina.playerId)).disqualified_at).toBeTruthy()
+  })
+
+  it('two outside fixes at 120 m accuracy, 30 s apart, do nothing', async () => {
+    const g = await safetyGame()
+    await reportAcc(g, g.aina.token, 240, 120)
+    await reportAcc(g, g.aina.token, 250, 120)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(0)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
+    expect(notices('Aina')).toEqual([])
+    // The marshal outside alert is unchanged (R1).
+    expect(await evs(g.gameId, 'outside')).toHaveLength(1)
+  })
+
+  it('a good fix still warns, and a fix at exactly 50 m counts', async () => {
+    const g = await safetyGame()
+    await reportAcc(g, g.aina.token, 240, 50)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(1)
+  })
+
+  it('a poor fix between a warning and a good outside fix does not clear the warning', async () => {
+    const g = await safetyGame()
+    await reportAcc(g, g.aina.token, 240, 8) // warned
+    await reportAcc(g, g.aina.token, 100, 120, 5_000) // inside, but too poor to clear
+    expect((await player(g.gameId, g.aina.playerId)).out_warned_at).toBeTruthy()
+    await reportAcc(g, g.aina.token, 250, 8, 30_000)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(1)
+  })
+
+  it('a failing push does not stop the event or the end of the game', async () => {
+    const g = await safetyGame()
+    await store.catchRunner(g.hafiz.playerId, g.ben.playerId)
+    await report(g, g.aina.token, 240)
+    const failing = (body: object) =>
+      actions.location(
+        {
+          store,
+          now,
+          rng: seeded(7),
+          push: async () => {
+            throw new Error('push service down')
+          },
+          fetchJson: async () => {
+            throw new Error('no fake reply')
+          },
+        },
+        body,
+      )
+    now += 30_000
+    await expect(failing({ code: g.code, token: g.aina.token, ...at(250) })).resolves.toEqual({ ok: true })
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(1)
+    expect(await evs(g.gameId, 'ended')).toHaveLength(1)
+  })
+
+  it('keeps the existing marshal outside alert', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 250)
+    await report(g, g.aina.token, 260)
+    expect(await evs(g.gameId, 'outside')).toHaveLength(1)
+    expect((await evs(g.gameId, 'outside'))[0].data).toEqual({ who: 'Aina #07' })
+  })
+
+  const disqualify = (id: string) => store.updatePlayers([{ id, patch: { disqualified_at: new Date(now).toISOString() } }])
+
+  it('the game ends when the last free runner is disqualified, and the chasers win', async () => {
+    const g = await safetyGame()
+    await store.catchRunner(g.hafiz.playerId, g.ben.playerId)
+    await report(g, g.aina.token, 240)
+    expect(await evs(g.gameId, 'ended')).toHaveLength(0)
+    await report(g, g.aina.token, 250)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(1)
+    const ended = await evs(g.gameId, 'ended')
+    expect(ended).toHaveLength(1)
+    expect(ended[0].data).toEqual({ winner: 'chasers' })
+    const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(v.phase).toBe('ended')
+    expect(v.results?.winner).toBe('chasers')
+    await report(g, g.aina.token, 260)
+    expect(await evs(g.gameId, 'ended')).toHaveLength(1)
+  })
+
+  it('the game goes on while another runner is free', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 250)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(1)
+    expect(await evs(g.gameId, 'ended')).toHaveLength(0)
+  })
+
+  it("a disqualified chaser's catch is refused", async () => {
+    const g = await safetyGame()
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await disqualify(g.ben.playerId)
+    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toEqual({ ok: false, reason: 'disqualified' })
+    expect((await player(g.gameId, g.aina.playerId)).jailed).toBe(false)
+    expect(await evs(g.gameId, 'caught')).toHaveLength(0)
+  })
+
+  it('a disqualified runner cannot be caught', async () => {
+    const g = await safetyGame()
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await disqualify(g.aina.playerId)
+    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toEqual({ ok: false, reason: 'already-out' })
+    expect((await player(g.gameId, g.aina.playerId)).jailed).toBe(false)
+    expect(await evs(g.gameId, 'caught')).toHaveLength(0)
+  })
+
+  it('a disqualified runner gets no check-in pushes', async () => {
+    const g = await safetyGame()
+    await disqualify(g.aina.playerId)
+    now = T0 + 10 * MIN - 30_000
+    pushes = []
+    await run('state', { code: g.code, token: g.ben.token })
+    const checkins = pushes.filter((p) => (p.payload as any).type === 'checkin').map((p) => p.endpoint)
+    expect(checkins).toEqual(['https://push/Hafiz'])
+  })
+
+  it('a disqualified runner is never auto-jailed', async () => {
+    const g = await safetyGame({ checkinMode: 'schedule' })
+    await disqualify(g.aina.playerId)
+    now = T0 + 20 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(await evs(g.gameId, 'auto-jailed').then((es) => es.map((e) => e.target_id))).not.toContain(g.aina.playerId)
+    const aina = await player(g.gameId, g.aina.playerId)
+    expect(aina.jailed).toBe(false)
+    expect(aina.disqualified_at).toBeTruthy()
+  })
+
+  it('a disqualified player cannot claim or use power-ups, jailbreak or Settle', async () => {
+    const g = await safetyGame()
+    const decoy = await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'decoy', station: 1 })
+    await disqualify(g.aina.playerId)
+    await disqualify(g.ben.playerId)
+    const refused = { ok: false, reason: 'disqualified' }
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...at(0) })).toEqual(refused)
+    expect(await run('claim', { code: g.code, token: g.ben.token, qr: stationQr(1), ...at(0) })).toEqual(refused)
+    expect(await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: decoy.id })).toEqual(refused)
+    expect(await run('grabPick', { code: g.code, token: g.aina.token, powerupId: decoy.id, choice: 0 })).toEqual(refused)
+    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(0) })).toEqual(refused)
+    expect(await run('settle', { code: g.code, token: g.aina.token, qr: JAIL_QR, targetIds: [], ...at(0) })).toEqual(refused)
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === decoy.id)!.used_at).toBeNull()
+  })
+
+  it('Ah Long and Toyol cannot take from a disqualified player, and the Ah Long is not spent', async () => {
+    const g = await safetyGame()
+    const along = await store.addPowerUp({ game_id: g.gameId, player_id: g.ben.playerId, kind: 'along', station: 1 })
+    await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'shield', station: 2 })
+    await store.addPowerUp({ game_id: g.gameId, player_id: g.hafiz.playerId, kind: 'shield', station: 3 })
+    await disqualify(g.aina.playerId)
+    await disqualify(g.hafiz.playerId)
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: along.id })).toEqual({ ok: false, reason: 'nothing-to-steal' })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === along.id)!.used_at).toBeNull()
+    await disqualify(g.ben.playerId)
+    expect(await store.stealFrom(g.gameId, 'chaser')).toBeNull()
+  })
+
+  it('jailbreak and Settle never free or count a disqualified player', async () => {
+    const g = await safetyGame()
+    await disqualify(g.aina.playerId)
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(10) }) // at Penjara
+    expect(await run('jailbreak', { code: g.code, token: g.hafiz.token, qr: JAIL_QR })).toEqual({ ok: false, reason: 'nobody-to-free' })
+    expect((await player(g.gameId, g.aina.playerId)).freed_once).toBe(false)
+  })
+})
+
 describe('automatic alerts', () => {
   const kinds = async (code: string, organiserToken: string) =>
     (await run<View>('state', { code, organiserToken })).alerts.map((a) => a.kind)

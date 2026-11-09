@@ -118,3 +118,21 @@ describe('service worker game check-in alerts', () => {
     expect(self.clients.openWindow).toHaveBeenCalledWith('/g/ABC234')
   })
 })
+
+describe('service worker notices', () => {
+  it('shows a notice with its title and body, and tapping it opens the game', async () => {
+    const { self, listeners } = loadWorker([])
+    const pending: Promise<unknown>[] = []
+    listeners.push({
+      data: { json: () => ({ type: 'notice', code: 'ABC234', title: 'T', body: 'B' }) },
+      waitUntil: (p: Promise<unknown>) => pending.push(p),
+    })
+    await Promise.all(pending)
+    expect(self.registration.showNotification).toHaveBeenCalledWith(
+      'T',
+      expect.objectContaining({ body: 'B', tag: 'kejar-notice', requireInteraction: true, data: { url: '/g/ABC234' } }),
+    )
+    await click(listeners, '/g/ABC234')
+    expect(self.clients.openWindow).toHaveBeenCalledWith('/g/ABC234')
+  })
+})

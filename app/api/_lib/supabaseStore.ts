@@ -1,8 +1,9 @@
+import { LUAR_GARISAN_GRACE_MS } from '../../shared/alerts.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind } from '../../shared/types.js'
 import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
-const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, push, removed_at, outside, left_start'
+const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at'
 const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
@@ -62,7 +63,7 @@ export class SupabaseStore implements GameStore {
     const rows = check(
       await this.db
         .from('players')
-        .update({ jailed: false, caught_at: null, freed_at: atIso })
+        .update({ jailed: false, caught_at: null, freed_at: atIso, out_warned_at: null })
         .eq('id', id)
         .eq('jailed', true)
         .is('caught_by', null)
@@ -74,9 +75,10 @@ export class SupabaseStore implements GameStore {
     const rows = check(
       await this.db
         .from('players')
-        .update({ jailed: true, caught_at: this.nowIso(), caught_by: by })
+        .update({ jailed: true, caught_at: this.nowIso(), caught_by: by, out_warned_at: null })
         .eq('id', id)
         .eq('jailed', false)
+        .is('disqualified_at', null)
         .select('id'),
     )
     return (rows ?? []).length > 0
@@ -256,6 +258,13 @@ export class SupabaseStore implements GameStore {
       await this.db.from('players').update({ [field]: value }).eq('id', playerId).eq(field, !value).select('id'),
     )
     return (rows ?? []).length > 0
+  }
+  async markOutside(playerId: string, at: string) {
+    const r = check(await this.db.rpc('mark_outside', { p_player: playerId, p_at: at, p_grace_ms: LUAR_GARISAN_GRACE_MS }))
+    return (r === 'warned' || r === 'disqualified' ? r : 'unchanged') as 'warned' | 'disqualified' | 'unchanged'
+  }
+  async clearOutWarning(playerId: string) {
+    check(await this.db.from('players').update({ out_warned_at: null }).eq('id', playerId).is('disqualified_at', null).not('out_warned_at', 'is', null))
   }
   async removePlayer(id: string) {
     const rows = check(

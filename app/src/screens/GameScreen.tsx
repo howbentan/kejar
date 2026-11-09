@@ -9,6 +9,7 @@ import ChaserChase from './ChaserChase'
 import Hide from './Hide'
 import Jail from './Jail'
 import Lobby from './Lobby'
+import LuarGarisan from './LuarGarisan'
 import MarshalLive from './MarshalLive'
 import Paused from './Paused'
 import Removed from './Removed'
@@ -16,6 +17,8 @@ import Results from './Results'
 import RunnerChase from './RunnerChase'
 import type { View } from '../../shared/views.js'
 
+// A disqualified (Luar Garisan) runner deliberately keeps sending location while the app is open: it only feeds
+// the marshals' safety map and SOS, and nothing about the round depends on it.
 function locationMode(view: View | null): LocationMode {
   if (!view || view.phase === 'lobby' || view.phase === 'ended' || view.me.id === 'host' || view.me.removed_at) return 'never'
   if (view.me.role === 'chaser' || view.me.role === 'marshal') return 'always'
@@ -77,6 +80,7 @@ export default function GameScreen({ code }: { code: string }) {
   // Runners and chasers: their screen, with the Help and SOS icon in the same corner on every one.
   let screen: ReactNode
   if (current.paused) screen = <Paused view={current} />
+  else if (current.me.role === 'runner' && current.me.disqualified_at) screen = <LuarGarisan view={current} />
   else if (current.phase === 'hiding') screen = <Hide view={current} />
   else if (current.me.role === 'runner' && (current.me.jailed || showingFreed)) screen = <Jail code={code} view={current} />
   else if (current.me.role === 'chaser') screen = <ChaserChase code={code} view={current} refresh={refresh} />

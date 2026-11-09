@@ -89,3 +89,30 @@ describe('judgeJailbreak', () => {
     expect(judgeJailbreak({ ...input, phase: 'ended' })).toEqual({ ok: false, reason: 'not-chasing' })
   })
 })
+
+describe('judgeCatch and Luar Garisan', () => {
+  const dq = { disqualified_at: new Date(NOW - MIN).toISOString() }
+  it('refuses a disqualified chaser', () => {
+    expect(judgeCatch({ ...base, chaser: { ...ben, ...dq } })).toEqual({ ok: false, reason: 'disqualified' })
+  })
+  it('refuses a disqualified runner as already out', () => {
+    expect(judgeCatch({ ...base, players: [ben, { ...aina, ...dq }, hafiz] })).toEqual({ ok: false, reason: 'already-out' })
+  })
+})
+
+describe('jailbreak and Settle skip a disqualified player', () => {
+  const dq = { ...aina, disqualified_at: new Date(NOW - MIN).toISOString() }
+  const jail = { lat: 3.0, lng: 101.0 }
+  it('a jailbreak has nobody to free when the only other runner is disqualified', () => {
+    expect(judgeJailbreak({ phase: 'chasing', runner: hafiz, players: [ben, dq, hafiz], runnerPos: here, jail, now: NOW })).toEqual({
+      ok: false,
+      reason: 'nobody-to-free',
+    })
+  })
+  it('a disqualified runner cannot jailbreak', () => {
+    expect(judgeJailbreak({ phase: 'chasing', runner: dq, players: [ben, dq, hafiz], runnerPos: here, jail, now: NOW })).toEqual({
+      ok: false,
+      reason: 'not-a-free-runner',
+    })
+  })
+})

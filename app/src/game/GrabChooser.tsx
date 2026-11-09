@@ -18,6 +18,7 @@ const PICK_REJECTIONS: Record<string, string> = {
   'not-chasing': 'Power-ups work during the chase',
   'cannot-use': "You can't use power-ups in Penjara",
   paused: 'Game is paused',
+  disqualified: "You're Luar Garisan, so no power-ups this round.",
 }
 
 /**

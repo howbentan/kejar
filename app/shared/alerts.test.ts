@@ -144,3 +144,10 @@ describe('auto-jail alert', () => {
     ])
   })
 })
+
+describe('luar-garisan alert', () => {
+  it('words it for marshals', () => {
+    const [a] = alertsFrom([event('luar-garisan', T0, { actor_id: 'r1', data: { who: 'Aina #07' } })])
+    expect(a).toMatchObject({ kind: 'luar-garisan', text: 'Aina #07 is Luar Garisan (left the play area twice)', handled: false })
+  })
+})

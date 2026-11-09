@@ -123,3 +123,38 @@ describe('catchMessage', () => {
     expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'shielded' })).toBe("Durian! That catch doesn't count. Hand the tag back.")
   })
 })
+
+describe('ChaserChase Luar Garisan', () => {
+  it('a disqualified chaser sees a banner', () => {
+    const v = chaser()
+    render(<ChaserChase code="ABC234" view={{ ...v, me: { ...v.me, disqualified_at: '2026-10-25T09:10:00.000Z' } }} refresh={() => {}} />)
+    expect(screen.getByRole('alert')).toHaveTextContent("Luar Garisan: your catches don't count this round, boss.")
+  })
+
+  it('a warned chaser sees the warning banner', () => {
+    render(<ChaserChase code="ABC234" view={{ ...chaser(), outWarned: true }} refresh={() => {}} />)
+    expect(screen.getByRole('alert')).toHaveTextContent("Eh, you're outside the play area! Balik within 30 seconds or you're out.")
+  })
+
+  it('a free chaser sees no banner', () => {
+    render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it.each([
+    ['disqualified', "You're Luar Garisan lah, so that catch doesn't count."],
+    ['already-out', 'Aiyo, that runner is already out of this round.'],
+  ])('a catch refused with %s says so', async (reason, line) => {
+    call.mockResolvedValue({ ok: false, reason })
+    render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    await scan('KEJAR:TAG:07')
+    expect(screen.getByText(line)).toBeInTheDocument()
+  })
+
+  it('a claim refused with disqualified says no power-ups', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'disqualified' })
+    render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    await scan('KEJAR:STATION:1')
+    expect(screen.getByText("You're Luar Garisan, so no power-ups this round.")).toBeInTheDocument()
+  })
+})
