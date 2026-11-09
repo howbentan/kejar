@@ -168,7 +168,7 @@ describe('timers and counts', () => {
   })
   it('counts free and jailed runners', () => {
     const v = view(chaser, { players: [chaser, { ...aina, jailed: true }, hafiz, wei, siti] })
-    expect(v.counts).toEqual({ runnersFree: 2, runnersJailed: 1, chasers: 1 })
+    expect(v.counts).toEqual({ runnersFree: 2, runnersJailed: 1, runnersLuarGarisan: 0, chasers: 1 })
   })
 })
 
@@ -836,5 +836,36 @@ describe('Luar Garisan views', () => {
     const v = view(siti, { events })
     expect(v.alerts.map((a) => a.text)).toEqual(['Hafiz #03 is Luar Garisan (left the play area twice)'])
     expect(v.alerts[0].kind).toBe('luar-garisan')
+  })
+})
+
+describe('Luar Garisan on the chasers and the feed', () => {
+  const out = { ...aina, disqualified_at: iso(T0 + 12 * MIN) }
+  const ps = [chaser, out, hafiz, wei, siti]
+
+  it('a chaser sees no dot and no note for a disqualified runner', () => {
+    const v = view(chaser, { players: ps })
+    expect(v.dots.find((d) => d.id === 'r1')).toBeUndefined()
+    expect(v.feed.map((f) => f.text).join('|')).not.toContain('#07 never checked in')
+    // Still there for a free runner (Hafiz has a position; Wei never checked in).
+    expect(v.dots.find((d) => d.id === 'r2')).toBeDefined()
+  })
+
+  it('counts them separately from Penjara', () => {
+    const v = view(siti, { players: ps })
+    expect(v.counts).toMatchObject({ runnersFree: 2, runnersJailed: 0, runnersLuarGarisan: 1 })
+  })
+
+  it('everyone gets a feed line when someone goes Luar Garisan, and none for the warning', () => {
+    const events = [
+      event('out-warned', T0 + 11 * MIN, { actor_id: 'r1', data: { who: 'Aina #07' } }),
+      event('luar-garisan', T0 + 12 * MIN, { actor_id: 'r1', data: { who: 'Aina #07' } }),
+    ]
+    for (const me of [chaser, hafiz, siti]) {
+      const lines = view(me, { players: ps, events }).feed
+      const line = lines.find((f) => f.text.includes('Luar Garisan'))
+      expect(line).toMatchObject({ text: '#07 is Luar Garisan, out of this round.', means: null, act: false })
+      expect(lines.filter((f) => /outside|warn/i.test(f.text))).toEqual([])
+    }
   })
 })

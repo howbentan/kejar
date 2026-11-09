@@ -41,7 +41,7 @@ async function scan(text: string) {
 describe('RunnerChase', () => {
   it('is one screen: top bar, chip, map, slot, Scan and the ticker, with no separate break-out button', () => {
     const view = testView({
-      counts: { runnersFree: 9, runnersJailed: 2, chasers: 2 },
+      counts: { runnersFree: 9, runnersJailed: 2, runnersLuarGarisan: 0, chasers: 2 },
       checkin: { state: 'early', alertAt: 100_000 + 134_000, revealAt: 100_000 + 179_000, missedInRow: 0 },
     })
     render(<RunnerChase code="ABC234" view={view} />)
@@ -64,7 +64,7 @@ describe('RunnerChase', () => {
 
   it('scanning the Penjara code breaks people out', async () => {
     call.mockResolvedValue({ ok: true, freedIds: ['r2', 'r3'] })
-    render(<RunnerChase code="ABC234" view={testView({ counts: { runnersFree: 3, runnersJailed: 2, chasers: 1 } })} />)
+    render(<RunnerChase code="ABC234" view={testView({ counts: { runnersFree: 3, runnersJailed: 2, runnersLuarGarisan: 0, chasers: 1 } })} />)
     await scan('KEJAR:JAIL')
     expect(call).toHaveBeenCalledWith('jailbreak', { code: 'ABC234', token: 't1', qr: 'KEJAR:JAIL' })
     expect(screen.getByText('Freed 2 Dikejar ✓')).toBeInTheDocument()

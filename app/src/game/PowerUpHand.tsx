@@ -50,7 +50,7 @@ export function stashMessage(r: ClaimResult | { ok: false; reason: 'no-stash' | 
   const reason: string = r.reason
   if (reason === 'too-far') return 'Get closer.'
   if (reason === 'hand-full') return 'Use or lose your power-up first'
-  if (reason === 'paused' || reason === 'disqualified') return CLAIM_REJECTIONS[reason]
+  if (reason === 'paused') return CLAIM_REJECTIONS.paused
   return 'Nothing here.'
 }
 

@@ -150,3 +150,23 @@ describe('GameScreen Luar Garisan routing', () => {
     expect(screen.getByRole('heading', { name: /Luar Garisan/ })).toBeInTheDocument()
   })
 })
+
+describe('marshal header counts with Luar Garisan', () => {
+  const marshal = (n: number) => {
+    const base = testView()
+    return testView({
+      me: { ...base.me, id: 'm1', role: 'marshal', tag_id: null },
+      counts: { runnersFree: 2, runnersJailed: 1, runnersLuarGarisan: n, chasers: 1 },
+    })
+  }
+  it('adds the Luar Garisan count when there is one', () => {
+    state.view = marshal(2)
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByText(/2 free · 1 in Penjara · 2 Luar Garisan · 1 Kejar/)).toBeInTheDocument()
+  })
+  it('leaves it out at zero', () => {
+    state.view = marshal(0)
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByText(/2 free · 1 in Penjara · 1 Kejar/)).toBeInTheDocument()
+  })
+})

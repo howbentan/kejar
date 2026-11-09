@@ -120,7 +120,7 @@ export interface View {
    */
   snapshotted: boolean
   feed: FeedItem[]
-  counts: { runnersFree: number; runnersJailed: number; chasers: number }
+  counts: { runnersFree: number; runnersJailed: number; runnersLuarGarisan: number; chasers: number }
   /** Everyone in the game: shown in the lobby and to marshals; empty for players mid-game. */
   roster: RosterEntry[]
   /** Reports filed once the game had already ended; marshals and the organiser only, for the After game tab. */
@@ -344,6 +344,8 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
       if (sliding) dots.push(sliding)
       continue
     }
+    // Luar Garisan: out of the round, so neither a target on the map nor a "never checked in" note.
+    if (isOut(p)) continue
     const at = latestAtOrBefore(i.positions[p.id], revealAt)
     // A cloaked runner must look exactly like one who never checked in.
     if (!at || cloaked.has(p.id)) {
@@ -639,6 +641,9 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
         `${tag} went to Penjara. Check in when your phone buzzes, or you're next.`,
         `One less to find. ${tag} is in Penjara.`,
       )
+    case 'luar-garisan':
+      // For everyone. The warning (`out-warned`) stays private to the player, so it has no line.
+      return actor ? plain(`${tagLabel(actor)} is Luar Garisan, out of this round.`) : null
     default: {
       const text = feedText(e, byId)
       return text ? plain(text) : null
@@ -785,6 +790,7 @@ function fullView(i: ViewInput): View {
     counts: {
       runnersFree: runners.filter((p) => !isOut(p)).length,
       runnersJailed: runners.filter((p) => p.jailed).length,
+      runnersLuarGarisan: runners.filter((p) => !p.removed_at && !!p.disqualified_at).length,
       chasers: i.players.filter((p) => p.role === 'chaser').length,
     },
     roster: showRoster

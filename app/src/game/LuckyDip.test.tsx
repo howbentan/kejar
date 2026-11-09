@@ -134,6 +134,8 @@ describe("Dato Seri's reveal (motion design §7)", () => {
       ['not-chasing', 'Nothing here.'],
       ['hand-full', 'Use or lose your power-up first'],
       ['paused', 'Game is paused'],
+      // A disqualified player's scan must not hint that the card is a power-up.
+      ['disqualified', 'Nothing here.'],
     ] as const
     for (const [reason, text] of cases) {
       const line = stashMessage({ ok: false, reason } as never)

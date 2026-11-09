@@ -17,6 +17,8 @@ import Results from './Results'
 import RunnerChase from './RunnerChase'
 import type { View } from '../../shared/views.js'
 
+// A disqualified (Luar Garisan) runner deliberately keeps sending location while the app is open: it only feeds
+// the marshals' safety map and SOS, and nothing about the round depends on it.
 function locationMode(view: View | null): LocationMode {
   if (!view || view.phase === 'lobby' || view.phase === 'ended' || view.me.id === 'host' || view.me.removed_at) return 'never'
   if (view.me.role === 'chaser' || view.me.role === 'marshal') return 'always'
