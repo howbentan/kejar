@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Role } from '../../shared/types.js'
 import { call } from '../game/api'
+import BeforeYouStart from '../game/BeforeYouStart'
 import CrewStep from '../game/CrewStep'
 import { AlertsOnPhone } from '../game/MarshalTools'
 import PackList from '../game/PackList'
@@ -23,6 +24,7 @@ export default function HostLobby({ code }: { code: string }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [marshalInviteUrl, setMarshalInviteUrl] = useState('')
+  const [notice, setNotice] = useState('')
   const joinUrl = `${window.location.origin}/join/${code}`
 
   useEffect(() => {
@@ -38,6 +40,27 @@ export default function HostLobby({ code }: { code: string }) {
     setError('')
     try {
       await call(action, { code, organiserToken: organiser!.organiserToken, ...body })
+      refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Core and Full can change here, in the lobby, and never after the start.
+  async function changeMode() {
+    if (!view) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const res = await call<{ notice?: string }>('setMode', {
+        code,
+        organiserToken: organiser!.organiserToken,
+        mode: view.settings.mode === 'full' ? 'core' : 'full',
+      })
+      if (res?.notice) setNotice(res.notice)
       refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -101,8 +124,15 @@ export default function HostLobby({ code }: { code: string }) {
           {code}
         </h1>
         {view && <ModeBadge mode={view.settings.mode} />}
+        {view && (
+          <button type="button" className="btn btn-ghost" style={{ width: 'auto', padding: '4px 10px', fontSize: 12 }} disabled={busy} onClick={changeMode}>
+            Change
+          </button>
+        )}
       </div>
+      {notice && <p className="muted">{notice}</p>}
       {view && <AlertsOnPhone code={code} view={view} refresh={refresh} />}
+      {view && <BeforeYouStart code={code} view={view} refresh={refresh} />}
       {view && <SetupMap view={view} />}
       <div className="card" style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
         {qr && <img src={qr} alt="Join QR code" width={120} height={120} style={{ borderRadius: 10 }} />}

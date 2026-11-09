@@ -847,6 +847,18 @@ describe('Luar Garisan views', () => {
     expect(v.roster.find((r) => r.id === 'r1')?.disqualified_at).toBeFalsy()
   })
 
+  it('the marshal and organiser rosters say whether each person has push on; players never see it', () => {
+    const pushy = { ...siti, push: { endpoint: 'https://push.test/x', keys: { p256dh: 'a', auth: 'b' } } as never }
+    const players = [chaser, aina, wei, pushy]
+    const ofMarshal = view(pushy, { players }).roster
+    expect(ofMarshal.find((r) => r.id === 'm1')?.pushOn).toBe(true)
+    expect(ofMarshal.find((r) => r.id === 'r1')?.pushOn).toBe(false)
+    expect(view(organiserMe, { players }).roster.find((r) => r.id === 'm1')?.pushOn).toBe(true)
+    const lobby = view(aina, { players, game: game({ started_at: null }) })
+    expect(lobby.roster.length).toBeGreaterThan(0)
+    expect(lobby.roster.every((r) => !('pushOn' in r))).toBe(true)
+  })
+
   it('marshals get a luar-garisan alert', () => {
     const events = [event('luar-garisan', T0 + 12 * MIN, { actor_id: 'r2', data: { who: 'Hafiz #03' } })]
     const v = view(siti, { events })

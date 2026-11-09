@@ -62,6 +62,7 @@ export function packItems(game: Game, secretLetters: SecretLetters): KitItem[] {
     { id: 'tape', group: 'pack', label: 'Tape, zip bags, power bank' },
     { id: 'walk', group: 'day', label: 'Walk the park' },
     { id: 'brief-helper', group: 'day', label: 'Brief your helper', note: 'Penjara, dares, SOS' },
+    { id: 'brief-players', group: 'day', label: 'Brief the players' },
   )
   return items
 }

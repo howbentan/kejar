@@ -41,6 +41,7 @@ describe('packItems', () => {
       ['tape', 'Tape, zip bags, power bank', 'pack'],
       ['walk', 'Walk the park', 'day'],
       ['brief-helper', 'Brief your helper', 'day'],
+      ['brief-players', 'Brief the players', 'day'],
     ])
     expect(items.find((i) => i.id === 'brief-helper')?.note).toBe('Penjara, dares, SOS')
   })

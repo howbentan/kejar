@@ -163,3 +163,62 @@ describe('HostLobby setup steps', () => {
     expect(screen.queryByAltText('Join QR code')).toBeNull()
   })
 })
+
+describe('HostLobby mode and checks', () => {
+  const fullView = {
+    ...lobbyView,
+    settings: { ...DEFAULT_SETTINGS, mode: 'full' },
+    kit: {
+      items: [
+        { id: 'penjara', group: 'pack', label: 'Penjara card', ticked: false },
+        { id: 'dato-card', group: 'pack', label: 'Yellow card B', tone: 'yellow', note: '(secret)', ticked: false },
+        { id: 'brief-players', group: 'day', label: 'Brief the players', ticked: false },
+      ],
+      places: [],
+      placed: {},
+    },
+  } as unknown as View
+
+  it('Change switches Core to Full through setMode', async () => {
+    render(<HostLobby code="ABC234" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Change' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('setMode', { code: 'ABC234', organiserToken: 'h1', mode: 'full' }))
+  })
+
+  it('switching Full to Core drops the secret card from the packing list', async () => {
+    let mode: 'full' | 'core' = 'full'
+    call.mockImplementation(async (action: string, body: { mode?: 'full' | 'core' }) => {
+      if (action === 'setMode') {
+        mode = body.mode!
+        return { ok: true }
+      }
+      if (action !== 'state') return {}
+      if (mode === 'full') return fullView
+      return { ...fullView, settings: { ...DEFAULT_SETTINGS, mode: 'core' }, kit: { ...fullView.kit, items: fullView.kit!.items.filter((i) => i.id !== 'dato-card') } }
+    })
+    render(<HostLobby code="ABC234" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Kit list' }))
+    expect(await screen.findByText('Yellow card B')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Change' }))
+    await waitFor(() => expect(screen.queryByText('Yellow card B')).toBeNull())
+    expect(screen.getByText('CORE')).toBeInTheDocument()
+  })
+
+  it("shows setMode's notice when no yellow card is free", async () => {
+    call.mockImplementation(async (action: string) => {
+      if (action === 'setMode') return { ok: true, notice: 'Reprint a yellow card to use Dato Seri.' }
+      return action === 'state' ? lobbyView : {}
+    })
+    render(<HostLobby code="ABC234" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Change' }))
+    expect(await screen.findByText('Reprint a yellow card to use Dato Seri.')).toBeInTheDocument()
+  })
+
+  it('shows Before you start, and Start game stays enabled with every check unticked', async () => {
+    call.mockImplementation(async (action: string) => (action === 'state' ? fullView : {}))
+    render(<HostLobby code="ABC234" />)
+    expect(await screen.findByText('BEFORE YOU START')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /Kit placed/ })).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('button', { name: /start game/i })).toBeEnabled()
+  })
+})

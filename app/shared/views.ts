@@ -55,6 +55,8 @@ export interface RosterEntry {
   caught_by?: string | null
   caught_at?: string | null
   freed_once?: boolean
+  /** This person has push alerts on. Sent only in the organiser's and marshals' rosters. */
+  pushOn?: boolean
 }
 
 /** A report made once the game had already ended; marshal/organiser-only, for the inbox's After game tab. */
@@ -828,6 +830,7 @@ function fullView(i: ViewInput): View {
           caught_by: p.caught_by ? (i.players.find((c) => c.id === p.caught_by)?.name ?? null) : null,
           caught_at: p.caught_at,
           freed_once: p.freed_once,
+          ...(organiser || role === 'marshal' ? { pushOn: !!p.push } : {}),
         }))
       : [],
     reports: postGameReportsFor(i),
