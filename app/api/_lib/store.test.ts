@@ -89,6 +89,25 @@ describe('MemoryStore safety methods', () => {
     expect(await store.setFlag(p.id, 'left_start', false)).toBe(false)
   })
 
+  it('markOutside warns, then disqualifies, then changes nothing; clearOutWarning resets only a warning', async () => {
+    const g = await startedGame()
+    const p = await newPlayer(g.id, 'Aina')
+    const at1 = iso(T0 + MIN)
+    const at2 = iso(T0 + 2 * MIN)
+    expect(await store.markOutside(p.id, at1)).toBe('warned')
+    expect((await store.players(g.id))[0].out_warned_at).toBe(at1)
+    await store.clearOutWarning(p.id)
+    expect((await store.players(g.id))[0].out_warned_at).toBeNull()
+    expect(await store.markOutside(p.id, at1)).toBe('warned')
+    expect(await store.markOutside(p.id, at2)).toBe('disqualified')
+    expect((await store.players(g.id))[0].disqualified_at).toBe(at2)
+    expect(await store.markOutside(p.id, iso(T0 + 3 * MIN))).toBe('unchanged')
+    await store.clearOutWarning(p.id)
+    const after = (await store.players(g.id))[0]
+    expect(after.out_warned_at).toBe(at1)
+    expect(after.disqualified_at).toBe(at2)
+  })
+
   it('removed players vanish from players() but not from playerByToken()', async () => {
     const g = await startedGame()
     const p = await newPlayer(g.id, 'Aina')

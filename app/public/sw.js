@@ -48,6 +48,21 @@ self.addEventListener('push', (event) => {
     )
     return
   }
+  if (data.type === 'notice' && data.code) {
+    // Luar Garisan: a warning or disqualification for the player who left the play area.
+    event.waitUntil(
+      self.registration.showNotification(String(data.title || 'kejar.'), {
+        body: String(data.body || ''),
+        tag: 'kejar-notice',
+        renotify: true,
+        requireInteraction: true,
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        data: { url: '/g/' + data.code },
+      }),
+    )
+    return
+  }
   // Anything else isn't a Kejar push; show nothing.
 })
 

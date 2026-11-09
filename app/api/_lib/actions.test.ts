@@ -1600,6 +1600,122 @@ describe('removing a player', () => {
   })
 })
 
+describe('Luar Garisan', () => {
+  const RUNNER_WARN = "Eh, you're outside the play area! Balik before your next check-in or you're out."
+  const CHASER_WARN = "Eh, you're outside the play area! Balik now or you're out."
+  const RUNNER_OUT = 'Luar Garisan lah! You left the play area, so no winning this round. You can still play along.'
+  const CHASER_OUT = "Luar Garisan lah! You left the play area, so no winning this round, and your catches don't count."
+  const evs = async (gameId: string, type: string) => (await store.events(gameId)).filter((e) => e.type === type)
+  const notices = (name: string) => pushes.filter((p) => p.endpoint === `https://push/${name}` && (p.payload as any).type === 'notice')
+  const player = async (gameId: string, id: string) => (await store.players(gameId)).find((p) => p.id === id)!
+  const report = async (g: { code: string }, token: string, m: number) => {
+    now += 5_000
+    await run('location', { code: g.code, token, ...at(m) })
+  }
+
+  it('warns a runner on the first report more than 20 m outside, and pushes the runner warning', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 100)
+    await report(g, g.aina.token, 240)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(1)
+    expect((await evs(g.gameId, 'out-warned'))[0].data).toEqual({ who: 'Aina #07' })
+    expect(notices('Aina').map((p) => p.payload)).toEqual([{ type: 'notice', code: g.code, title: 'Luar Garisan', body: RUNNER_WARN }])
+    const me = await player(g.gameId, g.aina.playerId)
+    expect(me.out_warned_at).toBeTruthy()
+    expect(me.disqualified_at).toBeFalsy()
+  })
+
+  it('disqualifies on the second consecutive report outside', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 250)
+    const out = await evs(g.gameId, 'luar-garisan')
+    expect(out).toHaveLength(1)
+    expect(out[0].data).toEqual({ who: 'Aina #07' })
+    expect(out[0].actor_id).toBe(g.aina.playerId)
+    expect((await player(g.gameId, g.aina.playerId)).disqualified_at).toBe(new Date(now).toISOString())
+    expect(notices('Aina').map((p) => (p.payload as any).body)).toEqual([RUNNER_WARN, RUNNER_OUT])
+    await report(g, g.aina.token, 260)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(1)
+  })
+
+  it('a report back within 20 m in between resets the streak', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 210) // 10 m outside: counts as inside
+    expect((await player(g.gameId, g.aina.playerId)).out_warned_at).toBeFalsy()
+    await report(g, g.aina.token, 240)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(2)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
+    expect((await player(g.gameId, g.aina.playerId)).disqualified_at).toBeFalsy()
+  })
+
+  it('uses the chaser copy for chasers', async () => {
+    const g = await safetyGame()
+    await report(g, g.ben.token, 240)
+    await report(g, g.ben.token, 250)
+    expect(notices('Ben').map((p) => (p.payload as any).body)).toEqual([CHASER_WARN, CHASER_OUT])
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(1)
+  })
+
+  it('stays disqualified after coming back inside', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 250)
+    await report(g, g.aina.token, 100)
+    await report(g, g.aina.token, 50)
+    expect((await player(g.gameId, g.aina.playerId)).disqualified_at).toBeTruthy()
+  })
+
+  it('never warns or disqualifies while the game is paused, in the lobby, or after it ends', async () => {
+    const g = await safetyGame()
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 250)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(0)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
+    expect(notices('Aina')).toEqual([])
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 24 * 60 * MIN
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 250)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(0)
+    const lobby = await readyGame()
+    const lobbyId = (await store.gameByCode(lobby.code))!.id
+    await report(lobby, lobby.aina.token, 240)
+    await report(lobby, lobby.aina.token, 250)
+    expect(await evs(lobbyId, 'out-warned')).toHaveLength(0)
+    expect(await evs(lobbyId, 'luar-garisan')).toHaveLength(0)
+  })
+
+  it('never warns or disqualifies a jailed runner, a marshal, or a removed player', async () => {
+    const g = await safetyGame()
+    await store.updatePlayers([{ id: g.hafiz.playerId, patch: { jailed: true } }])
+    await report(g, g.hafiz.token, 240)
+    await report(g, g.hafiz.token, 250)
+    await report(g, g.siti.token, 240)
+    await report(g, g.siti.token, 250)
+    await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.aina.playerId })
+    pushes = []
+    await report(g, g.aina.token, 240).catch(() => {})
+    await report(g, g.aina.token, 250).catch(() => {})
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(0)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
+    expect(notices('Hafiz')).toEqual([])
+    expect(notices('Siti')).toEqual([])
+    expect(notices('Aina')).toEqual([])
+  })
+
+  it('keeps the existing marshal outside alert', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 250)
+    await report(g, g.aina.token, 260)
+    expect(await evs(g.gameId, 'outside')).toHaveLength(1)
+    expect((await evs(g.gameId, 'outside'))[0].data).toEqual({ who: 'Aina #07' })
+  })
+})
+
 describe('automatic alerts', () => {
   const kinds = async (code: string, organiserToken: string) =>
     (await run<View>('state', { code, organiserToken })).alerts.map((a) => a.kind)

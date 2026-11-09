@@ -127,6 +127,10 @@ export interface Player {
   /** Alert flags: currently outside the play area; left the start point early. */
   outside: boolean
   left_start: boolean
+  /** Luar Garisan: when this player's first report outside the play area was taken (ISO), cleared by a report back inside. */
+  out_warned_at?: string | null
+  /** Luar Garisan: when this player was disqualified for leaving the play area twice in a row (ISO). Permanent for the round. */
+  disqualified_at?: string | null
 }
 
 export interface Ping {
@@ -153,6 +157,10 @@ export type EventType =
   | 'sos'
   | 'report'
   | 'outside'
+  /** A first report outside the play area (Luar Garisan). data: { who } */
+  | 'out-warned'
+  /** A second consecutive report outside: disqualified for the round. data: { who } */
+  | 'luar-garisan'
   | 'missed'
   | 'left-start'
   | 'handled'

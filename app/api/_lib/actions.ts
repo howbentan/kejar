@@ -590,10 +590,40 @@ function openWindowAlert(windows: { alertAt: number; revealAt: number }[], now: 
   return open.length ? Math.max(...open) : undefined
 }
 
+const LUAR_GARISAN_COPY = {
+  runner: {
+    warn: "Eh, you're outside the play area! Balik before your next check-in or you're out.",
+    out: 'Luar Garisan lah! You left the play area, so no winning this round. You can still play along.',
+  },
+  chaser: {
+    warn: "Eh, you're outside the play area! Balik now or you're out.",
+    out: "Luar Garisan lah! You left the play area, so no winning this round, and your catches don't count.",
+  },
+}
+
+/** One report clearly outside: the first warns, the second consecutive one disqualifies (spec Â§5-Â§6). */
+async function luarGaris(ctx: Ctx, game: Game, me: Player) {
+  const verdict = await ctx.store.markOutside(me.id, iso(ctx.now))
+  if (verdict === 'unchanged') return
+  const copy = LUAR_GARISAN_COPY[me.role === 'chaser' ? 'chaser' : 'runner']
+  const warned = verdict === 'warned'
+  await ctx.store.addEvent({
+    game_id: game.id,
+    type: warned ? 'out-warned' : 'luar-garisan',
+    actor_id: me.id,
+    target_id: null,
+    data: { who: who(me) },
+  })
+  await pushTo(ctx, [me], { type: 'notice', code: game.code, title: 'Luar Garisan', body: warned ? copy.warn : copy.out })
+}
+
 /** Raises marshal alerts for leaving the play area, or a chaser leaving the start early (spec §5.1). */
 async function checkWhere(ctx: Ctx, game: Game, me: Player, here: LatLng, accuracy: number) {
   const phase = phaseAt(game, ctx.now).phase
   if ((phase !== 'hiding' && phase !== 'chasing') || me.jailed || (me.role !== 'runner' && me.role !== 'chaser')) return
+  // Luar Garisan freezes with the game: nothing counts while paused, and a disqualified or removed player is done.
+  // The marshal outside alert below is unchanged and keeps running either way.
+  const ruleLive = !game.paused_at && !me.disqualified_at && !me.removed_at
   // Lakes cut out of the park count as outside too (Plan 4b).
   const outsideBy = distanceOutsidePlayArea(here, game.arena)
   // Alert only when clearly outside; re-arm only once back inside, so GPS jitter at the edge can't spam.
@@ -601,8 +631,10 @@ async function checkWhere(ctx: Ctx, game: Game, me: Player, here: LatLng, accura
     if (await ctx.store.setFlag(me.id, 'outside', true)) {
       await ctx.store.addEvent({ game_id: game.id, type: 'outside', actor_id: me.id, target_id: null, data: { who: who(me) } })
     }
-  } else if (outsideBy === 0 && me.outside) {
-    await ctx.store.setFlag(me.id, 'outside', false)
+    if (ruleLive) await luarGaris(ctx, game, me)
+  } else {
+    if (outsideBy === 0 && me.outside) await ctx.store.setFlag(me.id, 'outside', false)
+    if (ruleLive && me.out_warned_at) await ctx.store.clearOutWarning(me.id)
   }
   const slack = Math.min(Math.max(accuracy, 0), 20)
   if (phase === 'hiding' && me.role === 'chaser' && !me.left_start && distanceM(here, game.arena.start) > START_RADIUS_M + slack) {

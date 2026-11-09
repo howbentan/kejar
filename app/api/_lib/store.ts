@@ -129,6 +129,13 @@ export interface GameStore {
   resumeGame(gameId: string): Promise<number | null>
   /** Writes the flag only if it differs; true if it changed. */
   setFlag(playerId: string, field: 'outside' | 'left_start', value: boolean): Promise<boolean>
+  /**
+   * Luar Garisan, atomic and decided from the stored row: unchanged if already disqualified; else the first call
+   * sets out_warned_at (warned) and the next sets disqualified_at (disqualified).
+   */
+  markOutside(playerId: string, at: string): Promise<'warned' | 'disqualified' | 'unchanged'>
+  /** A report back inside: clears a pending warning, never a disqualification. */
+  clearOutWarning(playerId: string): Promise<void>
   /** Sets removed_at only if it was unset; true for the first caller. */
   removePlayer(id: string): Promise<boolean>
   /** Kept apart from game data (spec §6); at = store clock. The app never reads these back. */
@@ -494,6 +501,20 @@ export class MemoryStore implements GameStore {
     if (!p || p[field] === value) return false
     p[field] = value
     return true
+  }
+  async markOutside(playerId: string, at: string) {
+    const p = this.playerRows.find((x) => x.id === playerId)
+    if (!p || p.disqualified_at) return 'unchanged' as const
+    if (!p.out_warned_at) {
+      p.out_warned_at = at
+      return 'warned' as const
+    }
+    p.disqualified_at = at
+    return 'disqualified' as const
+  }
+  async clearOutWarning(playerId: string) {
+    const p = this.playerRows.find((x) => x.id === playerId)
+    if (p && !p.disqualified_at) p.out_warned_at = null
   }
   async removePlayer(id: string) {
     const p = this.playerRows.find((x) => x.id === id)
