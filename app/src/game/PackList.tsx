@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
 import Marker from './Marker'
@@ -8,7 +8,7 @@ import { ErrorText } from './ui'
 
 type Item = NonNullable<View['kit']>['items'][number]
 
-function Row({ item, done, code, onTap }: { item: Item; done: boolean; code: string; onTap: () => void }) {
+function Row({ item, done, code, onTap }: { item: Item; done: boolean; code: string; onTap?: () => void }) {
   const box = useRef<HTMLDivElement>(null)
   const yellow = item.tone === 'yellow'
   return (
@@ -18,7 +18,7 @@ function Row({ item, done, code, onTap }: { item: Item; done: boolean; code: str
       tabIndex={0}
       data-done={done || undefined}
       onClick={onTap}
-      onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && (e.preventDefault(), onTap())}
+      onKeyDown={(e) => onTap && (e.key === ' ' || e.key === 'Enter') && (e.preventDefault(), onTap())}
       style={{
         position: 'relative',
         display: 'flex',
@@ -27,7 +27,7 @@ function Row({ item, done, code, onTap }: { item: Item; done: boolean; code: str
         padding: '8px 0',
         borderBottom: '1px solid #1d1d1d',
         fontSize: 12.5,
-        cursor: 'pointer',
+        cursor: onTap ? 'pointer' : 'default',
         textDecoration: done ? 'line-through' : undefined,
       }}
     >
@@ -52,7 +52,7 @@ function Row({ item, done, code, onTap }: { item: Item; done: boolean; code: str
           OPEN
         </a>
       )}
-      {done && <Marker marks={[{ shape: 'tick', target: box }]} />}
+      {done && <Marker marks={[{ shape: 'tick', target: box }]} colour={yellow ? 'yellow' : 'lime'} />}
     </div>
   )
 }
@@ -75,11 +75,20 @@ export default function PackList({ code, view, refresh, compact = false }: { cod
   const [local, setLocal] = useState<Record<string, boolean>>({})
   const [error, setError] = useState('')
   const items = view.kit?.items ?? []
+  // A tap shows at once; the override goes once the refreshed view agrees, so later server changes (the walk's
+  // own tick) show through.
+  useEffect(() => {
+    setLocal((l) => {
+      const keep = Object.entries(l).filter(([id, on]) => items.find((i) => i.id === id)?.ticked !== on)
+      return keep.length === Object.keys(l).length ? l : Object.fromEntries(keep)
+    })
+  }, [items])
   const doneOf = (i: Item) => local[i.id] ?? i.ticked
   const ready = items.length > 0 && items.every(doneOf)
   const notice = !compact && new URLSearchParams(window.location.search).get('notice') === 'dato'
 
   async function tap(item: Item) {
+    // No organiser session on this phone: the rows are read-only.
     const organiser = loadOrganiserSession(localStorage)
     if (!organiser) return
     const on = !doneOf(item)
@@ -101,7 +110,7 @@ export default function PackList({ code, view, refresh, compact = false }: { cod
     <>
       <p className="eyebrow" style={{ marginTop: 10 }}>{title}</p>
       {items.filter((i) => i.group === g).map((i) => (
-        <Row key={i.id} item={i} done={doneOf(i)} code={code} onTap={() => void tap(i)} />
+        <Row key={i.id} item={i} done={doneOf(i)} code={code} onTap={i.id === 'walk' ? undefined : () => void tap(i)} />
       ))}
     </>
   )

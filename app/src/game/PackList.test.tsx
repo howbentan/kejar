@@ -89,6 +89,7 @@ describe('PackList', () => {
     render(<PackList code="ABC234" view={view()} refresh={refresh} />)
     const open = screen.getByRole('link', { name: 'OPEN' })
     expect(open.getAttribute('href')).toBe('/host/ABC234/walk')
+    open.addEventListener('click', (e) => e.preventDefault())
     fireEvent.click(open)
     expect(call).not.toHaveBeenCalled()
   })
@@ -104,5 +105,25 @@ describe('PackList', () => {
     render(<PackList code="ABC234" view={view()} refresh={refresh} />)
     expect(screen.getByText('Reprint a yellow card to use Dato Seri.')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Your kit' }).getAttribute('href')).toBe('/host/kit')
+  })
+
+  it('draws a yellow tick on the yellow card', () => {
+    render(<PackList code="ABC234" view={view(['dato-card'])} refresh={refresh} />)
+    expect(document.querySelector('.marker path')?.getAttribute('stroke')).toBe('#FFD60A')
+  })
+
+  it('Walk the park cannot be tapped; it ticks itself', () => {
+    render(<PackList code="ABC234" view={view()} refresh={refresh} />)
+    fireEvent.click(screen.getByText('Walk the park'))
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  it('a tap does not hide a later change from the server', async () => {
+    const { rerender } = render(<PackList code="ABC234" view={view()} refresh={refresh} />)
+    fireEvent.click(screen.getByText('4 lime vests'))
+    await waitFor(() => expect(call).toHaveBeenCalled())
+    rerender(<PackList code="ABC234" view={view(['vests-kejar'])} refresh={refresh} />)
+    rerender(<PackList code="ABC234" view={view([])} refresh={refresh} />)
+    expect(document.querySelectorAll('.marker')).toHaveLength(0)
   })
 })
