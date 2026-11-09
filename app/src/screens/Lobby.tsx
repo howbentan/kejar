@@ -5,7 +5,7 @@ import { currentPushEnv, NotificationsDeniedError, pushSupport, subscribe } from
 import { call } from '../game/api'
 import { loadSession } from '../game/session'
 import Scanner from '../game/Scanner'
-import SetupMap, { HiddenCard } from '../game/SetupMap'
+import SetupMap from '../game/SetupMap'
 import { ErrorText, ModeBadge, Screen, tagText } from '../game/ui'
 
 const ROLE_COPY = {
@@ -81,8 +81,8 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
         <ModeBadge mode={view.settings.mode} />
       </div>
       <p className="muted">{role ? ROLE_COPY[role] : 'Waiting for the organiser to give you a role…'}</p>
+      {/* Marshals are the helper: the hidden card is the organiser's alone (rules doc §9b), so no panel here. */}
       {role === 'marshal' && <SetupMap view={view} />}
-      {role === 'marshal' && <HiddenCard view={view} code={code} credentials={{ token: loadSession(localStorage, code).token ?? '' }} refresh={refresh} />}
 
       {role === 'runner' && (
         <div className="card">

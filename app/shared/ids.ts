@@ -19,8 +19,9 @@ export function tagIdFromQr(text: string): number | null {
 export const JAIL_QR = 'KEJAR:JAIL'
 
 /**
- * The printed Dato Seri card the organiser hides (jail design §4b); scanning it is a claim. Each game's card
- * carries that game's own secret code (ruling R15), so it's printed from the organiser tools, never the public sheet.
+ * The printed Dato Seri card the organiser hides (jail design §4b); scanning it is a claim. The code belongs to one of
+ * the organisation's reusable yellow cards (A-C), assigned to a game and claiming only there while it's in play
+ * (ruling R15). It's printed from the organiser-only link, never the public sheet, and reprinting gives a new code.
  */
 export const datoQr = (code: string) => `KEJAR:DATO:${code}`
 

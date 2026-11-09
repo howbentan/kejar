@@ -1,6 +1,7 @@
 import { LUAR_GARISAN_GRACE_MS } from '../../shared/alerts.js'
 import type { ArenaDraft } from '../../shared/arenaDraft.js'
-import type { Arena, Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind } from '../../shared/types.js'
+import type { Arena, Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard } from '../../shared/types.js'
+import { newDatoCode } from './secrets.js'
 
 export type GameRow = Game & { organiser_id: string; host_push?: PushSubscriptionJSON | null }
 export type PlayerRow = Player & { token_hash: string }
@@ -49,6 +50,16 @@ export interface GameStore {
   createGame(g: Omit<GameRow, 'id'>): Promise<Game>
   gameByCode(code: string): Promise<GameRow | null>
   updateGame(id: string, patch: Partial<GameRow>): Promise<void>
+  /**
+   * The packing list: atomically sets one key of `kit.ticks` or `kit.placed` (a label, or true), or removes it
+   * (null), leaving every other key as it is, so two phones ticking at once never drop each other's ticks.
+   */
+  setKitKey(gameId: string, group: 'ticks' | 'placed', key: string, value: string | true | null): Promise<void>
+  /** Every game not yet ended (ended_at unset) by any organiser in the organisation. */
+  unfinishedGames(organisationId: string): Promise<GameRow[]>
+  /** The organisation's six secret cards, A-C yellow and A-C purple; missing ones are made `ready`, with fresh codes, on first read. */
+  secretCards(organisationId: string): Promise<SecretCard[]>
+  setSecretCard(id: string, patch: Partial<Pick<SecretCard, 'code' | 'state' | 'found_at'>>): Promise<void>
   addPlayer(p: Omit<PlayerRow, 'id'>): Promise<Player>
   /** Includes removed players, so their page can tell them they were removed. */
   playerByToken(gameId: string, tokenHash: string): Promise<Player | null>
@@ -228,6 +239,7 @@ export class MemoryStore implements GameStore {
   private marshalInviteRows: MarshalInviteRow[] = []
   private arenaRows: SavedArenaRow[] = []
   private osmCacheRows = new Map<string, { body: unknown; fetched_at: number }>()
+  private secretCardRows: SecretCard[] = []
   private rateRows = new Map<string, number>()
 
   constructor(clock: () => number) {
@@ -259,6 +271,35 @@ export class MemoryStore implements GameStore {
   async updateGame(id: string, patch: Partial<GameRow>) {
     const g = this.games.find((x) => x.id === id)
     if (g) Object.assign(g, patch)
+  }
+  async setKitKey(gameId: string, group: 'ticks' | 'placed', key: string, value: string | true | null) {
+    // No await between the read and the write, so it's atomic here.
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g) return
+    const kit = { ticks: { ...(g.kit?.ticks ?? {}) }, placed: { ...(g.kit?.placed ?? {}) } }
+    const into = kit[group] as Record<string, string | boolean>
+    if (value === null) delete into[key]
+    else into[key] = value
+    g.kit = kit
+  }
+  async unfinishedGames(organisationId: string) {
+    const organisers = new Set(this.organiserRows.filter((o) => o.organisation_id === organisationId).map((o) => o.id))
+    return this.games.filter((g) => organisers.has(g.organiser_id) && !g.ended_at).map((g) => ({ ...g }))
+  }
+  async secretCards(organisationId: string) {
+    for (const legendary of ['dato', 'bomoh'] as const) {
+      for (const letter of ['A', 'B', 'C'] as const) {
+        const has = this.secretCardRows.some((c) => c.organisation_id === organisationId && c.legendary === legendary && c.letter === letter)
+        if (!has) {
+          this.secretCardRows.push({ id: this.id('sc'), organisation_id: organisationId, legendary, letter, code: newDatoCode(), state: 'ready', found_at: null })
+        }
+      }
+    }
+    return this.secretCardRows.filter((c) => c.organisation_id === organisationId).map((c) => ({ ...c }))
+  }
+  async setSecretCard(id: string, patch: Partial<Pick<SecretCard, 'code' | 'state' | 'found_at'>>) {
+    const c = this.secretCardRows.find((x) => x.id === id)
+    if (c) Object.assign(c, patch)
   }
   async addPlayer(p: Omit<PlayerRow, 'id'>) {
     const row = { ...p, id: this.id('p') }

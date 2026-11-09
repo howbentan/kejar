@@ -90,7 +90,10 @@ export interface View {
   reportable: { id: string; name: string }[]
   me: Player
   arena: Arena
-  /** The game's settings. `legendaries` is left out of players' views: even the name of a secret card stays off their phones. */
+  /**
+   * The game's settings. `legendaries` is in the organiser's own view only: even the name of a secret card stays
+   * off players' and marshals' phones.
+   */
   settings: Omit<Settings, 'legendaries'> & { legendaries?: Settings['legendaries'] }
   dots: MapDot[]
   nextRevealAt: number | null
@@ -152,15 +155,16 @@ export interface View {
    */
   settle: { canFreeSelf: boolean; options: { id: string; name: string; eligible: boolean }[] } | null
   /**
-   * Marshals and the organiser: exactly where the stash is (null if none), and who claimed it. Left out of
-   * players' views entirely, so not even the key's name reaches their phones (rules doc §9b).
+   * The organiser only: exactly where the stash is (null if none), and who claimed it. Left out of players' and
+   * marshals' views entirely, so not even the key's name reaches their phones (rules doc §9b).
    */
   datoStash?: PlacedStash | null
   /**
-   * Marshals and the organiser in a Full game: the secret code on this game's ★ card, to print it (ruling R15);
-   * null if the game has none. Left out of players' views entirely, like `datoStash`.
+   * The organiser only: the letter and current secret code of the yellow card assigned to this game, for the
+   * packing list and the organiser-only print link (ruling R15); null if the game has none. Left out of every
+   * other view entirely, like `datoStash`.
    */
-  datoCode?: string | null
+  datoCard?: { letter: string; code: string } | null
   /**
    * The organiser's and marshals' packing list. The yellow card and its place are in the organiser's own view
    * only (rules doc §9b); players never get this field.
@@ -188,6 +192,8 @@ export interface ViewInput {
   powerUps: PowerUp[]
   /** The card letters of this game's assigned secret sets; read only for the organiser's own view. */
   secretLetters?: SecretLetters
+  /** The assigned yellow card's letter and current code; read only for the organiser's own view. */
+  datoCard?: { letter: string; code: string } | null
 }
 
 /** '1 runner', '3 runners'. */
@@ -717,7 +723,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, settle: null, datoStash: undefined, datoCode: undefined, kit: undefined, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, settle: null, datoStash: undefined, datoCard: undefined, kit: undefined, reports: [], ratings: [] }
   }
   return v
 }
@@ -771,6 +777,7 @@ function fullView(i: ViewInput): View {
     .slice(0, FEED_MAX)
 
   const runners = i.players.filter((p) => p.role === 'runner')
+  const organiser = i.me.id === 'host'
   const showRoster = phase === 'lobby' || phase === 'ended' || role === 'marshal'
 
   return {
@@ -783,7 +790,7 @@ function fullView(i: ViewInput): View {
     reportable: i.players.filter((p) => p.id !== i.me.id).map((p) => ({ id: p.id, name: p.name })),
     me: i.me,
     arena: i.game.arena,
-    settings: role === 'marshal' ? i.game.settings : withoutLegendaries(i.game.settings),
+    settings: organiser ? i.game.settings : withoutLegendaries(i.game.settings),
     dots,
     nextRevealAt: upcoming?.revealAt ?? null,
     nextAlertAt: upcoming?.alertAt ?? null,
@@ -838,12 +845,20 @@ function fullView(i: ViewInput): View {
     })(),
     legendaryZone: legendaryZoneFor(i, phase),
     settle: settleFor(i, phase),
-    // The card's secret code goes only to marshals and the organiser, who print the card (ruling R15).
-    ...(role === 'marshal' ? { datoStash: placedStash(i.game.dato_stash), datoCode: i.game.dato_stash?.code ?? null } : {}),
+    // The stash and the card go only to the organiser, who prints and hides it (ruling R15). Marshals are the
+    // helper, and never see either (rules doc §9b).
+    ...(organiser ? { datoStash: placedStash(i.game.dato_stash), datoCard: datoCardOf(i) } : {}),
     // The packing list: marshals get the shared items, and only the organiser's own view adds the secret ones.
     ...(role === 'marshal' ? { kit: kitFor(i) } : {}),
     results: i.results,
   }
+}
+
+/** The organiser's card: as the action looked it up, else (a view built without it) the stash's own letter and code. */
+function datoCardOf(i: ViewInput): { letter: string; code: string } | null {
+  if (i.datoCard !== undefined) return i.datoCard
+  const s = i.game.dato_stash
+  return s?.card && s.code ? { letter: s.card.letter, code: s.code } : null
 }
 
 function withoutLegendaries(s: Settings): Omit<Settings, 'legendaries'> {

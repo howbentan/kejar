@@ -99,16 +99,37 @@ export interface Game {
 
 export interface DatoStash {
   /**
-   * The secret on this game's printed ★ card (QR `datoQr(code)`), made when the Full game is created, so a copy
-   * of another game's card (or of the public sheet) never claims it (ruling R15). Never sent to players. Games
+   * The secret on the printed ★ card (QR `datoQr(code)`): the code of the yellow card assigned to this game, so a
+   * copy of any other card (or of the public sheet) never claims it (ruling R15). Never sent to players. Games
    * made before it existed have none, and their card claims nothing until a drop gives them one.
    */
   code?: string
+  /**
+   * The organisation's reusable yellow card this game was assigned, kept for the game's life. Games made before
+   * card sets existed have none, and claim against `code` alone.
+   */
+  card?: { id: string; letter: string }
   /** Where the card was dropped; null until the organiser or a marshal drops it. */
   lat: number | null
   lng: number | null
   claimedBy: string | null
   claimedAt: string | null
+}
+
+/**
+ * One of an organisation's six reusable secret cards: A-C yellow (Dato Seri) and A-C purple (Bomoh).
+ * `ready`: printed and can be put in play. `retired`: found, or retired by hand. `printing`: has a new code that
+ * isn't confirmed printed yet.
+ */
+export interface SecretCard {
+  id: string
+  organisation_id: string
+  legendary: 'dato' | 'bomoh'
+  letter: 'A' | 'B' | 'C'
+  code: string
+  state: 'ready' | 'retired' | 'printing'
+  /** Set when someone claims it. */
+  found_at: string | null
 }
 
 /** A stash that has been dropped somewhere, without its secret code. */
@@ -194,6 +215,8 @@ export type EventType =
   | 'legendary'
   /** Dato Seri's Settle freed `data.freed` runners. Visible, but never names the card (jail design §4). */
   | 'settled'
+  /** A stash scan by this player that didn't claim. Three lock them out. Never in a feed or an alert. data: {} */
+  | 'stash-miss'
 
 export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along' | 'grab' | 'dato'
 

@@ -9,8 +9,8 @@ import { ErrorText } from './ui'
 export type SetupCredentials = { organiserToken: string } | { token: string }
 
 /**
- * Dato Seri's hidden stash, for the organiser and marshals in a Full lobby (jail design §4b): print this game's own
- * ★ card (ruling R15), hide it, stand by it and save the spot. Dropping again before the start moves it. The lobby
+ * Dato Seri's hidden stash, for the organiser only in a Full lobby (jail design §4b): print the yellow card assigned
+ * to this game (ruling R15), hide it, stand by it and save the spot. Dropping again before the start moves it. The lobby
  * is the screen organisers show to players, so it stays behind a closed, neutrally worded toggle: nothing says a
  * hidden card exists, names it or shows the pin until it's opened (rules doc §9b). No marker scribble here (marshal screen).
  */
@@ -18,7 +18,7 @@ export function HiddenCard({ view, code, credentials, refresh }: { view: View; c
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  // datoStash is only in the organiser's and marshals' views (undefined for players).
+  // datoStash is only in the organiser's own view (undefined for players and marshals), so nobody else sees this.
   if (view.settings.mode !== 'full' || view.phase !== 'lobby' || view.datoStash === undefined) return null
   const stash = view.datoStash
   async function drop() {
@@ -55,9 +55,9 @@ export function HiddenCard({ view, code, credentials, refresh }: { view: View; c
           ? 'The ★ card is hidden at the yellow pin. Players only see a ? zone round it. Drop again to move it.'
           : 'Print the ★ card, hide it somewhere in the play area, stand next to it, then drop it here. Players only see a ? zone round it.'}
       </p>
-      {view.datoCode && (
+      {view.datoCard && (
         // The code goes after #, so it never reaches the server or its logs. Only this game's card claims.
-        <a className="muted" href={`/print/card#${encodeURIComponent(view.datoCode)}`} target="_blank" rel="noopener noreferrer">
+        <a className="muted" href={`/print/card#${encodeURIComponent(view.datoCard.code)}`} target="_blank" rel="noopener noreferrer">
           Print the ★ card
         </a>
       )}

@@ -1,6 +1,7 @@
 import { LUAR_GARISAN_GRACE_MS } from '../../shared/alerts.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind } from '../../shared/types.js'
+import type { Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard } from '../../shared/types.js'
+import { newDatoCode } from './secrets.js'
 import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
 const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at'
@@ -39,6 +40,32 @@ export class SupabaseStore implements GameStore {
   }
   async updateGame(id: string, patch: Partial<GameRow>) {
     check(await this.db.from('games').update(patch).eq('id', id))
+  }
+  async setKitKey(gameId: string, group: 'ticks' | 'placed', key: string, value: string | true | null) {
+    // One UPDATE in the database, so two phones ticking at once both land.
+    check(await this.db.rpc('set_kit_key', { p_game: gameId, p_group: group, p_key: key, p_value: value }))
+  }
+  async unfinishedGames(organisationId: string): Promise<GameRow[]> {
+    const organisers = check(await this.db.from('organisers').select('id').eq('organisation_id', organisationId)) as { id: string }[] | null
+    const ids = (organisers ?? []).map((o) => o.id)
+    if (ids.length === 0) return []
+    return (check(await this.db.from('games').select('*').in('organiser_id', ids).is('ended_at', null)) ?? []) as GameRow[]
+  }
+  async secretCards(organisationId: string): Promise<SecretCard[]> {
+    const read = async () => (check(await this.db.from('secret_cards').select('*').eq('organisation_id', organisationId)) ?? []) as SecretCard[]
+    const have = await read()
+    const missing = (['dato', 'bomoh'] as const).flatMap((legendary) =>
+      (['A', 'B', 'C'] as const)
+        .filter((letter) => !have.some((c) => c.legendary === legendary && c.letter === letter))
+        .map((letter) => ({ organisation_id: organisationId, legendary, letter, code: newDatoCode(), state: 'ready', found_at: null })),
+    )
+    if (missing.length === 0) return have
+    // Two first reads at once: the unique key keeps one card per letter, and the other insert is ignored.
+    check(await this.db.from('secret_cards').upsert(missing, { onConflict: 'organisation_id,legendary,letter', ignoreDuplicates: true }))
+    return read()
+  }
+  async setSecretCard(id: string, patch: Partial<Pick<SecretCard, 'code' | 'state' | 'found_at'>>) {
+    check(await this.db.from('secret_cards').update(patch).eq('id', id))
   }
   async addPlayer(p: Omit<PlayerRow, 'id'>): Promise<Player> {
     return check(await this.db.from('players').insert(p).select(PLAYER_COLUMNS).single()) as Player

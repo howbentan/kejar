@@ -2518,10 +2518,11 @@ describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
   const scanQr = (g: { code: string }, token: string, qr: string, where: object = atStash) => run('claim', { code: g.code, token, qr, ...where })
   const scan = async (g: { code: string }, token: string, where: object = atStash) => scanQr(g, token, datoQr(await cardCode(g)), where)
   const CODE = expect.stringMatching(/^[A-Za-z0-9_-]{22}$/)
+  const CARD = { id: expect.any(String), letter: expect.stringMatching(/^[ABC]$/) }
 
   it("a Full game gets its own secret card code when it's made; Core has no stash at all", async () => {
     const g = await lobby()
-    expect(await stash(g)).toEqual({ code: CODE, lat: null, lng: null, claimedBy: null, claimedAt: null })
+    expect(await stash(g)).toEqual({ code: CODE, card: CARD, lat: null, lng: null, claimedBy: null, claimedAt: null })
     const other = await lobby()
     expect(await cardCode(other)).not.toBe(await cardCode(g))
     expect((await store.gameByCode((await readyGame()).code))!.dato_stash ?? null).toBeNull()
@@ -2536,7 +2537,8 @@ describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
     expect(await scanQr(g, g.ben.token, 'KEJAR:DATO')).toEqual({ ok: false, reason: 'no-stash' })
     expect(await scanQr(g, g.aina.token, 'KEJAR:DATO', { lat: CENTER.lat, lng: CENTER.lng, accuracy_m: 8 })).toEqual({ ok: false, reason: 'no-stash' })
     expect((await stash(g))!.claimedBy).toBeNull()
-    expect(await scan(g, g.aina.token)).toEqual({ ok: true, kind: 'dato' })
+    // Aina has used up her wrong scans by now, so Hafiz claims it.
+    expect(await scan(g, g.hafiz.token)).toEqual({ ok: true, kind: 'dato' })
   })
 
   it('a stash made but not yet dropped claims nothing and shows no zone', async () => {
@@ -2545,35 +2547,37 @@ describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
     expect((await run<View>('state', { code: g.code, token: g.aina.token })).legendaryZone).toBeNull()
   })
 
-  it("the card's code never reaches a player; the organiser and marshals get it to print the card", async () => {
+  it("the card's code never reaches a player or a marshal; only the organiser gets it to print the card", async () => {
     const g = await chasing()
     const code = await cardCode(g)
-    for (const token of [g.aina.token, g.hafiz.token, g.ben.token]) {
+    for (const token of [g.aina.token, g.hafiz.token, g.ben.token, g.siti.token]) {
       const v = await run<View>('state', { code: g.code, token })
       expect(JSON.stringify(v)).not.toContain(code)
       expect(v).not.toHaveProperty('datoCode')
+      expect(v).not.toHaveProperty('datoCard')
     }
-    for (const who of [{ token: g.siti.token }, { organiserToken: g.organiserToken }]) {
-      expect((await run<View>('state', { code: g.code, ...who })).datoCode).toBe(code)
-    }
+    const host = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(host.datoCard).toEqual({ letter: (await stash(g))!.card!.letter, code })
     const claimed = await scan(g, g.aina.token)
     expect(JSON.stringify(claimed)).not.toContain(code)
     expect(JSON.stringify(await run<View>('state', { code: g.code, token: g.aina.token }))).not.toContain(code)
   })
 
-  it('the organiser or a marshal drops it, and dropping again before the start moves it', async () => {
+  it('the organiser drops it, and dropping again before the start moves it', async () => {
     const g = await lobby()
     const code = await cardCode(g)
+    const card = (await stash(g))!.card
     expect(await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })).toEqual({ ok: true })
-    expect(await stash(g)).toEqual({ code, ...STASH, claimedBy: null, claimedAt: null })
+    expect(await stash(g)).toEqual({ code, card, ...STASH, claimedBy: null, claimedAt: null })
     const moved = { lat: CENTER.lat - 50 / 111_195, lng: CENTER.lng }
-    expect(await run('dropDatoSeri', { code: g.code, token: g.siti.token, ...moved })).toEqual({ ok: true })
+    expect(await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...moved })).toEqual({ ok: true })
     // The printed card keeps working: moving it never changes its code.
-    expect(await stash(g)).toEqual({ code, ...moved, claimedBy: null, claimedAt: null })
+    expect(await stash(g)).toEqual({ code, card, ...moved, claimedBy: null, claimedAt: null })
   })
 
-  it('players cannot drop it', async () => {
+  it('players and marshals cannot drop it', async () => {
     const g = await lobby()
+    await rejects(run('dropDatoSeri', { code: g.code, token: g.siti.token, ...STASH }), 403)
     await rejects(run('dropDatoSeri', { code: g.code, token: g.aina.token, ...STASH }), 403)
     await rejects(run('dropDatoSeri', { code: g.code, token: g.ben.token, ...STASH }), 403)
     expect(await stash(g)).toMatchObject({ lat: null, lng: null })
@@ -2595,7 +2599,7 @@ describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
   it('the first runner to scan the stash claims Dato Seri; it stops working after', async () => {
     const g = await chasing()
     expect(await scan(g, g.aina.token)).toEqual({ ok: true, kind: 'dato' })
-    expect(await stash(g)).toEqual({ code: CODE, ...STASH, claimedBy: g.aina.playerId, claimedAt: new Date(now).toISOString() })
+    expect(await stash(g)).toEqual({ code: CODE, card: CARD, ...STASH, claimedBy: g.aina.playerId, claimedAt: new Date(now).toISOString() })
     const held = (await store.powerUps(g.gameId)).filter((u) => u.kind === 'dato')
     expect(held).toEqual([expect.objectContaining({ player_id: g.aina.playerId, station: null, used_at: null, sealed: false })])
     expect(await scan(g, g.hafiz.token)).toEqual({ ok: false, reason: 'no-stash' })
@@ -2702,13 +2706,105 @@ describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
     }
   })
 
-  it('marshals and the organiser see the exact stash instead of the zone', async () => {
+  it('the organiser sees the exact stash instead of the zone; a marshal sees neither the stash nor the legendaries', async () => {
     const g = await chasing()
-    for (const who of [{ token: g.siti.token }, { organiserToken: g.organiserToken }]) {
-      const v = await run<View>('state', { code: g.code, ...who })
-      expect(v.datoStash).toEqual({ ...STASH, claimedBy: null, claimedAt: null })
-      expect(v.legendaryZone).toBeNull()
+    const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(v.datoStash).toEqual({ ...STASH, claimedBy: null, claimedAt: null })
+    expect(v.legendaryZone).toBeNull()
+    expect(v.settings.legendaries).toEqual({ dato: 'stash', bomoh: 'off' })
+    const m = await run<View>('state', { code: g.code, token: g.siti.token })
+    expect(m).not.toHaveProperty('datoStash')
+    expect(m).not.toHaveProperty('datoCode')
+    expect(m).not.toHaveProperty('datoCard')
+    expect(m.settings).not.toHaveProperty('legendaries')
+    expect(JSON.stringify(m)).not.toContain(await cardCode(g))
+  })
+
+  it('claiming the stash retires its card, with found_at; a retired card is never assigned again', async () => {
+    const g = await chasing()
+    const card = (await stash(g))!.card!
+    expect(await scan(g, g.aina.token)).toEqual({ ok: true, kind: 'dato' })
+    const org = (await store.organiserBySessionTokenHash(hashToken(g.organiserToken)))!.organisation_id
+    expect((await store.secretCards(org)).find((c) => c.id === card.id)).toMatchObject({ state: 'retired', found_at: new Date(now).toISOString() })
+    // The game ends; its card is still never handed out again.
+    await store.claimEnd(g.gameId, 'runners')
+    for (let k = 0; k < 2; k++) {
+      const { code } = await run('create', { arenaId: 'around-me', center: CENTER, settings: { mode: 'full' }, organiserToken: g.organiserToken })
+      expect((await store.gameByCode(code))!.dato_stash!.card!.id).not.toBe(card.id)
     }
+    const third = await run('create', { arenaId: 'around-me', center: CENTER, settings: { mode: 'full' }, organiserToken: g.organiserToken })
+    expect(third.notice).toBe('Reprint a yellow card to use Dato Seri.')
+  })
+
+  describe('the wrong-scan limit (Review Focus 2)', () => {
+    const far = { lat: CENTER.lat, lng: CENTER.lng, accuracy_m: 8 }
+    const misses = async (g: { gameId: string }) => (await store.events(g.gameId)).filter((e) => e.type === 'stash-miss')
+
+    it('a copied card walked round the zone: 3 wrong scans are recorded, the 4th at the right spot is ignored, and someone else still claims it', async () => {
+      const g = await chasing()
+      const feedBefore = (await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).feed
+      const spots = [far, { ...far, lat: CENTER.lat - 60 / 111_195 }, { ...far, lng: CENTER.lng + 60 / 111_195 }]
+      for (const where of spots) expect((await scan(g, g.aina.token, where)).ok).toBe(false)
+      expect(await misses(g)).toEqual([0, 1, 2].map(() => expect.objectContaining({ actor_id: g.aina.playerId, target_id: null, data: {} })))
+      // The 4th, right code at the right spot: the same neutral answer, nothing changes and nothing is recorded.
+      expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'no-stash' })
+      expect(await misses(g)).toHaveLength(3)
+      expect((await stash(g))!.claimedBy).toBeNull()
+      expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'dato')).toHaveLength(0)
+      // Never in a feed or an alert.
+      const views = [
+        await run<View>('state', { code: g.code, organiserToken: g.organiserToken }),
+        ...(await Promise.all([g.aina.token, g.hafiz.token, g.ben.token, g.siti.token].map((token) => run<View>('state', { code: g.code, token })))),
+      ]
+      expect(views[0].feed).toEqual(feedBefore)
+      const missIds = (await misses(g)).map((e) => e.id)
+      for (const v of views) {
+        expect(JSON.stringify(v)).not.toContain('stash-miss')
+        for (const id of missIds) expect(v.alerts.map((a) => a.id)).not.toContain(id)
+      }
+      expect(await scan(g, g.hafiz.token)).toEqual({ ok: true, kind: 'dato' })
+    })
+
+    it('wrong codes and no stash count as misses too', async () => {
+      const g = await chasing()
+      await scanQr(g, g.aina.token, 'KEJAR:DATO')
+      await scanQr(g, g.aina.token, datoQr('x'.repeat(22)))
+      await scanQr(g, g.aina.token, datoQr('y'.repeat(22)))
+      expect(await misses(g)).toHaveLength(3)
+      expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'no-stash' })
+      expect((await stash(g))!.claimedBy).toBeNull()
+    })
+  })
+
+  describe('old or wrong codes', () => {
+    const cardAction = (g: { organiserToken: string }, action: ActionName, legendary: string, letter: string) =>
+      run(action, { organiserToken: g.organiserToken, legendary, letter })
+
+    it("scanning a retired card's code, or another card's code, answers no-stash", async () => {
+      const g = await chasing()
+      const letter = (await stash(g))!.card!.letter
+      const otherLetter = ['A', 'B', 'C'].find((l) => l !== letter)!
+      const { code: otherCode } = await cardAction(g, 'secretCardCode', 'dato', otherLetter)
+      expect(await scanQr(g, g.aina.token, datoQr(otherCode))).toEqual({ ok: false, reason: 'no-stash' })
+      const { code: purple } = await cardAction(g, 'secretCardCode', 'bomoh', 'A')
+      expect(await scanQr(g, g.hafiz.token, datoQr(purple))).toEqual({ ok: false, reason: 'no-stash' })
+      await cardAction(g, 'retireSecretCard', 'dato', letter)
+      expect(await scan(g, g.hafiz.token)).toEqual({ ok: false, reason: 'no-stash' })
+      expect((await stash(g))!.claimedBy).toBeNull()
+    })
+
+    it('after a reprint, the old code answers no-stash and the new printed code claims', async () => {
+      const g = await chasing()
+      const letter = (await stash(g))!.card!.letter
+      const old = await cardCode(g)
+      await cardAction(g, 'reprintSecretCard', 'dato', letter)
+      await cardAction(g, 'confirmSecretCardPrinted', 'dato', letter)
+      const { code: fresh } = await cardAction(g, 'secretCardCode', 'dato', letter)
+      expect(fresh).not.toBe(old)
+      expect(await scanQr(g, g.aina.token, datoQr(old))).toEqual({ ok: false, reason: 'no-stash' })
+      expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).datoCard).toEqual({ letter, code: fresh })
+      expect(await scanQr(g, g.hafiz.token, datoQr(fresh))).toEqual({ ok: true, kind: 'dato' })
+    })
   })
 
   it('Dato Seri cannot be used from the slot like other cards; it is for Settle', async () => {
@@ -2988,5 +3084,217 @@ describe('setup settings and the packing list', () => {
     await run('start', { code: g.code, organiserToken: g.organiserToken })
     await rejects(run('setMode', { code: g.code, organiserToken: g.organiserToken, mode: 'full' }), 409)
     expect((await store.gameByCode(g.code))!.settings.mode).toBe('core')
+  })
+})
+
+describe('secret card sets', () => {
+  const NOTICE = 'Reprint a yellow card to use Dato Seri.'
+  const make = (organiserToken: string, settings: object = { mode: 'full' }) =>
+    run('create', { arenaId: 'around-me', center: CENTER, settings, organiserToken })
+  const gameOf = async (code: string) => (await store.gameByCode(code))!
+  const cardOf = async (code: string) => (await gameOf(code)).dato_stash?.card ?? null
+  const orgOf = async (organiserToken: string) => (await store.organiserBySessionTokenHash(hashToken(organiserToken)))!.organisation_id
+  const yellow = async (organiserToken: string) => (await store.secretCards(await orgOf(organiserToken))).filter((c) => c.legendary === 'dato')
+  const act = (organiserToken: string, action: ActionName, legendary: string, letter: string) => run(action, { organiserToken, legendary, letter })
+
+  it('a Full game is assigned a free yellow card, and its stash code is that card code', async () => {
+    const organiserToken = await createOrganiser()
+    const r = await make(organiserToken)
+    expect(r).toEqual({ code: r.code })
+    const card = (await cardOf(r.code))!
+    const row = (await yellow(organiserToken)).find((c) => c.id === card.id)!
+    expect(row).toMatchObject({ legendary: 'dato', letter: card.letter, state: 'ready' })
+    expect((await gameOf(r.code)).dato_stash!.code).toBe(row.code)
+  })
+
+  it('a Core game, or Dato Seri off, is assigned no card', async () => {
+    const organiserToken = await createOrganiser()
+    expect(await cardOf((await make(organiserToken, {})).code)).toBeNull()
+    expect(await cardOf((await make(organiserToken, { mode: 'full', legendaries: { dato: 'off' } })).code)).toBeNull()
+    expect((await run('listSecretCards', { organiserToken })).filter((c: { inGame: boolean }) => c.inGame)).toEqual([])
+  })
+
+  it('two unfinished games never get the same card', async () => {
+    const organiserToken = await createOrganiser()
+    const ids = []
+    for (let k = 0; k < 3; k++) ids.push((await cardOf((await make(organiserToken)).code))!.id)
+    expect(new Set(ids).size).toBe(3)
+  })
+
+  it('with no free card (Review Focus 1): one in a game, one retired, one printing, the game is made with Dato Seri off and a notice', async () => {
+    const organiserToken = await createOrganiser()
+    const first = await make(organiserToken)
+    const taken = (await cardOf(first.code))!.letter
+    const [l2, l3] = ['A', 'B', 'C'].filter((l) => l !== taken)
+    await act(organiserToken, 'retireSecretCard', 'dato', l2)
+    await act(organiserToken, 'reprintSecretCard', 'dato', l3)
+    const r = await make(organiserToken)
+    expect(r).toEqual({ code: expect.any(String), notice: NOTICE })
+    const g = await gameOf(r.code)
+    expect(g.settings.legendaries.dato).toBe('off')
+    expect(g.settings.mode).toBe('full')
+    expect(g.dato_stash ?? null).toBeNull()
+  })
+
+  it('once the first game ends unfound, its card can be assigned again', async () => {
+    const organiserToken = await createOrganiser()
+    const codes = []
+    for (let k = 0; k < 3; k++) codes.push((await make(organiserToken)).code)
+    expect((await make(organiserToken)).notice).toBe(NOTICE)
+    const freed = (await cardOf(codes[0]))!
+    await store.claimEnd((await gameOf(codes[0])).id, 'chasers')
+    expect((await yellow(organiserToken)).find((c) => c.id === freed.id)!.state).toBe('ready')
+    const again = await make(organiserToken)
+    expect(again.notice).toBeUndefined()
+    expect((await cardOf(again.code))!.id).toBe(freed.id)
+  })
+
+  it('a game whose time ran out is no longer holding its card, even before anyone polls it', async () => {
+    const g = await readyGame({ mode: 'full' })
+    const card = (await cardOf(g.code))!
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 6 * 60 * MIN
+    const others = []
+    for (let k = 0; k < 3; k++) others.push((await cardOf((await make(g.organiserToken)).code))?.id)
+    expect(others).toContain(card.id)
+  })
+
+  it('setMode to Full assigns a card; Full to Core to Full keeps the same one', async () => {
+    const organiserToken = await createOrganiser()
+    const { code } = await make(organiserToken, {})
+    expect(await run('setMode', { code, organiserToken, mode: 'full' })).toEqual({ ok: true })
+    const card = (await cardOf(code))!
+    expect(card).toEqual({ id: expect.any(String), letter: expect.stringMatching(/^[ABC]$/) })
+    await run('setMode', { code, organiserToken, mode: 'core' })
+    expect(await cardOf(code)).toEqual(card)
+    await run('setMode', { code, organiserToken, mode: 'full' })
+    expect(await cardOf(code)).toEqual(card)
+    const inGame = (await run('listSecretCards', { organiserToken })).filter((c: { inGame: boolean }) => c.inGame)
+    expect(inGame).toEqual([expect.objectContaining({ legendary: 'dato', letter: card.letter })])
+    // A game made Full keeps its card through Core and back too.
+    const full = await make(organiserToken)
+    const fullCard = await cardOf(full.code)
+    await run('setMode', { code: full.code, organiserToken, mode: 'core' })
+    await run('setMode', { code: full.code, organiserToken, mode: 'full' })
+    expect(await cardOf(full.code)).toEqual(fullCard)
+  })
+
+  it('setMode to Full with no free card turns Dato Seri off and says so', async () => {
+    const organiserToken = await createOrganiser()
+    for (const l of ['A', 'B', 'C']) await act(organiserToken, 'retireSecretCard', 'dato', l)
+    const { code } = await make(organiserToken, {})
+    expect(await run('setMode', { code, organiserToken, mode: 'full' })).toEqual({ ok: true, notice: NOTICE })
+    expect((await gameOf(code)).settings).toMatchObject({ mode: 'full', legendaries: { dato: 'off', bomoh: 'off' } })
+  })
+
+  it('listSecretCards lists all six without codes, with state, foundAt and inGame', async () => {
+    const organiserToken = await createOrganiser()
+    const { code } = await make(organiserToken)
+    const card = (await cardOf(code))!
+    const list = await run('listSecretCards', { organiserToken })
+    expect(list).toHaveLength(6)
+    for (const c of list) expect(Object.keys(c).sort()).toEqual(['foundAt', 'inGame', 'legendary', 'letter', 'state'])
+    expect(list.find((c: { legendary: string; letter: string }) => c.legendary === 'dato' && c.letter === card.letter)).toEqual({
+      legendary: 'dato', letter: card.letter, state: 'ready', foundAt: null, inGame: true,
+    })
+    const codes = (await store.secretCards(await orgOf(organiserToken))).map((c) => c.code)
+    for (const c of codes) expect(JSON.stringify(list)).not.toContain(c)
+  })
+
+  it('reprintSecretCard gives a new code and sets printing, which is not free; confirmSecretCardPrinted makes it ready', async () => {
+    const organiserToken = await createOrganiser()
+    const before = (await yellow(organiserToken)).find((c) => c.letter === 'A')!
+    expect(await act(organiserToken, 'reprintSecretCard', 'dato', 'A')).toEqual({ ok: true })
+    const after = (await yellow(organiserToken)).find((c) => c.letter === 'A')!
+    expect(after.state).toBe('printing')
+    expect(after.code).not.toBe(before.code)
+    expect(after.code).toMatch(/^[A-Za-z0-9_-]{22}$/)
+    expect(await act(organiserToken, 'secretCardCode', 'dato', 'A')).toEqual({ code: after.code })
+    const assigned = []
+    for (let k = 0; k < 2; k++) assigned.push((await cardOf((await make(organiserToken)).code))!.letter)
+    expect(assigned.sort()).toEqual(['B', 'C'])
+    expect((await make(organiserToken)).notice).toBe(NOTICE)
+    expect(await act(organiserToken, 'confirmSecretCardPrinted', 'dato', 'A')).toEqual({ ok: true })
+    expect((await yellow(organiserToken)).find((c) => c.letter === 'A')!.state).toBe('ready')
+    expect((await cardOf((await make(organiserToken)).code))!.letter).toBe('A')
+  })
+
+  it('confirmSecretCardPrinted only moves a printing card (409 otherwise)', async () => {
+    const organiserToken = await createOrganiser()
+    await rejects(act(organiserToken, 'confirmSecretCardPrinted', 'dato', 'A'), 409)
+    await act(organiserToken, 'retireSecretCard', 'dato', 'A')
+    await rejects(act(organiserToken, 'confirmSecretCardPrinted', 'dato', 'A'), 409)
+    expect((await yellow(organiserToken)).find((c) => c.letter === 'A')!.state).toBe('retired')
+  })
+
+  it('retireSecretCard by hand makes a card not free', async () => {
+    const organiserToken = await createOrganiser()
+    expect(await act(organiserToken, 'retireSecretCard', 'dato', 'B')).toEqual({ ok: true })
+    expect((await yellow(organiserToken)).find((c) => c.letter === 'B')).toMatchObject({ state: 'retired', found_at: null })
+    const letters = []
+    for (let k = 0; k < 2; k++) letters.push((await cardOf((await make(organiserToken)).code))!.letter)
+    expect(letters.sort()).toEqual(['A', 'C'])
+  })
+
+  it('a player or a marshal calling any card action gets 403, and a bad card is 400', async () => {
+    const g = await readyGame({ mode: 'full' })
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    const all: ActionName[] = ['listSecretCards', 'retireSecretCard', 'reprintSecretCard', 'confirmSecretCardPrinted', 'secretCardCode']
+    for (const action of all) {
+      for (const token of [g.aina.token, siti.token]) await rejects(run(action, { code: g.code, token, legendary: 'dato', letter: 'A' }), 403)
+      await rejects(run(action, { legendary: 'dato', letter: 'A' }), 403)
+    }
+    await rejects(act(g.organiserToken, 'secretCardCode', 'dato', 'D'), 400)
+    await rejects(act(g.organiserToken, 'retireSecretCard', 'joker', 'A'), 400)
+  })
+
+  it('each organisation has its own cards: one organiser never touches another organisation cards', async () => {
+    const a = await createOrganiser()
+    const b = await createOrganiser()
+    await act(a, 'retireSecretCard', 'dato', 'A')
+    expect((await yellow(b)).find((c) => c.letter === 'A')!.state).toBe('ready')
+    expect((await act(a, 'secretCardCode', 'dato', 'B')).code).not.toBe((await act(b, 'secretCardCode', 'dato', 'B')).code)
+  })
+
+  it('the organiser view carries datoCard and the card letter on the packing list; a marshal and a runner do not', async () => {
+    const g = await readyGame({ mode: 'full' })
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    const game = await gameOf(g.code)
+    const card = game.dato_stash!.card!
+    const host = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(host.datoCard).toEqual({ letter: card.letter, code: game.dato_stash!.code })
+    expect(host).not.toHaveProperty('datoCode')
+    expect(host.kit!.items.find((i) => i.id === 'dato-card')!.label).toBe(`Yellow card ${card.letter}`)
+    expect(host.kit!.places.map((p) => p.id)).toContain('dato')
+    for (const token of [siti.token, g.aina.token, g.ben.token]) {
+      const v = await run<View>('state', { code: g.code, token })
+      expect(v).not.toHaveProperty('datoCard')
+      expect(JSON.stringify(v)).not.toContain(`Yellow card ${card.letter}`)
+      expect(JSON.stringify(v)).not.toContain(game.dato_stash!.code!)
+    }
+    // A Core game has datoCard null for the organiser.
+    const core = await readyGame()
+    expect((await run<View>('state', { code: core.code, organiserToken: core.organiserToken })).datoCard).toBeNull()
+  })
+
+  it('the organiser can tick the yellow card under its letter', async () => {
+    const g = await readyGame({ mode: 'full' })
+    await run('setKit', { code: g.code, organiserToken: g.organiserToken, tick: { id: 'dato-card', on: true } })
+    const letter = (await cardOf(g.code))!.letter
+    expect((await gameOf(g.code)).kit!.ticks).toEqual({ 'dato-card': `Yellow card ${letter}` })
+  })
+
+  it('two phones ticking at once both keep their tick (atomic setKit)', async () => {
+    const g = await readyGame()
+    await Promise.all([
+      run('setKit', { code: g.code, organiserToken: g.organiserToken, tick: { id: 'tape', on: true } }),
+      run('setKit', { code: g.code, organiserToken: g.organiserToken, tick: { id: 'penjara', on: true } }),
+      run('setKit', { code: g.code, organiserToken: g.organiserToken, placed: { id: 'penjara', on: true } }),
+    ])
+    const kit = (await gameOf(g.code)).kit!
+    expect(Object.keys(kit.ticks).sort()).toEqual(['penjara', 'tape'])
+    expect(kit.placed).toEqual({ penjara: true })
   })
 })

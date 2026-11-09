@@ -14,6 +14,8 @@ const aina = player('r1', 'runner', { name: 'Aina', tag_id: 7 })
 const hafiz = player('r2', 'runner', { name: 'Hafiz', tag_id: 3 })
 const wei = player('r3', 'runner', { name: 'Wei', tag_id: 14 })
 const siti = player('m1', 'marshal', { name: 'Siti' })
+/** The organiser's own view: the synthetic player the state action builds for them. */
+const organiserMe: Player = { ...siti, id: 'host', name: 'Organiser' }
 const players = [chaser, aina, hafiz, wei, siti]
 
 const A = { lat: 3.002, lng: 101.002 }
@@ -763,31 +765,37 @@ describe("Dato Seri's hint zone (jail design §4b)", () => {
     expect(zone('secret-one')).toEqual(zone('secret-one'))
   })
 
-  it('is the same for runners and chasers, jailed or free; marshals get the exact stash instead', () => {
+  it('is the same for runners and chasers, jailed or free; the organiser gets the exact stash instead, a marshal neither', () => {
     const z = view(aina, { game: full('g1') }).legendaryZone
     expect(view(chaser, { game: full('g1') }).legendaryZone).toEqual(z)
     expect(view({ ...aina, jailed: true }, { game: full('g1') }).legendaryZone).toEqual(z)
+    const h = view(organiserMe, { game: full('g1') })
+    expect(h.legendaryZone).toBeNull()
+    expect(h.datoStash).toEqual(stash)
     const m = view(siti, { game: full('g1') })
     expect(m.legendaryZone).toBeNull()
-    expect(m.datoStash).toEqual(stash)
+    expect(m).not.toHaveProperty('datoStash')
   })
 
-  it("the card's code is for marshals only, never in a player's view (ruling R15)", () => {
-    const g = { ...full('g1'), dato_stash: { ...stash, code: 'Secret-card-code-12345' } }
-    expect(view(siti, { game: g }).datoCode).toBe('Secret-card-code-12345')
-    expect(view(siti, { game: g }).datoStash).toEqual(stash)
-    for (const me of [aina, chaser, { ...aina, jailed: true }]) {
+  it("the card is for the organiser only, never in a player's or a marshal's view (ruling R15, rules doc §9b)", () => {
+    const g = { ...full('g1'), dato_stash: { ...stash, code: 'Secret-card-code-12345', card: { id: 'sc1', letter: 'B' } } }
+    expect(view(organiserMe, { game: g }).datoCard).toEqual({ letter: 'B', code: 'Secret-card-code-12345' })
+    expect(view(organiserMe, { game: g }).datoStash).toEqual(stash)
+    expect(view(organiserMe, { game: g }).settings.legendaries).toEqual(g.settings.legendaries)
+    for (const me of [siti, aina, chaser, { ...aina, jailed: true }]) {
       const v = view(me, { game: g })
-      expect(v).not.toHaveProperty('datoCode')
+      expect(v).not.toHaveProperty('datoCard')
+      expect(v).not.toHaveProperty('datoStash')
+      expect(v.settings).not.toHaveProperty('legendaries')
       expect(JSON.stringify(v)).not.toContain('Secret-card-code-12345')
     }
   })
 
-  it('a stash made with the game but not dropped yet has no zone, and no pin for marshals', () => {
-    const g = { ...full('g1'), dato_stash: { code: 'c0de', lat: null, lng: null, claimedBy: null, claimedAt: null } }
+  it('a stash made with the game but not dropped yet has no zone, and no pin for the organiser', () => {
+    const g = { ...full('g1'), dato_stash: { code: 'c0de', card: { id: 'sc1', letter: 'A' }, lat: null, lng: null, claimedBy: null, claimedAt: null } }
     expect(view(aina, { game: g }).legendaryZone).toBeNull()
-    expect(view(siti, { game: g }).datoStash).toBeNull()
-    expect(view(siti, { game: g }).datoCode).toBe('c0de')
+    expect(view(organiserMe, { game: g }).datoStash).toBeNull()
+    expect(view(organiserMe, { game: g }).datoCard).toEqual({ letter: 'A', code: 'c0de' })
   })
 
   it("the Settle picker is offered only during the chase, and not while paused", () => {

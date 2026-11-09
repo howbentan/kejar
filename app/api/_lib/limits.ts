@@ -2,7 +2,7 @@ import { hashToken } from './secrets.js'
 
 export const TOKEN_LIMIT_PER_MIN = 120
 export const IP_LIMIT_PER_MIN = 60
-/** Join and the invite redeems: a whole group can join at once from one mobile-carrier IP (lobbies cap at 80). */
+/** Join and the invite redeems: a whole group can join at once from one mobile-carrier IP (lobbies cap at 40). */
 export const IP_KEYED_LIMIT_PER_MIN = 200
 export const LIMIT_WINDOW_MS = 60_000
 /** Wrong guesses (401, 403, 404) allowed per IP per minute before the answer is a 429. */
