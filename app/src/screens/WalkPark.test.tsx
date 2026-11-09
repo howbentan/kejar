@@ -109,17 +109,21 @@ describe('WalkPark', () => {
   it('the organiser walk ends with the yellow secret step', async () => {
     open(view([S1, DATO], { 'station-1': true }, { datoCard: { letter: 'B', code: 'secretcode' } }))
     expect(mapCalls.at(-1)!.pins!.at(-1)).toMatchObject({ id: 'dato', label: '?' })
+    // No fix yet: the card is there, but there is nothing to drop at.
+    expect(screen.queryByRole('button', { name: 'Drop Dato Seri here' })).not.toBeInTheDocument()
+    // 100 m from the hint spot: still the whole secret step and the drop button, with no distance or compass.
     act(() => onFix!(at(DATO, 0, 100)))
     expect(screen.getByText('SECRET · 2 OF 2')).toBeInTheDocument()
     expect(screen.getByText('Hide yellow card B.')).toBeInTheDocument()
-    expect(screen.queryByText('Hide it somewhere sneaky. Under a bench, behind a sign.')).not.toBeInTheDocument()
-    act(() => onFix!(at(DATO, 8, 0)))
+    expect(screen.getByText('Secret. Only you see this. Pick any spot nearby.')).toBeInTheDocument()
     expect(screen.getByText('Hide it somewhere sneaky. Under a bench, behind a sign.')).toBeInTheDocument()
+    expect(screen.queryByText(/ M · /)).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Drop Dato Seri here' }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('setKit', { code: 'ABC234', organiserToken: 'h1', placed: { id: 'dato', on: true } }))
     const drop = call.mock.calls.find((c) => c[0] === 'dropDatoSeri')!
     expect(drop[1]).toMatchObject({ code: 'ABC234', organiserToken: 'h1' })
-    expect(drop[1].lat).toBeCloseTo(DATO.lat + 8 / M_LAT, 6)
+    expect(drop[1].lat).toBeCloseTo(DATO.lat, 6)
+    expect(drop[1].lng).toBeCloseTo(DATO.lng + 100 / M_LNG, 6)
     expect(call.mock.calls.map((c) => c[0])).toEqual(['dropDatoSeri', 'setKit'])
   })
 

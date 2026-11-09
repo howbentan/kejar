@@ -218,7 +218,6 @@ export default function GameMap({
       attributionControl: { compact: false },
     })
     map.current = m
-    let pulse: number | undefined
     m.on('load', () => {
       m.addSource('arena', {
         type: 'geojson',
@@ -423,20 +422,11 @@ export default function GameMap({
         layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
         paint: { 'text-color': ['case', ['get', 'yellow'], y.ink, ['==', ['get', 'state'], 'todo'], WHITE, BLACK] },
       })
-      // The next pin breathes (not for reduced motion).
-      if (!reduce && latestPins.current.some((p) => p.state === 'next')) {
-        pulse = window.setInterval(() => {
-          const t = (Date.now() % 1600) / 1600
-          m.setPaintProperty('pins-pulse', 'circle-radius', 12 + 10 * t)
-          m.setPaintProperty('pins-pulse', 'circle-opacity', 0.35 * (1 - t))
-        }, 80)
-      }
       fitTo(m, latestFit.current)
       ready.current = true
       setLoaded(true)
     })
     return () => {
-      window.clearInterval(pulse)
       ready.current = false
       setLoaded(false)
       m.remove()
@@ -499,6 +489,20 @@ export default function GameMap({
     if (!ready.current || !map.current) return
     ;(map.current.getSource('pins') as GeoJSONSource | undefined)?.setData(pinFeatures(latestPins.current))
   }, [pinKey])
+
+  // The next pin breathes (not for reduced motion): start or stop as a `next` pin appears or goes, even after load.
+  const hasNext = pins.some((p) => p.state === 'next')
+  useEffect(() => {
+    const m = map.current
+    if (!loaded || !m || !hasNext || reduce) return
+    const timer = window.setInterval(() => {
+      const t = (Date.now() % 1600) / 1600
+      if (!m.getLayer('pins-pulse')) return
+      m.setPaintProperty('pins-pulse', 'circle-radius', 12 + 10 * t)
+      m.setPaintProperty('pins-pulse', 'circle-opacity', 0.35 * (1 - t))
+    }, 80)
+    return () => window.clearInterval(timer)
+  }, [loaded, hasNext, reduce])
 
   useEffect(() => {
     if (!ready.current || !map.current) return

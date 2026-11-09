@@ -100,7 +100,10 @@ export default function WalkPark({
   const next = nextIndex === -1 ? null : places[nextIndex]
   const secret = next?.tone === 'yellow'
   const metres = here && next ? distanceM(here, next) : null
-  const isHere = metres !== null && metres <= WALK_HERE_M
+  // The secret step has no spot to reach: any place nearby will do, so only stations and Penjara use the 15 m rule.
+  const isHere = !secret && metres !== null && metres <= WALK_HERE_M
+  const letter = view.datoCard?.letter
+  const hideLine = letter ? `Hide yellow card ${letter}.` : 'Hide the yellow card.'
 
   async function mark(id: string, beforeSave?: () => Promise<unknown>) {
     if (busy) return
@@ -157,7 +160,7 @@ export default function WalkPark({
             {places.map((p) => (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '6px 0' }}>
                 <span style={p.tone === 'yellow' ? { color: 'var(--legendary-2)', fontWeight: 700 } : undefined}>
-                  {p.tone === 'yellow' ? `Hide yellow card ${view.datoCard?.letter ?? ''}`.trim() : p.label}
+                  {p.tone === 'yellow' ? hideLine.slice(0, -1) : p.label}
                 </span>
                 {done(p.id) ? (
                   <span className="muted">Placed</span>
@@ -176,16 +179,13 @@ export default function WalkPark({
 
       {next && !(lost && !here) && (
         <>
-          <div style={cardStyle(secret ? (isHere ? 'secret-here' : 'secret') : isHere ? 'here' : 'away')}>
+          <div style={cardStyle(secret ? (here ? 'secret-here' : 'secret') : isHere ? 'here' : 'away')}>
             {secret ? (
               <>
-                <p className="eyebrow" style={isHere ? { color: 'inherit', opacity: 0.6 } : { color: 'var(--legendary-2)' }}>{`SECRET · ${count}`}</p>
-                <p style={{ fontWeight: 800, fontSize: 21, letterSpacing: '-0.04em' }}>{`Hide yellow card ${view.datoCard?.letter ?? ''}.`.replace(' .', '.')}</p>
-                {isHere ? (
-                  <p>Hide it somewhere sneaky. Under a bench, behind a sign.</p>
-                ) : (
-                  <p className="mono">{metres === null ? 'Finding you…' : `${Math.round(metres / 10) * 10} M · ${compass(here!, next)}`}</p>
-                )}
+                <p className="eyebrow" style={here ? { color: 'inherit', opacity: 0.6 } : { color: 'var(--legendary-2)' }}>{`SECRET · ${count}`}</p>
+                <p style={{ fontWeight: 800, fontSize: 21, letterSpacing: '-0.04em' }}>{hideLine}</p>
+                <p>Secret. Only you see this. Pick any spot nearby.</p>
+                <p>Hide it somewhere sneaky. Under a bench, behind a sign.</p>
               </>
             ) : isHere ? (
               <>
@@ -206,7 +206,7 @@ export default function WalkPark({
               {upText(next.id, next.label)}
             </button>
           )}
-          {isHere && secret && (
+          {secret && here && !lost && (
             <button
               type="button"
               className="btn btn-legendary"
