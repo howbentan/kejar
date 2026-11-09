@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { testView } from './testView'
 
@@ -67,5 +67,22 @@ describe('Lobby mode badge', () => {
     delete old.mode
     render(<Lobby code="ABC234" view={{ ...base, settings: old as typeof base.settings }} refresh={vi.fn()} />)
     expect(screen.getByText('CORE')).toBeInTheDocument()
+  })
+})
+
+describe('Lobby: Walk the park', () => {
+  it('a marshal opens the walk in place and comes back; a runner has no button', () => {
+    localStorage.setItem('kejar.game.ABC234', JSON.stringify({ token: 'm1' }))
+    const base = testView({ phase: 'lobby', stations })
+    const kit = { items: [], places: [{ id: 'station-1', label: 'Station 1', lat: 3.1, lng: 101.1 }], placed: {} }
+    const marshal = { ...base, kit, me: { ...base.me, role: 'marshal' as const } }
+    const { unmount } = render(<Lobby code="ABC234" view={marshal} refresh={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Walk the park' }))
+    expect(screen.getByText('WALK THE PARK')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to the lobby' }))
+    expect(screen.getByRole('button', { name: 'Walk the park' })).toBeInTheDocument()
+    unmount()
+    render(<Lobby code="ABC234" view={base} refresh={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Walk the park' })).toBeNull()
   })
 })

@@ -10,6 +10,7 @@ import MarshalRedeem from './screens/MarshalRedeem'
 import OrganiserRedeem from './screens/OrganiserRedeem'
 import PrintCard from './screens/PrintCard'
 import YourKit from './screens/YourKit'
+import { HostWalk } from './screens/WalkPark'
 import PrintTags from './screens/PrintTags'
 
 export default function App() {
@@ -31,6 +32,8 @@ function Routed() {
       return <YourKit />
     case 'host-lobby':
       return <HostLobby code={code!} />
+    case 'host-walk':
+      return <HostWalk code={code!} />
     case 'join':
       return <Join code={code!} />
     case 'game':

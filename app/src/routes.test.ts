@@ -7,6 +7,7 @@ describe('routeFor', () => {
     expect(routeFor('/host/new')).toEqual({ route: 'host-new' })
     expect(routeFor('/host/kit')).toEqual({ route: 'host-kit' })
     expect(routeFor('/host/ABC234')).toEqual({ route: 'host-lobby', code: 'ABC234' })
+    expect(routeFor('/host/ABC234/walk')).toEqual({ route: 'host-walk', code: 'ABC234' })
     expect(routeFor('/g/abc234')).toEqual({ route: 'game', code: 'ABC234' })
     expect(routeFor('/join/ABC234/')).toEqual({ route: 'join', code: 'ABC234' })
     expect(routeFor('/print/tags')).toEqual({ route: 'print-tags' })

@@ -3,6 +3,7 @@ export type Route =
   | 'host-new'
   | 'host-kit'
   | 'host-lobby'
+  | 'host-walk'
   | 'game'
   | 'join'
   | 'print-tags'
@@ -21,6 +22,7 @@ const FIXED: Record<string, Route> = {
 
 const WITH_CODE: [RegExp, Route][] = [
   [/^\/host\/([A-Za-z0-9]{6})$/, 'host-lobby'],
+  [/^\/host\/([A-Za-z0-9]{6})\/walk$/, 'host-walk'],
   [/^\/g\/([A-Za-z0-9]{6})$/, 'game'],
   [/^\/join\/([A-Za-z0-9]{6})$/, 'join'],
 ]

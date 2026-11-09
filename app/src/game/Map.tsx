@@ -70,11 +70,19 @@ function stationFeatures(stations: StationMark[]): FeatureCollection {
   )
 }
 
-type Pin = { id: string; lat: number; lng: number }
+/**
+ * A pin. The walk-the-park guide sets a `label` (drawn on the pin), a `state` (todo is outlined, next pulses, placed is
+ * filled) and, for Dato Seri's step, `tone: 'yellow'`. Plain pins (safety alerts) leave them out and draw as filled lime.
+ */
+type Pin = { id: string; lat: number; lng: number; label?: string; state?: 'todo' | 'next' | 'placed'; tone?: 'yellow' }
 
 function pinFeatures(pins: Pin[]): FeatureCollection {
   return collection(
-    pins.map((p) => ({ type: 'Feature', properties: { id: p.id }, geometry: { type: 'Point', coordinates: [p.lng, p.lat] } })),
+    pins.map((p) => ({
+      type: 'Feature',
+      properties: { id: p.id, label: p.label ?? '', state: p.state ?? 'placed', yellow: p.tone === 'yellow' },
+      geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+    })),
   )
 }
 
@@ -210,6 +218,7 @@ export default function GameMap({
       attributionControl: { compact: false },
     })
     map.current = m
+    let pulse: number | undefined
     m.on('load', () => {
       m.addSource('arena', {
         type: 'geojson',
@@ -390,16 +399,44 @@ export default function GameMap({
       })
       m.addSource('pins', { type: 'geojson', data: pinFeatures(latestPins.current) })
       m.addLayer({
+        id: 'pins-pulse',
+        type: 'circle',
+        source: 'pins',
+        filter: ['==', ['get', 'state'], 'next'],
+        paint: { 'circle-radius': 14, 'circle-color': ['case', ['get', 'yellow'], y.main, VOLT], 'circle-opacity': 0.3 },
+      })
+      m.addLayer({
         id: 'pins',
         type: 'circle',
         source: 'pins',
-        paint: { 'circle-radius': 10, 'circle-color': VOLT, 'circle-stroke-color': WHITE, 'circle-stroke-width': 3 },
+        paint: {
+          'circle-radius': ['case', ['!=', ['get', 'label'], ''], 11, 10],
+          'circle-color': ['case', ['get', 'yellow'], y.main, ['==', ['get', 'state'], 'todo'], BLACK, VOLT],
+          'circle-stroke-color': ['case', ['get', 'yellow'], y.deep, WHITE],
+          'circle-stroke-width': ['case', ['==', ['get', 'state'], 'todo'], 2, 3],
+        },
       })
+      m.addLayer({
+        id: 'pin-labels',
+        type: 'symbol',
+        source: 'pins',
+        layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
+        paint: { 'text-color': ['case', ['get', 'yellow'], y.ink, ['==', ['get', 'state'], 'todo'], WHITE, BLACK] },
+      })
+      // The next pin breathes (not for reduced motion).
+      if (!reduce && latestPins.current.some((p) => p.state === 'next')) {
+        pulse = window.setInterval(() => {
+          const t = (Date.now() % 1600) / 1600
+          m.setPaintProperty('pins-pulse', 'circle-radius', 12 + 10 * t)
+          m.setPaintProperty('pins-pulse', 'circle-opacity', 0.35 * (1 - t))
+        }, 80)
+      }
       fitTo(m, latestFit.current)
       ready.current = true
       setLoaded(true)
     })
     return () => {
+      window.clearInterval(pulse)
       ready.current = false
       setLoaded(false)
       m.remove()
