@@ -21,7 +21,7 @@ import { arenaAroundPoint } from '../../shared/arenas.js'
 import { isOut } from '../../shared/players.js'
 import { judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
-import { datoCodeFromQr, isDatoQr, JAIL_QR, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
+import { datoCodeFromQr, isDatoQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, flareBlocked, judgeClaim, judgeDatoClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
@@ -588,8 +588,7 @@ const create: Action = async (ctx, body) => {
   return noFreeCard ? { code, notice: NO_FREE_CARD_NOTICE } : { code }
 }
 
-/** Most players one game takes; the lobby refuses more. */
-export const MAX_PLAYERS_PER_GAME = 40
+export { MAX_PLAYERS_PER_GAME }
 /** A player's streamed location is stored at most once this often; scans always record their own fix. */
 export const LOCATION_MIN_GAP_MS = 2_000
 

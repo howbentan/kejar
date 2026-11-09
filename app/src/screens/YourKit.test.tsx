@@ -21,6 +21,7 @@ const set = (over: Record<string, Partial<Card>> = {}): Card[] =>
 
 let cards: Card[]
 let open: ReturnType<typeof vi.spyOn>
+let tab: { location: { href: string }; close: ReturnType<typeof vi.fn> }
 
 beforeEach(() => {
   localStorage.setItem('kejar.organiser', JSON.stringify({ organiserToken: 'ot1', name: 'Owner' }))
@@ -31,7 +32,8 @@ beforeEach(() => {
     if (action === 'secretCardCode') return { code: 'CODE123' }
     return { ok: true }
   })
-  open = vi.spyOn(window, 'open').mockImplementation(() => null)
+  tab = { location: { href: '' }, close: vi.fn() }
+  open = vi.spyOn(window, 'open').mockImplementation(() => tab as unknown as Window)
 })
 afterEach(() => {
   cleanup()
@@ -76,7 +78,9 @@ describe('YourKit', () => {
     const r = row('Yellow A')
     expect(within(r).getByText(/^Ready/)).toBeTruthy()
     fireEvent.click(within(r).getByRole('button', { name: 'PRINT' }))
-    await waitFor(() => expect(open).toHaveBeenCalledWith('/print/card#CODE123', '_blank'))
+    // The tab opens blank inside the tap, then points at the card once the code arrives.
+    expect(open).toHaveBeenCalledWith('', '_blank')
+    await waitFor(() => expect(tab.location.href).toBe('/print/card#CODE123'))
     expect(call).toHaveBeenCalledWith('secretCardCode', { organiserToken: 'ot1', legendary: 'dato', letter: 'A' })
     fireEvent.click(within(r).getByRole('button', { name: 'Retire' }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('retireSecretCard', { organiserToken: 'ot1', legendary: 'dato', letter: 'A' }))
@@ -96,7 +100,8 @@ describe('YourKit', () => {
     expect(within(row('Yellow A')).getByText('Found on 2 Nov · retired')).toBeTruthy()
     expect(within(row('Purple B')).getByText('Retired')).toBeTruthy()
     fireEvent.click(within(row('Yellow A')).getByRole('button', { name: 'REPRINT' }))
-    await waitFor(() => expect(open).toHaveBeenCalledWith('/print/card#CODE123', '_blank'))
+    expect(open).toHaveBeenCalledWith('', '_blank')
+    await waitFor(() => expect(tab.location.href).toBe('/print/card#CODE123'))
     const names = call.mock.calls.map((c) => c[0])
     expect(names.indexOf('reprintSecretCard')).toBeLessThan(names.indexOf('secretCardCode'))
   })
@@ -109,6 +114,38 @@ describe('YourKit', () => {
     expect(within(r).getByText('New code · print it, then confirm')).toBeTruthy()
     fireEvent.click(within(r).getByRole('button', { name: "I'VE PRINTED IT" }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('confirmSecretCardPrinted', { organiserToken: 'ot1', legendary: 'dato', letter: 'C' }))
+  })
+
+  it("hides Retire on a card in today's game", async () => {
+    cards = set({ datoB: { inGame: true } })
+    render(<YourKit />)
+    await screen.findByText('Yellow B')
+    expect(within(row('Yellow B')).queryByRole('button', { name: 'Retire' })).toBeNull()
+    expect(within(row('Yellow A')).getByRole('button', { name: 'Retire' })).toBeTruthy()
+  })
+
+  it('closes the blank tab and shows the error when the code can not be fetched', async () => {
+    call.mockImplementation(async (action: string) => {
+      if (action === 'listSecretCards') return cards
+      throw new Error('No connection')
+    })
+    render(<YourKit />)
+    await screen.findByText('Yellow A')
+    fireEvent.click(within(row('Yellow A')).getByRole('button', { name: 'PRINT' }))
+    await waitFor(() => expect(within(row('Yellow A')).getByText('No connection')).toBeTruthy())
+    expect(tab.close).toHaveBeenCalled()
+  })
+
+  it('prints in the same tab when the browser blocks the new one', async () => {
+    open.mockImplementation(() => null)
+    const assign = vi.fn()
+    const loc = window.location
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...loc, assign } })
+    render(<YourKit />)
+    await screen.findByText('Yellow A')
+    fireEvent.click(within(row('Yellow A')).getByRole('button', { name: 'PRINT' }))
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/print/card#CODE123'))
+    Object.defineProperty(window, 'location', { configurable: true, value: loc })
   })
 
   it('shows a 409 in plain text on the row', async () => {

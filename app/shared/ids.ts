@@ -38,6 +38,8 @@ export function datoCodeFromQr(text: string): string | null {
 }
 
 export const MAX_STATIONS = 8
+/** Most players one game takes; the lobby refuses more. Armbands #01 to this are always printed. */
+export const MAX_PLAYERS_PER_GAME = 40
 
 export function stationQr(n: number): string {
   return `KEJAR:STATION:${n}`

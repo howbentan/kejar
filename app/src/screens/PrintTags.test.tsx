@@ -18,6 +18,14 @@ describe('PrintTags', () => {
     expect(screen.getByText('#01')).toBeInTheDocument()
   })
 
+  it('prints 40 armbands, #01 to #40, one QR code each', async () => {
+    render(<PrintTags />)
+    await waitFor(() => expect(encoded).toContain('KEJAR:JAIL'))
+    expect(encoded.filter((t) => t.startsWith('KEJAR:TAG'))).toHaveLength(40)
+    expect(screen.getByText('#40')).toBeInTheDocument()
+    expect(screen.queryByText('#41')).toBeNull()
+  })
+
   it('the public sheet never prints a hidden-stash card: each game prints its own from the organiser tools (ruling R15)', async () => {
     render(<PrintTags />)
     await waitFor(() => expect(encoded).toContain('KEJAR:JAIL'))

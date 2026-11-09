@@ -33,7 +33,8 @@ const pill: CSSProperties = {
   letterSpacing: '0.1em',
   border: '1px solid var(--hair)',
   borderRadius: 999,
-  padding: '6px 10px',
+  padding: '6px 12px',
+  minHeight: 40,
   background: 'transparent',
   color: 'var(--white)',
   cursor: 'pointer',
@@ -67,23 +68,31 @@ export default function YourKit() {
     )
   }
 
-  async function act(c: KitCard, fn: (id: CardId) => Promise<void>) {
+  /**
+   * Runs a card action. When it prints, the tab opens blank straight away, inside the tap, because a browser blocks
+   * a window opened after an await. It's pointed at the card once the code arrives, and closed if anything fails.
+   */
+  async function act(c: KitCard, fn: (id: CardId, print: () => Promise<void>) => Promise<void>, prints = false) {
     const k = keyOf(c)
+    const w = prints ? window.open('', '_blank') : null
     setBusy(k)
     setErrors((e) => ({ ...e, [k]: '' }))
     try {
-      await fn({ organiserToken, legendary: c.legendary, letter: c.letter })
+      const id = { organiserToken, legendary: c.legendary, letter: c.letter }
+      await fn(id, async () => {
+        const { code } = await call<{ code: string }>('secretCardCode', id)
+        const url = `/print/card#${encodeURIComponent(code)}`
+        // Blocked anyway: print from this tab instead.
+        if (w) w.location.href = url
+        else window.location.assign(url)
+      })
       await load()
     } catch (e) {
+      w?.close()
       setErrors((x) => ({ ...x, [k]: e instanceof Error ? e.message : String(e) }))
     } finally {
       setBusy('')
     }
-  }
-
-  const printCard = async (id: CardId) => {
-    const { code } = await call<{ code: string }>('secretCardCode', id)
-    window.open(`/print/card#${encodeURIComponent(code)}`, '_blank')
   }
 
   return (
@@ -109,7 +118,7 @@ export default function YourKit() {
         {(cards ?? []).map((c) => {
           const k = keyOf(c)
           const colour = c.legendary === 'dato' ? 'var(--legendary-2)' : 'var(--bomoh-2)'
-          const retire = (
+          const retire = c.inGame ? null : (
             <>
               {' · '}
               <button type="button" style={linkBtn} disabled={busy === k} onClick={() => void act(c, async (id) => void (await call('retireSecretCard', id)))}>
@@ -124,10 +133,14 @@ export default function YourKit() {
             action = {
               label: 'REPRINT',
               run: () =>
-                void act(c, async (id) => {
-                  await call('reprintSecretCard', id)
-                  await printCard(id)
-                }),
+                void act(
+                  c,
+                  async (id, print) => {
+                    await call('reprintSecretCard', id)
+                    await print()
+                  },
+                  true,
+                ),
             }
           } else if (c.state === 'printing') {
             status = 'New code · print it, then confirm'
@@ -139,7 +152,7 @@ export default function YourKit() {
                 {retire}
               </>
             )
-            action = { label: 'PRINT', run: () => void act(c, printCard) }
+            action = { label: 'PRINT', run: () => void act(c, (_id, print) => print(), true) }
           }
           return (
             <div key={k} data-testid="card-row" style={{ ...rowStyle, flexWrap: 'wrap' }}>
