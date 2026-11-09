@@ -160,9 +160,9 @@ export interface View {
    */
   datoStash?: PlacedStash | null
   /**
-   * The organiser only: the letter and current secret code of the yellow card assigned to this game, for the
-   * packing list and the organiser-only print link (ruling R15); null if the game has none. Left out of every
-   * other view entirely, like `datoStash`.
+   * The organiser only: the letter and the code of the yellow card assigned to this game (the code its stash
+   * claims with, so the print link and the claim always agree), for the packing list and the organiser-only print
+   * link (ruling R15, R2); null if the game has none. Left out of every other view entirely, like `datoStash`.
    */
   datoCard?: { letter: string; code: string } | null
   /**
@@ -192,8 +192,6 @@ export interface ViewInput {
   powerUps: PowerUp[]
   /** The card letters of this game's assigned secret sets; read only for the organiser's own view. */
   secretLetters?: SecretLetters
-  /** The assigned yellow card's letter and current code; read only for the organiser's own view. */
-  datoCard?: { letter: string; code: string } | null
 }
 
 /** '1 runner', '3 runners'. */
@@ -854,9 +852,8 @@ function fullView(i: ViewInput): View {
   }
 }
 
-/** The organiser's card: as the action looked it up, else (a view built without it) the stash's own letter and code. */
+/** The organiser's card: the stash's letter and the code it claims with. */
 function datoCardOf(i: ViewInput): { letter: string; code: string } | null {
-  if (i.datoCard !== undefined) return i.datoCard
   const s = i.game.dato_stash
   return s?.card && s.code ? { letter: s.card.letter, code: s.code } : null
 }

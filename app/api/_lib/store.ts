@@ -55,8 +55,11 @@ export interface GameStore {
    * (null), leaving every other key as it is, so two phones ticking at once never drop each other's ticks.
    */
   setKitKey(gameId: string, group: 'ticks' | 'placed', key: string, value: string | true | null): Promise<void>
-  /** Every game not yet ended (ended_at unset) by any organiser in the organisation. */
-  unfinishedGames(organisationId: string): Promise<GameRow[]>
+  /**
+   * Every game not yet ended (ended_at unset) by any organiser in the organisation that has started, or was made
+   * after `createdAfter` (ISO), so abandoned lobbies drop out and the list stays small.
+   */
+  unfinishedGames(organisationId: string, createdAfter: string): Promise<GameRow[]>
   /** The organisation's six secret cards, A-C yellow and A-C purple; missing ones are made `ready`, with fresh codes, on first read. */
   secretCards(organisationId: string): Promise<SecretCard[]>
   setSecretCard(id: string, patch: Partial<Pick<SecretCard, 'code' | 'state' | 'found_at'>>): Promise<void>
@@ -259,7 +262,8 @@ export class MemoryStore implements GameStore {
   }
 
   async createGame(g: Omit<GameRow, 'id'>) {
-    const row = { ...g, id: this.id('g') }
+    // created_at = the store clock, like the column's default.
+    const row = { created_at: this.nowIso(), ...g, id: this.id('g') }
     this.games.push(row)
     const { organiser_id, ...rest } = row
     return rest as Game
@@ -282,9 +286,11 @@ export class MemoryStore implements GameStore {
     else into[key] = value
     g.kit = kit
   }
-  async unfinishedGames(organisationId: string) {
+  async unfinishedGames(organisationId: string, createdAfter: string) {
     const organisers = new Set(this.organiserRows.filter((o) => o.organisation_id === organisationId).map((o) => o.id))
-    return this.games.filter((g) => organisers.has(g.organiser_id) && !g.ended_at).map((g) => ({ ...g }))
+    return this.games
+      .filter((g) => organisers.has(g.organiser_id) && !g.ended_at && (g.started_at || !g.created_at || g.created_at > createdAfter))
+      .map((g) => ({ ...g }))
   }
   async secretCards(organisationId: string) {
     for (const legendary of ['dato', 'bomoh'] as const) {

@@ -71,6 +71,8 @@ export interface Game {
   code: string
   arena: Arena
   settings: Settings
+  /** When the game was made (ISO, the column's default). Rows built before it was read may lack it. */
+  created_at?: string
   started_at: string | null
   ended_at: string | null
   winner: 'runners' | 'chasers' | null

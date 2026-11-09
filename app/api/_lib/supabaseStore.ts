@@ -45,11 +45,19 @@ export class SupabaseStore implements GameStore {
     // One UPDATE in the database, so two phones ticking at once both land.
     check(await this.db.rpc('set_kit_key', { p_game: gameId, p_group: group, p_key: key, p_value: value }))
   }
-  async unfinishedGames(organisationId: string): Promise<GameRow[]> {
+  async unfinishedGames(organisationId: string, createdAfter: string): Promise<GameRow[]> {
     const organisers = check(await this.db.from('organisers').select('id').eq('organisation_id', organisationId)) as { id: string }[] | null
     const ids = (organisers ?? []).map((o) => o.id)
     if (ids.length === 0) return []
-    return (check(await this.db.from('games').select('*').in('organiser_id', ids).is('ended_at', null)) ?? []) as GameRow[]
+    return (check(
+      await this.db
+        .from('games')
+        .select('*')
+        .in('organiser_id', ids)
+        .is('ended_at', null)
+        // Quoted: the timestamp's ':' and '.' are reserved in PostgREST's or-filter syntax.
+        .or(`started_at.not.is.null,created_at.gt."${createdAfter}"`),
+    ) ?? []) as GameRow[]
   }
   async secretCards(organisationId: string): Promise<SecretCard[]> {
     const read = async () => (check(await this.db.from('secret_cards').select('*').eq('organisation_id', organisationId)) ?? []) as SecretCard[]

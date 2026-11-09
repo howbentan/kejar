@@ -436,7 +436,7 @@ describe('MemoryStore secret card sets', () => {
     expect(after).toEqual({ ...card, state: 'retired', found_at: iso(T0) })
   })
 
-  it('unfinishedGames lists the games of every organiser in the organisation that have not ended', async () => {
+  it('unfinishedGames lists the games of every organiser in the organisation that have not ended, and started or are recent', async () => {
     const org = await store.createOrganisation({ name: 'o', created_at: iso(T0) })
     const mk = (name: string) =>
       store.createOrganiser({ organisation_id: org.id, name, created_at: iso(T0), session_token_hash: name, session_created_at: iso(T0) })
@@ -447,7 +447,10 @@ describe('MemoryStore secret card sets', () => {
     const g1 = await store.createGame({ ...(rest as never), code: 'AAA222', organiser_id: a.id })
     const g2 = await store.createGame({ ...(rest as never), code: 'BBB222', organiser_id: b.id })
     await store.createGame({ ...(rest as never), code: 'CCC222', organiser_id: b.id, ended_at: iso(T0) })
-    expect((await store.unfinishedGames(org.id)).map((g) => g.id).sort()).toEqual([g1.id, g2.id].sort())
+    const oldLobby = await store.createGame({ ...(rest as never), code: 'DDD222', organiser_id: b.id, started_at: null })
+    expect((await store.unfinishedGames(org.id, iso(T0 - 1))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id].sort())
+    // Made before the cutoff: only the started games are left.
+    expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id].sort())
   })
 })
 
