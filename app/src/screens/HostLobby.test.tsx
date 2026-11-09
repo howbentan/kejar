@@ -138,3 +138,28 @@ describe('HostLobby', () => {
     expect(screen.getByText('Station 1')).toBeInTheDocument()
   })
 })
+
+describe('HostLobby setup steps', () => {
+  const at = (search: string) =>
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, origin: 'https://kejar.test', search, assign: vi.fn() } })
+  afterEach(() => at(''))
+
+  it('?setup=crew shows step 4 with the progress bar and no join QR', async () => {
+    at('?setup=crew')
+    render(<HostLobby code="ABC234" />)
+    expect(await screen.findByRole('heading', { name: 'Your crew.' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Step 4 of 5' })).toBeInTheDocument()
+    expect(screen.queryByAltText('Join QR code')).toBeNull()
+  })
+
+  it('?setup=pack shows step 5 with the progress bar and no join QR', async () => {
+    at('?setup=pack')
+    call.mockImplementation(async (action: string) =>
+      action === 'state' ? { ...lobbyView, kit: { items: [{ id: 'armbands', group: 'pack', label: 'Armbands #01–#40', ticked: false }], places: [], placed: {} } } : {},
+    )
+    render(<HostLobby code="ABC234" />)
+    expect(await screen.findByRole('heading', { name: 'Pack.' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Step 5 of 5' })).toBeInTheDocument()
+    expect(screen.queryByAltText('Join QR code')).toBeNull()
+  })
+})

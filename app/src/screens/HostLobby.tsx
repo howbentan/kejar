@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { Role } from '../../shared/types.js'
 import { call } from '../game/api'
+import CrewStep from '../game/CrewStep'
 import { AlertsOnPhone } from '../game/MarshalTools'
+import PackList from '../game/PackList'
 import SetupMap, { HiddenCard } from '../game/SetupMap'
 import { loadOrganiserSession } from '../game/organiserSession'
 import { qrDataUrl } from '../game/qr'
@@ -72,6 +74,22 @@ export default function HostLobby({ code }: { code: string }) {
     return (
       <Screen eyebrow="kejar. · organise">
         <p className="muted">This phone didn&apos;t create game {code}, so it can&apos;t run it.</p>
+      </Screen>
+    )
+  }
+
+  // The new-game setup's steps 4 and 5 stand in for the lobby: no join QR yet.
+  const setup = new URLSearchParams(window.location.search).get('setup')
+  if (setup === 'crew' || setup === 'pack') {
+    return (
+      <Screen eyebrow={`kejar. · game ${code}`}>
+        {!view ? (
+          <ErrorText>{loadError}</ErrorText>
+        ) : setup === 'crew' ? (
+          <CrewStep code={code} view={view} organiserToken={organiser.organiserToken} />
+        ) : (
+          <PackList code={code} view={view} refresh={refresh} />
+        )}
       </Screen>
     )
   }
