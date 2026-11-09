@@ -293,7 +293,7 @@ export class MemoryStore implements GameStore {
   }
   async catchRunner(id: string, by: string | null) {
     const p = this.playerRows.find((x) => x.id === id)
-    if (!p || p.jailed) return false
+    if (!p || p.jailed || p.disqualified_at) return false
     Object.assign(p, { jailed: true, caught_at: this.nowIso(), caught_by: by, out_warned_at: null })
     return true
   }
@@ -506,7 +506,7 @@ export class MemoryStore implements GameStore {
   }
   async markOutside(playerId: string, at: string) {
     const p = this.playerRows.find((x) => x.id === playerId)
-    if (!p || p.disqualified_at) return 'unchanged' as const
+    if (!p || p.disqualified_at || p.jailed) return 'unchanged' as const
     if (!p.out_warned_at) {
       p.out_warned_at = at
       return 'warned' as const

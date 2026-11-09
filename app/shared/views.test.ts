@@ -825,6 +825,14 @@ describe('Luar Garisan views', () => {
     expect(v.caughtBy).toBeNull()
   })
 
+  it('outWarned is true for a warned player, and false once disqualified or when never warned', () => {
+    const warned = { ...aina, out_warned_at: iso(T0 + 12 * MIN) }
+    expect(view(warned, { players: [chaser, warned, wei, siti] }).outWarned).toBe(true)
+    expect(view(aina, { players: [chaser, aina, wei, siti] }).outWarned).toBe(false)
+    const gone = { ...warned, disqualified_at: iso(T0 + 13 * MIN) }
+    expect(view(gone, { players: [chaser, gone, wei, siti] }).outWarned).toBe(false)
+  })
+
   it('the marshal roster carries disqualified_at', () => {
     const v = view(siti, { players: [chaser, aina, out, wei, siti] })
     expect(v.roster.find((r) => r.id === 'r2')?.disqualified_at).toBe(out.disqualified_at)

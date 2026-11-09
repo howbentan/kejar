@@ -5,6 +5,10 @@ export const SOS_REPEAT_MS = 30_000
 export const OUTSIDE_MARGIN_M = 20
 /** Luar Garisan: a second outside report disqualifies only this long after the warning, so one re-sent fix cannot do both. */
 export const LUAR_GARISAN_GRACE_MS = 30_000
+/** Luar Garisan ignores a fix whose accuracy is worse than this: it neither warns, disqualifies nor clears a warning. */
+export const LUAR_GARISAN_MAX_ACCURACY_M = 50
+/** The warning shown to a runner or chaser, in the push and the in-app banner. */
+export const LUAR_GARISAN_WARN = "Eh, you're outside the play area! Balik within 30 seconds or you're out."
 export const START_RADIUS_M = 50
 export const NOTE_MAX = 140
 

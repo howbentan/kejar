@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import type { CatchJudgement } from '../../shared/catch.js'
 import { isDatoQr, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
+import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
 import CatchMoment from '../game/CatchMoment'
 import ChaseLayout from '../game/ChaseLayout'
@@ -78,6 +79,10 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
         view.me.disqualified_at ? (
           <div role="alert" className="chase-warning">
             <p style={{ fontWeight: 700 }}>Luar Garisan: your catches don't count this round, boss.</p>
+          </div>
+        ) : view.outWarned ? (
+          <div role="alert" className="chase-warning">
+            <p style={{ fontWeight: 700 }}>{LUAR_GARISAN_WARN}</p>
           </div>
         ) : undefined
       }

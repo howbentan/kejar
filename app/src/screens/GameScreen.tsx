@@ -80,8 +80,8 @@ export default function GameScreen({ code }: { code: string }) {
   // Runners and chasers: their screen, with the Help and SOS icon in the same corner on every one.
   let screen: ReactNode
   if (current.paused) screen = <Paused view={current} />
-  else if (current.phase === 'hiding') screen = <Hide view={current} />
   else if (current.me.role === 'runner' && current.me.disqualified_at) screen = <LuarGarisan view={current} />
+  else if (current.phase === 'hiding') screen = <Hide view={current} />
   else if (current.me.role === 'runner' && (current.me.jailed || showingFreed)) screen = <Jail code={code} view={current} />
   else if (current.me.role === 'chaser') screen = <ChaserChase code={code} view={current} refresh={refresh} />
   else screen = <RunnerChase code={code} view={current} locationOff={locationOff} />

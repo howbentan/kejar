@@ -78,6 +78,7 @@ export class SupabaseStore implements GameStore {
         .update({ jailed: true, caught_at: this.nowIso(), caught_by: by, out_warned_at: null })
         .eq('id', id)
         .eq('jailed', false)
+        .is('disqualified_at', null)
         .select('id'),
     )
     return (rows ?? []).length > 0

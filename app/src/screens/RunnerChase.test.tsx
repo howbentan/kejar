@@ -55,6 +55,14 @@ describe('RunnerChase', () => {
     expect(screen.queryByRole('button', { name: /break them out/i })).toBeNull()
   })
 
+  it('shows the Luar Garisan warning banner while warned, and not otherwise', () => {
+    render(<RunnerChase code="ABC234" view={testView({ outWarned: true })} />)
+    expect(screen.getByRole('alert')).toHaveTextContent("Eh, you're outside the play area! Balik within 30 seconds or you're out.")
+    cleanup()
+    render(<RunnerChase code="ABC234" view={testView()} />)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
   it('shows the banner instead of the chip once the window opens', () => {
     render(<RunnerChase code="ABC234" view={testView({ checkin: { state: 'open', alertAt: 100_000, revealAt: 120_000, missedInRow: 0 } })} />)
     expect(screen.getByText('Check in now')).toBeInTheDocument()

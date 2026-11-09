@@ -131,6 +131,11 @@ describe('ChaserChase Luar Garisan', () => {
     expect(screen.getByRole('alert')).toHaveTextContent("Luar Garisan: your catches don't count this round, boss.")
   })
 
+  it('a warned chaser sees the warning banner', () => {
+    render(<ChaserChase code="ABC234" view={{ ...chaser(), outWarned: true }} refresh={() => {}} />)
+    expect(screen.getByRole('alert')).toHaveTextContent("Eh, you're outside the play area! Balik within 30 seconds or you're out.")
+  })
+
   it('a free chaser sees no banner', () => {
     render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
     expect(screen.queryByRole('alert')).toBeNull()

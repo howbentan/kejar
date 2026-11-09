@@ -1601,8 +1601,8 @@ describe('removing a player', () => {
 })
 
 describe('Luar Garisan', () => {
-  const RUNNER_WARN = "Eh, you're outside the play area! Balik before your next check-in or you're out."
-  const CHASER_WARN = "Eh, you're outside the play area! Balik now or you're out."
+  const RUNNER_WARN = "Eh, you're outside the play area! Balik within 30 seconds or you're out."
+  const CHASER_WARN = "Eh, you're outside the play area! Balik within 30 seconds or you're out."
   const RUNNER_OUT = 'Luar Garisan lah! You left the play area, so no winning this round. You can still play along.'
   const CHASER_OUT = "Luar Garisan lah! You left the play area, so no winning this round, and your catches don't count."
   const evs = async (gameId: string, type: string) => (await store.events(gameId)).filter((e) => e.type === type)
@@ -1734,6 +1734,84 @@ describe('Luar Garisan', () => {
     expect(notices('Hafiz')).toEqual([])
     expect(notices('Siti')).toEqual([])
     expect(notices('Aina')).toEqual([])
+  })
+
+  const reportAcc = async (g: { code: string }, token: string, m: number, accuracy_m: number, stepMs = 30_000) => {
+    now += stepMs
+    await run('location', { code: g.code, token, ...at(m), accuracy_m })
+  }
+
+  it('a warning given before a pause does not carry over: the first outside report after resume warns afresh', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240) // warned
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    now += 5 * MIN
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    expect((await player(g.gameId, g.aina.playerId)).out_warned_at).toBeFalsy()
+    await report(g, g.aina.token, 240)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(2)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
+    expect((await player(g.gameId, g.aina.playerId)).disqualified_at).toBeFalsy()
+  })
+
+  it('resume leaves a disqualification alone', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 250)
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    expect((await player(g.gameId, g.aina.playerId)).disqualified_at).toBeTruthy()
+  })
+
+  it('two outside fixes at 120 m accuracy, 30 s apart, do nothing', async () => {
+    const g = await safetyGame()
+    await reportAcc(g, g.aina.token, 240, 120)
+    await reportAcc(g, g.aina.token, 250, 120)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(0)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
+    expect(notices('Aina')).toEqual([])
+    // The marshal outside alert is unchanged (R1).
+    expect(await evs(g.gameId, 'outside')).toHaveLength(1)
+  })
+
+  it('a good fix still warns, and a fix at exactly 50 m counts', async () => {
+    const g = await safetyGame()
+    await reportAcc(g, g.aina.token, 240, 50)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(1)
+  })
+
+  it('a poor fix between a warning and a good outside fix does not clear the warning', async () => {
+    const g = await safetyGame()
+    await reportAcc(g, g.aina.token, 240, 8) // warned
+    await reportAcc(g, g.aina.token, 100, 120, 5_000) // inside, but too poor to clear
+    expect((await player(g.gameId, g.aina.playerId)).out_warned_at).toBeTruthy()
+    await reportAcc(g, g.aina.token, 250, 8, 30_000)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(1)
+  })
+
+  it('a failing push does not stop the event or the end of the game', async () => {
+    const g = await safetyGame()
+    await store.catchRunner(g.hafiz.playerId, g.ben.playerId)
+    await report(g, g.aina.token, 240)
+    const failing = (body: object) =>
+      actions.location(
+        {
+          store,
+          now,
+          rng: seeded(7),
+          push: async () => {
+            throw new Error('push service down')
+          },
+          fetchJson: async () => {
+            throw new Error('no fake reply')
+          },
+        },
+        body,
+      )
+    now += 30_000
+    await expect(failing({ code: g.code, token: g.aina.token, ...at(250) })).resolves.toEqual({ ok: true })
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(1)
+    expect(await evs(g.gameId, 'ended')).toHaveLength(1)
   })
 
   it('keeps the existing marshal outside alert', async () => {

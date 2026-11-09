@@ -98,6 +98,8 @@ export interface View {
   chaserNearby: boolean
   /** Name of the chaser who caught me, while I'm jailed. */
   caughtBy: string | null
+  /** Luar Garisan: I've been warned for being outside the play area and have not yet come back or been disqualified. */
+  outWarned: boolean
   /** Why I'm in Penjara: caught by a chaser, or auto-jailed for missing two check-ins. */
   jailReason: 'caught' | 'missed-checkins' | null
   /** My running Durian's end time; null for effects that wait for the next ping (motion design §7b). */
@@ -773,6 +775,7 @@ function fullView(i: ViewInput): View {
     chaserNearby,
     caughtBy: i.me.jailed && i.me.caught_by ? (byId.get(i.me.caught_by)?.name ?? null) : null,
     jailReason: jailReasonFor(i),
+    outWarned: !!i.me.out_warned_at && !i.me.disqualified_at,
     activeEndsAt: (() => {
       const shield = activeShield(i.powerUps, i.me.id, i.now)
       return shield?.used_at ? Date.parse(shield.used_at) + SHIELD_MS : null

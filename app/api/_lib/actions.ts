@@ -1,6 +1,8 @@
 import {
   alertsFrom,
   NOTE_MAX,
+  LUAR_GARISAN_MAX_ACCURACY_M,
+  LUAR_GARISAN_WARN,
   OUTSIDE_MARGIN_M,
   REASON_LABEL,
   SOS_DETAILS_MS,
@@ -593,11 +595,11 @@ function openWindowAlert(windows: { alertAt: number; revealAt: number }[], now: 
 
 const LUAR_GARISAN_COPY = {
   runner: {
-    warn: "Eh, you're outside the play area! Balik before your next check-in or you're out.",
+    warn: LUAR_GARISAN_WARN,
     out: 'Luar Garisan lah! You left the play area, so no winning this round. You can still play along.',
   },
   chaser: {
-    warn: "Eh, you're outside the play area! Balik now or you're out.",
+    warn: LUAR_GARISAN_WARN,
     out: "Luar Garisan lah! You left the play area, so no winning this round, and your catches don't count.",
   },
 }
@@ -608,6 +610,7 @@ async function luarGaris(ctx: Ctx, game: Game, me: Player) {
   if (verdict === 'unchanged') return
   const copy = LUAR_GARISAN_COPY[me.role === 'chaser' ? 'chaser' : 'runner']
   const warned = verdict === 'warned'
+  // Order matters: the event, then the end-of-game check, then the push, so a failing push can't stop either.
   await ctx.store.addEvent({
     game_id: game.id,
     type: warned ? 'out-warned' : 'luar-garisan',
@@ -615,11 +618,15 @@ async function luarGaris(ctx: Ctx, game: Game, me: Player) {
     target_id: null,
     data: { who: who(me) },
   })
-  await pushTo(ctx, [me], { type: 'notice', code: game.code, title: warned ? 'Outside the play area' : 'Luar Garisan', body: warned ? copy.warn : copy.out })
   // Disqualifying the last free runner ends the game, the same as catching them (spec §7a).
   if (!warned && me.role === 'runner') {
     const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
     if (runners.length > 0 && runners.every(isOut)) await finish(ctx, game)
+  }
+  try {
+    await pushTo(ctx, [me], { type: 'notice', code: game.code, title: warned ? 'Outside the play area' : 'Luar Garisan', body: warned ? copy.warn : copy.out })
+  } catch {
+    // A push that can't be delivered must not fail the location report; the in-app banner and screen still show it.
   }
 }
 
@@ -629,7 +636,8 @@ async function checkWhere(ctx: Ctx, game: Game, me: Player, here: LatLng, accura
   if ((phase !== 'hiding' && phase !== 'chasing') || me.jailed || (me.role !== 'runner' && me.role !== 'chaser')) return
   // Luar Garisan freezes with the game: nothing counts while paused, and a disqualified or removed player is done.
   // The marshal outside alert below is unchanged and keeps running either way.
-  const ruleLive = !game.paused_at && !me.disqualified_at && !me.removed_at
+  // A fix worse than LUAR_GARISAN_MAX_ACCURACY_M neither warns, disqualifies nor clears (the raw accuracy, before the slack clamp below).
+  const ruleLive = !game.paused_at && !me.disqualified_at && !me.removed_at && accuracy <= LUAR_GARISAN_MAX_ACCURACY_M
   // Lakes cut out of the park count as outside too (Plan 4b).
   const outsideBy = distanceOutsidePlayArea(here, game.arena)
   // Alert only when clearly outside; re-arm only once back inside, so GPS jitter at the edge can't spam.
@@ -640,7 +648,7 @@ async function checkWhere(ctx: Ctx, game: Game, me: Player, here: LatLng, accura
     if (ruleLive) await luarGaris(ctx, game, me)
   } else {
     if (outsideBy === 0 && me.outside) await ctx.store.setFlag(me.id, 'outside', false)
-    if (ruleLive) await ctx.store.clearOutWarning(me.id)
+    if (ruleLive && me.out_warned_at) await ctx.store.clearOutWarning(me.id)
   }
   const slack = Math.min(Math.max(accuracy, 0), 20)
   if (phase === 'hiding' && me.role === 'chaser' && !me.left_start && distanceM(here, game.arena.start) > START_RADIUS_M + slack) {
@@ -1428,6 +1436,9 @@ const resume: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const marshal = await requireMarshal(ctx, game, body)
   if ((await ctx.store.resumeGame(game.id)) === null) return { ok: false }
+  // Luar Garisan froze with the pause: a warning given before it must not carry over into the resumed game.
+  const warned = (await ctx.store.players(game.id)).filter((p) => p.out_warned_at && !p.disqualified_at)
+  if (warned.length > 0) await ctx.store.updatePlayers(warned.map((p) => ({ id: p.id, patch: { out_warned_at: null } })))
   await ctx.store.addEvent({ game_id: game.id, type: 'resumed', actor_id: marshal?.id ?? null, target_id: null, data: {} })
   return { ok: true }
 }

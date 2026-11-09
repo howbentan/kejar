@@ -143,6 +143,13 @@ describe('GameScreen Luar Garisan routing', () => {
     expect(screen.queryByRole('button', { name: 'Scan' })).toBeNull()
   })
 
+  it('shows Luar Garisan, not Hide, to a runner disqualified in the hiding phase', () => {
+    const base = testView()
+    state.view = testView({ phase: 'hiding', me: { ...base.me, disqualified_at: '2026-10-25T09:10:00.000Z' } })
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByRole('heading', { name: /Luar Garisan/ })).toBeInTheDocument()
+  })
+
   it('wins over Penjara for a runner who is somehow both', () => {
     const base = testView()
     state.view = testView({ me: { ...base.me, jailed: true, disqualified_at: '2026-10-25T09:10:00.000Z' } })

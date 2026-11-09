@@ -36,6 +36,7 @@ export function testView(over: Partial<View> = {}): View {
     lastRevealAt: null,
     chaserNearby: false,
     caughtBy: null,
+    outWarned: false,
     jailReason: null,
     activeEndsAt: null,
     flareReadyAt: null,

@@ -7,7 +7,7 @@ alter table players add column if not exists out_warned_at timestamptz;
 alter table players add column if not exists disqualified_at timestamptz;
 
 -- Records one report clearly outside the play area, deciding from the stored row so two racing requests
--- cannot both warn. Returns 'unchanged' (already disqualified, or a second report inside the grace after the
+-- cannot both warn. Returns 'unchanged' (already disqualified or jailed, or a second report inside the grace after the
 -- warning, so one re-sent fix cannot warn and disqualify together), 'warned' (first) or 'disqualified'.
 drop function if exists mark_outside(uuid, timestamptz);
 create or replace function mark_outside(p_player uuid, p_at timestamptz, p_grace_ms int) returns text
@@ -17,7 +17,7 @@ declare
   pl players%rowtype;
 begin
   select * into pl from players where id = p_player for update;
-  if not found or pl.disqualified_at is not null then
+  if not found or pl.disqualified_at is not null or pl.jailed then
     return 'unchanged';
   end if;
   if pl.out_warned_at is null then

@@ -108,6 +108,19 @@ describe('MemoryStore safety methods', () => {
     expect(after.disqualified_at).toBe(at2)
   })
 
+  it('markOutside leaves a jailed player alone, and catchRunner refuses a disqualified one', async () => {
+    const g = await startedGame()
+    const jailed = await newPlayer(g.id, 'Aina')
+    await store.updatePlayers([{ id: jailed.id, patch: { jailed: true } }])
+    expect(await store.markOutside(jailed.id, iso(T0))).toBe('unchanged')
+    expect((await store.players(g.id)).find((p) => p.id === jailed.id)!.out_warned_at).toBeFalsy()
+    const dq = await newPlayer(g.id, 'Ben')
+    await store.markOutside(dq.id, iso(T0))
+    expect(await store.markOutside(dq.id, iso(T0 + 30_000))).toBe('disqualified')
+    expect(await store.catchRunner(dq.id, null)).toBe(false)
+    expect((await store.players(g.id)).find((p) => p.id === dq.id)!.jailed).toBe(false)
+  })
+
   it('markOutside disqualifies only 30 s or more after the warning', async () => {
     const g = await startedGame()
     const p = await newPlayer(g.id, 'Aina')
