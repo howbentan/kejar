@@ -16,6 +16,7 @@ const CENTER = { lat: 3.0, lng: 101.0 }
 let now: number
 let store: MemoryStore
 let pushes: { endpoint: string; payload: unknown }[]
+let pushFails = false
 /** Replies the fake OpenStreetMap services give, in order; an Error is thrown instead. */
 let osmReplies: unknown[]
 let osmCalls: string[]
@@ -27,6 +28,7 @@ const run = <T = any>(action: ActionName, body: object) =>
       now,
       rng: seeded(7),
       push: async (sub, payload) => {
+        if (pushFails) throw new Error('push down')
         pushes.push({ endpoint: sub.endpoint!, payload: JSON.parse(payload) })
       },
       fetchJson: async (url) => {
@@ -68,6 +70,7 @@ beforeEach(() => {
   now = T0
   store = new MemoryStore(() => now)
   pushes = []
+  pushFails = false
   osmReplies = []
   osmCalls = []
 })
@@ -2233,7 +2236,60 @@ describe('automatic alerts', () => {
     const r = await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })
     expect(r).toMatchObject({ ok: true, flagged: true })
     const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
-    expect(v.alerts.map((a) => a.text)).toEqual(['Check catch: #03 by Ben (position unknown)'])
+    expect(v.alerts.map((a) => a.text)).toEqual(['Check catch: #03 by Ben (runner location old)'])
+  })
+
+  /** Hafiz's last fix is `ageS` seconds old when Ben scans his armband from 10 m away. */
+  async function catchHafizWithFixAge(ageS: number) {
+    const g = await safetyGame()
+    const scanAt = now
+    now = scanAt - ageS * 1000
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+    now = scanAt
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    pushes = []
+    const r = await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })
+    const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    return { g, r, v }
+  }
+
+  it('a catch on an old runner location tells the runner and flags it for marshals', async () => {
+    const { g, r, v } = await catchHafizWithFixAge(60)
+    expect(r).toMatchObject({ ok: true, flagged: false })
+    const toHafiz = pushes.filter((p) => p.endpoint === 'https://push/Hafiz')
+    expect(toHafiz).toEqual([
+      {
+        endpoint: 'https://push/Hafiz',
+        payload: { type: 'notice', code: g.code, title: 'Kena tangkap!', body: 'Ben caught you. Not you? Tap to tell a marshal.', url: `/g/${g.code}?dispute=1` },
+      },
+    ])
+    expect(pushes.filter((p) => (p.payload as any).type === 'notice')).toHaveLength(1)
+    expect(v.alerts.map((a) => a.text)).toEqual(['Check catch: #03 by Ben (runner location old)'])
+  })
+
+  it('a catch on a fresh runner location sends no push and no alert', async () => {
+    const { r, v } = await catchHafizWithFixAge(10)
+    expect(r).toMatchObject({ ok: true, flagged: false })
+    expect(pushes.filter((p) => (p.payload as any).type === 'notice')).toEqual([])
+    expect(v.alerts).toEqual([])
+  })
+
+  it('a failing push never undoes the catch (old runner location)', async () => {
+    const g = await safetyGame()
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    const scanAt = now
+    now = scanAt - 60_000
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+    now = scanAt
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    pushFails = true
+    try {
+      const r = await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })
+      expect(r).toMatchObject({ ok: true })
+    } finally {
+      pushFails = false
+    }
+    expect((await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!.jailed).toBe(true)
   })
 })
 

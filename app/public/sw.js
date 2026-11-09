@@ -58,7 +58,8 @@ self.addEventListener('push', (event) => {
         requireInteraction: true,
         icon: '/icon-192.png',
         badge: '/icon-192.png',
-        data: { url: '/g/' + data.code },
+        // A notice may carry its own deep link (a caught runner's dispute link); only a path on this site is trusted.
+        data: { url: typeof data.url === 'string' && /^\/[^/\\]/.test(data.url) ? data.url : '/g/' + data.code },
       }),
     )
     return

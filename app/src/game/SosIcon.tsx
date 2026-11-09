@@ -69,6 +69,18 @@ export default function SosIcon({ code, view }: { code: string; view: View }) {
     return () => window.removeEventListener('kejar:sos', onAsk)
   })
 
+  // The "Kena tangkap!" push opens /g/<CODE>?dispute=1: open the sheet with Catch dispute picked, then tidy the URL.
+  // Here rather than on one screen, so it works wherever the runner lands (Penjara, or already freed).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('dispute') !== '1') return
+    params.delete('dispute')
+    const rest = params.toString()
+    window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash)
+    preset.current = 'dispute'
+    show()
+  }, [])
+
   const show = () => {
     // Already open: a second tap mustn't reset a send in flight or the chips already picked.
     if (open) return

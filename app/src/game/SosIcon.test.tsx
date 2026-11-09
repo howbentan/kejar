@@ -179,6 +179,21 @@ describe('SosIcon', () => {
     expect(screen.getByRole('button', { name: 'Something else' })).toHaveAttribute('aria-pressed', 'true')
   })
 
+  it('opening the game with ?dispute=1 opens the sheet with Catch dispute going with the SOS', async () => {
+    window.history.replaceState(null, '', '/g/ABC234?dispute=1')
+    try {
+      render(<SosIcon code="ABC234" view={view} />)
+      expect(screen.getByText('Need help?')).toBeInTheDocument()
+      expect(window.location.search).toBe('')
+      fireEvent.pointerDown(bar())
+      await wait(1_000)
+      expect(call).toHaveBeenLastCalledWith('sosDetails', { code: 'ABC234', token: 't1', sosId: 'e9', reason: 'dispute' })
+      expect(screen.getByRole('button', { name: 'Catch dispute' })).toHaveAttribute('aria-pressed', 'true')
+    } finally {
+      window.history.replaceState(null, '', '/')
+    }
+  })
+
   it('has no Report a player link any more — that moved to the post-game screen', async () => {
     await openSheet()
     expect(screen.queryByRole('button', { name: 'Report a player' })).toBeNull()

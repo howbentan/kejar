@@ -135,4 +135,28 @@ describe('service worker notices', () => {
     await click(listeners, '/g/ABC234')
     expect(self.clients.openWindow).toHaveBeenCalledWith('/g/ABC234')
   })
+
+  it('a notice with a url opens that url when tapped', async () => {
+    const { self, listeners } = loadWorker([])
+    const pending: Promise<unknown>[] = []
+    listeners.push({
+      data: { json: () => ({ type: 'notice', code: 'ABC234', title: 'T', body: 'B', url: '/g/ABC234?dispute=1' }) },
+      waitUntil: (p: Promise<unknown>) => pending.push(p),
+    })
+    await Promise.all(pending)
+    expect(self.registration.showNotification).toHaveBeenCalledWith('T', expect.objectContaining({ data: { url: '/g/ABC234?dispute=1' } }))
+    await click(listeners, '/g/ABC234?dispute=1')
+    expect(self.clients.openWindow).toHaveBeenCalledWith('/g/ABC234?dispute=1')
+  })
+
+  it('a notice url that is not a path on this site is ignored', async () => {
+    const { self, listeners } = loadWorker([])
+    const pending: Promise<unknown>[] = []
+    listeners.push({
+      data: { json: () => ({ type: 'notice', code: 'ABC234', title: 'T', body: 'B', url: 'https://evil.example/' }) },
+      waitUntil: (p: Promise<unknown>) => pending.push(p),
+    })
+    await Promise.all(pending)
+    expect(self.registration.showNotification).toHaveBeenCalledWith('T', expect.objectContaining({ data: { url: '/g/ABC234' } }))
+  })
 })
