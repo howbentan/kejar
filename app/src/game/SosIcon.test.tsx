@@ -194,6 +194,18 @@ describe('SosIcon', () => {
     }
   })
 
+  it('a chaser opening ?dispute=1 gets no sheet, and the link is tidied', () => {
+    window.history.replaceState(null, '', '/g/ABC234?dispute=1')
+    try {
+      const chaser = { ...view, me: { ...view.me, role: 'chaser' as const } }
+      render(<SosIcon code="ABC234" view={chaser} />)
+      expect(screen.queryByText('Need help?')).toBeNull()
+      expect(window.location.search).toBe('')
+    } finally {
+      window.history.replaceState(null, '', '/')
+    }
+  })
+
   it('has no Report a player link any more — that moved to the post-game screen', async () => {
     await openSheet()
     expect(screen.queryByRole('button', { name: 'Report a player' })).toBeNull()

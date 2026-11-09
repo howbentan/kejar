@@ -77,6 +77,8 @@ export default function SosIcon({ code, view }: { code: string; view: View }) {
     params.delete('dispute')
     const rest = params.toString()
     window.history.replaceState(null, '', window.location.pathname + (rest ? `?${rest}` : '') + window.location.hash)
+    // Only a runner can be caught; for anyone else the link just tidies itself.
+    if (view.me.role !== 'runner') return
     preset.current = 'dispute'
     show()
   }, [])

@@ -2274,6 +2274,36 @@ describe('automatic alerts', () => {
     expect(v.alerts).toEqual([])
   })
 
+  it('a runner with no fix at all still gets the push', async () => {
+    const g = await safetyGame()
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    pushes = []
+    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })
+    expect(pushes.filter((p) => p.endpoint === 'https://push/Hafiz' && (p.payload as any).type === 'notice')).toHaveLength(1)
+  })
+
+  it('a fix exactly 20 s old gives no push and no alert', async () => {
+    const { v } = await catchHafizWithFixAge(20)
+    expect(pushes.filter((p) => (p.payload as any).type === 'notice')).toEqual([])
+    expect(v.alerts).toEqual([])
+  })
+
+  it('a fix 21 s old gives a push and an alert', async () => {
+    const { v } = await catchHafizWithFixAge(21)
+    expect(pushes.filter((p) => (p.payload as any).type === 'notice')).toHaveLength(1)
+    expect(v.alerts).toHaveLength(1)
+  })
+
+  it('a catch blocked by a shield sends no push', async () => {
+    const g = await safetyGame()
+    const shield = await store.addPowerUp({ game_id: g.gameId, player_id: g.hafiz.playerId, kind: 'shield', station: 3 })
+    await run('usePowerup', { code: g.code, token: g.hafiz.token, powerupId: shield.id })
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    pushes = []
+    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })).toEqual({ ok: false, reason: 'shielded' })
+    expect(pushes.filter((p) => (p.payload as any).type === 'notice')).toEqual([])
+  })
+
   it('a failing push never undoes the catch (old runner location)', async () => {
     const g = await safetyGame()
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })
