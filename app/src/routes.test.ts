@@ -5,6 +5,7 @@ describe('routeFor', () => {
   it('maps the game pages with their codes', () => {
     expect(routeFor('/')).toEqual({ route: 'home' })
     expect(routeFor('/host/new')).toEqual({ route: 'host-new' })
+    expect(routeFor('/host/kit')).toEqual({ route: 'host-kit' })
     expect(routeFor('/host/ABC234')).toEqual({ route: 'host-lobby', code: 'ABC234' })
     expect(routeFor('/g/abc234')).toEqual({ route: 'game', code: 'ABC234' })
     expect(routeFor('/join/ABC234/')).toEqual({ route: 'join', code: 'ABC234' })

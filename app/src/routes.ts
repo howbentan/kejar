@@ -1,6 +1,7 @@
 export type Route =
   | 'home'
   | 'host-new'
+  | 'host-kit'
   | 'host-lobby'
   | 'game'
   | 'join'
@@ -13,6 +14,7 @@ export type Route =
 const FIXED: Record<string, Route> = {
   '/': 'home',
   '/host/new': 'host-new',
+  '/host/kit': 'host-kit',
   '/print/tags': 'print-tags',
   '/print/card': 'print-card',
 }

@@ -9,6 +9,7 @@ import Join from './screens/Join'
 import MarshalRedeem from './screens/MarshalRedeem'
 import OrganiserRedeem from './screens/OrganiserRedeem'
 import PrintCard from './screens/PrintCard'
+import YourKit from './screens/YourKit'
 import PrintTags from './screens/PrintTags'
 
 export default function App() {
@@ -26,6 +27,8 @@ function Routed() {
       return <Home />
     case 'host-new':
       return <HostNew />
+    case 'host-kit':
+      return <YourKit />
     case 'host-lobby':
       return <HostLobby code={code!} />
     case 'join':

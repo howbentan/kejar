@@ -231,4 +231,8 @@ describe('HostNew', () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith('createOrganiserInvite', { organiserToken: 'ot1', name: 'Partner' }))
     expect(await screen.findByText(`${window.location.origin}/organiser/tok1`)).toBeInTheDocument()
   })
+  it('links to the print-once kit page', async () => {
+    render(<HostNew />)
+    expect(screen.getByRole('link', { name: 'Your kit' }).getAttribute('href')).toBe('/host/kit')
+  })
 })

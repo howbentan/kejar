@@ -208,6 +208,9 @@ export default function HostNew() {
           </p>
         )}
       </div>
+      <a className="muted" href="/host/kit" style={{ textDecoration: 'underline' }}>
+        Your kit
+      </a>
 
       <p className="eyebrow">Play area</p>
       {setup ? (
