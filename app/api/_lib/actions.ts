@@ -187,8 +187,12 @@ function expiredLobby(g: Game, now: number): boolean {
 function holdsCard(g: Game, now: number): boolean {
   if (!g.dato_stash?.card) return false
   if (g.started_at) return phaseAt(g, now).phase !== 'ended'
-  return !expiredLobby(g, now)
+  // A card already hidden stays this lobby's at any age (amended ruling R3): handing it to another game would
+  // leave a real card in the park that claims nothing.
+  return isDropped(g.dato_stash) || !expiredLobby(g, now)
 }
+
+const isDropped = (s: DatoStash | null | undefined) => typeof s?.lat === 'number' && typeof s?.lng === 'number'
 
 /** Each card held by one of the organisation's games, with the game holding it. */
 async function cardHolders(ctx: Ctx, organisationId: string): Promise<Map<string, GameRow>> {
@@ -241,12 +245,23 @@ async function recheckExpiredLobby(ctx: Ctx, game: GameRow, organisationId: stri
   if (!stash?.card || !expiredLobby(game, ctx.now)) return null
   const card = (await ctx.store.secretCards(organisationId)).find((c) => c.id === stash.card!.id)
   const holder = (await cardHolders(ctx, organisationId)).get(stash.card.id)
-  if (card && card.state === 'ready' && (!holder || holder.id === game.id)) {
-    if (card.code !== stash.code) await ctx.store.updateGame(game.id, { dato_stash: { ...stash, code: card.code } })
+  const ours = !!card && card.state !== 'retired' && (!holder || holder.id === game.id)
+  if (isDropped(stash)) {
+    // The ghost-card guard (amended R3): a hidden card is never swapped for one nobody hid. If the hidden card is
+    // no longer this game's to claim with, Dato Seri goes off and the organiser is told.
+    if (ours && card!.code === stash.code) return null
+    await ctx.store.updateGame(game.id, { dato_stash: null, settings: { ...game.settings, legendaries: { ...game.settings.legendaries, dato: 'off' } } })
+    return NO_FREE_CARD_NOTICE
+  }
+  if (ours) {
+    if (card!.code !== stash.code) await ctx.store.updateGame(game.id, { dato_stash: { ...stash, code: card!.code } })
     return null
   }
   return reassignDatoCard(ctx, game, organisationId)
 }
+
+/** The cheap test `state` runs on every poll before paying for a re-check: an expired lobby with an undropped card. */
+const needsRecheck = (g: Game, now: number) => !!g.dato_stash?.card && !isDropped(g.dato_stash) && expiredLobby(g, now)
 
 /** The card a card action names, in the calling organiser's own set. */
 async function requireSecretCard(ctx: Ctx, body: Body): Promise<{ card: SecretCard; organisationId: string }> {
@@ -709,6 +724,11 @@ const state: Action = async (ctx, body) => {
       outside: false,
       left_start: false,
     }
+  }
+  // An expired lobby re-checks its card here too, so the organiser's print link never shows a card another game holds.
+  if (needsRecheck(game, ctx.now)) {
+    const org = (await ctx.store.organiserById((game as GameRow).organiser_id))?.organisation_id
+    if (org) await recheckExpiredLobby(ctx, game as GameRow, org)
   }
   await advance(ctx, game)
   game = (await loadGame(ctx, body)) as Game

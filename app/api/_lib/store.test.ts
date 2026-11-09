@@ -449,8 +449,10 @@ describe('MemoryStore secret card sets', () => {
     await store.createGame({ ...(rest as never), code: 'CCC222', organiser_id: b.id, ended_at: iso(T0) })
     const oldLobby = await store.createGame({ ...(rest as never), code: 'DDD222', organiser_id: b.id, started_at: null })
     expect((await store.unfinishedGames(org.id, iso(T0 - 1))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id].sort())
-    // Made before the cutoff: only the started games are left.
+    // Made before the cutoff: only the started games are left, and a lobby whose stash is dropped.
     expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id].sort())
+    await store.updateGame(oldLobby.id, { dato_stash: { code: 'c', lat: 1, lng: 2, claimedBy: null, claimedAt: null } })
+    expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id].sort())
   })
 })
 

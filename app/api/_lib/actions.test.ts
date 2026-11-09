@@ -3413,6 +3413,65 @@ describe('secret card sets', () => {
       expect((await gameOf(g.code)).dato_stash!.code).toBe((await act(g.organiserToken, 'secretCardCode', 'dato', card.letter)).code)
     })
 
+    const DROP = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+
+    it('a dropped 25-hour-old lobby keeps its card: another game cannot draw it, and it starts with it', async () => {
+      const g = await readyGame({ mode: 'full' })
+      const card = (await cardOf(g.code))!
+      await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...DROP })
+      now = T0 + 25 * HOUR
+      const drawn = []
+      for (let k = 0; k < 2; k++) drawn.push((await cardOf((await make(g.organiserToken)).code))!.id)
+      expect(drawn).not.toContain(card.id)
+      expect((await make(g.organiserToken)).notice).toBe(NOTICE)
+      expect((await run('listSecretCards', { organiserToken: g.organiserToken })).find((c: { legendary: string; letter: string }) => c.legendary === 'dato' && c.letter === card.letter).inGame).toBe(true)
+      expect(await run('start', { code: g.code, organiserToken: g.organiserToken })).toEqual({ startedAt: expect.any(String) })
+      expect(await cardOf(g.code)).toEqual(card)
+      expect((await gameOf(g.code)).dato_stash).toMatchObject(DROP)
+    })
+
+    it('an undropped 25-hour-old lobby still frees its card', async () => {
+      const g = await readyGame({ mode: 'full' })
+      const card = (await cardOf(g.code))!
+      now = T0 + 25 * HOUR
+      const drawn = []
+      for (let k = 0; k < 3; k++) drawn.push((await cardOf((await make(g.organiserToken)).code))!.id)
+      expect(drawn).toContain(card.id)
+    })
+
+    it('the ghost-card guard: a dropped card that is no longer claimable is never swapped for an unhidden one; Dato Seri goes off with the notice', async () => {
+      const g = await readyGame({ mode: 'full' })
+      const card = (await cardOf(g.code))!
+      await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...DROP })
+      now = T0 + 25 * HOUR
+      // Forced: the hidden card is retired behind the lobby's back, while two other cards are free.
+      await store.setSecretCard(card.id, { state: 'retired' })
+      expect(await run('start', { code: g.code, organiserToken: g.organiserToken })).toEqual({ startedAt: expect.any(String), notice: NOTICE })
+      const game = await gameOf(g.code)
+      expect(game.dato_stash ?? null).toBeNull()
+      expect(game.settings.legendaries.dato).toBe('off')
+    })
+
+    it("state on an expired lobby shows the re-checked card, never one another game holds", async () => {
+      const g = await readyGame({ mode: 'full' })
+      const oldCard = (await cardOf(g.code))!
+      now = T0 + 25 * HOUR
+      const made = []
+      for (let k = 0; k < 3; k++) made.push((await make(g.organiserToken)).code)
+      let freed = ''
+      for (const code of made) {
+        const c = (await cardOf(code))!
+        if (c.id !== oldCard.id && !freed) {
+          freed = c.id
+          await store.claimEnd((await gameOf(code)).id, 'runners')
+        }
+      }
+      const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+      const freedCard = (await yellow(g.organiserToken)).find((c) => c.id === freed)!
+      expect(v.datoCard).toEqual({ letter: freedCard.letter, code: freedCard.code })
+      expect((await cardOf(g.code))!.id).toBe(freed)
+    })
+
     it('an old lobby re-checks on setMode and on a drop too', async () => {
       const g = await readyGame({ mode: 'full' })
       now = T0 + 25 * HOUR

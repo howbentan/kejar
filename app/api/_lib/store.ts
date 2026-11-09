@@ -289,7 +289,12 @@ export class MemoryStore implements GameStore {
   async unfinishedGames(organisationId: string, createdAfter: string) {
     const organisers = new Set(this.organiserRows.filter((o) => o.organisation_id === organisationId).map((o) => o.id))
     return this.games
-      .filter((g) => organisers.has(g.organiser_id) && !g.ended_at && (g.started_at || !g.created_at || g.created_at > createdAfter))
+      .filter(
+        (g) =>
+          organisers.has(g.organiser_id) &&
+          !g.ended_at &&
+          (g.started_at || !g.created_at || g.created_at > createdAfter || typeof g.dato_stash?.lat === 'number'),
+      )
       .map((g) => ({ ...g }))
   }
   async secretCards(organisationId: string) {
