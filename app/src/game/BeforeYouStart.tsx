@@ -46,7 +46,6 @@ export default function BeforeYouStart({ code, view, refresh }: { code: string; 
   const shared = (view.kit?.places ?? []).filter((p) => !SECRET_PLACE_IDS.includes(p.id))
   const placed = shared.filter((p) => view.kit?.placed[p.id] === true).length
   const kitDone = shared.length > 0 && placed === shared.length
-  const helpers = ['you', ...marshals.map((m) => m.name)]
 
   const without = [...(view.me.push ? [] : ['You']), ...marshals.filter((m) => !m.pushOn).map((m) => m.name)]
   const sosDone = without.length === 0
@@ -82,7 +81,7 @@ export default function BeforeYouStart({ code, view, refresh }: { code: string; 
       <Check
         label="Kit placed"
         done={kitDone}
-        note={kitDone ? `${placed} of ${shared.length} by ${list(helpers)}` : `${placed} of ${shared.length} placed`}
+        note={`${placed} of ${shared.length} placed`}
       />
       <Check
         label="Helper joined"

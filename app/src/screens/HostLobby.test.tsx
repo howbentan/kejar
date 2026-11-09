@@ -214,6 +214,15 @@ describe('HostLobby mode and checks', () => {
     expect(await screen.findByText('Reprint a yellow card to use Dato Seri.')).toBeInTheDocument()
   })
 
+  it('switching Full to Core with the stash already dropped says so, with no confirm', async () => {
+    const dropped = { lat: 0.002, lng: 0.002, claimedBy: null, claimedAt: null }
+    call.mockImplementation(async (action: string) => (action === 'state' ? { ...fullView, datoStash: dropped } : {}))
+    render(<HostLobby code="ABC234" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Change' }))
+    expect(await screen.findByText('Dato Seri is off for this game. Pick up the yellow card.')).toBeInTheDocument()
+    expect(call).toHaveBeenCalledWith('setMode', { code: 'ABC234', organiserToken: 'h1', mode: 'core' })
+  })
+
   it('shows Before you start, and Start game stays enabled with every check unticked', async () => {
     call.mockImplementation(async (action: string) => (action === 'state' ? fullView : {}))
     render(<HostLobby code="ABC234" />)

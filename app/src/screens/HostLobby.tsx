@@ -61,6 +61,7 @@ export default function HostLobby({ code }: { code: string }) {
         mode: view.settings.mode === 'full' ? 'core' : 'full',
       })
       if (res?.notice) setNotice(res.notice)
+      else if (view.settings.mode === 'full' && view.datoStash) setNotice('Dato Seri is off for this game. Pick up the yellow card.')
       refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))

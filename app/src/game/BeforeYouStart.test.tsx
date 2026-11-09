@@ -53,10 +53,10 @@ describe('BeforeYouStart', () => {
     expect(screen.getByRole('link', { name: 'Walk the park' })).toHaveAttribute('href', '/host/ABC234/walk')
   })
 
-  it('Kit placed ticks once every non-secret item is placed, naming who helped', () => {
+  it('Kit placed ticks once every non-secret item is placed, with no names', () => {
     render(<BeforeYouStart code="ABC234" view={make({ placed: ['station-1', 'penjara'], marshals: [{ name: 'Aina', pushOn: true }] })} refresh={refresh} />)
     expect(row('Kit placed')).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByText('2 of 2 by you and Aina')).toBeInTheDocument()
+    expect(screen.getByText('2 of 2 placed')).toBeInTheDocument()
   })
 
   it('Kit placed stays unticked while something is left, and the secret card does not count', () => {
