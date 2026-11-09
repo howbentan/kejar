@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Organiser setup mockups</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root { --volt: #C6FF3D; --ink: #0A0A0B; --paper: #F5F5F3; --line: #262626;
+    --y1: #FFF27A; --y2: #FFD60A; --y3: #F5B800; --p1: #F0E0FF; --p2: #C9A4FF; --p3: #9B5DE5; --plum: #2B0B45; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #050505; color: var(--paper); font-family: 'Geist', system-ui, sans-serif; }
+  header { max-width: 1180px; margin: 0 auto; padding: 32px 20px 8px; }
+  header h1 { font-size: 34px; letter-spacing: -0.04em; margin: 0 0 6px; }
+  header h1 span { color: var(--volt); }
+  header p { opacity: .7; max-width: 760px; line-height: 1.45; margin: 4px 0; font-size: 14.5px; }
+  .ctl { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0 4px; align-items: center; }
+  .ctl b { font: 500 10px 'Geist Mono', monospace; letter-spacing: .16em; opacity: .6; margin-right: 4px; }
+  .pill { border: 1px solid #333; border-radius: 999px; padding: 7px 13px; font-size: 13px; font-weight: 700; cursor: pointer; background: transparent; color: var(--paper); }
+  .pill.on { background: var(--paper); color: var(--ink); border-color: var(--paper); }
+  .grid { max-width: 1180px; margin: 0 auto; padding: 12px 20px 60px; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 28px 20px; }
+  .cell h3 { font-size: 15px; margin: 12px 4px 4px; letter-spacing: -0.02em; }
+  .cell p.note { font-size: 12.5px; opacity: .65; margin: 0 4px; line-height: 1.4; }
+  .new { display: inline-block; font: 500 9px 'Geist Mono', monospace; letter-spacing: .12em; color: var(--ink); background: var(--volt); border-radius: 4px; padding: 2px 5px; margin-left: 6px; vertical-align: 2px; }
+  .new.p { background: var(--p2); color: var(--plum); }
+
+  .phone { width: 290px; height: 600px; border-radius: 34px; background: var(--ink); border: 2px solid #2a2a2a; position: relative; overflow: hidden; margin: 0 auto; }
+  .pad { position: absolute; inset: 0; padding: 18px 15px 15px; display: flex; flex-direction: column; overflow-y: auto; scrollbar-width: none; }
+  .eb { font: 500 9.5px 'Geist Mono', monospace; letter-spacing: .2em; color: rgba(245,245,243,.55); }
+  h4 { margin: 4px 0 6px; font-size: 25px; font-weight: 800; letter-spacing: -0.05em; line-height: 1.05; }
+  h4 span { color: var(--volt); }
+  .muted { font-size: 12px; opacity: .65; margin: 0 0 10px; line-height: 1.4; }
+  .prog { display: flex; gap: 4px; margin: 8px 0 12px; }
+  .prog i { flex: 1; height: 4px; border-radius: 2px; background: #2a2a2a; } .prog i.on { background: var(--volt); }
+  .btn { width: 100%; border-radius: 999px; padding: 13px; font: 800 15px 'Geist', sans-serif; border: 0; cursor: pointer; background: var(--volt); color: var(--ink); margin-top: auto; }
+  .btn.ghost { background: transparent; color: var(--paper); border: 1px solid #444; font-weight: 600; margin-top: 8px; }
+  .row2 { display: flex; gap: 8px; margin-top: auto; } .row2 .btn { margin-top: 0; } .row2 .ghost { flex: 0 0 34%; }
+  .link { font-size: 12px; opacity: .6; text-decoration: underline; text-align: center; margin-top: 10px; cursor: pointer; }
+
+  .park { border: 1.5px solid #333; border-radius: 14px; padding: 11px 12px; margin-bottom: 8px; cursor: pointer; }
+  .park.on { border-color: var(--volt); background: rgba(198,255,61,.06); }
+  .park b { font-size: 14.5px; } .park small { display: block; font-size: 11px; opacity: .6; margin-top: 2px; }
+  .search { border: 1px solid #333; border-radius: 12px; padding: 10px 12px; font-size: 13px; opacity: .55; margin-bottom: 10px; }
+
+  .mode { border: 1.5px solid #333; border-radius: 18px; padding: 12px; margin-bottom: 10px; cursor: pointer; }
+  .mode.on { border-color: var(--volt); background: rgba(198,255,61,.06); }
+  .mode .top { display: flex; justify-content: space-between; align-items: center; }
+  .mode b { font-size: 19px; letter-spacing: -0.03em; } .mode .tag { font: 500 8.5px 'Geist Mono', monospace; letter-spacing: .14em; color: var(--volt); }
+  .mode p { font-size: 12px; opacity: .78; margin: 5px 0 7px; line-height: 1.35; }
+  .stk-row { display: flex; gap: 1px; flex-wrap: wrap; }
+  .stk-row svg { width: 33px; height: 33px; }
+
+  .seg { display: flex; border: 1px solid #333; border-radius: 999px; padding: 3px; gap: 3px; margin: 5px 0 8px; }
+  .seg div { flex: 1; text-align: center; border-radius: 999px; padding: 8px 4px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .seg div.on { background: var(--paper); color: var(--ink); }
+  .seg div small { display: block; font: 500 8.5px 'Geist Mono', monospace; opacity: .6; letter-spacing: .06em; }
+  .lbl { font: 500 9.5px 'Geist Mono', monospace; letter-spacing: .16em; opacity: .6; margin-top: 8px; }
+  .sw { display: flex; justify-content: space-between; align-items: center; gap: 8px; border-top: 1px solid #222; padding: 10px 0; font-size: 13px; }
+  .sw small { display: block; opacity: .6; font-size: 11px; margin-top: 2px; line-height: 1.3; }
+  .tg { width: 38px; height: 22px; border-radius: 999px; background: #333; position: relative; flex: none; cursor: pointer; }
+  .tg::after { content: ''; position: absolute; left: 2px; top: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--paper); transition: left .2s; }
+  .tg.on { background: var(--volt); } .tg.on::after { left: 18px; background: var(--ink); }
+
+  .leg { border-radius: 14px; padding: 10px 11px 6px; margin: 6px 0 8px; border: 1.5px solid; }
+  .leg.y { border-color: var(--y2); background: rgba(255,214,10,.06); }
+  .leg.p { border-color: var(--p3); background: rgba(155,93,229,.09); }
+  .leg .hd { display: flex; align-items: center; gap: 8px; }
+  .leg .hd svg { width: 38px; height: 38px; flex: none; }
+  .leg .hd b { font-size: 14.5px; } .leg .hd small { display: block; font: 500 8.5px 'Geist Mono', monospace; letter-spacing: .12em; opacity: .7; }
+  .leg.y .hd small { color: var(--y2); } .leg.p .hd small { color: var(--p2); }
+  .leg .seg { margin: 6px 0 4px; } .leg .say { font-size: 11px; opacity: .7; margin: 0 0 4px; line-height: 1.35; }
+  .leg.y .seg div.on { background: var(--y2); color: #1a1600; }
+  .leg.p .seg div.on { background: var(--p2); color: var(--plum); }
+  .soon { font: 500 8px 'Geist Mono', monospace; letter-spacing: .1em; background: var(--p2); color: var(--plum); padding: 2px 5px; border-radius: 4px; margin-left: 4px; }
+
+  .crew { border: 1px solid var(--line); border-radius: 14px; padding: 10px; margin-bottom: 8px; display: flex; gap: 10px; align-items: center; }
+  .crew .av { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; flex: none; background: #F28C28; color: var(--ink); }
+  .crew b { font-size: 13.5px; } .crew small { display: block; font-size: 11px; opacity: .65; }
+  .crew .st { margin-left: auto; font: 500 8.5px 'Geist Mono', monospace; letter-spacing: .1em; }
+  .crew .st.ok { color: var(--volt); } .crew .st.inv { opacity: .7; }
+  .add { border: 1px dashed #444; border-radius: 14px; padding: 9px; text-align: center; font-size: 12.5px; opacity: .7; cursor: pointer; margin-bottom: 8px; }
+
+  .grp { font: 500 9.5px 'Geist Mono', monospace; letter-spacing: .18em; opacity: .5; margin: 10px 0 2px; }
+  .ck { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid #1d1d1d; font-size: 12.5px; cursor: pointer; position: relative; }
+  .ck .bx { width: 19px; height: 19px; border-radius: 5px; border: 1.5px solid #555; flex: none; margin-top: 1px; position: relative; }
+  .ck.done .bx { border-color: var(--volt); }
+  .ck.done .txt { opacity: .5; text-decoration: line-through; }
+  .ck small { display: block; opacity: .6; font-size: 10.5px; }
+  .ck .pr { margin-left: auto; font: 500 9px 'Geist Mono', monospace; letter-spacing: .1em; border: 1px solid #444; border-radius: 999px; padding: 3px 7px; flex: none; }
+  .ck.y .txt b { color: var(--y2); } .ck.p .txt b { color: var(--p2); }
+  .ck svg.tick { position: absolute; left: -4px; top: -1px; width: 30px; height: 27px; overflow: visible; filter: url(#wob); }
+  .ck svg.tick path { fill: none; stroke: var(--volt); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 60; stroke-dashoffset: 60; animation: draw .35s ease-out forwards; }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .ready { text-align: center; font-weight: 800; font-size: 21px; letter-spacing: -0.04em; margin: 12px 0 4px; position: relative; }
+  .ready svg { position: absolute; left: 50%; top: 50%; width: 230px; height: 56px; transform: translate(-50%, -50%); overflow: visible; filter: url(#wob); }
+  .ready svg path { fill: none; stroke: var(--volt); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 600; stroke-dashoffset: 600; animation: draw .9s ease-out forwards; }
+
+  .map { position: relative; height: 270px; border-radius: 18px; background: #121412; border: 1px solid var(--line); overflow: hidden; margin: 6px 0 10px; flex: none; }
+  .map svg.parkmap { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .pin { position: absolute; transform: translate(-50%, -50%); width: 24px; height: 24px; border-radius: 7px; border: 1.5px solid var(--volt); display: grid; place-items: center; font: 600 10.5px 'Geist Mono', monospace; color: var(--volt); background: var(--ink); }
+  .pin.done { background: var(--volt); color: var(--ink); }
+  .pin.next { animation: pulse 1.2s ease-in-out infinite; } @keyframes pulse { 50% { box-shadow: 0 0 0 7px rgba(198,255,61,.25) } }
+  .pin.pen { width: auto; padding: 0 5px; font-size: 8px; letter-spacing: .08em; }
+  .pin.ds { border-color: var(--y2); color: var(--y2); } .pin.bm { border-color: var(--p2); color: var(--p2); }
+  .pin.ds.next { animation-name: pulsey; } @keyframes pulsey { 50% { box-shadow: 0 0 0 7px rgba(255,214,10,.3) } }
+  .pin.bm.next { animation-name: pulsep; } @keyframes pulsep { 50% { box-shadow: 0 0 0 7px rgba(155,93,229,.35) } }
+  .me { position: absolute; width: 13px; height: 13px; border-radius: 50%; background: var(--paper); border: 2px solid var(--ink); transform: translate(-50%, -50%); box-shadow: 0 0 0 5px rgba(245,245,243,.2); }
+  .nextcard { border-radius: 16px; background: #141614; border: 1px solid var(--line); padding: 12px; }
+  .nextcard .d { font-size: 25px; font-weight: 800; letter-spacing: -0.05em; margin: 2px 0; }
+  .nextcard p { margin: 2px 0 0; font-size: 12px; opacity: .75; line-height: 1.35; }
+  .nextcard.here { background: var(--volt); color: var(--ink); border-color: var(--volt); }
+  .nextcard.here .eb { color: rgba(10,10,11,.6); } .nextcard.here p { opacity: .85; }
+  .nextcard.ds { border-color: var(--y2); } .nextcard.ds .eb { color: var(--y2); }
+  .nextcard.ds.here { background: linear-gradient(135deg, var(--y1), var(--y2) 50%, var(--y3)); color: #1a1600; }
+  .nextcard.ds.here .eb { color: rgba(26,22,0,.6); }
+  .nextcard.bm { border-color: var(--p3); } .nextcard.bm .eb { color: var(--p2); }
+  .nextcard.bm.here { background: linear-gradient(135deg, var(--p1), var(--p2) 50%, var(--p3)); color: var(--plum); }
+  .nextcard.bm.here .eb { color: rgba(43,11,69,.6); }
+  .btn.y { background: var(--y2); color: #1a1600; } .btn.p { background: var(--p3); color: #fff; }
+  .btn.dark { background: var(--ink); color: var(--volt); }
+
+  .code { display: flex; align-items: baseline; gap: 8px; }
+  .code .c { font: 600 30px 'Geist Mono', monospace; letter-spacing: .12em; }
+  .badge { font: 500 9px 'Geist Mono', monospace; letter-spacing: .14em; border: 1px solid var(--volt); color: var(--volt); border-radius: 5px; padding: 2px 6px; }
+  .chg { font-size: 11px; opacity: .6; text-decoration: underline; cursor: pointer; }
+  .qr { width: 110px; height: 110px; background: var(--paper); border-radius: 12px; margin: 8px 0; display: grid; place-items: center; color: var(--ink); font: 500 9px 'Geist Mono', monospace; }
+  .players { font-size: 12px; opacity: .7; margin: 2px 0 8px; }
+  .byos { border: 1px solid var(--line); border-radius: 16px; padding: 10px 11px 6px; margin-bottom: 8px; }
+  .byos .ck { font-size: 12.5px; } .byos .ck:last-of-type { border-bottom: 0; }
+  .warn { font-size: 10.5px; opacity: .6; margin: 6px 0 2px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <filter id="wob" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7"/>
+      <feDisplacementMap in="SourceGraphic" scale="3.2"/>
+    </filter>
+    <filter id="stk" x="-25%" y="-25%" width="150%" height="150%">
+      <feMorphology in="SourceAlpha" operator="dilate" radius="4.5" result="d"/>
+      <feFlood flood-color="#F5F5F3"/><feComposite in2="d" operator="in" result="w"/>
+      <feOffset in="w" dy="3.5" result="o"/><feFlood flood-color="#000" flood-opacity=".55"/><feComposite in2="o" operator="in" result="sh"/>
+      <feMerge><feMergeNode in="sh"/><feMergeNode in="w"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+</svg>
+
+<header>
+  <h1>Organiser setup<span>.</span></h1>
+  <p>Mockups of the proposed setup flow. Two changes from the plan: the kit is <b>printed once and reused</b> (no printing on event day), and Full mode gets a <b>Legendary cards</b> setting covering both <b style="color:#FFD60A">Dato Seri</b> (for Dikejar) and <b style="color:#C9A4FF">Bomoh</b> (for Kejar), each <i>Off</i> or <i>Hidden stash</i>. Bomoh isn't built yet; these screens show where it would slot in.</p>
+  <p>Everything is tappable. Use the switches below to see how the screens change.</p>
+  <div class="ctl">
+    <b>MODE</b><button class="pill on" data-mode="core">Core</button><button class="pill" data-mode="full">Full</button>
+    <b style="margin-left:14px">DATO SERI</b><button class="pill" data-dato="off">Off</button><button class="pill on" data-dato="stash">Stash</button>
+    <b style="margin-left:14px">BOMOH</b><button class="pill" data-bomoh="off">Off</button><button class="pill on" data-bomoh="stash">Stash</button>
+  </div>
+</header>
+
+<main class="grid">
+  <!-- 0 your kit, print once -->
+  <section class="cell">
+    <div class="phone"><div class="pad">
+      <div class="eb">ORGANISER · YOUR KIT</div>
+      <h4>Print once<span>.</span></h4>
+      <p class="muted">Laminate it and reuse it every game.</p>
+      <div class="grp">EVERY GAME</div>
+      <div class="ck"><div class="txt">Armbands #01–#40</div><span class="pr">PRINT</span></div>
+      <div class="ck"><div class="txt">Station cards 1–8</div><span class="pr">PRINT</span></div>
+      <div class="ck"><div class="txt">Penjara card</div><span class="pr">PRINT</span></div>
+      <div data-show="anylegfull">
+        <div class="grp">SECRET CARDS · FULL MODE</div>
+        <div class="ck y"><div class="txt"><b>Yellow A</b><small>Found on 2 Nov · retired</small></div><span class="pr">REPRINT</span></div>
+        <div class="ck y"><div class="txt"><b>Yellow B</b><small>In today's game · <u>Retire</u></small></div><span class="pr">PRINT</span></div>
+        <div class="ck y"><div class="txt"><b>Yellow C</b><small>New code · print it, then confirm</small></div><span class="pr">I'VE PRINTED IT</span></div>
+        <div class="ck p"><div class="txt"><b>Purple A</b><small>Ready · <u>Retire</u></small></div><span class="pr">PRINT</span></div>
+        <div class="ck p"><div class="txt"><b>Purple B</b><small>Ready</small></div><span class="pr">PRINT</span></div>
+        <div class="ck p"><div class="txt"><b>Purple C</b><small>Ready</small></div><span class="pr">PRINT</span></div>
+      </div>
+    </div></div>
+    <h3>0. Your kit, printed once <span class="new">NEW</span></h3>
+    <p class="note">Armbands, station cards and the Penjara card are the same in every game, so they print once and get laminated. The secret cards come as a set of three per legendary. Each game uses one the app picks, and a card is reused until someone finds it, then it's retired and you reprint just that one at home. A reprint only counts once you tap "I've printed it". Each player gets 3 wrong scans of a secret card per game, so a photographed copy can't be walked around the zone.</p>
+  </section>
+
+  <!-- 1 park -->
+  <section class="cell">
+    <div class="phone"><div class="pad">
+      <div class="eb">NEW GAME · STEP 1 OF 5</div>
+      <div class="prog" data-step="1"></div>
+      <h4>Where are you<span>?</span></h4>
+      <div class="search">Search a park by name</div>
+      <div class="lbl" style="margin-top:0">SAVED PARKS</div>
+      <div class="park on" data-park><b>Taman Tasik Titiwangsa</b><small>8 stations · Penjara · start · lakes checked</small></div>
+      <div class="park" data-park><b>Desa ParkCity Central Park</b><small>5 stations · Penjara · start</small></div>
+      <div class="park" data-park><b>Bukit Kiara, lower loop</b><small>6 stations · Penjara · start</small></div>
+      <button class="btn">Next</button>
+      <div class="link">Invite another organiser</div>
+    </div></div>
+    <h3>1. Park</h3>
+    <p class="note">Today's saved-parks screen, unchanged. "Invite another organiser" shrinks to a small link at the bottom.</p>
+  </section>
+
+  <!-- 2 mode -->
+  <section class="cell">
+    <div class="phone"><div class="pad">
+      <div class="eb">NEW GAME · STEP 2 OF 5</div>
+      <div class="prog" data-step="2"></div>
+      <h4>Which game<span>?</span></h4>
+      <p class="muted">Taman Tasik Titiwangsa</p>
+      <div class="mode on" data-pick="core"><div class="top"><b>Core</b><span class="tag">BEST FOR FIRST-TIMERS</span></div>
+        <p>The chase, check-ins and Penjara, plus 4 simple power-ups. Learnable in 5 minutes.</p><div class="stk-row" data-stk="durian,ponteng,rempit,guard"></div></div>
+      <div class="mode" data-pick="full"><div class="top"><b>Full</b><span class="tag">FOR REGULARS</span></div>
+        <p>Everything in Core, plus 4 more power-ups and two secret legendaries.</p><div class="stk-row" data-stk="gostan,durian,ponteng,toyol,grab,rempit,guard,along,dato,bomoh"></div></div>
+      <div class="row2"><button class="btn ghost">Back</button><button class="btn">Next</button></div>
+    </div></div>
+    <h3>2. Core or Full <span class="new p">BOMOH ADDED</span></h3>
+    <p class="note">Full's line becomes "two secret legendaries", and its sticker row shows Bomoh after Dato Seri.</p>
+  </section>
+
+  <!-- 3 settings -->
+  <section class="cell">
+    <div class="phone"><div class="pad">
+      <div class="eb">NEW GAME · STEP 3 OF 5</div>
+      <div class="prog" data-step="3"></div>
+      <h4>How long<span>?</span></h4>
+      <div class="seg" data-seg><div>Quick<small>30 MIN</small></div><div class="on">Standard<small>45 MIN</small></div><div>Long<small>60 MIN</small></div></div>
+      <p class="muted" style="margin-top:-2px">Hide 5 min · ping every 5 min · Penjara view 2 min behind. <u>Change</u></p>
+      <div class="lbl">EXPECTED PLAYERS</div>
+      <div class="seg" data-seg><div class="on">Up to 20</div><div>21–30</div><div>31–40</div></div>
+      <div data-show="full">
+        <div class="lbl">LEGENDARY CARDS · SECRET FROM PLAYERS</div>
+        <div class="leg y">
+          <div class="hd"><span data-stk1="dato"></span><div><b>Dato Seri</b><small>FOR DIKEJAR · YELLOW</small></div></div>
+          <div class="seg" data-legseg="dato"><div data-v="off">Off</div><div data-v="stash" class="on">Hidden stash</div></div>
+          <p class="say" data-say="dato">You hide a QR card. The first runner to find it can free themselves and 2 friends from Penjara.</p>
+        </div>
+        <div class="leg p">
+          <div class="hd"><span data-stk1="bomoh"></span><div><b>Bomoh <span class="soon">NOT BUILT YET</span></b><small>FOR KEJAR · PURPLE</small></div></div>
+          <div class="seg" data-legseg="bomoh"><div data-v="off">Off</div><div data-v="stash" class="on">Hidden stash</div></div>
+          <p class="say" data-say="bomoh">You hide a second QR card. The first chaser to find it sees every free runner live for 1 minute, or until the end in the last 5 minutes.</p>
+        </div>
+        <div class="sw"><div>Dikejar can see Kejar at check-in<small>Where chasers were when the phone buzzed</small></div><div class="tg" data-tg></div></div>
+      </div>
+      <p class="muted" data-show="core" style="margin-top:6px">No extra settings in Core.</p>
+      <div class="row2"><button class="btn ghost">Back</button><button class="btn">Create game</button></div>
+    </div></div>
+    <h3>3. Settings <span class="new p">LEGENDARY CARDS</span></h3>
+    <p class="note">Switch the page to Full to see it. The two legendaries sit together, each with its own colour, and each one can be turned off on its own. Create game happens here, so the next two steps can send invites and save ticks.</p>
+  </section>
+
+  <!-- 4 crew -->
+  <section class="cell">
+    <div class="phone"><div class="pad">
+      <div class="eb">TASIK · STEP 4 OF 5</div>
+      <div class="prog" data-step="4"></div>
+      <h4>Your crew<span>.</span></h4>
+      <p class="muted">You plus 1 helper for up to 20 players.</p>
+      <div class="crew"><div class="av">B</div><div><b>You</b><small>Roaming marshal · gets every SOS</small></div><span class="st ok">READY</span></div>
+      <div class="crew"><div class="av" style="background:#333;color:var(--paper)">?</div><div><b>Helper at Penjara</b><small>Marshal · plays Pak Pulis</small></div><span class="st inv">INVITE</span></div>
+      <div class="add" data-add>+ Add a marshal</div>
+      <button class="btn">Send invite links</button>
+      <button class="btn ghost">Next</button>
+    </div></div>
+    <h3>4. Crew</h3>
+    <p class="note">Each invite link is personal and goes out through the phone's share sheet (WhatsApp or anything else). On a laptop it copies the links instead.</p>
+  </section>
+
+  <!-- 5 kit -->
+  <section class="cell">
+    <div class="phone"><div class="pad" data-kit>
+      <div class="eb">TASIK · STEP 5 OF 5</div>
+      <div class="prog" data-step="5"></div>
+      <h4>Pack<span>.</span></h4>
+      <p class="muted">From your printed kit. Nothing to print today.</p>
+      <div class="grp">PACK</div>
+      <div class="ck"><div class="bx"></div><div class="txt">Armbands #01–#40</div></div>
+      <div class="ck"><div class="bx"></div><div class="txt">4 lime vests</div></div>
+      <div class="ck"><div class="bx"></div><div class="txt">2 marshal vests</div></div>
+      <div class="ck"><div class="bx"></div><div class="txt">Station cards 1–8</div></div>
+      <div class="ck"><div class="bx"></div><div class="txt">Penjara card</div></div>
+      <div class="ck y" data-show="dato"><div class="bx"></div><div class="txt"><b>Yellow card B</b> (secret)</div></div>
+      <div class="ck p" data-show="bomoh"><div class="bx"></div><div class="txt"><b>Purple card A</b> (secret)</div></div>
+      <div class="ck"><div class="bx"></div><div class="txt">Tape, zip bags, power bank</div></div>
+      <div class="grp">ON THE DAY</div>
+      <div class="ck"><div class="bx"></div><div class="txt">Walk the park</div><span class="pr">OPEN</span></div>
+      <div class="ck"><div class="bx"></div><div class="txt">Brief your helper<small>Penjara, dares, SOS</small></div></div>
+      <div class="ready" data-ready hidden>Ready for event day<svg viewBox="0 0 230 56"><path d="M18 30 C 22 8, 200 2, 214 24 C 226 46, 40 56, 14 36 C 6 28, 30 14, 60 12"/></svg></div>
+      <button class="btn" style="margin-top:14px">Go to the lobby</button>
+    </div></div>
+    <h3>5. Pack <span class="new">NO PRINTING</span></h3>
+    <p class="note">A packing list from the kit you printed once. Games cap at 40 players, so you always bring armbands #01–#40. The app picks which secret card to bring (here, yellow card B).</p>
+  </section>
+
+  <!-- walk: next -->
+  <section class="cell">
+    <div class="phone"><div class="pad">
+      <div class="eb">WALK THE PARK</div>
+      <div class="map" data-map="2"></div>
+      <div class="nextcard">
+        <div class="eb">NEXT · 2 OF 9</div>
+        <div class="d">Station 2</div>
+        <p>210 M · EAST</p>
+      </div>
+      <button class="btn ghost" style="margin-top:auto">Back to the lobby</button>
+    </div></div>
+    <h3>Walk the park: on the way</h3>
+    <p class="note">One map, one card: the next thing to place, with distance and direction. The next pin pulses, and placed ones fill lime.</p>
+  </section>
+
+  <!-- walk: here -->
+  <section class="cell">
+    <div class="phone"><div class="pad">
+      <div class="eb">WALK THE PARK</div>
+      <div class="map" data-map="2h"></div>
+      <div class="nextcard here">
+        <div class="eb">YOU'RE HERE · 8 M</div>
+        <div class="d">Tape Station 2 here.</div>
+        <p>At eye level, facing the path.</p>
+      </div>
+      <button class="btn" style="margin-top:auto">Station 2 is up</button>
+    </div></div>
+    <h3>Walk the park: you're there</h3>
+    <p class="note">Within 15 m the card turns lime. One tap marks it placed, and your helper's list ticks too.</p>
+  </section>
+
+  <!-- walk: dato -->
+  <section class="cell" data-show="dato">
+    <div class="phone"><div class="pad">
+      <div class="eb">WALK THE PARK · ONLY YOU SEE THIS</div>
+      <div class="map" data-map="ds"></div>
+      <div class="nextcard ds here">
+        <div class="eb">SECRET · 8 OF 9</div>
+        <div class="d">Hide yellow card B.</div>
+        <p>Hide it somewhere sneaky. Under a bench, behind a sign.</p>
+      </div>
+      <button class="btn y" style="margin-top:auto">Drop Dato Seri here</button>
+    </div></div>
+    <h3>The Dato Seri stash</h3>
+    <p class="note">Near the end, in yellow, organiser only. Any spot nearby works, and this tap saves the phone's position as the stash.</p>
+  </section>
+
+  <!-- walk: bomoh -->
+  <section class="cell" data-show="bomoh">
+    <div class="phone"><div class="pad">
+      <div class="eb">WALK THE PARK · ONLY YOU SEE THIS</div>
+      <div class="map" data-map="bm"></div>
+      <div class="nextcard bm here">
+        <div class="eb">SECRET · 9 OF 9</div>
+        <div class="d">Hide purple card A.</div>
+        <p>Somewhere quiet, away from the yellow one. Behind a tree, under a bin.</p>
+      </div>
+      <button class="btn p" style="margin-top:auto">Drop Bomoh here</button>
+    </div></div>
+    <h3>The Bomoh stash <span class="new p">NEW</span></h3>
+    <p class="note">The same step in purple, last of all. Your helper's walk never shows either secret card, and its count leaves them out ("2 of 7").</p>
+  </section>
+
+  <!-- lobby -->
+  <section class="cell">
+    <div class="phone"><div class="pad">
+      <div class="eb">KEJAR · LOBBY</div>
+      <div class="code"><span class="c">K7Q2MX</span><span class="badge" data-badge>CORE</span><span class="chg">Change</span></div>
+      <div class="qr">SCAN TO JOIN</div>
+      <div class="players">14 players · 2 marshals</div>
+      <div class="byos">
+        <div class="eb" style="margin-bottom:2px">BEFORE YOU START</div>
+        <div class="ck done"><div class="bx"></div><div class="txt">Kit placed<small>9 of 9 by you and Aina</small></div></div>
+        <div class="ck done"><div class="bx"></div><div class="txt">Helper joined<small>Aina · Penjara</small></div></div>
+        <div class="ck"><div class="bx"></div><div class="txt">SOS alerts on<small>Aina hasn't turned them on</small></div></div>
+        <div class="ck"><div class="bx"></div><div class="txt">Brief the players<small>Tap when you've told them the rules</small></div></div>
+        <p class="warn">Unticked items warn you, but never block Start.</p>
+      </div>
+      <div class="link" style="margin:0 0 8px">Kit list · Walk the park</div>
+      <button class="btn">Shuffle roles</button>
+      <button class="btn ghost">Start game</button>
+    </div></div>
+    <h3>The lobby</h3>
+    <p class="note">The mode badge and Change sit next to the code (before the game starts only). Four checks warn but never block. "Brief the players" is a simple tick until the how-to-play card is designed.</p>
+  </section>
+</main>
+
+<script src="art.js"></script>
+<script>
+  const state = { mode: 'core', dato: 'stash', bomoh: 'stash' }
+  const sticker = (k) => `<svg viewBox="-8 -6 116 116"><g filter="url(#stk)"><g filter="url(#wob)">${window.ART[k] ?? ''}</g></g></svg>`
+  const TICK = '<svg class="tick" viewBox="0 0 30 27"><path d="M5 14 L12 21 L26 4"/></svg>'
+
+  document.querySelectorAll('[data-stk]').forEach((el) => { el.innerHTML = el.dataset.stk.split(',').map(sticker).join('') })
+  document.querySelectorAll('[data-stk1]').forEach((el) => { el.innerHTML = sticker(el.dataset.stk1) })
+  document.querySelectorAll('[data-step]').forEach((el) => {
+    const n = Number(el.dataset.step); el.innerHTML = [1, 2, 3, 4, 5].map((i) => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')
+  })
+
+  // Map: a park outline, numbered pins, Penjara, the two stashes, and "you".
+  const PINS = [[22, 30, '1'], [62, 22, '2'], [80, 46, '3'], [70, 74, '4'], [40, 80, '5'], [18, 60, '6'], [48, 50, 'PENJARA', 'pen']]
+  function drawMap(el) {
+    const v = el.dataset.map, done = { '2': 1, '2h': 1, ds: 7, bm: 8 }[v]
+    const stash = v === 'ds' ? [56, 64, '?', 'ds'] : v === 'bm' ? [30, 46, '?', 'bm'] : null
+    const pins = [...PINS]
+    if (v === 'bm') pins.push([56, 64, '?', 'ds'])
+    if (stash) pins.push(stash)
+    const me = { '2': [46, 38], '2h': [60, 25], ds: [53, 62], bm: [32, 48] }[v]
+    el.innerHTML = `<svg class="parkmap" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <path d="M8 18 Q20 6 50 8 Q86 6 92 30 Q98 62 84 86 Q60 98 30 92 Q6 86 6 56 Z" fill="rgba(198,255,61,.05)" stroke="rgba(198,255,61,.5)" stroke-width=".6" stroke-dasharray="2 1.5"/>
+      <ellipse cx="74" cy="60" rx="9" ry="6" fill="#16222c"/></svg>` +
+      pins.map(([x, y, t, k], i) => {
+        const cls = ['pin', k ?? '', i < done ? 'done' : '', (stash ? pins.length - 1 : done) === i ? 'next' : ''].join(' ')
+        return `<div class="${cls}" style="left:${x}%;top:${y}%">${t}</div>`
+      }).join('') + `<div class="me" style="left:${me[0]}%;top:${me[1]}%"></div>`
+  }
+  document.querySelectorAll('[data-map]').forEach(drawMap)
+
+  // Small interactions inside the phones.
+  document.querySelectorAll('[data-park]').forEach((p) => p.onclick = () => { document.querySelectorAll('[data-park]').forEach((q) => q.classList.remove('on')); p.classList.add('on') })
+  document.querySelectorAll('[data-seg]').forEach((s) => s.querySelectorAll('div').forEach((d) => d.onclick = () => { s.querySelectorAll('div').forEach((x) => x.classList.remove('on')); d.classList.add('on') }))
+  document.querySelectorAll('[data-tg]').forEach((t) => t.onclick = () => t.classList.toggle('on'))
+  document.querySelectorAll('[data-pick]').forEach((m) => m.onclick = () => set({ mode: m.dataset.pick }))
+  document.querySelectorAll('[data-legseg]').forEach((s) => s.querySelectorAll('div').forEach((d) => d.onclick = () => set({ [s.dataset.legseg]: d.dataset.v })))
+  document.querySelectorAll('[data-add]').forEach((a) => a.onclick = () => {
+    a.insertAdjacentHTML('beforebegin', '<div class="crew"><div class="av" style="background:#333;color:var(--paper)">?</div><div><b>Marshal</b><small>Roams a side of the park</small></div><span class="st inv">INVITE</span></div>')
+  })
+  const kit = document.querySelector('[data-kit]')
+  kit.querySelectorAll('.ck').forEach((c) => c.onclick = () => {
+    c.classList.toggle('done')
+    c.querySelector('.tick')?.remove()
+    if (c.classList.contains('done')) c.querySelector('.bx').insertAdjacentHTML('afterend', TICK)
+    const items = [...kit.querySelectorAll('.ck')].filter((x) => x.offsetParent !== null)
+    kit.querySelector('[data-ready]').hidden = !items.every((x) => x.classList.contains('done'))
+  })
+  document.querySelectorAll('.byos .ck.done .bx').forEach((b) => b.insertAdjacentHTML('afterend', TICK))
+
+  document.querySelectorAll('[data-mode]').forEach((b) => b.onclick = () => set({ mode: b.dataset.mode }))
+  document.querySelectorAll('[data-dato]').forEach((b) => b.onclick = () => set({ dato: b.dataset.dato }))
+  document.querySelectorAll('[data-bomoh]').forEach((b) => b.onclick = () => set({ bomoh: b.dataset.bomoh }))
+
+  function set(patch) {
+    Object.assign(state, patch)
+    const full = state.mode === 'full', dato = full && state.dato === 'stash', bomoh = full && state.bomoh === 'stash'
+    const on = { core: !full, full, dato, bomoh, anyleg: dato || bomoh, anylegfull: true }
+    document.querySelectorAll('[data-show]').forEach((el) => { el.style.display = on[el.dataset.show] ? '' : 'none' })
+    document.querySelectorAll('[data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === state.mode))
+    document.querySelectorAll('[data-dato]').forEach((b) => b.classList.toggle('on', b.dataset.dato === state.dato))
+    document.querySelectorAll('[data-bomoh]').forEach((b) => b.classList.toggle('on', b.dataset.bomoh === state.bomoh))
+    document.querySelectorAll('[data-pick]').forEach((m) => m.classList.toggle('on', m.dataset.pick === state.mode))
+    document.querySelectorAll('[data-legseg]').forEach((s) => s.querySelectorAll('div').forEach((d) => d.classList.toggle('on', d.dataset.v === state[s.dataset.legseg])))
+    document.querySelectorAll('[data-say]').forEach((p) => { p.style.opacity = state[p.dataset.say] === 'off' ? .35 : '' })
+    document.querySelector('[data-badge]').textContent = full ? 'FULL' : 'CORE'
+  }
+  set({})
+</script>
+</body>
+</html>
