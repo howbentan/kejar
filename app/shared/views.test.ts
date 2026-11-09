@@ -294,6 +294,10 @@ describe('check-in state', () => {
     expect(checkin(jailed, { players: [chaser, jailed, hafiz, wei, siti] })).toBeNull()
     expect(checkin(aina, { now: T0 + 3 * MIN, pings: [] })).toBeNull()
   })
+  it('is null for a runner disqualified for Luar Garisan', () => {
+    const out = { ...hafiz, disqualified_at: new Date(T0 + 12 * MIN).toISOString() }
+    expect(checkin(out, { now: T0 + 16 * MIN, players: [chaser, aina, out, wei, siti] })).toBeNull()
+  })
   it('a pause inside the window keeps a check-in sent before it', () => {
     const paused = game({ paused_at: new Date(T0 + 19.5 * MIN).toISOString() })
     const at = { ...positions, r1: [...positions.r1, pos(A.lat, A.lng, T0 + 19.4 * MIN)] }
@@ -620,6 +624,11 @@ describe('the chaser snapshot at check-in (checkins design §5)', () => {
       positions: { c1: [pos(BEN_LATER.lat, BEN_LATER.lng, alertAt(2) + 1_000)], r1: [pos(A.lat, A.lng, alertAt(2) + 10_000)] },
     })
     expect(s).toEqual({ positions: [] })
+  })
+
+  it('a runner disqualified for Luar Garisan gets no chaser snapshot', () => {
+    const out = { ...aina, disqualified_at: new Date(alertAt(2)).toISOString() }
+    expect(snap(out, [pos(A.lat, A.lng, alertAt(2) + 10_000)], { now: alertAt(2) + 20_000 })).toBeNull()
   })
 
   it('the switch off means no chaser snapshot, even after checking in', () => {

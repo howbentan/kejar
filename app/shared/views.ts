@@ -411,7 +411,7 @@ function deckLeftFor(i: ViewInput): number | null {
  * says "Checked in" for a ping the server will count as missed.
  */
 function checkinFor(i: ViewInput, phase: Phase): Checkin | null {
-  if (i.me.role !== 'runner' || i.me.jailed || phase !== 'chasing') return null
+  if (i.me.role !== 'runner' || isOut(i.me) || phase !== 'chasing') return null
   const times = pingTimes(i.game, i.now)
   const next = times.find((t) => t.revealAt > i.now)
   if (!next) return null
@@ -457,7 +457,7 @@ const snapshotOn = (g: Game) => g.settings.mode === 'full' && g.settings.chaserS
  */
 export function snapshotWindow(i: SnapshotInput): { seq: number; alertAt: number; revealAt: number } | null {
   if (!snapshotOn(i.game)) return null
-  if (i.me.role !== 'runner' || i.me.jailed || phaseAt(i.game, i.now).phase !== 'chasing') return null
+  if (i.me.role !== 'runner' || isOut(i.me) || phaseAt(i.game, i.now).phase !== 'chasing') return null
   const recorded = new Set(
     i.events
       .filter((e) => e.type === 'ping' && Array.isArray(e.data.checkedIn) && (e.data.checkedIn as unknown[]).includes(i.me.id))

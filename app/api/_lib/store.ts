@@ -400,7 +400,7 @@ export class MemoryStore implements GameStore {
     const stealable = (u: PowerUp) =>
       u.game_id === gameId && !u.used_at && !u.consumed_at && !u.taken_at && !u.sealed && u.kind !== 'dato' // Dato Seri is immune
     const owners = this.playerRows
-      .filter((p) => p.game_id === gameId && p.role === side && !p.removed_at && !(side === 'runner' && p.jailed))
+      .filter((p) => p.game_id === gameId && p.role === side && !p.removed_at && !p.disqualified_at && !(side === 'runner' && p.jailed))
       .filter((p) => this.powerUpRows.some((u) => u.player_id === p.id && stealable(u)))
     if (!owners.length) return null
     const victim = pick(owners)

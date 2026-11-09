@@ -1828,6 +1828,19 @@ describe('Luar Garisan', () => {
     expect((await store.powerUps(g.gameId)).find((u) => u.id === decoy.id)!.used_at).toBeNull()
   })
 
+  it('Ah Long and Toyol cannot take from a disqualified player, and the Ah Long is not spent', async () => {
+    const g = await safetyGame()
+    const along = await store.addPowerUp({ game_id: g.gameId, player_id: g.ben.playerId, kind: 'along', station: 1 })
+    await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'shield', station: 2 })
+    await store.addPowerUp({ game_id: g.gameId, player_id: g.hafiz.playerId, kind: 'shield', station: 3 })
+    await disqualify(g.aina.playerId)
+    await disqualify(g.hafiz.playerId)
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: along.id })).toEqual({ ok: false, reason: 'nothing-to-steal' })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === along.id)!.used_at).toBeNull()
+    await disqualify(g.ben.playerId)
+    expect(await store.stealFrom(g.gameId, 'chaser')).toBeNull()
+  })
+
   it('jailbreak and Settle never free or count a disqualified player', async () => {
     const g = await safetyGame()
     await disqualify(g.aina.playerId)

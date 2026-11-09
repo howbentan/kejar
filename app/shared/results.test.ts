@@ -106,8 +106,18 @@ describe('Luar Garisan', () => {
     const r = computeResults(g, players, [out('r1', 10)])
     expect(r.winner).toBe('chasers')
     expect(r.survivors).toEqual([])
-    // Out of the running for the award, but never credited with more than the 5 minutes they actually lasted.
-    expect(r.longestSurvivor === null || r.longestSurvivor.ms <= 10 * MIN).toBe(true)
+    // Out of the running for the award, so a lone disqualified runner leaves nobody to win it.
+    expect(r.longestSurvivor).toBeNull()
+  })
+
+  it('survival ends at Luar Garisan, so a later catch of another runner gives them the award', () => {
+    const players = [
+      ben,
+      player('r1', 'runner', { disqualified_at: iso(T0 + 20 * MIN) }),
+      player('r2', 'runner', { jailed: true }),
+    ]
+    const events = [out('r1', 20), event('caught', T0 + 8 * MIN, { actor_id: 'c1', target_id: 'r2' })]
+    expect(computeResults(g, players, events).longestSurvivor).toEqual({ id: 'r2', ms: 3 * MIN })
   })
 
   it('a disqualified runner is not a survivor while another is still free', () => {
