@@ -1,3 +1,4 @@
+import { LUAR_GARISAN_GRACE_MS } from '../../shared/alerts.js'
 import type { ArenaDraft } from '../../shared/arenaDraft.js'
 import type { Arena, Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind } from '../../shared/types.js'
 
@@ -131,10 +132,11 @@ export interface GameStore {
   setFlag(playerId: string, field: 'outside' | 'left_start', value: boolean): Promise<boolean>
   /**
    * Luar Garisan, atomic and decided from the stored row: unchanged if already disqualified; else the first call
-   * sets out_warned_at (warned) and the next sets disqualified_at (disqualified).
+   * sets out_warned_at (warned); a later one at least LUAR_GARISAN_GRACE_MS after it sets disqualified_at
+   * (disqualified), and one sooner is unchanged.
    */
   markOutside(playerId: string, at: string): Promise<'warned' | 'disqualified' | 'unchanged'>
-  /** A report back inside: clears a pending warning, never a disqualification. */
+  /** A report back inside: clears a pending (non-null) warning, never a disqualification. */
   clearOutWarning(playerId: string): Promise<void>
   /** Sets removed_at only if it was unset; true for the first caller. */
   removePlayer(id: string): Promise<boolean>
@@ -286,13 +288,13 @@ export class MemoryStore implements GameStore {
   async releaseAutoJailed(id: string, atIso: string) {
     const p = this.playerRows.find((x) => x.id === id)
     if (!p || !p.jailed || p.caught_by !== null) return false
-    Object.assign(p, { jailed: false, caught_at: null, freed_at: atIso })
+    Object.assign(p, { jailed: false, caught_at: null, freed_at: atIso, out_warned_at: null })
     return true
   }
   async catchRunner(id: string, by: string | null) {
     const p = this.playerRows.find((x) => x.id === id)
     if (!p || p.jailed) return false
-    Object.assign(p, { jailed: true, caught_at: this.nowIso(), caught_by: by })
+    Object.assign(p, { jailed: true, caught_at: this.nowIso(), caught_by: by, out_warned_at: null })
     return true
   }
   async addPosition(gameId: string, playerId: string, p: Omit<Position, 'at'>, minGapMs?: number, since?: number) {
@@ -509,6 +511,7 @@ export class MemoryStore implements GameStore {
       p.out_warned_at = at
       return 'warned' as const
     }
+    if (Date.parse(at) - Date.parse(p.out_warned_at) < LUAR_GARISAN_GRACE_MS) return 'unchanged' as const
     p.disqualified_at = at
     return 'disqualified' as const
   }

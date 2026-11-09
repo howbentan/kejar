@@ -3,6 +3,8 @@ import type { GameEvent, LatLng, Player } from './types.js'
 /** Spec §5.1. */
 export const SOS_REPEAT_MS = 30_000
 export const OUTSIDE_MARGIN_M = 20
+/** Luar Garisan: a second outside report disqualifies only this long after the warning, so one re-sent fix cannot do both. */
+export const LUAR_GARISAN_GRACE_MS = 30_000
 export const START_RADIUS_M = 50
 export const NOTE_MAX = 140
 

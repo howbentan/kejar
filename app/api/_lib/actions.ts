@@ -601,7 +601,7 @@ const LUAR_GARISAN_COPY = {
   },
 }
 
-/** One report clearly outside: the first warns, the second consecutive one disqualifies (spec Â§5-Â§6). */
+/** One report clearly outside: the first warns, the second consecutive one disqualifies (spec §5-§6). */
 async function luarGaris(ctx: Ctx, game: Game, me: Player) {
   const verdict = await ctx.store.markOutside(me.id, iso(ctx.now))
   if (verdict === 'unchanged') return
@@ -614,7 +614,7 @@ async function luarGaris(ctx: Ctx, game: Game, me: Player) {
     target_id: null,
     data: { who: who(me) },
   })
-  await pushTo(ctx, [me], { type: 'notice', code: game.code, title: 'Luar Garisan', body: warned ? copy.warn : copy.out })
+  await pushTo(ctx, [me], { type: 'notice', code: game.code, title: warned ? 'Outside the play area' : 'Luar Garisan', body: warned ? copy.warn : copy.out })
 }
 
 /** Raises marshal alerts for leaving the play area, or a chaser leaving the start early (spec §5.1). */
@@ -634,7 +634,7 @@ async function checkWhere(ctx: Ctx, game: Game, me: Player, here: LatLng, accura
     if (ruleLive) await luarGaris(ctx, game, me)
   } else {
     if (outsideBy === 0 && me.outside) await ctx.store.setFlag(me.id, 'outside', false)
-    if (ruleLive && me.out_warned_at) await ctx.store.clearOutWarning(me.id)
+    if (ruleLive) await ctx.store.clearOutWarning(me.id)
   }
   const slack = Math.min(Math.max(accuracy, 0), 20)
   if (phase === 'hiding' && me.role === 'chaser' && !me.left_start && distanceM(here, game.arena.start) > START_RADIUS_M + slack) {
@@ -705,7 +705,7 @@ const jailbreak: Action = async (ctx, body) => {
     now: ctx.now,
   })
   if (!verdict.ok) return verdict
-  await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now) } })))
+  await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now), out_warned_at: null } })))
   await ctx.store.addEvent({
     game_id: game.id,
     type: 'jailbreak',
@@ -748,7 +748,7 @@ const settle: Action = async (ctx, body) => {
   if (!verdict.ok) return verdict
   if (!(await ctx.store.markUsed(dato!.id))) return { ok: false, reason: 'already-used' }
   try {
-    await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now) } })))
+    await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now), out_warned_at: null } })))
   } catch (e) {
     await ctx.store.updatePowerUp(dato!.id, { used_at: null }) // give Dato Seri back
     throw e

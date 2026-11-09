@@ -108,6 +108,16 @@ describe('MemoryStore safety methods', () => {
     expect(after.disqualified_at).toBe(at2)
   })
 
+  it('markOutside disqualifies only 30 s or more after the warning', async () => {
+    const g = await startedGame()
+    const p = await newPlayer(g.id, 'Aina')
+    expect(await store.markOutside(p.id, iso(T0))).toBe('warned')
+    expect(await store.markOutside(p.id, iso(T0 + 1_000))).toBe('unchanged')
+    expect(await store.markOutside(p.id, iso(T0 + 29_000))).toBe('unchanged')
+    expect((await store.players(g.id))[0].disqualified_at).toBeFalsy()
+    expect(await store.markOutside(p.id, iso(T0 + 30_000))).toBe('disqualified')
+  })
+
   it('removed players vanish from players() but not from playerByToken()', async () => {
     const g = await startedGame()
     const p = await newPlayer(g.id, 'Aina')

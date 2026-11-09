@@ -1608,8 +1608,8 @@ describe('Luar Garisan', () => {
   const evs = async (gameId: string, type: string) => (await store.events(gameId)).filter((e) => e.type === type)
   const notices = (name: string) => pushes.filter((p) => p.endpoint === `https://push/${name}` && (p.payload as any).type === 'notice')
   const player = async (gameId: string, id: string) => (await store.players(gameId)).find((p) => p.id === id)!
-  const report = async (g: { code: string }, token: string, m: number) => {
-    now += 5_000
+  const report = async (g: { code: string }, token: string, m: number, stepMs = 30_000) => {
+    now += stepMs
     await run('location', { code: g.code, token, ...at(m) })
   }
 
@@ -1619,7 +1619,7 @@ describe('Luar Garisan', () => {
     await report(g, g.aina.token, 240)
     expect(await evs(g.gameId, 'out-warned')).toHaveLength(1)
     expect((await evs(g.gameId, 'out-warned'))[0].data).toEqual({ who: 'Aina #07' })
-    expect(notices('Aina').map((p) => p.payload)).toEqual([{ type: 'notice', code: g.code, title: 'Luar Garisan', body: RUNNER_WARN }])
+    expect(notices('Aina').map((p) => p.payload)).toEqual([{ type: 'notice', code: g.code, title: 'Outside the play area', body: RUNNER_WARN }])
     const me = await player(g.gameId, g.aina.playerId)
     expect(me.out_warned_at).toBeTruthy()
     expect(me.disqualified_at).toBeFalsy()
@@ -1648,6 +1648,36 @@ describe('Luar Garisan', () => {
     expect(await evs(g.gameId, 'out-warned')).toHaveLength(2)
     expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
     expect((await player(g.gameId, g.aina.playerId)).disqualified_at).toBeFalsy()
+  })
+
+  it('two outside reports 1 s apart give a warning only', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240)
+    await report(g, g.aina.token, 250, 3_000) // a re-sent fix a few seconds later
+    await report(g, g.aina.token, 250, 1_000)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(1)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
+    expect((await player(g.gameId, g.aina.playerId)).disqualified_at).toBeFalsy()
+  })
+
+  it('disqualifies only 30 s or more after the warning', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240) // warned
+    await report(g, g.aina.token, 250, 29_000)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
+    await report(g, g.aina.token, 250, 1_000) // exactly 30 s after the warning
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(1)
+    expect((await player(g.gameId, g.aina.playerId)).disqualified_at).toBe(new Date(now).toISOString())
+  })
+
+  it('a warning does not survive Penjara', async () => {
+    const g = await safetyGame()
+    await report(g, g.aina.token, 240) // warned
+    await store.catchRunner(g.aina.playerId, g.ben.playerId)
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: false, freed_once: true } }])
+    await report(g, g.aina.token, 240)
+    expect(await evs(g.gameId, 'out-warned')).toHaveLength(2)
+    expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(0)
   })
 
   it('uses the chaser copy for chasers', async () => {
