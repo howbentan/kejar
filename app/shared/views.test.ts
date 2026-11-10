@@ -543,6 +543,66 @@ describe('power-up effects', () => {
   })
 })
 
+describe("Bomoh's team-wide reveal (jail design §2e)", () => {
+  const bomohStash = (claimedAtMs: number | null) => ({
+    lat: 3.004,
+    lng: 101.004,
+    claimedBy: claimedAtMs === null ? null : 'c1',
+    claimedAt: claimedAtMs === null ? null : iso(claimedAtMs),
+  })
+
+  it('reveals every free runner exactly, regardless of distance from any chaser, once claimed', () => {
+    const v = view(chaser, { game: { ...g, bomoh_stash: bomohStash(T0 + 12 * MIN) } })
+    expect(v.dots.find((d) => d.id === 'r1')).toMatchObject({ lat: A.lat, lng: A.lng, exact: true, revealedBy: 'bomoh' })
+    expect(v.dots.find((d) => d.id === 'r2')).toMatchObject({ exact: true, revealedBy: 'bomoh' })
+  })
+
+  it('stays active through exactly the second ping-reveal after the claim', () => {
+    // Claimed before the chase's first reveal (10 min): both the 10 min and 15 min reveals count, so the
+    // most recent (15 min, the 2nd since the claim) is still the card's last active reveal.
+    const v = view(chaser, { game: { ...g, bomoh_stash: bomohStash(T0 + 9 * MIN) } })
+    expect(v.dots.find((d) => d.id === 'r1')).toMatchObject({ exact: true, revealedBy: 'bomoh' })
+  })
+
+  it('reverts to the normal fuzzy/decoy treatment from the third reveal after the claim onward', () => {
+    const pings3 = [...pings, ping(3, T0 + 20 * MIN)]
+    const v = view(chaser, { game: { ...g, bomoh_stash: bomohStash(T0 + 9 * MIN) }, pings: pings3, now: T0 + 21 * MIN })
+    const dot = v.dots.find((d) => d.id === 'r1')!
+    expect(dot.revealedBy).toBeNull()
+    expect(dot.exact).toBeUndefined()
+    expect(dot.fuzzy).toBe(true)
+  })
+
+  it('an active Bomoh beats an active Focus on the same runner: revealedBy is bomoh, not focus', () => {
+    const ps = { ...positions, c1: [pos(A.lat + 0.0005, A.lng, T0 + 14.8 * MIN)] } // ~56 m from Aina, inside FOCUS_M
+    const focus: PowerUp = {
+      id: 'uf',
+      game_id: 'g1',
+      player_id: 'c1',
+      kind: 'focus',
+      station: 1,
+      claimed_at: iso(T0 + 13 * MIN),
+      used_at: iso(T0 + 14 * MIN),
+      consumed_at: null,
+      sealed: false,
+      taken_at: null,
+      offer: null,
+    }
+    const v = view(chaser, { game: { ...g, bomoh_stash: bomohStash(T0 + 12 * MIN) }, positions: ps, powerUps: [focus] })
+    const dot = v.dots.find((d) => d.id === 'r1')!
+    expect(dot.exact).toBe(true)
+    expect(dot.revealedBy).toBe('bomoh')
+  })
+
+  it('an unclaimed bomoh_stash has no effect on any dot', () => {
+    const v = view(chaser, { game: { ...g, bomoh_stash: bomohStash(null) } })
+    const dot = v.dots.find((d) => d.id === 'r1')!
+    expect(dot.revealedBy).toBeNull()
+    expect(dot.exact).toBeUndefined()
+    expect(dot.fuzzy).toBe(true)
+  })
+})
+
 describe('power-up secrecy', () => {
   const used = (playerId: string, kind: PowerUp['kind'], usedAt: number): PowerUp => ({
     id: `${playerId}-${kind}`,
@@ -813,6 +873,29 @@ describe("Dato Seri's hint zone (jail design §4b)", () => {
     expect(view(aina, { game: claimed }).legendaryZone).toBeNull()
     expect(view(aina, { game: full('g1'), now: T0 + 2 * MIN }).legendaryZone).toBeNull()
     expect(view(aina, { game: { ...full('g1'), ended_at: iso(NOW - MIN) } }).legendaryZone).toBeNull()
+  })
+})
+
+describe("Bomoh's hint zone (jail design §2e)", () => {
+  const stash = { lat: 3.004, lng: 101.004, claimedBy: null, claimedAt: null }
+  const full = (id: string) => game({ id, settings: { ...DEFAULT_SETTINGS, mode: 'full' }, dato_stash: stash, bomoh_stash: stash })
+
+  it('lands at a different offset than an unclaimed dato_stash at the same spot (distinct seed suffix)', () => {
+    const v = view(aina, { game: full('g1') })
+    expect(v.bomohZone).not.toBeNull()
+    expect(v.bomohZone).not.toEqual(v.legendaryZone)
+  })
+
+  it('a claimed or undropped bomoh_stash produces no zone', () => {
+    const claimed = game({ settings: { ...DEFAULT_SETTINGS, mode: 'full' }, bomoh_stash: { ...stash, claimedBy: 'r2', claimedAt: iso(NOW) } })
+    expect(view(aina, { game: claimed }).bomohZone).toBeNull()
+    const undropped = game({ settings: { ...DEFAULT_SETTINGS, mode: 'full' }, bomoh_stash: { lat: null, lng: null, claimedBy: null, claimedAt: null } })
+    expect(view(aina, { game: undropped }).bomohZone).toBeNull()
+  })
+
+  it('Core mode produces no bomoh zone even with a dropped stash', () => {
+    const core = game({ settings: { ...DEFAULT_SETTINGS, mode: 'core' }, bomoh_stash: stash })
+    expect(view(aina, { game: core }).bomohZone).toBeNull()
   })
 })
 
