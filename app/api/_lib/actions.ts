@@ -957,6 +957,9 @@ const catchAction: Action = async (ctx, body) => {
   const tagId = tagIdFromQr(str(body.tagQr))
   const runner = players.find((p) => p.role === 'runner' && p.tag_id === tagId)
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
+  const shieldings = (await ctx.store.events(game.id))
+    .filter((e) => e.type === 'shielded' && e.actor_id && e.target_id)
+    .map((e) => ({ chaserId: e.actor_id as string, runnerId: e.target_id as string, at: Date.parse(e.at) }))
   const verdict = judgeCatch({
     phase: phaseAt(fresh, ctx.now).phase,
     chaser: players.find((p) => p.id === me.id) ?? me,
@@ -965,14 +968,18 @@ const catchAction: Action = async (ctx, body) => {
     chaserPos: latest(positions[me.id]),
     runnerPos: runner ? latest(positions[runner.id]) : null,
     now: ctx.now,
+    shieldings,
   })
-  if (!verdict.ok) return verdict
+  if (!verdict.ok) {
+    // The Durian refusals name the runner so the chaser knows who is off limits.
+    return runner && (verdict.reason === 'durian-locked' || verdict.reason === 'durian-head-start') ? { ...verdict, name: runner.name } : verdict
+  }
   // A switched-on Shield absorbs one otherwise-valid catch.
   const shield = activeShield(await ctx.store.powerUps(game.id), verdict.runnerId, ctx.now)
   // consumeShield is atomic, so two chasers scanning at once can't both be blocked by one shield.
   if (shield && (await ctx.store.consumeShield(shield.id))) {
     await ctx.store.addEvent({ game_id: game.id, type: 'shielded', actor_id: me.id, target_id: verdict.runnerId, data: {} })
-    return { ok: false, reason: 'shielded' }
+    return { ok: false, reason: 'shielded', name: runner?.name }
   }
   if (!(await ctx.store.catchRunner(verdict.runnerId, me.id))) return { ok: false, reason: 'already-caught' }
   await ctx.store.addEvent({

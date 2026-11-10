@@ -151,8 +151,14 @@ describe('catchMessage', () => {
   it('refuses an implausible catch with the exact copy', () => {
     expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'implausible' })).toBe("Can't confirm that one. Get closer and try again.")
   })
-  it('explains a shielded catch', () => {
-    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'shielded' })).toBe("Durian! That catch doesn't count. Hand the tag back.")
+  it('explains a shielded catch, naming the runner', () => {
+    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'shielded', name: 'Aina' })).toBe("Durian! You can't catch Aina again this game. Hand the tag back.")
+  })
+  it('explains a Durian lock on a later scan', () => {
+    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'durian-locked', name: 'Aina' })).toBe("Durian! You can't catch Aina again this game.")
+  })
+  it('explains the 15 s head start', () => {
+    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'durian-head-start', name: 'Aina' })).toBe('Durian! Aina gets a 15 s head start.')
   })
 })
 

@@ -11,7 +11,29 @@ const here = pos(3.0, 101.0, NOW - 5_000)
 const near = pos(3.0003, 101.0, NOW - 5_000) // ~33 m
 const far = pos(3.0008, 101.0, NOW - 5_000) // ~89 m: beyond 50 m plus both GPS errors
 
-const base = { phase: 'chasing' as const, chaser: ben, tagId: 7, players, chaserPos: here, runnerPos: near, now: NOW }
+const base = { phase: 'chasing' as const, chaser: ben, tagId: 7, players, chaserPos: here, runnerPos: near, now: NOW, shieldings: [] as { chaserId: string; runnerId: string; at: number }[] }
+
+describe('judgeCatch and Durian', () => {
+  const stung = { chaserId: 'c1', runnerId: 'r1', at: NOW - 1_000 }
+  it('the stung chaser is locked off that runner at +1 s and at +30 min', () => {
+    expect(judgeCatch({ ...base, shieldings: [stung] })).toEqual({ ok: false, reason: 'durian-locked' })
+    expect(judgeCatch({ ...base, now: NOW + 30 * MIN - 1_000, chaserPos: pos(3.0, 101.0, NOW + 30 * MIN - 5_000), shieldings: [stung] })).toEqual({
+      ok: false,
+      reason: 'durian-locked',
+    })
+  })
+  it('another chaser gets a 15 s head start refusal at +14 s and is accepted at +16 s', () => {
+    const kim = player('c2', 'chaser', { name: 'Kim' })
+    const s = { chaserId: 'c1', runnerId: 'r1', at: NOW }
+    const as = (ms: number) => judgeCatch({ ...base, chaser: kim, players: [...players, kim], now: NOW + ms, chaserPos: pos(3.0, 101.0, NOW + ms - 1_000), runnerPos: pos(3.0003, 101.0, NOW + ms - 1_000), shieldings: [s] })
+    expect(as(14_000)).toEqual({ ok: false, reason: 'durian-head-start' })
+    expect(as(16_000)).toMatchObject({ ok: true })
+  })
+  it('an unrelated runner is unaffected', () => {
+    const other = { chaserId: 'c1', runnerId: 'r2', at: NOW - 1_000 }
+    expect(judgeCatch({ ...base, shieldings: [other] })).toEqual({ ok: true, flagged: false, runnerId: 'r1' })
+  })
+})
 
 describe('judgeCatch', () => {
   it('catch within 50 m succeeds unflagged', () => {

@@ -18,7 +18,9 @@ const REJECTIONS: Record<string, string> = {
   'not-chasing': 'You can only catch during the chase',
   'not-a-chaser': 'Only chasers can catch',
   'no-location': 'Turn on location to catch',
-  shielded: "Durian! That catch doesn't count. Hand the tag back.",
+  shielded: "Durian! You can't catch {name} again this game. Hand the tag back.",
+  'durian-locked': "Durian! You can't catch {name} again this game.",
+  'durian-head-start': 'Durian! {name} gets a 15 s head start.',
   paused: 'Game is paused',
   disqualified: "You're Luar Garisan lah, so that catch doesn't count.",
   'already-out': 'Aiyo, that runner is already out of this round.',
@@ -28,7 +30,7 @@ export function catchMessage(text: string, r: CatchJudgement): string {
   const tag = tagIdFromQr(text)
   const label = tag === null ? 'runner' : `#${String(tag).padStart(2, '0')}`
   if (r.ok) return r.flagged ? `Caught ${label} — flagged for marshal` : `Caught ${label} ✓`
-  return REJECTIONS[r.reason] ?? 'Catch not recorded'
+  return (REJECTIONS[r.reason] ?? 'Catch not recorded').replace('{name}', r.name ?? label)
 }
 
 /** "Next ping 1:42 · last 3:18 ago", or whichever half is known. */

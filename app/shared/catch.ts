@@ -24,7 +24,27 @@ const slack = (p: Position) => Math.min(Math.max(p.accuracy_m, 0), MAX_ACCURACY_
 export type CatchJudgement =
   /** `label` names the runner for the chaser's stamp: `#07 Aina` (motion design §4). Added by the catch action. */
   | { ok: true; flagged: boolean; runnerId: string; label?: string }
-  | { ok: false; reason: 'not-chasing' | 'not-a-chaser' | 'unknown-tag' | 'already-caught' | 'too-far' | 'implausible' | 'no-location' | 'shielded' | 'disqualified' | 'already-out' }
+  | {
+      ok: false
+      reason:
+        | 'not-chasing'
+        | 'not-a-chaser'
+        | 'unknown-tag'
+        | 'already-caught'
+        | 'too-far'
+        | 'implausible'
+        | 'no-location'
+        | 'shielded'
+        | 'disqualified'
+        | 'already-out'
+        | 'durian-locked'
+        | 'durian-head-start'
+      /** The runner's name, on the Durian refusals (added by the catch action). */
+      name?: string
+    }
+
+/** After a Durian blocks a catch, no other chaser can catch that runner for this long (fair play §1.5). */
+export const DURIAN_HEAD_START_MS = 15_000
 
 export function judgeCatch(i: {
   phase: Phase
@@ -34,6 +54,8 @@ export function judgeCatch(i: {
   chaserPos: Position | null
   runnerPos: Position | null
   now: number
+  /** Every Durian block this game, from the `shielded` events. */
+  shieldings: { chaserId: string; runnerId: string; at: number }[]
 }): CatchJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (i.chaser.role !== 'chaser') return { ok: false, reason: 'not-a-chaser' }
@@ -43,6 +65,10 @@ export function judgeCatch(i: {
   if (!runner) return { ok: false, reason: 'unknown-tag' }
   if (runner.jailed) return { ok: false, reason: 'already-caught' }
   if (runner.disqualified_at) return { ok: false, reason: 'already-out' }
+  // Durian can't be camped: a stung chaser is off this runner for the game, and everyone waits out a head start.
+  const stings = i.shieldings.filter((s) => s.runnerId === runner.id)
+  if (stings.some((s) => s.chaserId === i.chaser.id)) return { ok: false, reason: 'durian-locked' }
+  if (stings.some((s) => i.now - s.at < DURIAN_HEAD_START_MS)) return { ok: false, reason: 'durian-head-start' }
 
   const age = (p: Position) => i.now - Date.parse(p.at)
   if (!i.chaserPos || age(i.chaserPos) > CHASER_FRESH_MS) return { ok: false, reason: 'no-location' }

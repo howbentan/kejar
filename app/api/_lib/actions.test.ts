@@ -680,10 +680,11 @@ describe('power-up stations', () => {
     await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: shield.id })
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })
     await run('location', { code: g.code, token: g.aina.token, ...at(10) })
-    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toEqual({ ok: false, reason: 'shielded' })
+    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toEqual({ ok: false, reason: 'shielded', name: 'Aina' })
     const v = await run<View>('state', { code: g.code, token: g.ben.token })
     expect(v.feed[0].text).toBe('#07 blocked a catch with Durian.')
-    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toMatchObject({ ok: true })
+    // The same chaser can't camp the runner: a rescan is locked out for the game.
+    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toEqual({ ok: false, reason: 'durian-locked', name: 'Aina' })
   })
 })
 
@@ -798,6 +799,37 @@ describe('review fixes', () => {
       run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) }),
     ])
     expect(results.map((r) => (r.ok ? 'caught' : r.reason)).sort()).toEqual(['caught', 'shielded'])
+  })
+
+  it('Durian locks the stung chaser off that runner for the game and gives others a 15 s head start', async () => {
+    const g = await readyGame({}, { stations: [S1] })
+    const kim = await run('join', { code: g.code, name: 'Kim', accepted: true })
+    await run('setRoles', {
+      code: g.code,
+      organiserToken: g.organiserToken,
+      roles: { [g.ben.playerId]: 'chaser', [kim.playerId]: 'chaser', [g.aina.playerId]: 'runner', [g.hafiz.playerId]: 'runner' },
+    })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    const gameId = (await store.gameByCode(g.code))!.id
+    const shield = await give(gameId, g.aina.playerId, 'shield')
+    await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: shield.id })
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toEqual({ ok: false, reason: 'shielded', name: 'Aina' })
+    now += 5_000
+    await run('location', { code: g.code, token: kim.token, ...at(0) })
+    expect(await run('catch', { code: g.code, token: kim.token, tagQr: tagQr(7) })).toEqual({ ok: false, reason: 'durian-head-start', name: 'Aina' })
+    now += 11_000
+    await run('location', { code: g.code, token: kim.token, ...at(0) })
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    expect(await run('catch', { code: g.code, token: kim.token, tagQr: tagQr(7) })).toMatchObject({ ok: true })
+    // Simulate a marshal undo (Task 5): the runner is free again. Ben is still locked out, 20 min on.
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: false } }])
+    now += 20 * MIN
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toEqual({ ok: false, reason: 'durian-locked', name: 'Aina' })
   })
 })
 
@@ -2388,7 +2420,7 @@ describe('automatic alerts', () => {
     await run('usePowerup', { code: g.code, token: g.hafiz.token, powerupId: shield.id })
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })
     pushes = []
-    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })).toEqual({ ok: false, reason: 'shielded' })
+    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })).toEqual({ ok: false, reason: 'shielded', name: 'Hafiz' })
     expect(pushes.filter((p) => (p.payload as any).type === 'notice')).toEqual([])
   })
 
