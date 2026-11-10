@@ -3065,6 +3065,61 @@ describe('Bomoh: the hidden stash (chaser-side legendary, mirrors Dato Seri abov
     const g = await chasing(false)
     expect(await scanQr(g, g.ben.token, 'KEJAR:BOMOH')).toEqual({ ok: false, reason: 'no-stash' })
   })
+
+  it('end to end: lobby stash, drop, claim, then a team-wide exact reveal for exactly 2 ping reveals', async () => {
+    // 1. The lobby has its purple card eagerly, with a code and nowhere to be found yet.
+    const g = await lobby()
+    expect(await stash(g)).toMatchObject({ code: expect.any(String), lat: null, lng: null, claimedBy: null })
+    // 2. The organiser hides the card; a chaser sees only the fuzzy hint zone, and no runner exactly.
+    await run('dropBomohSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    const runners = [g.aina, g.chong]
+    const report = async (min: number) => {
+      now = T0 + min * MIN
+      await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+      await run('location', { code: g.code, token: g.chong.token, ...at(40) })
+    }
+    const chaserView = (token: string) => run<View>('state', { code: g.code, token })
+    const runnerDots = (v: View) => v.dots.filter((d) => d.kind === 'runner')
+    await report(6)
+    now = T0 + 7 * MIN
+    let v = await chaserView(g.hafiz.token)
+    expect(v.bomohZone).toMatchObject({ radiusM: expect.any(Number) })
+    expect(runnerDots(v)).toEqual([])
+    // 3. Ben scans the card in reach: instant claim, card retired, one anonymised feed entry.
+    const card = (await stash(g))!.card!
+    expect(await scan(g, g.ben.token)).toEqual({ ok: true, kind: 'bomoh' })
+    const org = (await store.organiserBySessionTokenHash(hashToken(g.organiserToken)))!.organisation_id
+    expect((await store.secretCards(org)).find((c) => c.id === card.id)).toMatchObject({ state: 'retired' })
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'legendary')).toHaveLength(1)
+    v = await chaserView(g.hafiz.token)
+    expect(v.feed.filter((f) => f.text === 'Something legendary was found.')).toHaveLength(1)
+    expect(runnerDots(v)).toEqual([]) // nothing is revealed until the next ping reveal
+    // 4. First reveal since the claim (10 min): every chaser, claimant or not, sees every runner exactly.
+    await report(9.5)
+    now = T0 + 10 * MIN
+    for (const token of [g.ben.token, g.hafiz.token]) {
+      v = await chaserView(token)
+      expect(runnerDots(v)).toHaveLength(runners.length)
+      for (const d of runnerDots(v)) expect(d).toMatchObject({ exact: true, revealedBy: 'bomoh' })
+    }
+    // 5. Second reveal (15 min): still active.
+    await report(14.5)
+    now = T0 + 15 * MIN
+    v = await chaserView(g.hafiz.token)
+    expect(runnerDots(v)).toHaveLength(runners.length)
+    for (const d of runnerDots(v)) expect(d).toMatchObject({ exact: true, revealedBy: 'bomoh' })
+    // 6. Third reveal (20 min): back to fuzzy, with no Bomoh marking.
+    await report(19.5)
+    now = T0 + 20 * MIN
+    v = await chaserView(g.hafiz.token)
+    expect(runnerDots(v)).toHaveLength(runners.length)
+    for (const d of runnerDots(v)) {
+      expect(d.fuzzy).toBe(true)
+      expect(d.exact).toBeUndefined()
+      expect(d.revealedBy).toBeNull()
+    }
+  })
 })
 
 describe('dropBomohSeri (mirrors dropDatoSeri above)', () => {
