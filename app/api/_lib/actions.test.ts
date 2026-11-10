@@ -2310,23 +2310,23 @@ describe('automatic alerts', () => {
     expect((await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!.jailed).toBe(true)
   })
 
-  it('a flagged catch shows as Check catch', async () => {
+  it('a catch on a runner who never sent a location counts and raises no alert', async () => {
     const g = await safetyGame()
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })
     now = T0 + 7 * MIN
-    // Hafiz has never sent a location: the catch counts but is flagged.
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
     const r = await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })
-    expect(r).toMatchObject({ ok: true, flagged: true })
+    expect(r).toMatchObject({ ok: true, flagged: false })
     const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
-    expect(v.alerts.map((a) => a.text)).toEqual(['Check catch: #03 by Ben (runner location old)'])
+    expect(v.alerts).toEqual([])
   })
 
-  /** Hafiz's last fix is `ageS` seconds old when Ben scans his armband from 10 m away. */
-  async function catchHafizWithFixAge(ageS: number) {
+  /** Hafiz's last fix is `ageS` seconds old when Ben scans his armband from `distM` metres away (accuracy 8 m each). */
+  async function catchHafizWithFixAge(ageS: number, distM = 10) {
     const g = await safetyGame()
     const scanAt = now
     now = scanAt - ageS * 1000
-    await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(distM) })
     now = scanAt
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })
     pushes = []
@@ -2335,9 +2335,26 @@ describe('automatic alerts', () => {
     return { g, r, v }
   }
 
-  it('a catch on an old runner location tells the runner and flags it for marshals', async () => {
-    const { g, r, v } = await catchHafizWithFixAge(60)
+  it('an ordinary catch (3 min old fix, 100 m away) records no alert and sends no push', async () => {
+    const { r, v } = await catchHafizWithFixAge(180, 100)
     expect(r).toMatchObject({ ok: true, flagged: false })
+    expect(pushes.filter((p) => (p.payload as any).type === 'notice')).toEqual([])
+    expect(v.alerts).toEqual([])
+  })
+
+  it('an implausible catch is refused: no caught event and the runner stays free', async () => {
+    // Limit with a 3 min old fix is 50 + 8 + 8 + 1080 = 1146 m.
+    const { g, r } = await catchHafizWithFixAge(180, 1300)
+    expect(r).toEqual({ ok: false, reason: 'implausible' })
+    expect((await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!.jailed).toBe(false)
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'caught')).toEqual([])
+    expect(pushes.filter((p) => (p.payload as any).type === 'notice')).toEqual([])
+  })
+
+  it('a borderline catch tells the runner and flags it for marshals', async () => {
+    // 1000 m is over 80% of 1146 m but within it.
+    const { g, r, v } = await catchHafizWithFixAge(180, 1000)
+    expect(r).toMatchObject({ ok: true, flagged: true })
     const toHafiz = pushes.filter((p) => p.endpoint === 'https://push/Hafiz')
     expect(toHafiz).toEqual([
       {
@@ -2346,7 +2363,8 @@ describe('automatic alerts', () => {
       },
     ])
     expect(pushes.filter((p) => (p.payload as any).type === 'notice')).toHaveLength(1)
-    expect(v.alerts.map((a) => a.text)).toEqual(['Check catch: #03 by Ben (runner location old)'])
+    // (Hafiz's 1000 m-off fix also put him outside the play area; only the catch alert matters here.)
+    expect(v.alerts.map((a) => a.text).filter((t) => t.startsWith('Check catch'))).toEqual(['Check catch: #03 by Ben (far from their last spot)'])
   })
 
   it('a catch on a fresh runner location sends no push and no alert', async () => {
@@ -2356,24 +2374,12 @@ describe('automatic alerts', () => {
     expect(v.alerts).toEqual([])
   })
 
-  it('a runner with no fix at all still gets the push', async () => {
+  it('a runner with no fix at all gets no push', async () => {
     const g = await safetyGame()
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })
     pushes = []
     await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })
-    expect(pushes.filter((p) => p.endpoint === 'https://push/Hafiz' && (p.payload as any).type === 'notice')).toHaveLength(1)
-  })
-
-  it('a fix exactly 20 s old gives no push and no alert', async () => {
-    const { v } = await catchHafizWithFixAge(20)
     expect(pushes.filter((p) => (p.payload as any).type === 'notice')).toEqual([])
-    expect(v.alerts).toEqual([])
-  })
-
-  it('a fix 21 s old gives a push and an alert', async () => {
-    const { v } = await catchHafizWithFixAge(21)
-    expect(pushes.filter((p) => (p.payload as any).type === 'notice')).toHaveLength(1)
-    expect(v.alerts).toHaveLength(1)
   })
 
   it('a catch blocked by a shield sends no push', async () => {
@@ -2386,12 +2392,12 @@ describe('automatic alerts', () => {
     expect(pushes.filter((p) => (p.payload as any).type === 'notice')).toEqual([])
   })
 
-  it('a failing push never undoes the catch (old runner location)', async () => {
+  it('a failing push never undoes the catch (borderline catch)', async () => {
     const g = await safetyGame()
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })
     const scanAt = now
-    now = scanAt - 60_000
-    await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+    now = scanAt - 180_000
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(1000) })
     now = scanAt
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })
     pushFails = true

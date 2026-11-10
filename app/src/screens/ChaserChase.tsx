@@ -12,6 +12,7 @@ import { useWakeLock } from '../game/useWakeLock'
 
 const REJECTIONS: Record<string, string> = {
   'too-far': 'Too far — get within 50 m',
+  implausible: "Can't confirm that one. Get closer and try again.",
   'already-caught': 'Already caught',
   'unknown-tag': "That's not a Kejar tag",
   'not-chasing': 'You can only catch during the chase',

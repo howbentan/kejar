@@ -19,7 +19,7 @@ import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
 import { isOut } from '../../shared/players.js'
-import { judgeCatch, judgeJailbreak, judgeSettle, RUNNER_TRUSTED_MS } from '../../shared/catch.js'
+import { judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
 import { bomohCodeFromQr, datoCodeFromQr, isBomohQr, isDatoQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
@@ -967,9 +967,6 @@ const catchAction: Action = async (ctx, body) => {
     now: ctx.now,
   })
   if (!verdict.ok) return verdict
-  // judgeCatch stays as it is; "old" here is the runner's own fix being past what can reject a catch (or missing).
-  const runnerFix = runner ? latest(positions[runner.id]) : null
-  const oldRunnerFix = !runnerFix || ctx.now - Date.parse(runnerFix.at) > RUNNER_TRUSTED_MS
   // A switched-on Shield absorbs one otherwise-valid catch.
   const shield = activeShield(await ctx.store.powerUps(game.id), verdict.runnerId, ctx.now)
   // consumeShield is atomic, so two chasers scanning at once can't both be blocked by one shield.
@@ -983,15 +980,15 @@ const catchAction: Action = async (ctx, body) => {
     type: 'caught',
     actor_id: me.id,
     target_id: verdict.runnerId,
-    data: { flagged: verdict.flagged, who: tagLabelOf(players, verdict.runnerId), chaser: me.name, ...(oldRunnerFix ? { oldRunnerFix: true } : {}) },
+    data: { flagged: verdict.flagged, who: tagLabelOf(players, verdict.runnerId), chaser: me.name, ...(verdict.flagged ? { farFromLast: true } : {}) },
   })
   const after = await ctx.store.players(game.id)
   if (after.filter((p) => p.role === 'runner').every(isOut)) await finish(ctx, fresh)
   const caught = players.find((p) => p.id === verdict.runnerId)
   // Wrong-catch backstop: armbands are reused, so a scan of a photo can "catch" a runner whose pocketed phone is
-  // far away. The rip is the proof, so tell the runner straight away and let them dispute it. The push goes after
-  // the catch is recorded and can never undo it (same as Luar Garisan).
-  if (oldRunnerFix && caught) {
+  // far away. Only a borderline catch (far from their last spot, but not implausibly so) tells the runner straight
+  // away and lets them dispute it. The push goes after the catch is recorded and can never undo it (same as Luar Garisan).
+  if (verdict.flagged && caught) {
     try {
       await pushTo(ctx, [caught], {
         type: 'notice',

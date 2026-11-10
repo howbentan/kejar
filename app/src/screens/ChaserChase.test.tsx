@@ -148,6 +148,9 @@ describe('catchMessage', () => {
   it('names the tag on success', () => {
     expect(catchMessage('KEJAR:TAG:07', { ok: true, flagged: false, runnerId: 'r1' })).toBe('Caught #07 ✓')
   })
+  it('refuses an implausible catch with the exact copy', () => {
+    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'implausible' })).toBe("Can't confirm that one. Get closer and try again.")
+  })
   it('explains a shielded catch', () => {
     expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'shielded' })).toBe("Durian! That catch doesn't count. Hand the tag back.")
   })
