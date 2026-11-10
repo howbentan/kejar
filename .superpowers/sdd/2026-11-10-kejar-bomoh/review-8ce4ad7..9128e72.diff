@@ -1,0 +1,153 @@
+# Review package: 8ce4ad71ee08da4da508a6a8fdb6512a5fbd4206..9128e72a9dc3dbb4a755f591adaffd528788fe58
+
+## Commits
+9128e72 feat: add judgeBomohClaim
+
+## Files changed
+ app/shared/powerups.test.ts | 36 +++++++++++++++++++++++++++++++++++-
+ app/shared/powerups.ts      | 26 +++++++++++++++++++++++++-
+ 2 files changed, 60 insertions(+), 2 deletions(-)
+
+## Diff
+diff --git a/app/shared/powerups.test.ts b/app/shared/powerups.test.ts
+index 9becfa5..af2ad55 100644
+--- a/app/shared/powerups.test.ts
++++ b/app/shared/powerups.test.ts
+@@ -1,16 +1,16 @@
+ import { describe, expect, it } from 'vitest'
+ import { arenaAroundPoint } from './arenas.js'
+ import { iso, MIN, ping, player, pos, T0 } from './fixtures.js'
+ import { circlePolygon, distanceM, offset, pointInPolygon } from './geo.js'
+ import { buildPlayArea, inPlayArea } from './playArea.js'
+-import { activeShield, decoySpot, flareBlocked, judgeClaim, slotBusy } from './powerups.js'
++import { activeShield, decoySpot, flareBlocked, judgeBomohClaim, judgeClaim, slotBusy } from './powerups.js'
+ import { BONUS_SEQ_BASE } from './clock.js'
+ import type { Ping, PowerUp } from './types.js'
+ 
+ const NOW = T0 + 20 * MIN
+ const C = { lat: 3.0, lng: 101.0 }
+ const S1 = { lat: 3.0 + 100 / 111_195, lng: 101.0 }
+ const arena = arenaAroundPoint(C, 200, [S1])
+ const aina = player('r1', 'runner')
+ const ben = player('c1', 'chaser')
+ const atS1 = pos(S1.lat, S1.lng, NOW - 5_000)
+@@ -65,20 +65,54 @@ describe('judgeClaim', () => {
+   it('only during the chase, and only real stations', () => {
+     expect(judgeClaim({ ...base, phase: 'hiding' })).toEqual({ ok: false, reason: 'not-chasing' })
+     expect(judgeClaim({ ...base, station: 2 })).toEqual({ ok: false, reason: 'unknown-station' })
+     expect(judgeClaim({ ...base, station: null })).toEqual({ ok: false, reason: 'unknown-station' })
+   })
+   it('chasers can claim too', () => {
+     expect(judgeClaim({ ...base, me: ben })).toEqual({ ok: true })
+   })
+ })
+ 
++describe('judgeBomohClaim', () => {
++  const dropped = { lat: S1.lat, lng: S1.lng, claimedBy: null, claimedAt: null }
++  const bombase = { phase: 'chasing' as const, me: ben, stash: dropped, myPos: atS1, now: NOW }
++
++  it('a chaser in reach of a dropped, unclaimed stash can claim it', () => {
++    expect(judgeBomohClaim(bombase)).toEqual({ ok: true })
++  })
++  it('only during the chase', () => {
++    expect(judgeBomohClaim({ ...bombase, phase: 'hiding' })).toEqual({ ok: false, reason: 'not-chasing' })
++  })
++  it('runners and marshals cannot claim Bomoh', () => {
++    expect(judgeBomohClaim({ ...bombase, me: aina })).toEqual({ ok: false, reason: 'cannot-claim' })
++    expect(judgeBomohClaim({ ...bombase, me: player('m1', 'marshal') })).toEqual({ ok: false, reason: 'cannot-claim' })
++  })
++  it('nothing to find when the stash is missing, not yet dropped, or already claimed', () => {
++    expect(judgeBomohClaim({ ...bombase, stash: null })).toEqual({ ok: false, reason: 'no-stash' })
++    expect(judgeBomohClaim({ ...bombase, stash: undefined })).toEqual({ ok: false, reason: 'no-stash' })
++    expect(judgeBomohClaim({ ...bombase, stash: { ...dropped, lat: null, lng: null } })).toEqual({ ok: false, reason: 'no-stash' })
++    expect(judgeBomohClaim({ ...bombase, stash: { ...dropped, claimedBy: 'c2', claimedAt: iso(NOW - MIN) } })).toEqual({
++      ok: false,
++      reason: 'no-stash',
++    })
++  })
++  it('too far from the dropped spot, or a stale fix, is too-far', () => {
++    expect(judgeBomohClaim({ ...bombase, myPos: pos(S1.lat + 200 / 111_195, S1.lng, NOW - 5_000) })).toEqual({ ok: false, reason: 'too-far' })
++    expect(judgeBomohClaim({ ...bombase, myPos: pos(S1.lat, S1.lng, NOW - 40_000) })).toEqual({ ok: false, reason: 'too-far' })
++    expect(judgeBomohClaim({ ...bombase, myPos: null })).toEqual({ ok: false, reason: 'too-far' })
++  })
++  it('never checks the hand: a chaser holding a power-up can still claim', () => {
++    // No powerUps/pings input exists; Bomoh never occupies a slot.
++    expect(judgeBomohClaim(bombase)).toEqual({ ok: true })
++  })
++})
++
+ describe('slotBusy', () => {
+   it('a card that was taken (Toyol / Ah Long) no longer fills the slot', () => {
+     expect(slotBusy([pu({ kind: 'cloak', taken_at: iso(NOW - 1_000) })], 'r1', [], NOW)).toBeNull()
+   })
+   it('a card row from before migration 0011 (no taken_at at all) still fills the slot', () => {
+     const { taken_at: _, ...old } = pu({ kind: 'cloak' })
+     expect(slotBusy([old as PowerUp], 'r1', [], NOW)).toEqual({ kind: 'cloak', running: false })
+   })
+   it('Toyol and Ah Long are done the moment they are used', () => {
+     expect(slotBusy([pu({ kind: 'toyol', used_at: iso(NOW - 1_000) })], 'r1', [], NOW)).toBeNull()
+diff --git a/app/shared/powerups.ts b/app/shared/powerups.ts
+index 39f46e9..e5cb9d7 100644
+--- a/app/shared/powerups.ts
++++ b/app/shared/powerups.ts
+@@ -1,14 +1,14 @@
+ import { distanceM, hash, offset } from './geo.js'
+ import { inPlayArea } from './playArea.js'
+ import { BONUS_SEQ_BASE } from './clock.js'
+-import { placedStash, type Arena, type DatoStash, type LatLng, type Phase, type Ping, type Player, type Position, type PowerUp, type PowerUpKind } from './types.js'
++import { placedStash, type Arena, type BomohStash, type DatoStash, type LatLng, type Phase, type Ping, type Player, type Position, type PowerUp, type PowerUpKind } from './types.js'
+ 
+ /** Spec §4.8.1. */
+ export const CLAIM_RADIUS_M = 30
+ export const CLAIM_FRESH_MS = 30_000
+ export const STATION_LOCK_MS = 60_000
+ export const SHIELD_MS = 10 * 60_000
+ /** Power-ups §5a: after each surprise ping is revealed, the chasers wait this long for the next. */
+ export const FLARE_COOLDOWN_MS = 3 * 60_000
+ const MAX_ACCURACY_M = 20
+ const DECOY_MIN_M = 120
+@@ -79,20 +79,44 @@ export function judgeDatoClaim(i: {
+ }): DatoClaimJudgement {
+   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
+   if (i.me.role !== 'runner' || i.me.jailed) return { ok: false, reason: 'cannot-claim' }
+   const stash = placedStash(i.stash) // made with the game, but not dropped yet: nothing to find
+   if (!stash || stash.claimedBy !== null) return { ok: false, reason: 'no-stash' }
+   if (!withinClaimReach(i.myPos, stash, i.now)) return { ok: false, reason: 'too-far' }
+   if (slotBusy(i.powerUps, i.me.id, i.pings, i.now)) return { ok: false, reason: 'hand-full' }
+   return { ok: true }
+ }
+ 
++export type BomohClaimJudgement =
++  | { ok: true }
++  | { ok: false; reason: 'not-chasing' | 'cannot-claim' | 'no-stash' | 'too-far' }
++
++/**
++ * Scanning Bomoh's hidden stash: a chaser within reach of the dropped purple card, first come first served.
++ * Bomoh never occupies a hand slot, so a held power-up doesn't block it, and there's no jail check (chasers
++ * are never jailed).
++ */
++export function judgeBomohClaim(i: {
++  phase: Phase
++  me: Player
++  stash: BomohStash | null | undefined
++  myPos: Position | null
++  now: number
++}): BomohClaimJudgement {
++  if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
++  if (i.me.role !== 'chaser') return { ok: false, reason: 'cannot-claim' }
++  const stash = placedStash(i.stash) // made with the game, but not dropped yet: nothing to find
++  if (!stash || stash.claimedBy !== null) return { ok: false, reason: 'no-stash' }
++  if (!withinClaimReach(i.myPos, stash, i.now)) return { ok: false, reason: 'too-far' }
++  return { ok: true }
++}
++
+ /**
+  * What fills a player's one slot (power-ups §5a): an unused card, or a used one whose effect is still
+  * running. Durian runs until it blocks a catch or 10 minutes pass; Gostan, Ponteng and Pak Guard until
+  * the next reveal after use; Mat Rempit until its own surprise ping is revealed.
+  */
+ export function slotBusy(powerUps: PowerUp[], playerId: string, pings: Ping[], now: number): { kind: PowerUpKind; running: boolean } | null {
+   for (const u of powerUps.filter((x) => x.player_id === playerId)) {
+     // Toyol or Ah Long took it: gone from the hand. Truthy, not `!== null`: before migration 0011 it's undefined.
+     if (u.taken_at) continue
+     if (u.used_at === null) return { kind: u.kind, running: false }

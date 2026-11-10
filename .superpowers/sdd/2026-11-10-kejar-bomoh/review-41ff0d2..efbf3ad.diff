@@ -1,0 +1,260 @@
+# Review package: 41ff0d2909f33c895ab3d52d98ec7785bdb769d4..efbf3ad23d79394a84f6d9b217ec693e841bc5c4
+
+## Commits
+efbf3ad feat: add bomoh_stash column and claim_bomoh for Bomoh's grant
+
+## Files changed
+ app/api/_lib/store.test.ts         | 24 ++++++++++++++++++++++++
+ app/api/_lib/store.ts              | 14 ++++++++++++++
+ app/api/_lib/supabaseStore.ts      |  6 +++++-
+ app/shared/types.ts                | 18 ++++++++++++++++++
+ supabase/migrations/0015_bomoh.sql | 28 ++++++++++++++++++++++++++++
+ 5 files changed, 89 insertions(+), 1 deletion(-)
+
+## Diff
+diff --git a/app/api/_lib/store.test.ts b/app/api/_lib/store.test.ts
+index 19fbf59..019356d 100644
+--- a/app/api/_lib/store.test.ts
++++ b/app/api/_lib/store.test.ts
+@@ -461,10 +461,34 @@ describe('MemoryStore.setKitKey', () => {
+     const g = await startedGame()
+     await store.setKitKey(g.id, 'ticks', 'tape', 'Tape')
+     await store.setKitKey(g.id, 'placed', 'station-1', true)
+     await store.setKitKey(g.id, 'ticks', 'penjara', 'Penjara card')
+     expect((await store.gameByCode('ABC234'))!.kit).toEqual({ ticks: { tape: 'Tape', penjara: 'Penjara card' }, placed: { 'station-1': true } })
+     await store.setKitKey(g.id, 'ticks', 'tape', null)
+     await store.setKitKey(g.id, 'placed', 'nope', null)
+     expect((await store.gameByCode('ABC234'))!.kit).toEqual({ ticks: { penjara: 'Penjara card' }, placed: { 'station-1': true } })
+   })
+ })
++
++describe('MemoryStore.claimBomoh', () => {
++  const dropped = { code: 'bomoh-code', lat: 1, lng: 2, claimedBy: null, claimedAt: null }
++
++  it('goes to one of two simultaneous claims, stamps the stash, and inserts no powerups row', async () => {
++    const g = await startedGame()
++    await store.updateGame(g.id, { bomoh_stash: dropped })
++    const results = await Promise.all([store.claimBomoh(g.id, 'p1', new Date(now)), store.claimBomoh(g.id, 'p2', new Date(now))])
++    expect(results.filter((r) => r === true)).toHaveLength(1)
++    const stash = (await store.gameByCode('ABC234'))!.bomoh_stash!
++    expect(['p1', 'p2']).toContain(stash.claimedBy)
++    expect(stash.claimedAt).toBe(iso(T0))
++    expect(await store.powerUps(g.id)).toEqual([])
++  })
++
++  it('refuses a stash that was never dropped, is already claimed, or belongs to no game', async () => {
++    const g = await startedGame()
++    await store.updateGame(g.id, { bomoh_stash: { ...dropped, lat: null, lng: null } })
++    expect(await store.claimBomoh(g.id, 'p1', new Date(now))).toBe(false)
++    await store.updateGame(g.id, { bomoh_stash: { ...dropped, claimedBy: 'p0', claimedAt: iso(T0) } })
++    expect(await store.claimBomoh(g.id, 'p1', new Date(now))).toBe(false)
++    expect(await store.claimBomoh('no-such-game', 'p1', new Date(now))).toBe(false)
++  })
++})
+diff --git a/app/api/_lib/store.ts b/app/api/_lib/store.ts
+index 806a46c..3c2d8a3 100644
+--- a/app/api/_lib/store.ts
++++ b/app/api/_lib/store.ts
+@@ -123,20 +123,26 @@ export interface GameStore {
+    * Abang Grab, on pick: atomically checks the Grab is this player's, still held and has an offer, marks it
+    * used and adds the chosen card (offer[choice]) to the player's slot, sealed, with no station.
+    */
+   pickGrab(powerupId: string, playerId: string, choice: number): Promise<GrabPick>
+   /**
+    * Dato Seri's hidden stash (jail design §4b): atomically, if the game has a stash nobody has claimed, marks
+    * it claimed by this player (claimedAt = store clock) and gives them the 'dato' card, with no station.
+    * Null if there's no stash or someone got there first.
+    */
+   claimDato(gameId: string, playerId: string): Promise<PowerUp | null>
++  /**
++   * Claims Bomoh's dropped stash for a player, stamping it claimed at `at`. Returns true only for the one caller
++   * who wins; no powerups row is inserted, since Bomoh activates on claim. False if nothing was dropped or it's
++   * already claimed.
++   */
++  claimBomoh(gameId: string, playerId: string, at: Date): Promise<boolean>
+   /** Consumes a shield only if it wasn't already; true for the first caller. */
+   consumeShield(id: string): Promise<boolean>
+   /** Adds a bonus (Flare) ping with the next free bonus number; safe when two happen at once. */
+   /** Adds surprise ping `seq` only if that number is free; false if another one took it first. */
+   addBonusPing(gameId: string, seq: number, alertAt: string, revealAt: string): Promise<boolean>
+   /** Pauses a started, unfinished, unpaused game (paused_at = store clock); true for the first caller. */
+   pauseGame(gameId: string): Promise<boolean>
+   /**
+    * Atomically ends the pause: records it, clears paused_at, and moves every unrevealed ping later
+    * by its length. Returns that length in ms, or null if the game wasn't paused.
+@@ -512,20 +518,28 @@ export class MemoryStore implements GameStore {
+       claimed_at: this.nowIso(),
+       used_at: null,
+       consumed_at: null,
+       sealed: false,
+       taken_at: null,
+       offer: null,
+     }
+     this.powerUpRows.push(row)
+     return { ...row }
+   }
++  async claimBomoh(gameId: string, playerId: string, at: Date) {
++    const g = this.games.find((x) => x.id === gameId)
++    // Not dropped yet (no spot), or already claimed: nothing to take.
++    if (!g?.bomoh_stash || typeof g.bomoh_stash.lat !== 'number' || g.bomoh_stash.claimedBy !== null) return false
++    // A fresh object: gameByCode hands out shallow copies that share the old one.
++    g.bomoh_stash = { ...g.bomoh_stash, claimedBy: playerId, claimedAt: at.toISOString() }
++    return true
++  }
+   async consumeShield(id: string) {
+     const u = this.powerUpRows.find((x) => x.id === id)
+     if (!u || u.consumed_at) return false
+     u.consumed_at = this.nowIso()
+     return true
+   }
+   async addBonusPing(gameId: string, seq: number, alertAt: string, revealAt: string) {
+     if (this.pingRows.some((p) => p.game_id === gameId && p.seq === seq)) return false
+     this.pingRows.push({ game_id: gameId, seq, alert_at: alertAt, reveal_at: revealAt, alerted: false, revealed: false })
+     return true
+diff --git a/app/api/_lib/supabaseStore.ts b/app/api/_lib/supabaseStore.ts
+index 1162a09..362219e 100644
+--- a/app/api/_lib/supabaseStore.ts
++++ b/app/api/_lib/supabaseStore.ts
+@@ -1,18 +1,18 @@
+ import { LUAR_GARISAN_GRACE_MS } from '../../shared/alerts.js'
+ import type { SupabaseClient } from '@supabase/supabase-js'
+ import type { Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard } from '../../shared/types.js'
+ import { newDatoCode } from './secrets.js'
+ import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
+ 
+ const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at'
+-const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, kit'
++const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit'
+ 
+ function check<T>(res: { data: T; error: { message: string } | null }): T {
+   if (res.error) throw new Error(res.error.message)
+   return res.data
+ }
+ 
+ /** PostgREST's "no such function" (PGRST202) or Postgres's undefined_function (42883). */
+ const isMissingFunction = (error: { code?: string } | null) => error?.code === 'PGRST202' || error?.code === '42883'
+ 
+ let warnedMissingAddPosition = false
+@@ -250,20 +250,24 @@ export class SupabaseStore implements GameStore {
+     const reason = row?.result
+     return { ok: false, reason: reason === 'already-used' || reason === 'taken' || reason === 'no-offer' || reason === 'bad-choice' ? reason : 'not-yours' }
+   }
+   async claimDato(gameId: string, playerId: string): Promise<PowerUp | null> {
+     // The database function locks the game row, re-checks the stash is unclaimed, marks it and inserts the card.
+     const rows = check(await this.db.rpc('claim_dato', { p_game: gameId, p_player: playerId, p_at: this.nowIso() })) as
+       | PowerUp[]
+       | null
+     return rows?.[0] ?? null
+   }
++  async claimBomoh(gameId: string, playerId: string, at: Date): Promise<boolean> {
++    // The database function locks the game row, re-checks the stash is unclaimed, and marks it claimed. True for the winner.
++    return check(await this.db.rpc('claim_bomoh', { p_game: gameId, p_player: playerId, p_at: at.toISOString() })) === true
++  }
+   async consumeShield(id: string) {
+     const rows = check(
+       await this.db.from('powerups').update({ consumed_at: this.nowIso() }).eq('id', id).is('consumed_at', null).select('id'),
+     )
+     return (rows ?? []).length > 0
+   }
+   async addBonusPing(gameId: string, seq: number, alertAt: string, revealAt: string) {
+     // Two Mat Rempits at once pick the same number; the primary key lets only one in (one at a time, §5a).
+     const { error } = await this.db
+       .from('pings')
+diff --git a/app/shared/types.ts b/app/shared/types.ts
+index f8abde0..0ed35dc 100644
+--- a/app/shared/types.ts
++++ b/app/shared/types.ts
+@@ -85,20 +85,25 @@ export interface Game {
+   chaser_sets?: number | null
+   runner_draws?: number
+   chaser_draws?: number
+   /** Secret seed for the deck shuffle, set at start; never sent to players, so the next card can't be predicted. */
+   deck_seed?: string | null
+   /**
+    * Dato Seri's hidden stash (jail design §4b): where the organiser or a marshal dropped the card, and who
+    * scanned it first. Never sent to players as is: they get a fuzzy, unlabelled zone. Older games have none.
+    */
+   dato_stash?: DatoStash | null
++  /**
++   * Bomoh's hidden stash (jail design §2e): the purple card's drop spot and who scanned it first. Same shape and
++   * secrecy as `dato_stash`. Older games have none.
++   */
++  bomoh_stash?: BomohStash | null
+   /**
+    * The organiser's packing list: `ticks` maps an item id to the label it was ticked under (the item un-ticks
+    * itself if its label changes), and `placed` is which cards are taped up. Older games have none.
+    */
+   kit?: { ticks: Record<string, string>; placed: Record<string, boolean> }
+ }
+ 
+ export interface DatoStash {
+   /**
+    * The secret on the printed ★ card (QR `datoQr(code)`): the code of the yellow card assigned to this game, so a
+@@ -111,20 +116,33 @@ export interface DatoStash {
+    * card sets existed have none, and claim against `code` alone.
+    */
+   card?: { id: string; letter: string }
+   /** Where the card was dropped; null until the organiser or a marshal drops it. */
+   lat: number | null
+   lng: number | null
+   claimedBy: string | null
+   claimedAt: string | null
+ }
+ 
++/** Bomoh's hidden stash: the same shape as `DatoStash`, kept apart so the two legendaries stay independent. */
++export interface BomohStash {
++  /** The secret on the printed purple card; never sent to players. See `DatoStash.code`. */
++  code?: string
++  /** The organisation's reusable purple card this game was assigned. See `DatoStash.card`. */
++  card?: { id: string; letter: string }
++  /** Where the card was dropped; null until the organiser or a marshal drops it. */
++  lat: number | null
++  lng: number | null
++  claimedBy: string | null
++  claimedAt: string | null
++}
++
+ /**
+  * One of an organisation's six reusable secret cards: A-C yellow (Dato Seri) and A-C purple (Bomoh).
+  * `ready`: printed and can be put in play. `retired`: found, or retired by hand. `printing`: has a new code that
+  * isn't confirmed printed yet.
+  */
+ export interface SecretCard {
+   id: string
+   organisation_id: string
+   legendary: 'dato' | 'bomoh'
+   letter: 'A' | 'B' | 'C'
+diff --git a/supabase/migrations/0015_bomoh.sql b/supabase/migrations/0015_bomoh.sql
+new file mode 100644
+index 0000000..561a9c5
+--- /dev/null
++++ b/supabase/migrations/0015_bomoh.sql
+@@ -0,0 +1,28 @@
++-- Bomoh's hidden stash (jail design §2e): same shape as Dato Seri's, { code, lat, lng, claimedBy, claimedAt }.
++alter table games add column if not exists bomoh_stash jsonb;
++
++-- Mirrors claim_dato() exactly (same locking and re-check), except it never inserts into powerups: Bomoh
++-- activates the instant it's claimed (spec §2e), it doesn't sit in a hand. Returns true iff this call won the claim.
++create or replace function claim_bomoh(p_game uuid, p_player uuid, p_at timestamptz) returns boolean
++language plpgsql
++as $$
++declare
++  g games;
++begin
++  select * into g from games where id = p_game for update;
++  if not found or g.bomoh_stash is null or jsonb_typeof(g.bomoh_stash) <> 'object'
++     or coalesce(jsonb_typeof(g.bomoh_stash -> 'lat'), 'missing') <> 'number'
++     or (g.bomoh_stash ->> 'claimedBy') is not null then
++    return false;
++  end if;
++  update games
++     set bomoh_stash = g.bomoh_stash || jsonb_build_object(
++           'claimedBy', p_player::text,
++           'claimedAt', to_char(p_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
++   where id = p_game;
++  return true;
++end;
++$$;
++
++revoke execute on function claim_bomoh(uuid, uuid, timestamptz) from public, anon, authenticated;
++grant execute on function claim_bomoh(uuid, uuid, timestamptz) to service_role;

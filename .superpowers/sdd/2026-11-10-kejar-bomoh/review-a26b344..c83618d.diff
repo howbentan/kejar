@@ -1,0 +1,124 @@
+# Review package: a26b344e4eb110cc539221f143cd83560959b402..c83618d088cf5a723ce9befb604741132ea06d37
+
+## Commits
+c83618d fix: strengthen Bomoh zone test and add decoy/organiser-gating coverage
+
+## Files changed
+ app/shared/views.test.ts | 53 ++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 53 insertions(+)
+
+## Diff
+diff --git a/app/shared/views.test.ts b/app/shared/views.test.ts
+index 91d300e..53c5356 100644
+--- a/app/shared/views.test.ts
++++ b/app/shared/views.test.ts
+@@ -594,20 +594,43 @@ describe("Bomoh's team-wide reveal (jail design §2e)", () => {
+     expect(dot.revealedBy).toBe('bomoh')
+   })
+ 
+   it('an unclaimed bomoh_stash has no effect on any dot', () => {
+     const v = view(chaser, { game: { ...g, bomoh_stash: bomohStash(null) } })
+     const dot = v.dots.find((d) => d.id === 'r1')!
+     expect(dot.revealedBy).toBeNull()
+     expect(dot.exact).toBeUndefined()
+     expect(dot.fuzzy).toBe(true)
+   })
++
++  it('a decoyed runner under an active Bomoh is shown exactly at the decoy spot, not their real one', () => {
++    const decoy: PowerUp = {
++      id: 'ud',
++      game_id: 'g1',
++      player_id: 'r1',
++      kind: 'decoy',
++      station: 1,
++      claimed_at: iso(T0 + 13 * MIN),
++      used_at: iso(T0 + 14 * MIN),
++      consumed_at: null,
++      sealed: false,
++      taken_at: null,
++      offer: null,
++    }
++    const dot = view(chaser, { game: { ...g, bomoh_stash: bomohStash(T0 + 12 * MIN) }, powerUps: [decoy] }).dots.find(
++      (d) => d.id === 'r1',
++    )!
++    expect(dot.exact).toBe(true)
++    expect(dot.fuzzy).toBeUndefined()
++    expect(dot.revealedBy).toBe('bomoh')
++    expect(distanceM(dot, A)).toBeGreaterThanOrEqual(119) // the decoy spot, not Aina's real one
++  })
+ })
+ 
+ describe('power-up secrecy', () => {
+   const used = (playerId: string, kind: PowerUp['kind'], usedAt: number): PowerUp => ({
+     id: `${playerId}-${kind}`,
+     game_id: 'g1',
+     player_id: playerId,
+     kind,
+     station: 1,
+     claimed_at: new Date(usedAt - MIN).toISOString(),
+@@ -875,35 +898,65 @@ describe("Dato Seri's hint zone (jail design §4b)", () => {
+     expect(view(aina, { game: { ...full('g1'), ended_at: iso(NOW - MIN) } }).legendaryZone).toBeNull()
+   })
+ })
+ 
+ describe("Bomoh's hint zone (jail design §2e)", () => {
+   const stash = { lat: 3.004, lng: 101.004, claimedBy: null, claimedAt: null }
+   const full = (id: string) => game({ id, settings: { ...DEFAULT_SETTINGS, mode: 'full' }, dato_stash: stash, bomoh_stash: stash })
+ 
+   it('lands at a different offset than an unclaimed dato_stash at the same spot (distinct seed suffix)', () => {
+     const v = view(aina, { game: full('g1') })
++    // Positive shape/geometry assertions first: a missing `bomohZoneFor` leaves `bomohZone` `undefined`, which
++    // would vacuously pass a bare `.not.toBeNull()`/`.not.toEqual()` check, so assert it's a real zone.
+     expect(v.bomohZone).not.toBeNull()
++    expect(typeof v.bomohZone?.lat).toBe('number')
++    expect(typeof v.bomohZone?.lng).toBe('number')
++    expect(v.bomohZone?.radiusM).toBe(LEGENDARY_ZONE_M)
++    const d = distanceM(v.bomohZone!, stash)
++    expect(d).toBeGreaterThanOrEqual(0.3 * LEGENDARY_ZONE_M - 0.5)
++    expect(d).toBeLessThanOrEqual(0.8 * LEGENDARY_ZONE_M + 0.5)
++    // And distinct from Dato's zone at the same spot, proving the seed suffix differs.
+     expect(v.bomohZone).not.toEqual(v.legendaryZone)
+   })
+ 
+   it('a claimed or undropped bomoh_stash produces no zone', () => {
+     const claimed = game({ settings: { ...DEFAULT_SETTINGS, mode: 'full' }, bomoh_stash: { ...stash, claimedBy: 'r2', claimedAt: iso(NOW) } })
+     expect(view(aina, { game: claimed }).bomohZone).toBeNull()
+     const undropped = game({ settings: { ...DEFAULT_SETTINGS, mode: 'full' }, bomoh_stash: { lat: null, lng: null, claimedBy: null, claimedAt: null } })
+     expect(view(aina, { game: undropped }).bomohZone).toBeNull()
+   })
+ 
+   it('Core mode produces no bomoh zone even with a dropped stash', () => {
+     const core = game({ settings: { ...DEFAULT_SETTINGS, mode: 'core' }, bomoh_stash: stash })
+     expect(view(aina, { game: core }).bomohZone).toBeNull()
+   })
++
++  it('the organiser gets the exact bomoh stash instead of a zone; a marshal gets neither', () => {
++    const h = view(organiserMe, { game: full('g1') })
++    expect(h.bomohZone).toBeNull()
++    expect(h.bomohStash).toEqual(stash)
++    const m = view(siti, { game: full('g1') })
++    expect(m.bomohZone).toBeNull()
++    expect(m).not.toHaveProperty('bomohStash')
++  })
++
++  it("the Bomoh card is for the organiser only, never in a player's or a marshal's view (ruling R15, rules doc §9b)", () => {
++    const g = { ...full('g1'), bomoh_stash: { ...stash, code: 'Secret-purple-code-98765', card: { id: 'sc2', letter: 'A' } } }
++    expect(view(organiserMe, { game: g }).bomohCard).toEqual({ letter: 'A', code: 'Secret-purple-code-98765' })
++    expect(view(organiserMe, { game: g }).bomohStash).toEqual(stash)
++    for (const me of [siti, aina, chaser, { ...aina, jailed: true }]) {
++      const v = view(me, { game: g })
++      expect(v).not.toHaveProperty('bomohCard')
++      expect(v).not.toHaveProperty('bomohStash')
++      expect(JSON.stringify(v)).not.toContain('Secret-purple-code-98765')
++    }
++  })
+ })
+ 
+ describe('Luar Garisan views', () => {
+   const out = { ...hafiz, disqualified_at: iso(T0 + 12 * MIN) }
+ 
+   it('a disqualified runner gets the delayed spectator dots a jailed runner gets', () => {
+     const ps = { ...positions, c1: [pos(3.001, 101.001, NOW - 3 * MIN), pos(3.009, 101.009, NOW - 1 * MIN)] }
+     const v = view(out, { players: [chaser, aina, out, wei, siti], positions: ps })
+     expect(v.dots.find((d) => d.id === 'c1')).toMatchObject({ lat: 3.001, lng: 101.001 })
+   })
