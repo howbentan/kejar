@@ -14,6 +14,8 @@ const aina = player('r1', 'runner', { name: 'Aina', tag_id: 7 })
 const hafiz = player('r2', 'runner', { name: 'Hafiz', tag_id: 3 })
 const wei = player('r3', 'runner', { name: 'Wei', tag_id: 14 })
 const siti = player('m1', 'marshal', { name: 'Siti' })
+/** The organiser's own view: the synthetic player the state action builds for them. */
+const organiserMe: Player = { ...siti, id: 'host', name: 'Organiser' }
 const players = [chaser, aina, hafiz, wei, siti]
 
 const A = { lat: 3.002, lng: 101.002 }
@@ -763,31 +765,37 @@ describe("Dato Seri's hint zone (jail design §4b)", () => {
     expect(zone('secret-one')).toEqual(zone('secret-one'))
   })
 
-  it('is the same for runners and chasers, jailed or free; marshals get the exact stash instead', () => {
+  it('is the same for runners and chasers, jailed or free; the organiser gets the exact stash instead, a marshal neither', () => {
     const z = view(aina, { game: full('g1') }).legendaryZone
     expect(view(chaser, { game: full('g1') }).legendaryZone).toEqual(z)
     expect(view({ ...aina, jailed: true }, { game: full('g1') }).legendaryZone).toEqual(z)
+    const h = view(organiserMe, { game: full('g1') })
+    expect(h.legendaryZone).toBeNull()
+    expect(h.datoStash).toEqual(stash)
     const m = view(siti, { game: full('g1') })
     expect(m.legendaryZone).toBeNull()
-    expect(m.datoStash).toEqual(stash)
+    expect(m).not.toHaveProperty('datoStash')
   })
 
-  it("the card's code is for marshals only, never in a player's view (ruling R15)", () => {
-    const g = { ...full('g1'), dato_stash: { ...stash, code: 'Secret-card-code-12345' } }
-    expect(view(siti, { game: g }).datoCode).toBe('Secret-card-code-12345')
-    expect(view(siti, { game: g }).datoStash).toEqual(stash)
-    for (const me of [aina, chaser, { ...aina, jailed: true }]) {
+  it("the card is for the organiser only, never in a player's or a marshal's view (ruling R15, rules doc §9b)", () => {
+    const g = { ...full('g1'), dato_stash: { ...stash, code: 'Secret-card-code-12345', card: { id: 'sc1', letter: 'B' } } }
+    expect(view(organiserMe, { game: g }).datoCard).toEqual({ letter: 'B', code: 'Secret-card-code-12345' })
+    expect(view(organiserMe, { game: g }).datoStash).toEqual(stash)
+    expect(view(organiserMe, { game: g }).settings.legendaries).toEqual(g.settings.legendaries)
+    for (const me of [siti, aina, chaser, { ...aina, jailed: true }]) {
       const v = view(me, { game: g })
-      expect(v).not.toHaveProperty('datoCode')
+      expect(v).not.toHaveProperty('datoCard')
+      expect(v).not.toHaveProperty('datoStash')
+      expect(v.settings).not.toHaveProperty('legendaries')
       expect(JSON.stringify(v)).not.toContain('Secret-card-code-12345')
     }
   })
 
-  it('a stash made with the game but not dropped yet has no zone, and no pin for marshals', () => {
-    const g = { ...full('g1'), dato_stash: { code: 'c0de', lat: null, lng: null, claimedBy: null, claimedAt: null } }
+  it('a stash made with the game but not dropped yet has no zone, and no pin for the organiser', () => {
+    const g = { ...full('g1'), dato_stash: { code: 'c0de', card: { id: 'sc1', letter: 'A' }, lat: null, lng: null, claimedBy: null, claimedAt: null } }
     expect(view(aina, { game: g }).legendaryZone).toBeNull()
-    expect(view(siti, { game: g }).datoStash).toBeNull()
-    expect(view(siti, { game: g }).datoCode).toBe('c0de')
+    expect(view(organiserMe, { game: g }).datoStash).toBeNull()
+    expect(view(organiserMe, { game: g }).datoCard).toEqual({ letter: 'A', code: 'c0de' })
   })
 
   it("the Settle picker is offered only during the chase, and not while paused", () => {
@@ -839,6 +847,18 @@ describe('Luar Garisan views', () => {
     expect(v.roster.find((r) => r.id === 'r1')?.disqualified_at).toBeFalsy()
   })
 
+  it('the marshal and organiser rosters say whether each person has push on; players never see it', () => {
+    const pushy = { ...siti, push: { endpoint: 'https://push.test/x', keys: { p256dh: 'a', auth: 'b' } } as never }
+    const players = [chaser, aina, wei, pushy]
+    const ofMarshal = view(pushy, { players }).roster
+    expect(ofMarshal.find((r) => r.id === 'm1')?.pushOn).toBe(true)
+    expect(ofMarshal.find((r) => r.id === 'r1')?.pushOn).toBe(false)
+    expect(view(organiserMe, { players }).roster.find((r) => r.id === 'm1')?.pushOn).toBe(true)
+    const lobby = view(aina, { players, game: game({ started_at: null }) })
+    expect(lobby.roster.length).toBeGreaterThan(0)
+    expect(lobby.roster.every((r) => !('pushOn' in r))).toBe(true)
+  })
+
   it('marshals get a luar-garisan alert', () => {
     const events = [event('luar-garisan', T0 + 12 * MIN, { actor_id: 'r2', data: { who: 'Hafiz #03' } })]
     const v = view(siti, { events })
@@ -875,5 +895,43 @@ describe('Luar Garisan on the chasers and the feed', () => {
       expect(line).toMatchObject({ text: '#07 is Luar Garisan, out of this round.', means: null, act: false })
       expect(lines.filter((f) => /outside|warn/i.test(f.text))).toEqual([])
     }
+  })
+})
+
+describe('the packing list in organiser and marshal views', () => {
+  const kitGame = () =>
+    game({
+      settings: { ...DEFAULT_SETTINGS, mode: 'full' },
+      arena: { ...game().arena, stations: [{ lat: 3.001, lng: 101.001 }] },
+      kit: { ticks: { tape: 'Tape, zip bags, power bank' }, placed: { 'station-1': true } },
+    })
+  const host: Player = { ...siti, id: 'host', name: 'Organiser' }
+  const kitView = (me: Player) => view(me, { game: kitGame(), secretLetters: { dato: 'B' } })
+
+  it("the organiser's view has the secret card and its place", () => {
+    const k = kitView(host).kit!
+    expect(k.items.find((i) => i.id === 'dato-card')).toMatchObject({ label: 'Yellow card B', tone: 'yellow', ticked: false })
+    expect(k.items.find((i) => i.id === 'tape')!.ticked).toBe(true)
+    expect(k.placed).toEqual({ 'station-1': true })
+    expect(k.places.map((p) => p.id)).toEqual(['station-1', 'penjara', 'dato'])
+  })
+
+  it("a marshal's view has the list without the secret card, its letter or its place", () => {
+    const v = kitView(siti)
+    expect(v.kit!.items.map((i) => i.id)).not.toContain('dato-card')
+    expect(v.kit!.places.map((p) => p.id)).not.toContain('dato')
+    expect(JSON.stringify(v.kit)).not.toContain('Yellow card')
+  })
+
+  it('a runner or chaser has no kit at all', () => {
+    for (const me of [aina, chaser]) {
+      const v = kitView(me)
+      expect(v).not.toHaveProperty('kit')
+      expect(JSON.stringify(v)).not.toContain('Yellow card')
+    }
+  })
+
+  it('a removed marshal gets no kit', () => {
+    expect(kitView({ ...siti, removed_at: '2026-01-01T00:00:00Z' }).kit).toBeUndefined()
   })
 })

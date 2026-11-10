@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { JAIL_QR, MAX_STATIONS, stationQr, tagQr } from '../../shared/ids.js'
+import { JAIL_QR, MAX_PLAYERS_PER_GAME, MAX_STATIONS, stationQr, tagQr } from '../../shared/ids.js'
 import { qrDataUrl } from '../game/qr'
 
-const TAGS = Array.from({ length: 30 }, (_, i) => i + 1)
+const TAGS = Array.from({ length: MAX_PLAYERS_PER_GAME }, (_, i) => i + 1)
 const STATIONS = Array.from({ length: MAX_STATIONS }, (_, i) => i + 1)
 
 /**
- * Printable sheet: 30 runner tags plus the jail code. Black on white, no lime text (spec §9). It's public, so it
+ * Printable sheet: armbands #01 to #40 (one per player at the game cap) plus the jail code. Black on white, no lime text (spec §9). It's public, so it
  * never has Full mode's hidden ★ card: each game prints its own from Organiser tools (`PrintCard`, ruling R15).
  */
 export default function PrintTags() {

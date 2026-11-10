@@ -4,6 +4,17 @@
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
 
+// A notice's own deep link, only if it resolves to this site; otherwise null.
+function sameSiteUrl(u) {
+  if (typeof u !== 'string') return null
+  try {
+    const url = new URL(u, self.location.origin)
+    return url.origin === self.location.origin ? url.pathname + url.search + url.hash : null
+  } catch {
+    return null
+  }
+}
+
 self.addEventListener('push', (event) => {
   let data = {}
   try {
@@ -58,7 +69,8 @@ self.addEventListener('push', (event) => {
         requireInteraction: true,
         icon: '/icon-192.png',
         badge: '/icon-192.png',
-        data: { url: '/g/' + data.code },
+        // A notice may carry its own deep link (a caught runner's dispute link); only a path on this site is trusted.
+        data: { url: sameSiteUrl(data.url) || '/g/' + data.code },
       }),
     )
     return

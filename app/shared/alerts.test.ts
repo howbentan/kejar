@@ -32,6 +32,12 @@ describe('alertsFrom', () => {
     ])
   })
 
+  it('a catch on an old runner location is a Check catch even when not flagged', () => {
+    expect(
+      texts([event('caught', T0, { data: { flagged: false, oldRunnerFix: true, who: '#07', chaser: 'Ben' } })]),
+    ).toEqual(['Check catch: #07 by Ben (runner location old)'])
+  })
+
   it('appends a report note after a dash', () => {
     expect(
       texts([event('report', T0, { data: { name: 'Hafiz', targetName: 'Ben', reason: 'dispute', note: 'tag was already off' } })]),

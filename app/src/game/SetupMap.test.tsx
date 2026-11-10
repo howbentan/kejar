@@ -80,14 +80,14 @@ describe('HiddenCard: dropping Dato Seri', () => {
   })
 
   it("opened, it links to a print page for this game's own card, with the code kept out of the server's logs", () => {
-    render(<HiddenCard view={lobby({ datoCode: 'Zx9_q-4abc' })} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={() => {}} />)
+    render(<HiddenCard view={lobby({ datoCard: { letter: 'B', code: 'Zx9_q-4abc' } })} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={() => {}} />)
     expect(screen.queryByRole('link', { name: 'Print the ★ card' })).toBeNull()
     open()
     expect(screen.getByRole('link', { name: 'Print the ★ card' })).toHaveAttribute('href', '/print/card#Zx9_q-4abc')
   })
 
   it('no print link when the game has no card code', () => {
-    render(<HiddenCard view={lobby({ datoCode: null })} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={() => {}} />)
+    render(<HiddenCard view={lobby({ datoCard: null })} code="ABC234" credentials={{ organiserToken: 'h1' }} refresh={() => {}} />)
     open()
     expect(screen.queryByRole('link', { name: 'Print the ★ card' })).toBeNull()
   })

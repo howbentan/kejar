@@ -128,11 +128,11 @@ describe('handle', () => {
       }
     })
 
-    it('lets a group of 60 join from one IP in a minute', async () => {
+    it('lets a group of 39 more (a full game of 40) join from one IP in a minute', async () => {
       const store = new MemoryStore(() => T0)
       const { code } = await lobby(store)
       const deps = { ...makeDeps(store), ip: '5.6.7.9' }
-      for (let i = 0; i < 60; i++) {
+      for (let i = 0; i < 39; i++) {
         const r = await handle({ action: 'join', code, name: `P${i}`, accepted: true }, deps)
         expect(r.status).toBe(200)
       }

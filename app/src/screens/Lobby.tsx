@@ -5,7 +5,8 @@ import { currentPushEnv, NotificationsDeniedError, pushSupport, subscribe } from
 import { call } from '../game/api'
 import { loadSession } from '../game/session'
 import Scanner from '../game/Scanner'
-import SetupMap, { HiddenCard } from '../game/SetupMap'
+import SetupMap from '../game/SetupMap'
+import WalkPark from './WalkPark'
 import { ErrorText, ModeBadge, Screen, tagText } from '../game/ui'
 
 const ROLE_COPY = {
@@ -56,6 +57,7 @@ function AlertsCard({ code, view, onDone }: { code: string; view: View; onDone: 
 export default function Lobby({ code, view, refresh }: { code: string; view: View; refresh: () => void }) {
   const [scanning, setScanning] = useState(false)
   const [error, setError] = useState('')
+  const [walking, setWalking] = useState(false)
   const role = view.me.role
 
   const link = useCallback(
@@ -74,6 +76,11 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
   )
   const onScan = useCallback((text: string) => void link(tagIdFromQr(text)), [link])
 
+  const token = loadSession(localStorage, code).token
+  if (walking && role === 'marshal' && token) {
+    return <WalkPark code={code} view={view} credentials={{ token }} refresh={refresh} onBack={() => setWalking(false)} />
+  }
+
   return (
     <Screen eyebrow={`kejar. · game ${code}`}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -81,8 +88,13 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
         <ModeBadge mode={view.settings.mode} />
       </div>
       <p className="muted">{role ? ROLE_COPY[role] : 'Waiting for the organiser to give you a role…'}</p>
+      {/* Marshals are the helper: the hidden card is the organiser's alone (rules doc §9b), so no panel here. */}
       {role === 'marshal' && <SetupMap view={view} />}
-      {role === 'marshal' && <HiddenCard view={view} code={code} credentials={{ token: loadSession(localStorage, code).token ?? '' }} refresh={refresh} />}
+      {role === 'marshal' && token && (
+        <button type="button" className="btn btn-ghost" onClick={() => setWalking(true)}>
+          Walk the park
+        </button>
+      )}
 
       {role === 'runner' && (
         <div className="card">

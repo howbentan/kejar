@@ -9,6 +9,11 @@
   --legendary-2: #FFD60A;
   --legendary-3: #F5B800;
   --legendary-ink: #1A1400;
+  /* Bomoh's legendary purple: the only other colour besides lime and yellow, never on any other card. */
+  --bomoh-1: #F0E0FF;
+  --bomoh-2: #C9A4FF;
+  --bomoh-3: #9B5DE5;
+  --bomoh-ink: #2B0B45;
   --black: #0A0A0B;
   --white: #F5F5F3;
   --dim: rgba(245, 245, 243, 0.55);

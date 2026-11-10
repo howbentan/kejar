@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import type { Role } from '../../shared/types.js'
 import { call } from '../game/api'
+import BeforeYouStart from '../game/BeforeYouStart'
+import CrewStep from '../game/CrewStep'
 import { AlertsOnPhone } from '../game/MarshalTools'
+import PackList from '../game/PackList'
 import SetupMap, { HiddenCard } from '../game/SetupMap'
 import { loadOrganiserSession } from '../game/organiserSession'
 import { qrDataUrl } from '../game/qr'
@@ -9,6 +12,12 @@ import { ErrorText, ModeBadge, Pills, Screen, tagText } from '../game/ui'
 import { useGameState } from '../game/useGameState'
 
 type Side = Extract<Role, 'runner' | 'chaser'>
+
+// Players look at this screen to scan the join code, so its notices never name the secret card (the full
+// wording sits behind Organiser tools).
+const NO_CARD_LINE = 'Hidden card is off for now. Reprint a card to use it.'
+const PICK_UP_LINE = 'Hidden card is off for this game. Pick it up.'
+const STARTED_NO_CARD_LINE = 'Started without the hidden card. Reprint a card for next time.'
 const SIDES: { value: Side; text: string }[] = [
   { value: 'runner', text: 'Dikejar' },
   { value: 'chaser', text: 'Kejar' },
@@ -21,6 +30,8 @@ export default function HostLobby({ code }: { code: string }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [marshalInviteUrl, setMarshalInviteUrl] = useState('')
+  const [notice, setNotice] = useState('')
+  const [startNotice, setStartNotice] = useState('')
   const joinUrl = `${window.location.origin}/join/${code}`
 
   useEffect(() => {
@@ -28,14 +39,38 @@ export default function HostLobby({ code }: { code: string }) {
   }, [joinUrl])
 
   useEffect(() => {
-    if (view && view.phase !== 'lobby') window.location.assign(`/g/${code}`)
-  }, [view, code])
+    // A notice from the start waits for the organiser to read it before going to the game.
+    if (view && view.phase !== 'lobby' && !startNotice) window.location.assign(`/g/${code}`)
+  }, [view, code, startNotice])
 
   async function act(action: string, body: object) {
     setBusy(true)
     setError('')
     try {
-      await call(action, { code, organiserToken: organiser!.organiserToken, ...body })
+      const res = await call<{ notice?: string } | undefined>(action, { code, organiserToken: organiser!.organiserToken, ...body })
+      if (action === 'start' && res?.notice) setStartNotice(STARTED_NO_CARD_LINE)
+      refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Core and Full can change here, in the lobby, and never after the start.
+  async function changeMode() {
+    if (!view) return
+    setBusy(true)
+    setError('')
+    setNotice('')
+    try {
+      const res = await call<{ notice?: string }>('setMode', {
+        code,
+        organiserToken: organiser!.organiserToken,
+        mode: view.settings.mode === 'full' ? 'core' : 'full',
+      })
+      if (res?.notice) setNotice(NO_CARD_LINE)
+      else if (view.settings.mode === 'full' && view.datoStash) setNotice(PICK_UP_LINE)
       refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -67,11 +102,42 @@ export default function HostLobby({ code }: { code: string }) {
   const runners = players.filter((p) => p.role === 'runner').length
   const chasers = players.filter((p) => p.role === 'chaser').length
   const suggested = Math.max(1, Math.round(players.length / 4))
+  // Full and wanting the hidden card, but none was free yet: the lobby keeps trying (ruling R9), so this stays
+  // until a card is assigned. `legendaries` and `datoCard` are in the organiser's own view only.
+  const waitingForCard = !!view && view.settings.mode === 'full' && view.settings.legendaries?.dato === 'stash' && view.datoCard === null
+  const shownNotice = notice === NO_CARD_LINE && view?.datoCard ? '' : notice || (waitingForCard ? NO_CARD_LINE : '')
 
   if (!organiser) {
     return (
       <Screen eyebrow="kejar. · organise">
         <p className="muted">This phone didn&apos;t create game {code}, so it can&apos;t run it.</p>
+      </Screen>
+    )
+  }
+
+  // The new-game setup's steps 4 and 5 stand in for the lobby: no join QR yet.
+  const setup = new URLSearchParams(window.location.search).get('setup')
+  if (setup === 'crew' || setup === 'pack') {
+    return (
+      <Screen eyebrow={`kejar. · game ${code}`}>
+        {!view ? (
+          <ErrorText>{loadError}</ErrorText>
+        ) : setup === 'crew' ? (
+          <CrewStep code={code} view={view} organiserToken={organiser.organiserToken} />
+        ) : (
+          <PackList code={code} view={view} refresh={refresh} />
+        )}
+      </Screen>
+    )
+  }
+
+  if (startNotice) {
+    return (
+      <Screen eyebrow={`kejar. · game ${code}`}>
+        <p className="muted">{startNotice}</p>
+        <button className="btn" onClick={() => window.location.assign(`/g/${code}`)}>
+          Go to the game
+        </button>
       </Screen>
     )
   }
@@ -83,8 +149,15 @@ export default function HostLobby({ code }: { code: string }) {
           {code}
         </h1>
         {view && <ModeBadge mode={view.settings.mode} />}
+        {view && (
+          <button type="button" className="btn btn-ghost" style={{ width: 'auto', padding: '4px 10px', fontSize: 12 }} disabled={busy} onClick={changeMode}>
+            Change
+          </button>
+        )}
       </div>
+      {shownNotice && <p className="muted">{shownNotice}</p>}
       {view && <AlertsOnPhone code={code} view={view} refresh={refresh} />}
+      {view && <BeforeYouStart code={code} view={view} refresh={refresh} />}
       {view && <SetupMap view={view} />}
       <div className="card" style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
         {qr && <img src={qr} alt="Join QR code" width={120} height={120} style={{ borderRadius: 10 }} />}

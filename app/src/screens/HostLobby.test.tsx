@@ -138,3 +138,138 @@ describe('HostLobby', () => {
     expect(screen.getByText('Station 1')).toBeInTheDocument()
   })
 })
+
+describe('HostLobby setup steps', () => {
+  const at = (search: string) =>
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, origin: 'https://kejar.test', search, assign: vi.fn() } })
+  afterEach(() => at(''))
+
+  it('?setup=crew shows step 4 with the progress bar and no join QR', async () => {
+    at('?setup=crew')
+    render(<HostLobby code="ABC234" />)
+    expect(await screen.findByRole('heading', { name: 'Your crew.' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Step 4 of 5' })).toBeInTheDocument()
+    expect(screen.queryByAltText('Join QR code')).toBeNull()
+  })
+
+  it('?setup=pack shows step 5 with the progress bar and no join QR', async () => {
+    at('?setup=pack')
+    call.mockImplementation(async (action: string) =>
+      action === 'state' ? { ...lobbyView, kit: { items: [{ id: 'armbands', group: 'pack', label: 'Armbands #01–#40', ticked: false }], places: [], placed: {} } } : {},
+    )
+    render(<HostLobby code="ABC234" />)
+    expect(await screen.findByRole('heading', { name: 'Pack.' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Step 5 of 5' })).toBeInTheDocument()
+    expect(screen.queryByAltText('Join QR code')).toBeNull()
+  })
+})
+
+describe('HostLobby mode and checks', () => {
+  const fullView = {
+    ...lobbyView,
+    settings: { ...DEFAULT_SETTINGS, mode: 'full' },
+    kit: {
+      items: [
+        { id: 'penjara', group: 'pack', label: 'Penjara card', ticked: false },
+        { id: 'dato-card', group: 'pack', label: 'Yellow card B', tone: 'yellow', note: '(secret)', ticked: false },
+        { id: 'brief-players', group: 'day', label: 'Brief the players', ticked: false },
+      ],
+      places: [],
+      placed: {},
+    },
+  } as unknown as View
+
+  it('Change switches Core to Full through setMode', async () => {
+    render(<HostLobby code="ABC234" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Change' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('setMode', { code: 'ABC234', organiserToken: 'h1', mode: 'full' }))
+  })
+
+  it('switching Full to Core drops the secret card from the packing list', async () => {
+    let mode: 'full' | 'core' = 'full'
+    call.mockImplementation(async (action: string, body: { mode?: 'full' | 'core' }) => {
+      if (action === 'setMode') {
+        mode = body.mode!
+        return { ok: true }
+      }
+      if (action !== 'state') return {}
+      if (mode === 'full') return fullView
+      return { ...fullView, settings: { ...DEFAULT_SETTINGS, mode: 'core' }, kit: { ...fullView.kit, items: fullView.kit!.items.filter((i) => i.id !== 'dato-card') } }
+    })
+    render(<HostLobby code="ABC234" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Kit list' }))
+    expect(await screen.findByText('Yellow card B')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Change' }))
+    await waitFor(() => expect(screen.queryByText('Yellow card B')).toBeNull())
+    expect(screen.getByText('CORE')).toBeInTheDocument()
+  })
+
+  it("with no yellow card free, setMode's notice is neutral on the open screen and full only behind Organiser tools", async () => {
+    let mode: 'core' | 'full' = 'core'
+    call.mockImplementation(async (action: string) => {
+      if (action === 'setMode') {
+        mode = 'full'
+        return { ok: true, notice: 'Reprint a yellow card to use Dato Seri.' }
+      }
+      if (action !== 'state') return {}
+      return mode === 'core' ? lobbyView : { ...lobbyView, settings: { ...DEFAULT_SETTINGS, mode: 'full' }, datoStash: null, datoCard: null }
+    })
+    render(<HostLobby code="ABC234" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Change' }))
+    expect(await screen.findByText('Hidden card is off for now. Reprint a card to use it.')).toBeInTheDocument()
+    await screen.findByText('FULL')
+    expect(document.body.textContent).not.toMatch(/dato|yellow/i)
+    fireEvent.click(screen.getByRole('button', { name: 'Organiser tools' }))
+    expect(screen.getByText('Reprint a yellow card to use Dato Seri.')).toBeInTheDocument()
+  })
+
+  it('the no-card line stays while the lobby still has no card (ruling R9), and goes once one is assigned', async () => {
+    let card: { letter: string; code: string } | null = null
+    call.mockImplementation(async (action: string) =>
+      action === 'state' ? { ...lobbyView, settings: { ...DEFAULT_SETTINGS, mode: 'full' }, datoStash: null, datoCard: card } : {},
+    )
+    const { unmount } = render(<HostLobby code="ABC234" />)
+    expect(await screen.findByText('Hidden card is off for now. Reprint a card to use it.')).toBeInTheDocument()
+    unmount()
+    card = { letter: 'A', code: 'x'.repeat(22) }
+    render(<HostLobby code="ABC234" />)
+    await screen.findByText('FULL')
+    expect(screen.queryByText('Hidden card is off for now. Reprint a card to use it.')).toBeNull()
+  })
+
+  it('switching Full to Core with the stash already dropped says so neutrally, with no confirm', async () => {
+    const dropped = { lat: 0.002, lng: 0.002, claimedBy: null, claimedAt: null }
+    call.mockImplementation(async (action: string) => (action === 'state' ? { ...fullView, datoStash: dropped } : {}))
+    render(<HostLobby code="ABC234" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Change' }))
+    expect(await screen.findByText('Hidden card is off for this game. Pick it up.')).toBeInTheDocument()
+    expect(call).toHaveBeenCalledWith('setMode', { code: 'ABC234', organiserToken: 'h1', mode: 'core' })
+  })
+
+  it("shows start's notice and waits for the organiser before going to the game", async () => {
+    const assign = vi.fn()
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, origin: 'https://kejar.test', search: '', assign } })
+    let started = false
+    call.mockImplementation(async (action: string) => {
+      if (action === 'start') {
+        started = true
+        return { startedAt: 'now', notice: 'Reprint a yellow card to use Dato Seri.' }
+      }
+      return action === 'state' ? { ...fullView, phase: started ? 'hiding' : 'lobby' } : {}
+    })
+    render(<HostLobby code="ABC234" />)
+    fireEvent.click(await screen.findByRole('button', { name: /start game/i }))
+    expect(await screen.findByText('Started without the hidden card. Reprint a card for next time.')).toBeInTheDocument()
+    expect(assign).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Go to the game' }))
+    expect(assign).toHaveBeenCalledWith('/g/ABC234')
+  })
+
+  it('shows Before you start, and Start game stays enabled with every check unticked', async () => {
+    call.mockImplementation(async (action: string) => (action === 'state' ? fullView : {}))
+    render(<HostLobby code="ABC234" />)
+    expect(await screen.findByText('BEFORE YOU START')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /Kit placed/ })).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('button', { name: /start game/i })).toBeEnabled()
+  })
+})

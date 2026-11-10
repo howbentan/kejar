@@ -11,6 +11,7 @@ function loadWorker(windows: unknown[]) {
       listeners[type] = fn
     },
     skipWaiting: vi.fn(),
+    location: { origin: 'https://kejar.test' },
     registration: { showNotification: vi.fn(async () => {}) },
     clients: {
       claim: vi.fn(async () => {}),
@@ -134,5 +135,29 @@ describe('service worker notices', () => {
     )
     await click(listeners, '/g/ABC234')
     expect(self.clients.openWindow).toHaveBeenCalledWith('/g/ABC234')
+  })
+
+  it('a notice with a url opens that url when tapped', async () => {
+    const { self, listeners } = loadWorker([])
+    const pending: Promise<unknown>[] = []
+    listeners.push({
+      data: { json: () => ({ type: 'notice', code: 'ABC234', title: 'T', body: 'B', url: '/g/ABC234?dispute=1' }) },
+      waitUntil: (p: Promise<unknown>) => pending.push(p),
+    })
+    await Promise.all(pending)
+    expect(self.registration.showNotification).toHaveBeenCalledWith('T', expect.objectContaining({ data: { url: '/g/ABC234?dispute=1' } }))
+    await click(listeners, '/g/ABC234?dispute=1')
+    expect(self.clients.openWindow).toHaveBeenCalledWith('/g/ABC234?dispute=1')
+  })
+
+  it.each(['https://evil.example/', '/\t/evil.com', '//evil.com', '/\\evil.com'])('a notice url %j that leaves this site is ignored', async (bad) => {
+    const { self, listeners } = loadWorker([])
+    const pending: Promise<unknown>[] = []
+    listeners.push({
+      data: { json: () => ({ type: 'notice', code: 'ABC234', title: 'T', body: 'B', url: bad }) },
+      waitUntil: (p: Promise<unknown>) => pending.push(p),
+    })
+    await Promise.all(pending)
+    expect(self.registration.showNotification).toHaveBeenCalledWith('T', expect.objectContaining({ data: { url: '/g/ABC234' } }))
   })
 })

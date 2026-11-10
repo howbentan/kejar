@@ -27,6 +27,19 @@ function fakeDb() {
 }
 
 describe('SupabaseStore', () => {
+  it('setKitKey sets or removes one packing-list key through set_kit_key, in one call', async () => {
+    const { db, rpcs } = fakeDb()
+    const store = new SupabaseStore(db, () => 0)
+    await store.setKitKey('g1', 'ticks', 'tape', 'Tape')
+    await store.setKitKey('g1', 'placed', 'penjara', true)
+    await store.setKitKey('g1', 'ticks', 'tape', null)
+    expect(rpcs).toEqual([
+      { fn: 'set_kit_key', args: { p_game: 'g1', p_group: 'ticks', p_key: 'tape', p_value: 'Tape' } },
+      { fn: 'set_kit_key', args: { p_game: 'g1', p_group: 'placed', p_key: 'penjara', p_value: true } },
+      { fn: 'set_kit_key', args: { p_game: 'g1', p_group: 'ticks', p_key: 'tape', p_value: null } },
+    ])
+  })
+
   it('stamps a new location with the game clock, so a scan can use the location it just sent', async () => {
     const { db, inserts } = fakeDb()
     const now = Date.parse('2026-10-25T09:07:00.000Z')

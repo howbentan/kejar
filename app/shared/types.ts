@@ -27,6 +27,16 @@ export interface Settings {
    * setting existed have no value, so readers must test `settings.chaserSnapshot === true`.
    */
   chaserSnapshot: boolean
+  /**
+   * How many players the organiser expects: only sets the crew suggestion and the vest count (the printed kit is
+   * always armbands #01–#40). Games stored before this setting existed have none, so readers default to 20.
+   */
+  playersBand: 20 | 30 | 40
+  /**
+   * Which legendary cards this game uses. Only Full mode reads it. Bomoh isn't built yet, so it stays 'off'.
+   * Older games have none: read them as the defaults.
+   */
+  legendaries: { dato: 'off' | 'stash'; bomoh: 'off' | 'stash' }
 }
 
 /** Spec §4.3 defaults. */
@@ -38,6 +48,8 @@ export const DEFAULT_SETTINGS: Settings = {
   checkinMode: 'push',
   mode: 'core',
   chaserSnapshot: false,
+  playersBand: 20,
+  legendaries: { dato: 'stash', bomoh: 'off' },
 }
 
 export interface Arena {
@@ -59,6 +71,8 @@ export interface Game {
   code: string
   arena: Arena
   settings: Settings
+  /** When the game was made (ISO, the column's default). Rows built before it was read may lack it. */
+  created_at?: string
   started_at: string | null
   ended_at: string | null
   winner: 'runners' | 'chasers' | null
@@ -78,20 +92,46 @@ export interface Game {
    * scanned it first. Never sent to players as is: they get a fuzzy, unlabelled zone. Older games have none.
    */
   dato_stash?: DatoStash | null
+  /**
+   * The organiser's packing list: `ticks` maps an item id to the label it was ticked under (the item un-ticks
+   * itself if its label changes), and `placed` is which cards are taped up. Older games have none.
+   */
+  kit?: { ticks: Record<string, string>; placed: Record<string, boolean> }
 }
 
 export interface DatoStash {
   /**
-   * The secret on this game's printed ★ card (QR `datoQr(code)`), made when the Full game is created, so a copy
-   * of another game's card (or of the public sheet) never claims it (ruling R15). Never sent to players. Games
+   * The secret on the printed ★ card (QR `datoQr(code)`): the code of the yellow card assigned to this game, so a
+   * copy of any other card (or of the public sheet) never claims it (ruling R15). Never sent to players. Games
    * made before it existed have none, and their card claims nothing until a drop gives them one.
    */
   code?: string
+  /**
+   * The organisation's reusable yellow card this game was assigned, kept for the game's life. Games made before
+   * card sets existed have none, and claim against `code` alone.
+   */
+  card?: { id: string; letter: string }
   /** Where the card was dropped; null until the organiser or a marshal drops it. */
   lat: number | null
   lng: number | null
   claimedBy: string | null
   claimedAt: string | null
+}
+
+/**
+ * One of an organisation's six reusable secret cards: A-C yellow (Dato Seri) and A-C purple (Bomoh).
+ * `ready`: printed and can be put in play. `retired`: found, or retired by hand. `printing`: has a new code that
+ * isn't confirmed printed yet.
+ */
+export interface SecretCard {
+  id: string
+  organisation_id: string
+  legendary: 'dato' | 'bomoh'
+  letter: 'A' | 'B' | 'C'
+  code: string
+  state: 'ready' | 'retired' | 'printing'
+  /** Set when someone claims it. */
+  found_at: string | null
 }
 
 /** A stash that has been dropped somewhere, without its secret code. */
@@ -177,6 +217,8 @@ export type EventType =
   | 'legendary'
   /** Dato Seri's Settle freed `data.freed` runners. Visible, but never names the card (jail design §4). */
   | 'settled'
+  /** A stash scan by this player that didn't claim. Three lock them out. Never in a feed or an alert. data: {} */
+  | 'stash-miss'
 
 export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along' | 'grab' | 'dato'
 
