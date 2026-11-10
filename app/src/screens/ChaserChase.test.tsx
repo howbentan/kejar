@@ -98,6 +98,28 @@ describe('ChaserChase', () => {
     expect(screen.getByText('Nothing here.')).toBeInTheDocument()
   })
 
+  it.each(['KEJAR:BOMOH:Pq7-abc', 'KEJAR:DATO:Pq7-abc'])('claiming Bomoh (%s) says what it does, with no Dato Seri reveal', async (qr) => {
+    call.mockResolvedValue({ ok: true, kind: 'bomoh' })
+    render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    await scan(qr)
+    expect(call).toHaveBeenCalledWith('claim', expect.objectContaining({ qr }))
+    expect(screen.getByText('Bomoh found! Every Dikejar shows up for Kejar at the next 2 pings.')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Dato Seri.' })).toBeNull()
+    expect(document.body.textContent).not.toMatch(/—|Error/)
+  })
+
+  it.each([
+    ['too-far', 'Get closer.'],
+    ['no-stash', 'Nothing here.'],
+    ['not-chasing', 'Nothing here.'],
+  ])('a refused Bomoh scan (%s) never names a station', async (reason, text) => {
+    call.mockResolvedValue({ ok: false, reason })
+    render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    await scan('KEJAR:BOMOH:Pq7-abc')
+    expect(screen.getByText(text)).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/Station \d|the station|within 30 m/i)
+  })
+
   it('the ? zone shows on the chaser map too', () => {
     const legendaryZone = { lat: 3, lng: 101, radiusM: 150 }
     render(<ChaserChase code="ABC234" view={{ ...chaser(), legendaryZone }} refresh={() => {}} />)
