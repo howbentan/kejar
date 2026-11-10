@@ -4,11 +4,11 @@ import { MIN, T0 } from '../../shared/fixtures.js'
 import { BONUS_SEQ_BASE } from '../../shared/clock.js'
 import { cardAt, deckFor } from '../../shared/deck.js'
 import { distanceM } from '../../shared/geo.js'
-import { datoQr, JAIL_QR, stationQr, tagQr } from '../../shared/ids.js'
+import { bomohQr, datoQr, JAIL_QR, stationQr, tagQr } from '../../shared/ids.js'
 import { seeded } from '../../shared/testing.js'
 import type { PowerUpKind, Role } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
-import { ActionError, actions, MAX_PLAYERS_PER_GAME, type ActionName } from './actions.js'
+import { ActionError, actions, MAX_PLAYERS_PER_GAME, STASH_MISS_LIMIT, type ActionName } from './actions.js'
 import { hashToken } from './secrets.js'
 import { MemoryStore } from './store.js'
 
@@ -2955,6 +2955,151 @@ describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
     await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 7 * MIN
     expect((await run<View>('state', { code: g.code, token: g.aina.token })).legendaryZone).toBeNull()
+  })
+})
+
+describe('Bomoh: the hidden stash (chaser-side legendary, mirrors Dato Seri above)', () => {
+  const STASH = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const atStash = { lat: STASH.lat, lng: STASH.lng, accuracy_m: 8 }
+
+  /**
+   * A Full game in the lobby, Bomoh on and Dato Seri off, with two chasers (Ben and Hafiz) so a claim can be
+   * raced, and Chong joining as a second runner so the teams still validate.
+   */
+  async function lobby() {
+    const g = await readyGame({ mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } })
+    const chong = await run('join', { code: g.code, name: 'Chong', accepted: true })
+    await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [g.hafiz.playerId]: 'chaser', [chong.playerId]: 'runner' } })
+    await run('linkTag', { code: g.code, token: chong.token, tagId: 5 })
+    return { ...g, chong, gameId: (await store.gameByCode(g.code))!.id }
+  }
+  async function chasing(drop = true) {
+    const g = await lobby()
+    if (drop) await run('dropBomohSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    return g
+  }
+  const stash = async (g: { code: string }) => (await store.gameByCode(g.code))!.bomoh_stash
+  /** This game's own Bomoh card code (ruling R15). */
+  const cardCode = async (g: { code: string }) => (await stash(g))!.code!
+  const scanQr = (g: { code: string }, token: string, qr: string, where: object = atStash) => run('claim', { code: g.code, token, qr, ...where })
+  const scan = async (g: { code: string }, token: string, where: object = atStash) => scanQr(g, token, bomohQr(await cardCode(g)), where)
+
+  it('a chaser in reach of the dropped, unclaimed stash with the right code claims Bomoh; it retires the card and stops working after', async () => {
+    const g = await chasing()
+    const card = (await stash(g))!.card!
+    expect(await scan(g, g.ben.token)).toEqual({ ok: true, kind: 'bomoh' })
+    expect((await stash(g))!.claimedBy).toBe(g.ben.playerId)
+    expect((await stash(g))!.claimedAt).toBe(new Date(now).toISOString())
+    const org = (await store.organiserBySessionTokenHash(hashToken(g.organiserToken)))!.organisation_id
+    expect((await store.secretCards(org)).find((c) => c.id === card.id)).toMatchObject({ state: 'retired', found_at: new Date(now).toISOString() })
+    // Already claimed: nobody else can take it.
+    expect(await scan(g, g.hafiz.token)).toEqual({ ok: false, reason: 'no-stash' })
+    // Unlike Dato Seri, Bomoh activates on claim: no powerups row is ever added for it.
+    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'bomoh')).toHaveLength(0)
+  })
+
+  it('Bomoh is secret: the feed never names it or the finder', async () => {
+    const g = await chasing()
+    await scan(g, g.ben.token)
+    for (const token of [g.hafiz.token, g.aina.token, g.chong.token]) {
+      const v = await run<View>('state', { code: g.code, token })
+      expect(v.feed[0].text).toBe('Something legendary was found.')
+      expect(v.feed.map((f) => f.text).join(' ')).not.toMatch(/Bomoh|picked up/)
+    }
+    expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).feed[0].text).toBe('Something legendary was found.')
+  })
+
+  it("only this game's card claims: a bare, another game's or a made-up card is a silent miss, same as no stash", async () => {
+    const g = await chasing()
+    const other = await lobby()
+    await run('dropBomohSeri', { code: other.code, organiserToken: other.organiserToken, ...STASH })
+    for (const qr of ['KEJAR:BOMOH', bomohQr(await cardCode(other)), bomohQr('x'.repeat(22)), 'KEJAR:BOMOH:'])
+      expect(await scanQr(g, g.ben.token, qr)).toEqual({ ok: false, reason: 'no-stash' })
+    expect((await stash(g))!.claimedBy).toBeNull()
+    // Hafiz still claims it: the wrong scans above were Ben's misses, not a change to the stash itself.
+    expect(await scan(g, g.hafiz.token)).toEqual({ ok: true, kind: 'bomoh' })
+  })
+
+  it('the wrong-scan limit: STASH_MISS_LIMIT misses lock a player out, even at the right spot after, but someone else can still claim it', async () => {
+    const g = await chasing()
+    for (let i = 0; i < STASH_MISS_LIMIT; i++) {
+      expect(await scanQr(g, g.ben.token, 'KEJAR:BOMOH')).toEqual({ ok: false, reason: 'no-stash' })
+    }
+    // A genuine scan at the right spot is now ignored for Ben.
+    expect(await scan(g, g.ben.token)).toEqual({ ok: false, reason: 'no-stash' })
+    expect(await scan(g, g.hafiz.token)).toEqual({ ok: true, kind: 'bomoh' })
+  })
+
+  it('two chasers scanning at the same moment: exactly one gets it', async () => {
+    const g = await chasing()
+    const [a, b] = await Promise.all([scan(g, g.ben.token), scan(g, g.hafiz.token)])
+    expect([a, b].filter((r: { ok: boolean }) => r.ok)).toHaveLength(1)
+    expect((await stash(g))!.claimedBy).not.toBeNull()
+  })
+
+  it('a runner (not a chaser) is rejected as cannot-claim, and it is not counted as a miss', async () => {
+    const g = await chasing()
+    expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'cannot-claim' })
+    expect((await stash(g))!.claimedBy).toBeNull()
+    // Not a miss: no stash-miss event was recorded for Aina, and the stash still claims.
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'stash-miss')).toHaveLength(0)
+    expect(await scan(g, g.ben.token)).toEqual({ ok: true, kind: 'bomoh' })
+  })
+
+  it('with no stash dropped, scanning claims nothing', async () => {
+    const g = await chasing(false)
+    expect(await scanQr(g, g.ben.token, 'KEJAR:BOMOH')).toEqual({ ok: false, reason: 'no-stash' })
+  })
+})
+
+describe('dropBomohSeri (mirrors dropDatoSeri above)', () => {
+  const STASH = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+
+  it('the organiser drops it, and dropping again before the start moves it', async () => {
+    const g = await readyGame({ mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } })
+    // Bomoh's card isn't assigned until first needed (ruling R9): the first drop both assigns and places it.
+    expect(await run('dropBomohSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })).toEqual({ ok: true })
+    const { code, card } = (await store.gameByCode(g.code))!.bomoh_stash!
+    expect((await store.gameByCode(g.code))!.bomoh_stash).toEqual({ code, card, ...STASH, claimedBy: null, claimedAt: null })
+    const moved = { lat: CENTER.lat - 50 / 111_195, lng: CENTER.lng }
+    expect(await run('dropBomohSeri', { code: g.code, organiserToken: g.organiserToken, ...moved })).toEqual({ ok: true })
+    // The printed card keeps working: moving it never changes its code.
+    expect((await store.gameByCode(g.code))!.bomoh_stash).toEqual({ code, card, ...moved, claimedBy: null, claimedAt: null })
+  })
+
+  it('players and marshals cannot drop it; only the organiser can', async () => {
+    const g = await readyGame({ mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } })
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    await rejects(run('dropBomohSeri', { code: g.code, token: g.aina.token, ...STASH }), 403)
+    await rejects(run('dropBomohSeri', { code: g.code, token: siti.token, ...STASH }), 403)
+    // The rejection happens before the organiser-only card lifecycle runs, so nothing was assigned either.
+    expect((await store.gameByCode(g.code))!.bomoh_stash ?? null).toBeNull()
+  })
+
+  it('is Full mode only, inside the play area only, and fixed once the game starts', async () => {
+    const core = await readyGame()
+    await rejects(run('dropBomohSeri', { code: core.code, organiserToken: core.organiserToken, ...STASH }), 409, 'Full mode')
+    const g = await readyGame({ mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } })
+    const far = { lat: CENTER.lat + 400 / 111_195, lng: CENTER.lng }
+    await rejects(run('dropBomohSeri', { code: g.code, organiserToken: g.organiserToken, ...far }), 400, 'inside the play area')
+    await rejects(run('dropBomohSeri', { code: g.code, organiserToken: g.organiserToken, lat: 'x', lng: 1 }), 400)
+    await run('dropBomohSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    await rejects(run('dropBomohSeri', { code: g.code, organiserToken: g.organiserToken, lat: CENTER.lat, lng: CENTER.lng }), 409)
+    expect((await store.gameByCode(g.code))!.bomoh_stash).toMatchObject(STASH)
+  })
+
+  it('with none of the organisation\'s purple cards free, dropping is refused and says so (ruling R9)', async () => {
+    const g = await readyGame({ mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } })
+    const org = (await store.organiserBySessionTokenHash(hashToken(g.organiserToken)))!.organisation_id
+    const cards = (await store.secretCards(org)).filter((c) => c.legendary === 'bomoh')
+    for (const c of cards) await store.setSecretCard(c.id, { state: 'retired', found_at: new Date(now).toISOString() })
+    await rejects(run('dropBomohSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH }), 409, 'Reprint a purple card to use Bomoh.')
+    expect((await store.gameByCode(g.code))!.bomoh_stash ?? null).toBeNull()
   })
 })
 

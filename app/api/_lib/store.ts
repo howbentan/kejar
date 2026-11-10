@@ -299,7 +299,11 @@ export class MemoryStore implements GameStore {
         (g) =>
           organisers.has(g.organiser_id) &&
           !g.ended_at &&
-          (g.started_at || !g.created_at || g.created_at > createdAfter || typeof g.dato_stash?.lat === 'number'),
+          (g.started_at ||
+            !g.created_at ||
+            g.created_at > createdAfter ||
+            typeof g.dato_stash?.lat === 'number' ||
+            typeof g.bomoh_stash?.lat === 'number'),
       )
       .map((g) => ({ ...g }))
   }

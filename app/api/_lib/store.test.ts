@@ -453,6 +453,11 @@ describe('MemoryStore secret card sets', () => {
     expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id].sort())
     await store.updateGame(oldLobby.id, { dato_stash: { code: 'c', lat: 1, lng: 2, claimedBy: null, claimedAt: null } })
     expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id].sort())
+    // Same for a dropped-but-unclaimed Bomoh stash: an old lobby holding one is still worth listing.
+    const oldLobby2 = await store.createGame({ ...(rest as never), code: 'EEE222', organiser_id: b.id, started_at: null })
+    expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id].sort())
+    await store.updateGame(oldLobby2.id, { bomoh_stash: { code: 'd', lat: 3, lng: 4, claimedBy: null, claimedAt: null } })
+    expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id, oldLobby2.id].sort())
   })
 })
 

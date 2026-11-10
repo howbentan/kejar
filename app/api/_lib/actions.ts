@@ -21,8 +21,8 @@ import { arenaAroundPoint } from '../../shared/arenas.js'
 import { isOut } from '../../shared/players.js'
 import { judgeCatch, judgeJailbreak, judgeSettle, RUNNER_TRUSTED_MS } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
-import { datoCodeFromQr, isDatoQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
-import { activeShield, flareBlocked, judgeClaim, judgeDatoClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
+import { bomohCodeFromQr, datoCodeFromQr, isBomohQr, isDatoQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
+import { activeShield, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
 import { validateTeams } from '../../shared/teams.js'
@@ -1179,6 +1179,7 @@ const claim: Action = async (ctx, body) => {
   const fresh = (await loadGame(ctx, body)) as Game
   if (fresh.paused_at) return { ok: false, reason: 'paused' }
   if (isDatoQr(str(body.qr))) return claimDato(ctx, fresh as GameRow, me, str(body.qr))
+  if (isBomohQr(str(body.qr))) return claimBomoh(ctx, fresh as GameRow, me, str(body.qr))
   const station = stationFromQr(str(body.qr))
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeClaim({
@@ -1251,6 +1252,49 @@ async function claimDato(ctx: Ctx, game: GameRow, me: Player, qr: string) {
 }
 
 /**
+ * Scanning Bomoh's hidden stash: a chaser within reach of the dropped purple card, first come first served.
+ * Mirrors `claimDato` above, with Bomoh's own rules (chaser-only, no jail or hand-slot check — power-ups §5a,
+ * `judgeBomohClaim`). The store claims it atomically: two chasers scanning at once get one card. No 'powerup'
+ * event, which would name the finder: the feed only ever says `Something legendary was found.`. Claiming retires
+ * the card. Unlike `claimDato`, no `powerups` row is read back or returned: Bomoh activates on claim, and
+ * `store.claimBomoh` only reports whether the caller won.
+ *
+ * The wrong-scan limit (mirroring Review Focus 2): a scan that doesn't claim is recorded as a `stash-miss`, and
+ * after STASH_MISS_LIMIT of them every later stash scan by that player answers `no-stash`, unrecorded, even at
+ * the right spot.
+ */
+async function claimBomoh(ctx: Ctx, game: GameRow, me: Player, qr: string) {
+  const missed = (await ctx.store.events(game.id)).filter((e) => e.type === 'stash-miss' && e.actor_id === me.id).length
+  if (missed >= STASH_MISS_LIMIT) return NO_STASH
+  // Only a wrong or unknown code, no stash, or too far counts (ruling R4): the other refusals reveal no location.
+  const miss = async <T extends { reason: string }>(answer: T): Promise<T> => {
+    await ctx.store.addEvent({ game_id: game.id, type: 'stash-miss', actor_id: me.id, target_id: null, data: {} })
+    return answer
+  }
+  // Only the code this game was assigned (ruling R15, R2): the one on the card the organiser printed and hid. Any
+  // other Bomoh card, bare, another game's or another card's, gets the same answer as no stash before anything else
+  // is judged, so it can't tell anyone how near they are or whether a stash exists.
+  const scanned = bomohCodeFromQr(qr)
+  const secret = game.settings.mode === 'full' ? (game.bomoh_stash?.code ?? null) : null
+  if (!scanned || !secret || hashToken(scanned) !== hashToken(secret)) return miss(NO_STASH)
+  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
+  const verdict = judgeBomohClaim({
+    phase: phaseAt(game, ctx.now).phase,
+    me,
+    stash: game.bomoh_stash,
+    myPos: latest(positions[me.id]),
+    now: ctx.now,
+  })
+  if (!verdict.ok) return verdict.reason === 'no-stash' || verdict.reason === 'too-far' ? miss(verdict) : verdict
+  // Losing the race to another chaser isn't a miss.
+  if (!(await ctx.store.claimBomoh(game.id, me.id, new Date(ctx.now)))) return NO_STASH
+  // Found: the card is never put in play again until it's reprinted.
+  if (game.bomoh_stash?.card) await ctx.store.setSecretCard(game.bomoh_stash.card.id, { state: 'retired', found_at: iso(ctx.now) })
+  await ctx.store.addEvent({ game_id: game.id, type: 'legendary', actor_id: me.id, target_id: null, data: {} })
+  return { ok: true, kind: 'bomoh' }
+}
+
+/**
  * The organiser hides the printed Dato Seri card and saves the spot (jail design §4b). Organiser only: marshals are
  * the helper, and never learn where it is. Full mode only. Dropping again before the start moves it; once the
  * game starts it stays put.
@@ -1270,6 +1314,29 @@ const dropDatoSeri: Action = async (ctx, body) => {
   // Moving it keeps the code and the card, so the card already printed still works. A game made before codes gets one now.
   const stash: DatoStash = { ...game.dato_stash, code: game.dato_stash.code ?? newDatoCode(), lat: at.lat, lng: at.lng, claimedBy: null, claimedAt: null }
   await ctx.store.updateGame(game.id, { dato_stash: stash })
+  return { ok: true }
+}
+
+/**
+ * The organiser hides the printed Bomoh card and saves the spot, mirroring `dropDatoSeri` above. Organiser only:
+ * marshals are the helper, and never learn where it is. Full mode only. Dropping again before the start moves it;
+ * once the game starts it stays put.
+ */
+const dropBomohSeri: Action = async (ctx, body) => {
+  const loaded = await loadGame(ctx, body)
+  const organiser = await requireOrganiser(ctx, loaded, body)
+  if (loaded.settings.mode !== 'full') throw new ActionError(409, 'Bomoh is in Full mode only')
+  requireLobby(loaded, ctx.now)
+  // An old lobby re-checks its card first, and one with none tries for one (rulings R3, R9).
+  const { game } = await settleLobbyCard(ctx, loaded, organiser.organisation_id, 'bomoh')
+  // No card (Bomoh off, or none is free yet): there's nothing to drop.
+  if (!game.bomoh_stash) throw new ActionError(409, NO_FREE_BOMOH_CARD_NOTICE)
+  const at = coordsOf(body)
+  if (!at) throw new ActionError(400, 'Invalid location')
+  if (!inPlayArea(at, game.arena)) throw new ActionError(400, 'Drop it inside the play area')
+  // Moving it keeps the code and the card, so the card already printed still works. A game made before codes gets one now.
+  const stash: BomohStash = { ...game.bomoh_stash, code: game.bomoh_stash.code ?? newDatoCode(), lat: at.lat, lng: at.lng, claimedBy: null, claimedAt: null }
+  await ctx.store.updateGame(game.id, { bomoh_stash: stash })
   return { ok: true }
 }
 
@@ -1807,6 +1874,7 @@ export const actions = {
   usePowerup,
   grabPick,
   dropDatoSeri,
+  dropBomohSeri,
   listSecretCards,
   retireSecretCard,
   reprintSecretCard,
