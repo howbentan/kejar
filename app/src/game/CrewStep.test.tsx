@@ -150,4 +150,11 @@ describe('CrewStep', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
     expect(assign).toHaveBeenLastCalledWith('/host/ABC234?setup=pack&notice=dato')
   })
+
+  it('Next keeps a purple card notice too', () => {
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, search: '?setup=crew&notice=dato,bomoh', assign } })
+    render(<CrewStep code="ABC234" view={view()} organiserToken="h1" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(assign).toHaveBeenLastCalledWith('/host/ABC234?setup=pack&notice=dato,bomoh')
+  })
 })

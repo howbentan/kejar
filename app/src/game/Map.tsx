@@ -27,6 +27,13 @@ function legendaryYellow() {
   return { fill: token('--legendary-1', '#FFF27A'), main: token('--legendary-2', '#FFD60A'), deep: token('--legendary-3', '#F5B800'), ink: token('--legendary-ink', '#1A1400') }
 }
 
+/** Bomoh's purple, read from tokens.css --bomoh-1/2/3 and --bomoh-ink; the fallbacks (#F0E0FF, #C9A4FF, #9B5DE5, #2B0B45) must change with them. */
+function legendaryPurple() {
+  const css = typeof document === 'undefined' ? null : getComputedStyle(document.documentElement)
+  const token = (name: string, fallback: string) => css?.getPropertyValue(name).trim() || fallback
+  return { fill: token('--bomoh-1', '#F0E0FF'), main: token('--bomoh-2', '#C9A4FF'), deep: token('--bomoh-3', '#9B5DE5'), ink: token('--bomoh-ink', '#2B0B45') }
+}
+
 type Feature = GeoFeature<Geometry, Record<string, unknown>>
 const collection = (features: Feature[]): FeatureCollection => ({ type: 'FeatureCollection', features })
 
@@ -74,13 +81,13 @@ function stationFeatures(stations: StationMark[]): FeatureCollection {
  * A pin. The walk-the-park guide sets a `label` (drawn on the pin), a `state` (todo is outlined, next pulses, placed is
  * filled) and, for Dato Seri's step, `tone: 'yellow'`. Plain pins (safety alerts) leave them out and draw as filled lime.
  */
-type Pin = { id: string; lat: number; lng: number; label?: string; state?: 'todo' | 'next' | 'placed'; tone?: 'yellow' }
+type Pin = { id: string; lat: number; lng: number; label?: string; state?: 'todo' | 'next' | 'placed'; tone?: 'yellow' | 'purple' }
 
 function pinFeatures(pins: Pin[]): FeatureCollection {
   return collection(
     pins.map((p) => ({
       type: 'Feature',
-      properties: { id: p.id, label: p.label ?? '', state: p.state ?? 'placed', yellow: p.tone === 'yellow' },
+      properties: { id: p.id, label: p.label ?? '', state: p.state ?? 'placed', yellow: p.tone === 'yellow', purple: p.tone === 'purple' },
       geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
     })),
   )
@@ -141,8 +148,10 @@ export default function GameMap({
   showJailAndStart = true,
   fit = null,
   legendaryZone = null,
+  bomohZone = null,
   snapshot = null,
   stash = null,
+  stashTone = 'yellow',
 }: {
   arena: Arena
   dots: MapDot[]
@@ -168,19 +177,27 @@ export default function GameMap({
   fit?: LatLng[] | null
   /** Dato Seri's hint zone: a dashed yellow circle with a twinkling ? and a slow ripple, never a name (jail design §4a, §4c). */
   legendaryZone?: LegendaryZone | null
+  /** Bomoh's hint zone: the same unlabelled ? circle as Dato Seri's, only purple. */
+  bomohZone?: LegendaryZone | null
   /** Runners: where the chasers were at their last check-in's alert. Frozen: redrawn only when it changes. */
   snapshot?: ChaserSnapshot | null
-  /** Organiser and marshals before the start: the exact spot Dato Seri's card was dropped, as a yellow pin. */
+  /** Organiser and marshals before the start: the exact spot a legendary's card was dropped, as a pin. */
   stash?: LatLng | null
+  /** The stash pin's colour: Dato Seri's yellow, or Bomoh's purple. Read once, when the map loads. */
+  stashTone?: 'yellow' | 'purple'
 }) {
   const reduce = useReducedMotion()
   const [loaded, setLoaded] = useState(false)
   const latestZone = useRef(legendaryZone)
   latestZone.current = legendaryZone
+  const latestBomohZone = useRef(bomohZone)
+  latestBomohZone.current = bomohZone
   const latestSnapshot = useRef(snapshot)
   latestSnapshot.current = snapshot
   const latestStash = useRef(stash)
   latestStash.current = stash
+  const latestStashTone = useRef(stashTone)
+  latestStashTone.current = stashTone
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
   const ready = useRef(false)
@@ -270,6 +287,10 @@ export default function GameMap({
       m.addSource('legendary', { type: 'geojson', data: zone.zone })
       m.addLayer({ id: 'legendary-fill', type: 'fill', source: 'legendary', paint: { 'fill-color': y.main, 'fill-opacity': 0.12 } })
       m.addLayer({ id: 'legendary-line', type: 'line', source: 'legendary', paint: { 'line-color': y.main, 'line-width': 2, 'line-dasharray': [2, 2] } })
+      const p = legendaryPurple()
+      m.addSource('bomoh-legendary', { type: 'geojson', data: zoneFeatures(latestBomohZone.current).zone })
+      m.addLayer({ id: 'bomoh-legendary-fill', type: 'fill', source: 'bomoh-legendary', paint: { 'fill-color': p.main, 'fill-opacity': 0.12 } })
+      m.addLayer({ id: 'bomoh-legendary-line', type: 'line', source: 'bomoh-legendary', paint: { 'line-color': p.main, 'line-width': 2, 'line-dasharray': [2, 2] } })
       // The ? badge and its ripple are an HTML marker animated by CSS (the compositor), so the map idles.
       m.addSource('toilets', {
         type: 'geojson',
@@ -328,11 +349,12 @@ export default function GameMap({
         paint: { 'text-color': VOLT, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
       })
       m.addSource('stash', { type: 'geojson', data: stashFeatures(latestStash.current) })
+      const pin = latestStashTone.current === 'purple' ? legendaryPurple() : y
       m.addLayer({
         id: 'stash',
         type: 'circle',
         source: 'stash',
-        paint: { 'circle-radius': 9, 'circle-color': y.main, 'circle-stroke-color': y.deep, 'circle-stroke-width': 2 },
+        paint: { 'circle-radius': 9, 'circle-color': pin.main, 'circle-stroke-color': pin.deep, 'circle-stroke-width': 2 },
       })
       m.addSource('stations', { type: 'geojson', data: stationFeatures(latestStations.current) })
       m.addLayer({
@@ -390,6 +412,18 @@ export default function GameMap({
         },
       })
       m.addLayer({
+        id: 'bomoh-reveal-ring',
+        type: 'circle',
+        source: 'points',
+        filter: ['==', ['get', 'revealedBy'], 'bomoh'],
+        paint: {
+          'circle-radius': 11,
+          'circle-color': 'rgba(0,0,0,0)',
+          'circle-stroke-color': legendaryPurple().main,
+          'circle-stroke-width': 2,
+        },
+      })
+      m.addLayer({
         id: 'labels',
         type: 'symbol',
         source: 'fuzzy',
@@ -402,7 +436,7 @@ export default function GameMap({
         type: 'circle',
         source: 'pins',
         filter: ['==', ['get', 'state'], 'next'],
-        paint: { 'circle-radius': 14, 'circle-color': ['case', ['get', 'yellow'], y.main, VOLT], 'circle-opacity': 0.3 },
+        paint: { 'circle-radius': 14, 'circle-color': ['case', ['get', 'yellow'], y.main, ['get', 'purple'], p.main, VOLT], 'circle-opacity': 0.3 },
       })
       m.addLayer({
         id: 'pins',
@@ -410,8 +444,8 @@ export default function GameMap({
         source: 'pins',
         paint: {
           'circle-radius': ['case', ['!=', ['get', 'label'], ''], 11, 10],
-          'circle-color': ['case', ['get', 'yellow'], y.main, ['==', ['get', 'state'], 'todo'], BLACK, VOLT],
-          'circle-stroke-color': ['case', ['get', 'yellow'], y.deep, WHITE],
+          'circle-color': ['case', ['get', 'yellow'], y.main, ['get', 'purple'], p.main, ['==', ['get', 'state'], 'todo'], BLACK, VOLT],
+          'circle-stroke-color': ['case', ['get', 'yellow'], y.deep, ['get', 'purple'], p.deep, WHITE],
           'circle-stroke-width': ['case', ['==', ['get', 'state'], 'todo'], 2, 3],
         },
       })
@@ -420,7 +454,7 @@ export default function GameMap({
         type: 'symbol',
         source: 'pins',
         layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
-        paint: { 'text-color': ['case', ['get', 'yellow'], y.ink, ['==', ['get', 'state'], 'todo'], WHITE, BLACK] },
+        paint: { 'text-color': ['case', ['get', 'yellow'], y.ink, ['get', 'purple'], p.ink, ['==', ['get', 'state'], 'todo'], WHITE, BLACK] },
       })
       fitTo(m, latestFit.current)
       ready.current = true
@@ -477,6 +511,25 @@ export default function GameMap({
       marker.remove()
     }
   }, [zoneKey, reduce, loaded])
+
+  // Bomoh's hint zone: the same unlabelled ? badge, tinted purple by CSS.
+  const bomohZoneKey = JSON.stringify(bomohZone)
+  useEffect(() => {
+    const mp = map.current
+    if (!ready.current || !mp) return
+    ;(mp.getSource('bomoh-legendary') as GeoJSONSource | undefined)?.setData(zoneFeatures(latestBomohZone.current).zone)
+    const z = latestBomohZone.current
+    if (!z) return
+    const el = document.createElement('div')
+    el.className = 'legendary-marker bomoh-marker'
+    el.setAttribute('aria-hidden', 'true')
+    if (reduce) el.dataset.still = 'true'
+    el.innerHTML = '<i class="legendary-ring"></i><b>?</b>'
+    const marker = new maplibregl.Marker({ element: el }).setLngLat([z.lng, z.lat]).addTo(mp)
+    return () => {
+      marker.remove()
+    }
+  }, [bomohZoneKey, reduce, loaded])
 
   const fitKey = JSON.stringify(fit)
   useEffect(() => {

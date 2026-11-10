@@ -5,7 +5,7 @@ import { newDatoCode } from './secrets.js'
 import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
 const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at'
-const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, kit'
+const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -56,8 +56,8 @@ export class SupabaseStore implements GameStore {
         .in('organiser_id', ids)
         .is('ended_at', null)
         // Quoted: the timestamp's ':' and '.' are reserved in PostgREST's or-filter syntax. A dropped stash
-        // (lat set) holds its card at any age, so those lobbies come back too.
-        .or(`started_at.not.is.null,created_at.gt."${createdAfter}",dato_stash->>lat.not.is.null`),
+        // (lat set), either legendary's, holds its card at any age, so those lobbies come back too.
+        .or(`started_at.not.is.null,created_at.gt."${createdAfter}",dato_stash->>lat.not.is.null,bomoh_stash->>lat.not.is.null`),
     ) ?? []) as GameRow[]
   }
   async secretCards(organisationId: string): Promise<SecretCard[]> {
@@ -256,6 +256,10 @@ export class SupabaseStore implements GameStore {
       | PowerUp[]
       | null
     return rows?.[0] ?? null
+  }
+  async claimBomoh(gameId: string, playerId: string, at: Date): Promise<boolean> {
+    // The database function locks the game row, re-checks the stash is unclaimed, and marks it claimed. True for the winner.
+    return check(await this.db.rpc('claim_bomoh', { p_game: gameId, p_player: playerId, p_at: at.toISOString() })) === true
   }
   async consumeShield(id: string) {
     const rows = check(

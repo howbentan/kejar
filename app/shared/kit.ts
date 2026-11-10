@@ -27,8 +27,8 @@ export interface SecretLetters {
 export type PlayersBand = 20 | 30 | 40
 
 /** Ids only the organiser may tick or place (spec: Dato Seri secrecy). */
-export const SECRET_PACK_IDS = ['dato-card']
-export const SECRET_PLACE_IDS = ['dato']
+export const SECRET_PACK_IDS = ['dato-card', 'bomoh-card']
+export const SECRET_PLACE_IDS = ['dato', 'bomoh']
 
 /** Older games stored before the setup settings existed have no band or legendaries: read them with the defaults. */
 const bandOf = (game: Game): PlayersBand => game.settings.playersBand ?? DEFAULT_SETTINGS.playersBand
@@ -58,6 +58,9 @@ export function packItems(game: Game, secretLetters: SecretLetters): KitItem[] {
   if (game.settings.mode === 'full' && legendariesOf(game).dato === 'stash' && secretLetters.dato) {
     items.push({ id: 'dato-card', group: 'pack', label: `Yellow card ${secretLetters.dato}`, tone: 'yellow', note: '(secret)' })
   }
+  if (game.settings.mode === 'full' && legendariesOf(game).bomoh === 'stash' && secretLetters.bomoh) {
+    items.push({ id: 'bomoh-card', group: 'pack', label: `Purple card ${secretLetters.bomoh}`, tone: 'purple', note: '(secret)' })
+  }
   items.push(
     { id: 'tape', group: 'pack', label: 'Tape, zip bags, power bank' },
     { id: 'walk', group: 'day', label: 'Walk the park' },
@@ -67,7 +70,7 @@ export function packItems(game: Game, secretLetters: SecretLetters): KitItem[] {
   return items
 }
 
-/** Where the cards go: stations 1..N, Penjara, then (organiser only) Dato Seri's stash. */
+/** Where the cards go: stations 1..N, Penjara, then (organiser only) Dato Seri's and Bomoh's stashes. */
 export function placeItems(game: Game, forOrganiser: boolean, secretLetters: SecretLetters): PlaceItem[] {
   const places: PlaceItem[] = (game.arena.stations ?? []).map((s, i) => ({
     id: `station-${i + 1}`,
@@ -86,6 +89,17 @@ export function placeItems(game: Game, forOrganiser: boolean, secretLetters: Sec
   ) {
     const at = typeof stash?.lat === 'number' && typeof stash?.lng === 'number' ? { lat: stash.lat, lng: stash.lng } : game.arena.start
     places.push({ id: 'dato', label: 'Yellow card', lat: at.lat, lng: at.lng, tone: 'yellow' })
+  }
+  const bomoh = game.bomoh_stash
+  if (
+    forOrganiser &&
+    game.settings.mode === 'full' &&
+    legendariesOf(game).bomoh === 'stash' &&
+    secretLetters.bomoh &&
+    !bomoh?.claimedBy
+  ) {
+    const at = typeof bomoh?.lat === 'number' && typeof bomoh?.lng === 'number' ? { lat: bomoh.lat, lng: bomoh.lng } : game.arena.start
+    places.push({ id: 'bomoh', label: 'Purple card', lat: at.lat, lng: at.lng, tone: 'purple' })
   }
   return places
 }

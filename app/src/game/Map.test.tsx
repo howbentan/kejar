@@ -294,6 +294,15 @@ describe('GameMap', () => {
       rerender(<GameMap arena={arena} dots={[]} stash={null} />)
       expect(created.data.stash).toMatchObject({ features: [] })
     })
+
+    it("Bomoh's stash pin is purple (M8)", () => {
+      created.layers = []
+      created.data = {}
+      render(<GameMap arena={arena} dots={[]} stash={{ lat: 3.03, lng: 101.03 }} stashTone="purple" />)
+      act(() => created.load!())
+      expect(layer('stash').paint['circle-color']).toBe('#C9A4FF')
+      expect(layer('stash').paint['circle-stroke-color']).toBe('#9B5DE5')
+    })
   })
 
   describe("Dato Seri's hint zone", () => {
@@ -354,6 +363,66 @@ describe('GameMap', () => {
       act(() => created.load!())
       rerender(<GameMap arena={arena} dots={[]} legendaryZone={null} />)
       expect(created.markers.every((m) => m.removed)).toBe(true)
+    })
+  })
+
+  describe("Bomoh's hint zone and reveal ring", () => {
+    const zone = { lat: 3.1, lng: 101.1, radiusM: 150 }
+    const bomohZone = { lat: 3.2, lng: 101.2, radiusM: 120 }
+    const layer = (id: string) => created.layers.find((l) => l.id === id) as unknown as { paint: Record<string, unknown>; filter?: unknown }
+
+    it('is a dashed purple circle with an unlabelled ? marker, distinct from a simultaneous Dato zone', () => {
+      created.layers = []
+      created.data = {}
+      created.markers = []
+      render(<GameMap arena={arena} dots={[]} legendaryZone={zone} bomohZone={bomohZone} />)
+      act(() => created.load!())
+      expect(layer('bomoh-legendary-line').paint['line-color']).toBe('#C9A4FF')
+      expect(layer('bomoh-legendary-line').paint['line-dasharray']).toBeTruthy()
+      expect(layer('legendary-line').paint['line-color']).toBe('#FFD60A')
+      for (const id of ['bomoh-legendary-fill', 'bomoh-legendary-line']) expect(JSON.stringify(layer(id).paint)).not.toMatch(/C6FF3D|FFD60A/i)
+      expect(created.data['bomoh-legendary']).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
+      expect(created.data.legendary).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
+      expect(created.data['bomoh-legendary']).not.toEqual(created.data.legendary)
+      const mk = created.markers.find((m) => m.lngLat?.[0] === 101.2)!
+      expect(mk.lngLat).toEqual([101.2, 3.2])
+      expect(mk.el.textContent).toBe('?')
+      expect(mk.el).toHaveAttribute('aria-hidden', 'true')
+      expect(mk.el.getAttribute('title')).toBeNull()
+      expect(JSON.stringify(created.data['bomoh-legendary']) + mk.el.outerHTML.replace(/(legendary|bomoh)-/g, '')).not.toMatch(/bomoh|dato|legendary|seri/i)
+      expect(created.markers.some((m) => m.lngLat?.[0] === 101.1)).toBe(true)
+    })
+
+    it('draws nothing with no zone, follows the prop, and removes the marker when it goes', () => {
+      created.layers = []
+      created.data = {}
+      created.markers = []
+      const { rerender } = render(<GameMap arena={arena} dots={[]} />)
+      act(() => created.load!())
+      expect(created.data['bomoh-legendary']).toMatchObject({ features: [] })
+      rerender(<GameMap arena={arena} dots={[]} bomohZone={bomohZone} />)
+      expect(created.data['bomoh-legendary']).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
+      rerender(<GameMap arena={arena} dots={[]} bomohZone={null} />)
+      expect(created.data['bomoh-legendary']).toMatchObject({ features: [] })
+      expect(created.markers.every((m) => m.removed)).toBe(true)
+    })
+
+    it("draws a purple ring only around dots revealed by Bomoh, not Pak Guard's Focus", () => {
+      created.layers = []
+      created.data = {}
+      const dots = [
+        { id: 'r1', kind: 'runner' as const, lat: 3.1, lng: 101.1, at: '', revealedBy: 'bomoh' as const },
+        { id: 'r2', kind: 'runner' as const, lat: 3.3, lng: 101.3, at: '', revealedBy: 'focus' as const },
+      ]
+      render(<GameMap arena={arena} dots={dots} />)
+      created.load!()
+      const ids = created.layers.map((l) => l.id)
+      expect(ids.indexOf('bomoh-reveal-ring')).toBeGreaterThan(ids.indexOf('points'))
+      const ring = layer('bomoh-reveal-ring')
+      expect(ring.filter).toEqual(['==', ['get', 'revealedBy'], 'bomoh'])
+      expect(ring.paint['circle-stroke-color']).toBe('#C9A4FF')
+      expect(layer('reveal-ring').filter).toEqual(['==', ['get', 'revealedBy'], 'focus'])
+      expect(created.data.points).toMatchObject({ features: [{ properties: { revealedBy: 'bomoh' } }, { properties: { revealedBy: 'focus' } }] })
     })
   })
 })

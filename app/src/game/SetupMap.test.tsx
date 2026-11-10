@@ -120,3 +120,42 @@ describe('HiddenCard: dropping Dato Seri', () => {
     expect(toggle()).toBeNull()
   })
 })
+
+describe('HiddenCard: dropping Bomoh', () => {
+  const bomohLobby = (over: Parameters<typeof testView>[0] = {}) =>
+    lobby({ datoStash: undefined, bomohStash: null, settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } }, ...over })
+  const creds = { code: 'ABC234', credentials: { organiserToken: 'h1' }, refresh: () => {} }
+
+  it('drops Bomoh at the organiser spot with its own action and purple copy', async () => {
+    call.mockResolvedValue({ ok: true })
+    const refresh = vi.fn()
+    render(<HiddenCard legendary="bomoh" view={bomohLobby()} {...creds} refresh={refresh} />)
+    open()
+    expect(screen.getByText(/Print the purple card, hide it/)).toBeInTheDocument()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Drop the purple card here' })))
+    expect(call).toHaveBeenCalledWith('dropBomoh', { code: 'ABC234', organiserToken: 'h1', lat: 3.01, lng: 101.01, accuracy_m: 4 })
+    expect(refresh).toHaveBeenCalled()
+    expect(document.body.textContent).not.toMatch(/—|bomoh/i)
+  })
+
+  it('shows the purple pin once dropped, and the print link and reprint hint use the Bomoh card', () => {
+    const bomohStash = { lat: 3.02, lng: 101.02, claimedBy: null, claimedAt: null }
+    render(<HiddenCard legendary="bomoh" view={bomohLobby({ bomohStash, bomohCard: { letter: 'C', code: 'Pq7-abc' } })} {...creds} />)
+    open()
+    expect(mapProps.last?.stash).toEqual({ lat: 3.02, lng: 101.02 })
+    expect((mapProps.last as { stashTone?: string }).stashTone).toBe('purple')
+    expect(screen.getByText(/hidden at the purple pin/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Print the purple card' })).toHaveAttribute('href', '/print/card#bomoh/Pq7-abc')
+  })
+
+  it('says to reprint a purple card when none was free', () => {
+    render(<HiddenCard legendary="bomoh" view={bomohLobby({ bomohCard: null })} {...creds} />)
+    open()
+    expect(screen.getByText('Reprint a purple card to use Bomoh.')).toBeInTheDocument()
+  })
+
+  it('renders nothing when Bomoh is not in the view, and Dato still works beside it', () => {
+    render(<HiddenCard legendary="bomoh" view={bomohLobby({ bomohStash: undefined })} {...creds} />)
+    expect(screen.queryByRole('button', { name: 'Organiser tools' })).toBeNull()
+  })
+})

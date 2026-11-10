@@ -12,7 +12,12 @@ import { Foil } from './PowerCard'
 import Sticker from './Sticker'
 import { ErrorText } from './ui'
 
-export type ClaimResult = ({ ok: true; kind: PowerUpKind } | Exclude<ClaimJudgement, { ok: true }>)
+/**
+ * What a successful claim can hand back: a deck card, Dato Seri, or Bomoh. Bomoh is never a `PowerUpKind` (he works on
+ * claim and never sits in a hand), so every place that names a claimed kind has to handle him on purpose.
+ */
+export type ClaimedKind = PowerUpKind | 'bomoh'
+export type ClaimResult = ({ ok: true; kind: ClaimedKind } | Exclude<ClaimJudgement, { ok: true }>)
 type UseResult =
   | { ok: true; kind: PowerUpKind; offer?: PowerUpKind[] }
   | { ok: false; reason: string; readyInMs?: number }
@@ -41,13 +46,21 @@ const USE_REJECTIONS: Record<string, string> = {
   disqualified: "You're Luar Garisan, so no power-ups this round.",
 }
 
+/** A chaser claiming Bomoh: what it does, since there's no card or reveal for it. */
+export const BOMOH_FOUND = 'Bomoh found! Every Dikejar shows up for Kejar at the next 2 pings.'
+
+const claimedLine = (kind: ClaimedKind) => (kind === 'bomoh' ? BOMOH_FOUND : `Got ${INFO[kind].name} ✓`)
+
 /**
  * Plain words for a scan of the hidden stash card. It's a secret (rules doc §9b): no refusal says what the card
- * is, or calls it a station, so anyone who isn't meant to have it learns nothing.
+ * is, or calls it a station, so anyone who isn't meant to have it learns nothing. Both legendaries' cards come here, by
+ * the server's answer: an old purple card carries a ★ QR, so the client can't tell the two apart. A runner whose stash
+ * scan is refused as cannot-claim is holding the chasers' purple card (a runner on the chase screen is never jailed).
  */
-export function stashMessage(r: ClaimResult | { ok: false; reason: 'no-stash' | 'paused' }): string {
-  if (r.ok) return `Got ${INFO[r.kind].name} ✓`
+export function stashMessage(r: ClaimResult | { ok: false; reason: 'no-stash' | 'paused' }, side?: 'runner' | 'chaser'): string {
+  if (r.ok) return claimedLine(r.kind)
   const reason: string = r.reason
+  if (reason === 'cannot-claim' && side === 'runner') return 'Not for your side.'
   if (reason === 'too-far') return 'Get closer.'
   if (reason === 'hand-full') return 'Use or lose your power-up first'
   if (reason === 'paused') return CLAIM_REJECTIONS.paused
@@ -56,7 +69,7 @@ export function stashMessage(r: ClaimResult | { ok: false; reason: 'no-stash' | 
 
 /** Plain words for a claim; refusals name the station when the scan said which one (motion design §7). */
 export function claimMessage(r: ClaimResult, station?: number | null): string {
-  if (r.ok) return `Got ${INFO[r.kind].name} ✓`
+  if (r.ok) return claimedLine(r.kind)
   if (station) {
     if (r.reason === 'too-far') return `Get closer. You need to be within 30 m of Station ${station}.`
     if (r.reason === 'already-claimed') return `You've used Station ${station} this game. Try another one.`

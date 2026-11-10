@@ -30,10 +30,10 @@ export interface MapDot {
   label?: string
   fuzzy?: boolean
   missed?: boolean
-  /** Shown at the true spot because of a chaser's Focus. */
+  /** Shown at the true spot because of a chaser's Focus or Bomoh's team-wide reveal. */
   exact?: true
-  /** Exact specifically because of Pak Guard's Focus; null for every other dot. */
-  revealedBy: 'focus' | null
+  /** Exact specifically because of Pak Guard's Focus or Bomoh's reveal; null for every other dot. */
+  revealedBy: 'focus' | 'bomoh' | null
   at: string
   /**
    * Set only for a runner just caught or auto-jailed, within the slide-off window (`MOMENT_WINDOW_MS` of
@@ -151,6 +151,11 @@ export interface View {
    */
   legendaryZone: { lat: number; lng: number; radiusM: number } | null
   /**
+   * The unlabelled `?` zone around Bomoh's hidden stash (jail design §2e): the same shape and rules as
+   * `legendaryZone`, seeded independently so the two zones never land at the same offset.
+   */
+  bomohZone: { lat: number; lng: number; radiusM: number } | null
+  /**
    * What Settle could do, for a jailed runner holding an unused Dato Seri (jail design §4b, §4d); null for
    * everyone else. `options` are the other runners in Penjara; those who already used their one escape are
    * listed as not eligible (greyed out).
@@ -167,6 +172,12 @@ export interface View {
    * link (ruling R15, R2); null if the game has none. Left out of every other view entirely, like `datoStash`.
    */
   datoCard?: { letter: string; code: string } | null
+  /**
+   * The organiser only: Bomoh's stash and card, the same shape and secrecy as `datoStash`/`datoCard`. Left out
+   * of players' and marshals' views entirely, like its Dato Seri counterpart.
+   */
+  bomohStash?: PlacedStash | null
+  bomohCard?: { letter: string; code: string } | null
   /**
    * The organiser's and marshals' packing list. The yellow card and its place are in the organiser's own view
    * only (rules doc §9b); players never get this field.
@@ -361,6 +372,14 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
     .map((u) => latestAtOrBefore(i.positions[u.player_id], revealAt))
     .filter((p): p is Position => !!p)
 
+  // Bomoh (jail design §2e): a team-wide, radius-free reveal sourced from the game's own `bomoh_stash`, not
+  // a hand card — there's nothing to look up per-player. Active for the first 2 ping-reveals strictly after
+  // the claim, however long that takes (never a timer), then reverts for good.
+  const bomoh = placedStash(i.game.bomoh_stash)
+  const bomohClaimedAt = bomoh?.claimedBy ? Date.parse(bomoh.claimedAt!) : null
+  const bomohRevealNo = bomohClaimedAt === null ? Infinity : revealed.filter((r) => Date.parse(r.reveal_at) > bomohClaimedAt).length
+  const bomohActive = bomohClaimedAt !== null && revealAt > bomohClaimedAt && bomohRevealNo <= 2
+
   for (const p of i.players) {
     if (p.role !== 'runner') continue
     if (p.jailed) {
@@ -381,15 +400,19 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
     // this file's own client-shipped code could recompute the fuzz/decoy offset and recover exact spots.
     const seed = `${secretSeed(i.game)}:${p.id}:${last.seq}`
     const focused = focusers.some((f) => distanceM(f, at) <= FOCUS_M)
+    // Bomoh takes priority over Focus when both apply: the rarer, team-wide effect wins the purple ring.
+    const revealedByBomoh = bomohActive ? 'bomoh' : null
+    const isExact = revealedByBomoh !== null || focused
+    const revealedBy = revealedByBomoh ?? (focused ? 'focus' : null)
     let dot: MapDot
     if (decoyed.has(p.id)) {
-      // Drawn the same way as everyone else in range, so a Focus can't expose a Decoy.
+      // Drawn the same way as everyone else in range, so neither Focus nor Bomoh can expose a Decoy.
       const spot = decoySpot(at, i.game.arena, seed)
-      dot = focused
-        ? { ...dotFor(p, at, 'runner'), ...spot, exact: true, revealedBy: 'focus' }
+      dot = isExact
+        ? { ...dotFor(p, at, 'runner'), ...spot, exact: true, revealedBy }
         : { ...dotFor(p, at, 'runner'), ...spot, fuzzy: true }
-    } else if (focused) {
-      dot = { ...dotFor(p, at, 'runner'), exact: true, revealedBy: 'focus' }
+    } else if (isExact) {
+      dot = { ...dotFor(p, at, 'runner'), exact: true, revealedBy }
     } else {
       dot = { ...dotFor(p, at, 'runner'), ...fuzz(at, FUZZ_RADIUS_M, seed), fuzzy: true }
     }
@@ -548,6 +571,21 @@ function legendaryZoneFor(i: ViewInput, phase: Phase): View['legendaryZone'] {
   if (i.game.settings.mode !== 'full' || phase !== 'chasing' || !s || s.claimedBy !== null) return null
   if (i.me.role !== 'runner' && i.me.role !== 'chaser') return null
   const h = hash(`${secretSeed(i.game)}:legendary-zone`)
+  const angle = ((h & 0xffff) / 0x10000) * 2 * Math.PI
+  const dist = (0.3 + ((h >>> 16) / 0x10000) * 0.5) * LEGENDARY_ZONE_M
+  const c = offset({ lat: s.lat, lng: s.lng }, dist, angle)
+  return { lat: c.lat, lng: c.lng, radiusM: LEGENDARY_ZONE_M }
+}
+
+/**
+ * Bomoh's hint zone: the same shape and rules as `legendaryZoneFor`, seeded with a distinct suffix so the
+ * two zones never land at the same offset even when both stashes share a spot.
+ */
+function bomohZoneFor(i: ViewInput, phase: Phase): View['bomohZone'] {
+  const s = placedStash(i.game.bomoh_stash)
+  if (i.game.settings.mode !== 'full' || phase !== 'chasing' || !s || s.claimedBy !== null) return null
+  if (i.me.role !== 'runner' && i.me.role !== 'chaser') return null
+  const h = hash(`${secretSeed(i.game)}:bomoh-legendary-zone`)
   const angle = ((h & 0xffff) / 0x10000) * 2 * Math.PI
   const dist = (0.3 + ((h >>> 16) / 0x10000) * 0.5) * LEGENDARY_ZONE_M
   const c = offset({ lat: s.lat, lng: s.lng }, dist, angle)
@@ -723,7 +761,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, settle: null, datoStash: undefined, datoCard: undefined, kit: undefined, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, settle: null, datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, kit: undefined, reports: [], ratings: [] }
   }
   return v
 }
@@ -845,10 +883,13 @@ function fullView(i: ViewInput): View {
       return busy?.running ? busy.kind : null
     })(),
     legendaryZone: legendaryZoneFor(i, phase),
+    bomohZone: bomohZoneFor(i, phase),
     settle: settleFor(i, phase),
     // The stash and the card go only to the organiser, who prints and hides it (ruling R15). Marshals are the
     // helper, and never see either (rules doc §9b).
-    ...(organiser ? { datoStash: placedStash(i.game.dato_stash), datoCard: datoCardOf(i) } : {}),
+    ...(organiser
+      ? { datoStash: placedStash(i.game.dato_stash), datoCard: datoCardOf(i), bomohStash: placedStash(i.game.bomoh_stash), bomohCard: bomohCardOf(i) }
+      : {}),
     // The packing list: marshals get the shared items, and only the organiser's own view adds the secret ones.
     ...(role === 'marshal' ? { kit: kitFor(i) } : {}),
     results: i.results,
@@ -858,6 +899,12 @@ function fullView(i: ViewInput): View {
 /** The organiser's card: the stash's letter and the code it claims with. */
 function datoCardOf(i: ViewInput): { letter: string; code: string } | null {
   const s = i.game.dato_stash
+  return s?.card && s.code ? { letter: s.card.letter, code: s.code } : null
+}
+
+/** The organiser's card for Bomoh: the stash's letter and the code it claims with. */
+function bomohCardOf(i: ViewInput): { letter: string; code: string } | null {
+  const s = i.game.bomoh_stash
   return s?.card && s.code ? { letter: s.card.letter, code: s.code } : null
 }
 
@@ -872,8 +919,9 @@ function kitFor(i: ViewInput): KitView {
   const kit = kitOf(i.game)
   const places = placeItems(i.game, organiser, letters)
   // The secret step is placed only when the stash is really dropped, never from the saved flag alone (ruling R8).
-  const placed = Object.fromEntries(Object.entries(kit.placed).filter(([id]) => id !== 'dato' && places.some((p) => p.id === id)))
+  const placed = Object.fromEntries(Object.entries(kit.placed).filter(([id]) => id !== 'dato' && id !== 'bomoh' && places.some((p) => p.id === id)))
   if (places.some((p) => p.id === 'dato') && placedStash(i.game.dato_stash)) placed.dato = true
+  if (places.some((p) => p.id === 'bomoh') && placedStash(i.game.bomoh_stash)) placed.bomoh = true
   return {
     items: packItems(i.game, letters).map((item) => ({ ...item, ticked: isTicked(i.game, item) })),
     placed,

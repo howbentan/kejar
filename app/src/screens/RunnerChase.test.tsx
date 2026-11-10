@@ -129,6 +129,22 @@ describe('RunnerChase', () => {
     expect(screen.queryByRole('heading', { name: 'Dato Seri.' })).toBeNull()
   })
 
+  it.each(['KEJAR:BOMOH:Pq7-abc', 'KEJAR:DATO:Pq7-abc'])('a runner scanning a purple card (%s) is told it is not for their side', async (qr) => {
+    call.mockResolvedValue({ ok: false, reason: 'cannot-claim' })
+    render(<RunnerChase code="ABC234" view={testView()} />)
+    await scan(qr)
+    expect(screen.getByText('Not for your side.')).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/Station \d|the station|within 30 m|bomoh/i)
+  })
+
+  it('a refused Bomoh scan for being too far uses the stash copy, not a station', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'too-far' })
+    render(<RunnerChase code="ABC234" view={testView()} />)
+    await scan('KEJAR:BOMOH:Pq7-abc')
+    expect(screen.getByText('Get closer.')).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/Station \d|the station|within 30 m/i)
+  })
+
   it("draws the chasers' frozen snapshot and the ? zone on the map", () => {
     const chaserSnapshot = { positions: [{ name: 'Ben', lat: 3.001, lng: 101.001, stale: false }] }
     const legendaryZone = { lat: 3, lng: 101, radiusM: 150 }

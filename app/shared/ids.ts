@@ -37,6 +37,24 @@ export function datoCodeFromQr(text: string): string | null {
   return m ? m[1] : null
 }
 
+/**
+ * The printed Bomoh card (the chaser-side legendary power-up); the same card rules as the ★ card above. Scanning it is
+ * a claim, and the code belongs to one of the organisation's reusable cards, claiming only in its own game (ruling R15).
+ */
+export const bomohQr = (code: string) => `KEJAR:BOMOH:${code}`
+
+/**
+ * Any Bomoh card, this game's or not, including a bare `KEJAR:BOMOH`: all go to the server as a claim, which answers
+ * a wrong card exactly like no stash, so a scan never says whose card it was.
+ */
+export const isBomohQr = (text: string) => /^KEJAR:BOMOH(:|$)/.test(text.trim())
+
+/** The secret code on a Bomoh card, or null for a bare or malformed one. */
+export function bomohCodeFromQr(text: string): string | null {
+  const m = /^KEJAR:BOMOH:([A-Za-z0-9_-]{1,64})$/.exec(text.trim())
+  return m ? m[1] : null
+}
+
 export const MAX_STATIONS = 8
 /** Most players one game takes; the lobby refuses more. Armbands #01 to this are always printed. */
 export const MAX_PLAYERS_PER_GAME = 40

@@ -130,6 +130,12 @@ export interface GameStore {
    * Null if there's no stash or someone got there first.
    */
   claimDato(gameId: string, playerId: string): Promise<PowerUp | null>
+  /**
+   * Claims Bomoh's dropped stash for a player, stamping it claimed at `at`. Returns true only for the one caller
+   * who wins; no powerups row is inserted, since Bomoh activates on claim. False if nothing was dropped or it's
+   * already claimed.
+   */
+  claimBomoh(gameId: string, playerId: string, at: Date): Promise<boolean>
   /** Consumes a shield only if it wasn't already; true for the first caller. */
   consumeShield(id: string): Promise<boolean>
   /** Adds a bonus (Flare) ping with the next free bonus number; safe when two happen at once. */
@@ -293,7 +299,11 @@ export class MemoryStore implements GameStore {
         (g) =>
           organisers.has(g.organiser_id) &&
           !g.ended_at &&
-          (g.started_at || !g.created_at || g.created_at > createdAfter || typeof g.dato_stash?.lat === 'number'),
+          (g.started_at ||
+            !g.created_at ||
+            g.created_at > createdAfter ||
+            typeof g.dato_stash?.lat === 'number' ||
+            typeof g.bomoh_stash?.lat === 'number'),
       )
       .map((g) => ({ ...g }))
   }
@@ -518,6 +528,14 @@ export class MemoryStore implements GameStore {
     }
     this.powerUpRows.push(row)
     return { ...row }
+  }
+  async claimBomoh(gameId: string, playerId: string, at: Date) {
+    const g = this.games.find((x) => x.id === gameId)
+    // Not dropped yet (no spot), or already claimed: nothing to take.
+    if (!g?.bomoh_stash || typeof g.bomoh_stash.lat !== 'number' || g.bomoh_stash.claimedBy !== null) return false
+    // A fresh object: gameByCode hands out shallow copies that share the old one.
+    g.bomoh_stash = { ...g.bomoh_stash, claimedBy: playerId, claimedAt: at.toISOString() }
+    return true
   }
   async consumeShield(id: string) {
     const u = this.powerUpRows.find((x) => x.id === id)

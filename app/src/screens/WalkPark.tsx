@@ -60,7 +60,9 @@ function useHere(): { here: LatLng | null; lost: boolean } {
   return { here, lost }
 }
 
-const cardStyle = (kind: 'away' | 'here' | 'secret' | 'secret-here') => ({
+type Kind = 'away' | 'here' | 'secret' | 'secret-here' | 'purple' | 'purple-here'
+
+const cardStyle = (kind: Kind) => ({
   border: '1px solid var(--hair)',
   borderRadius: 18,
   padding: '14px 16px',
@@ -68,6 +70,10 @@ const cardStyle = (kind: 'away' | 'here' | 'secret' | 'secret-here') => ({
   ...(kind === 'secret' ? { borderColor: 'var(--legendary-2)' } : {}),
   ...(kind === 'secret-here'
     ? { background: 'linear-gradient(135deg, var(--legendary-1), var(--legendary-2) 50%, var(--legendary-3))', color: 'var(--legendary-ink)', borderColor: 'var(--legendary-2)' }
+    : {}),
+  ...(kind === 'purple' ? { borderColor: 'var(--bomoh-2)' } : {}),
+  ...(kind === 'purple-here'
+    ? { background: 'linear-gradient(135deg, var(--bomoh-1), var(--bomoh-2) 50%, var(--bomoh-3))', color: 'var(--bomoh-ink)', borderColor: 'var(--bomoh-2)' }
     : {}),
 })
 
@@ -98,12 +104,19 @@ export default function WalkPark({
   const done = (id: string) => local[id] === true || view.kit?.placed[id] === true
   const nextIndex = places.findIndex((p) => !done(p.id))
   const next = nextIndex === -1 ? null : places[nextIndex]
-  const secret = next?.tone === 'yellow'
+  const secret = next?.tone === 'yellow' || next?.tone === 'purple'
+  const purple = next?.tone === 'purple'
+  // The purple step only mentions the yellow card when this game has one to keep away from.
+  const hasYellow = places.some((p) => p.tone === 'yellow')
   const metres = here && next ? distanceM(here, next) : null
   // The secret step has no spot to reach: any place nearby will do, so only stations and Penjara use the 15 m rule.
   const isHere = !secret && metres !== null && metres <= WALK_HERE_M
-  const letter = view.datoCard?.letter
-  const hideLine = letter ? `Hide yellow card ${letter}.` : 'Hide the yellow card.'
+  // The server only sends a secret place to the organiser, so a step shows up here only when it's theirs to see.
+  const hideLineFor = (tone: 'yellow' | 'purple') => {
+    const colour = tone === 'purple' ? 'purple' : 'yellow'
+    const letter = tone === 'purple' ? view.bomohCard?.letter : view.datoCard?.letter
+    return letter ? `Hide ${colour} card ${letter}.` : `Hide the ${colour} card.`
+  }
 
   async function mark(id: string, beforeSave?: () => Promise<unknown>) {
     if (busy) return
@@ -125,9 +138,9 @@ export default function WalkPark({
     id: p.id,
     lat: p.lat,
     lng: p.lng,
-    label: p.id === 'penjara' ? 'PENJARA' : p.tone === 'yellow' ? '?' : String(i + 1),
+    label: p.id === 'penjara' ? 'PENJARA' : p.tone ? '?' : String(i + 1),
     state: (done(p.id) ? 'placed' : p.id === next?.id ? 'next' : 'todo') as 'placed' | 'next' | 'todo',
-    ...(p.tone === 'yellow' ? { tone: 'yellow' as const } : {}),
+    ...(p.tone ? { tone: p.tone } : {}),
   }))
 
   const eyebrow = secret ? 'WALK THE PARK · ONLY YOU SEE THIS' : 'WALK THE PARK'
@@ -159,12 +172,12 @@ export default function WalkPark({
           <div className="card">
             {places.map((p) => (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '6px 0' }}>
-                <span style={p.tone === 'yellow' ? { color: 'var(--legendary-2)', fontWeight: 700 } : undefined}>
-                  {p.tone === 'yellow' ? hideLine.slice(0, -1) : p.label}
+                <span style={p.tone ? { color: p.tone === 'purple' ? 'var(--bomoh-2)' : 'var(--legendary-2)', fontWeight: 700 } : undefined}>
+                  {p.tone ? hideLineFor(p.tone).slice(0, -1) : p.label}
                 </span>
                 {done(p.id) ? (
                   <span className="muted">Placed</span>
-                ) : p.tone === 'yellow' ? (
+                ) : p.tone ? (
                   <span className="muted">Needs location</span>
                 ) : (
                   <button type="button" className="btn btn-ghost" style={{ padding: '6px 12px' }} disabled={busy} onClick={() => void mark(p.id)}>
@@ -179,13 +192,19 @@ export default function WalkPark({
 
       {next && !(lost && !here) && (
         <>
-          <div style={cardStyle(secret ? (here ? 'secret-here' : 'secret') : isHere ? 'here' : 'away')}>
+          <div style={cardStyle(purple ? (here ? 'purple-here' : 'purple') : secret ? (here ? 'secret-here' : 'secret') : isHere ? 'here' : 'away')}>
             {secret ? (
               <>
-                <p className="eyebrow" style={here ? { color: 'inherit', opacity: 0.6 } : { color: 'var(--legendary-2)' }}>{`SECRET · ${count}`}</p>
-                <p style={{ fontWeight: 800, fontSize: 21, letterSpacing: '-0.04em' }}>{hideLine}</p>
+                <p className="eyebrow" style={here ? { color: 'inherit', opacity: 0.6 } : { color: purple ? 'var(--bomoh-2)' : 'var(--legendary-2)' }}>{`SECRET · ${count}`}</p>
+                <p style={{ fontWeight: 800, fontSize: 21, letterSpacing: '-0.04em' }}>{hideLineFor(purple ? 'purple' : 'yellow')}</p>
                 <p>Secret. Only you see this. Pick any spot nearby.</p>
-                <p>Hide it somewhere sneaky. Under a bench, behind a sign.</p>
+                <p>
+                  {purple
+                    ? hasYellow
+                      ? 'Somewhere quiet, away from the yellow one. Behind a tree, under a bin.'
+                      : 'Somewhere quiet. Behind a tree, under a bin.'
+                    : 'Hide it somewhere sneaky. Under a bench, behind a sign.'}
+                </p>
               </>
             ) : isHere ? (
               <>
@@ -209,11 +228,15 @@ export default function WalkPark({
           {secret && here && !lost && (
             <button
               type="button"
-              className="btn btn-legendary"
+              className={purple ? 'btn btn-bomoh' : 'btn btn-legendary'}
               disabled={busy}
-              onClick={() => void mark('dato', () => call('dropDatoSeri', { code, ...credentials, lat: here!.lat, lng: here!.lng }))}
+              onClick={() =>
+                void mark(next!.id, () =>
+                  call(purple ? 'dropBomoh' : 'dropDatoSeri', { code, ...credentials, lat: here!.lat, lng: here!.lng }),
+                )
+              }
             >
-              Drop Dato Seri here
+              {purple ? 'Drop Bomoh here' : 'Drop Dato Seri here'}
             </button>
           )}
         </>

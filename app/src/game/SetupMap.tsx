@@ -3,6 +3,7 @@ import type { View } from '../../shared/views.js'
 import { call } from './api'
 import { currentCoords } from './here'
 import GameMap from './Map'
+import { printCardUrl } from './printLinks'
 import { ErrorText } from './ui'
 
 /** Who is dropping: the organiser's token, or a marshal's player token. */
@@ -14,20 +15,42 @@ export type SetupCredentials = { organiserToken: string } | { token: string }
  * is the screen organisers show to players, so it stays behind a closed, neutrally worded toggle: nothing says a
  * hidden card exists, names it or shows the pin until it's opened (rules doc §9b). No marker scribble here (marshal screen).
  */
-export function HiddenCard({ view, code, credentials, refresh }: { view: View; code: string; credentials: SetupCredentials; refresh: () => void }) {
-  const [open, setOpen] = useState(false)
+export function HiddenCard({
+  view,
+  code,
+  credentials,
+  refresh,
+  legendary = 'dato',
+  onHide,
+  inTools = false,
+}: {
+  view: View
+  code: string
+  credentials: SetupCredentials
+  refresh: () => void
+  legendary?: 'dato' | 'bomoh'
+  /** Inside `OrganiserTools`: the card is shown open, with a Hide button only when this is given. */
+  onHide?: () => void
+  /** Set by `OrganiserTools`, which owns the one toggle. */
+  inTools?: boolean
+}) {
+  const [ownOpen, setOpen] = useState(false)
+  const open = inTools || ownOpen
+  const hide = inTools ? onHide : () => setOpen(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  // datoStash is only in the organiser's own view (undefined for players and marshals), so nobody else sees this.
-  if (view.settings.mode !== 'full' || view.phase !== 'lobby' || view.datoStash === undefined) return null
-  const stash = view.datoStash
+  // The stash is only in the organiser's own view (undefined for players and marshals), so nobody else sees this.
+  const bomoh = legendary === 'bomoh'
+  const stash = bomoh ? view.bomohStash : view.datoStash
+  const card = bomoh ? view.bomohCard : view.datoCard
+  if (!showsHiddenCard(view, legendary)) return null
   async function drop() {
     setBusy(true)
     setError('')
     try {
       const here = await currentCoords()
       if (typeof here.lat !== 'number' || typeof here.lng !== 'number') return setError('Turn on location, then stand by the card and try again')
-      await call('dropDatoSeri', { code, ...credentials, ...here })
+      await call(bomoh ? 'dropBomoh' : 'dropDatoSeri', { code, ...credentials, ...here })
       refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -45,30 +68,78 @@ export function HiddenCard({ view, code, credentials, refresh }: { view: View; c
   return (
     <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <p className="eyebrow settle-eyebrow">★ Hidden card</p>
-        <button type="button" className="btn btn-ghost" style={{ padding: '6px 12px' }} onClick={() => setOpen(false)}>
-          Hide
-        </button>
+        <p className="eyebrow settle-eyebrow" style={bomoh ? { color: 'var(--bomoh-2)' } : undefined}>
+          {bomoh ? '★ Purple card' : '★ Hidden card'}
+        </p>
+        {hide && (
+          <button type="button" className="btn btn-ghost" style={{ padding: '6px 12px' }} onClick={hide}>
+            Hide
+          </button>
+        )}
       </div>
       <p className="muted">
-        {stash
-          ? 'The ★ card is hidden at the yellow pin. Players only see a ? zone round it. Drop again to move it.'
-          : 'Print the ★ card, hide it somewhere in the play area, stand next to it, then drop it here. Players only see a ? zone round it.'}
+        {bomoh
+          ? stash
+            ? 'The purple card is hidden at the purple pin. Players only see a ? zone round it. Drop again to move it.'
+            : 'Print the purple card, hide it somewhere in the play area, stand next to it, then drop it here. Players only see a ? zone round it.'
+          : stash
+            ? 'The ★ card is hidden at the yellow pin. Players only see a ? zone round it. Drop again to move it.'
+            : 'Print the ★ card, hide it somewhere in the play area, stand next to it, then drop it here. Players only see a ? zone round it.'}
       </p>
       {/* Wanted, but no card was free yet (ruling R9): the full wording stays behind this organiser-only toggle. */}
-      {view.datoCard === null && view.settings.legendaries?.dato === 'stash' && <p className="muted">Reprint a yellow card to use Dato Seri.</p>}
-      {view.datoCard && (
+      {card === null && view.settings.legendaries?.[legendary] === 'stash' && (
+        <p className="muted">{bomoh ? 'Reprint a purple card to use Bomoh.' : 'Reprint a yellow card to use Dato Seri.'}</p>
+      )}
+      {card && (
         // The code goes after #, so it never reaches the server or its logs. Only this game's card claims.
-        <a className="muted" href={`/print/card#${encodeURIComponent(view.datoCard.code)}`} target="_blank" rel="noopener noreferrer">
-          Print the ★ card
+        <a className="muted" href={printCardUrl(legendary, card.code)} target="_blank" rel="noopener noreferrer">
+          {bomoh ? 'Print the purple card' : 'Print the ★ card'}
         </a>
       )}
-      <GameMap arena={view.arena} dots={[]} height={200} stash={stash ? { lat: stash.lat, lng: stash.lng } : null} />
-      <button type="button" className="btn btn-legendary" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={drop}>
-        Drop the ★ card here
+      <GameMap arena={view.arena} dots={[]} height={200} stash={stash ? { lat: stash.lat, lng: stash.lng } : null} stashTone={bomoh ? 'purple' : 'yellow'} />
+      <button
+        type="button"
+        className={bomoh ? 'btn btn-bomoh' : 'btn btn-legendary'}
+        style={{ alignSelf: 'flex-start' }}
+        disabled={busy}
+        onClick={drop}
+      >
+        {bomoh ? 'Drop the purple card here' : 'Drop the ★ card here'}
       </button>
       <ErrorText>{error}</ErrorText>
     </div>
+  )
+}
+
+/** Whether a legendary's hidden card belongs in this view: the organiser's own, in a Full lobby, with it switched on. */
+function showsHiddenCard(view: View, legendary: 'dato' | 'bomoh'): boolean {
+  const stash = legendary === 'bomoh' ? view.bomohStash : view.datoStash
+  if (view.settings.mode !== 'full' || view.phase !== 'lobby' || stash === undefined) return false
+  // Bomoh's stash is null (not undefined) whenever he's off, so he also has to be switched on to show anything.
+  return legendary !== 'bomoh' || view.settings.legendaries?.bomoh === 'stash'
+}
+
+/**
+ * The lobby's one closed "Organiser tools" toggle, holding every hidden card this game has (M11). It is the same
+ * single button whether one legendary is on or both, so the open screen's button count gives nothing away.
+ */
+export function OrganiserTools(props: { view: View; code: string; credentials: SetupCredentials; refresh: () => void }) {
+  const [open, setOpen] = useState(false)
+  const shown = (['dato', 'bomoh'] as const).filter((l) => showsHiddenCard(props.view, l))
+  if (shown.length === 0) return null
+  if (!open) {
+    return (
+      <button type="button" className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen(true)}>
+        Organiser tools
+      </button>
+    )
+  }
+  return (
+    <>
+      {shown.map((l, i) => (
+        <HiddenCard key={l} {...props} legendary={l} inTools onHide={i === 0 ? () => setOpen(false) : undefined} />
+      ))}
+    </>
   )
 }
 

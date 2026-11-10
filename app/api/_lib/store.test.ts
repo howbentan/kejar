@@ -453,6 +453,11 @@ describe('MemoryStore secret card sets', () => {
     expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id].sort())
     await store.updateGame(oldLobby.id, { dato_stash: { code: 'c', lat: 1, lng: 2, claimedBy: null, claimedAt: null } })
     expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id].sort())
+    // Same for a dropped-but-unclaimed Bomoh stash: an old lobby holding one is still worth listing.
+    const oldLobby2 = await store.createGame({ ...(rest as never), code: 'EEE222', organiser_id: b.id, started_at: null })
+    expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id].sort())
+    await store.updateGame(oldLobby2.id, { bomoh_stash: { code: 'd', lat: 3, lng: 4, claimedBy: null, claimedAt: null } })
+    expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id, oldLobby2.id].sort())
   })
 })
 
@@ -466,5 +471,29 @@ describe('MemoryStore.setKitKey', () => {
     await store.setKitKey(g.id, 'ticks', 'tape', null)
     await store.setKitKey(g.id, 'placed', 'nope', null)
     expect((await store.gameByCode('ABC234'))!.kit).toEqual({ ticks: { penjara: 'Penjara card' }, placed: { 'station-1': true } })
+  })
+})
+
+describe('MemoryStore.claimBomoh', () => {
+  const dropped = { code: 'bomoh-code', lat: 1, lng: 2, claimedBy: null, claimedAt: null }
+
+  it('goes to one of two simultaneous claims, stamps the stash, and inserts no powerups row', async () => {
+    const g = await startedGame()
+    await store.updateGame(g.id, { bomoh_stash: dropped })
+    const results = await Promise.all([store.claimBomoh(g.id, 'p1', new Date(now)), store.claimBomoh(g.id, 'p2', new Date(now))])
+    expect(results.filter((r) => r === true)).toHaveLength(1)
+    const stash = (await store.gameByCode('ABC234'))!.bomoh_stash!
+    expect(['p1', 'p2']).toContain(stash.claimedBy)
+    expect(stash.claimedAt).toBe(iso(T0))
+    expect(await store.powerUps(g.id)).toEqual([])
+  })
+
+  it('refuses a stash that was never dropped, is already claimed, or belongs to no game', async () => {
+    const g = await startedGame()
+    await store.updateGame(g.id, { bomoh_stash: { ...dropped, lat: null, lng: null } })
+    expect(await store.claimBomoh(g.id, 'p1', new Date(now))).toBe(false)
+    await store.updateGame(g.id, { bomoh_stash: { ...dropped, claimedBy: 'p0', claimedAt: iso(T0) } })
+    expect(await store.claimBomoh(g.id, 'p1', new Date(now))).toBe(false)
+    expect(await store.claimBomoh('no-such-game', 'p1', new Date(now))).toBe(false)
   })
 })

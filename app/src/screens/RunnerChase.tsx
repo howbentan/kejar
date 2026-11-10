@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BreakJudgement } from '../../shared/catch.js'
 import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
-import { isDatoQr, stationFromQr } from '../../shared/ids.js'
+import { isBomohQr, isDatoQr, stationFromQr } from '../../shared/ids.js'
 import ChaseLayout from '../game/ChaseLayout'
 import CheckinBanner from '../game/CheckinBanner'
 import { dipFor } from '../game/LuckyDip'
@@ -66,7 +66,7 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
       const b = r as BreakJudgement
       return b.ok ? `Freed ${b.freedIds.length} Dikejar ✓` : (BREAK_REJECTIONS[b.reason] ?? 'Nobody freed')
     }
-    if (isDatoQr(text)) return stashMessage(r as ClaimResult)
+    if (isDatoQr(text) || isBomohQr(text)) return stashMessage(r as ClaimResult, 'runner')
     return claimMessage(r as ClaimResult, stationFromQr(text))
   }, [])
   const deckLeft = view.deckLeft

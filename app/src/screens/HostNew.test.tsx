@@ -271,16 +271,15 @@ describe('HostNew step 3, how long', () => {
     await waitFor(() => createdWith({ settings: expect.objectContaining({ playersBand: 40 }) }))
   })
 
-  it('Full shows the legendary cards: Dato Seri on a hidden stash, Bomoh not built yet', async () => {
+  it('Full shows the legendary cards: Dato Seri on a hidden stash, Bomoh off by default', async () => {
     render(<HostNew />)
     await toStep3('Full')
     expect(screen.getByText('LEGENDARY CARDS · SECRET FROM PLAYERS')).toBeInTheDocument()
     expect(screen.getByText('FOR DIKEJAR · YELLOW')).toBeInTheDocument()
     expect(screen.getByText('FOR KEJAR · PURPLE')).toBeInTheDocument()
-    expect(screen.getByText('NOT BUILT YET')).toBeInTheDocument()
     expect(screen.getByText('You hide a QR card. The first runner to find it can free themselves and 2 friends from Penjara.')).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: 'Dato Seri: Hidden stash' })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByRole('radio', { name: 'Bomoh: Hidden stash' })).toBeDisabled()
+    expect(screen.getByRole('radio', { name: 'Bomoh: Hidden stash' })).toBeEnabled()
     expect(screen.getByRole('radio', { name: 'Bomoh: Off' })).toHaveAttribute('aria-checked', 'true')
     createGame()
     await waitFor(() =>
@@ -294,6 +293,21 @@ describe('HostNew step 3, how long', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Dato Seri: Off' }))
     createGame()
     await waitFor(() => createdWith({ settings: expect.objectContaining({ legendaries: { dato: 'off', bomoh: 'off' } }) }))
+  })
+
+  it('Bomoh can be turned on as a hidden stash, with its copy and no build badge', async () => {
+    render(<HostNew />)
+    await toStep3('Full')
+    expect(screen.queryByText('NOT BUILT YET')).not.toBeInTheDocument()
+    expect(
+      screen.getByText("You hide a second QR card. The first chaser to find it shows every free runner's exact spot to all Kejar for the next 2 pings."),
+    ).toBeInTheDocument()
+    const stash = screen.getByRole('radio', { name: 'Bomoh: Hidden stash' })
+    expect(stash).toBeEnabled()
+    fireEvent.click(stash)
+    expect(stash).toHaveAttribute('aria-checked', 'true')
+    createGame()
+    await waitFor(() => createdWith({ settings: expect.objectContaining({ legendaries: { dato: 'stash', bomoh: 'stash' } }) }))
   })
 
   it('the chaser-snapshot switch is Full only, off by default, and can be turned on', async () => {
@@ -390,6 +404,22 @@ describe('HostNew creating', () => {
     await toStep3('Full')
     createGame()
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/host/ABC234?setup=crew&notice=dato'))
+  })
+
+  it.each([
+    ['Reprint a purple card to use Bomoh.', 'bomoh'],
+    ['Reprint a yellow card to use Dato Seri. Reprint a purple card to use Bomoh.', 'dato,bomoh'],
+  ])('carries a purple card notice along too (%s)', async (notice, param) => {
+    const assign = vi.fn()
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign } })
+    call.mockImplementation(async (action: string) => {
+      if (action === 'listArenas') return { arenas }
+      return { code: 'ABC234', notice }
+    })
+    render(<HostNew />)
+    await toStep3('Full')
+    createGame()
+    await waitFor(() => expect(assign).toHaveBeenCalledWith(`/host/ABC234?setup=crew&notice=${param}`))
   })
 
   it('shows a create error and lets the organiser try again', async () => {

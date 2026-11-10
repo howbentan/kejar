@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { game } from './fixtures.js'
-import { crewFor, isTicked, packItems, placeItems } from './kit.js'
+import { crewFor, isTicked, packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS } from './kit.js'
 import { DEFAULT_SETTINGS, type Game } from './types.js'
 
 const withArena = (over: Partial<Game> = {}) =>
@@ -125,6 +125,37 @@ describe('placeItems', () => {
     const g = full()
     expect(placeItems(g, true, { dato: 'B' }).at(-1)).toMatchObject({ id: 'dato', tone: 'yellow' })
     expect(placeItems(g, false, { dato: 'B' }).map((p) => p.id)).not.toContain('dato')
+  })
+
+  it('puts bomoh after dato, purple, and only for the organiser', () => {
+    const both = full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'stash', bomoh: 'stash' } } })
+    const ids = placeItems(both, true, { dato: 'B', bomoh: 'C' }).map((p) => p.id)
+    expect(ids.slice(-2)).toEqual(['dato', 'bomoh'])
+    expect(placeItems(both, true, { dato: 'B', bomoh: 'C' }).at(-1)).toMatchObject({ id: 'bomoh', tone: 'purple', label: 'Purple card' })
+    expect(placeItems(both, false, { dato: 'B', bomoh: 'C' }).map((p) => p.id)).not.toContain('bomoh')
+  })
+
+  it('no bomoh place when off, in Core, with no letter, or once claimed; it sits where it was dropped', () => {
+    const on = (over = {}) => full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } }, ...over })
+    expect(placeItems(on(), true, { bomoh: 'C' }).map((p) => p.id)).toContain('bomoh')
+    expect(placeItems(full(), true, { bomoh: 'C' }).map((p) => p.id)).not.toContain('bomoh')
+    expect(placeItems(on(), true, {}).map((p) => p.id)).not.toContain('bomoh')
+    const claimed = on({ bomoh_stash: { lat: 3.002, lng: 101.002, claimedBy: 'p1', claimedAt: 'x' } })
+    expect(placeItems(claimed, true, { bomoh: 'C' }).map((p) => p.id)).not.toContain('bomoh')
+    const dropped = on({ bomoh_stash: { lat: 3.002, lng: 101.003, claimedBy: null, claimedAt: null } })
+    expect(placeItems(dropped, true, { bomoh: 'C' }).at(-1)).toMatchObject({ lat: 3.002, lng: 101.003 })
+  })
+
+  it('lists Purple card C in the pack, purple and secret, only when Bomoh is on with a letter', () => {
+    const on = full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } } })
+    expect(packItems(on, { bomoh: 'C' }).find((i) => i.id === 'bomoh-card')).toMatchObject({ label: 'Purple card C', tone: 'purple', note: '(secret)', group: 'pack' })
+    expect(packItems(on, {}).map((i) => i.id)).not.toContain('bomoh-card')
+    expect(packItems(full(), { bomoh: 'C' }).map((i) => i.id)).not.toContain('bomoh-card')
+  })
+
+  it('both secret ids are organiser-only', () => {
+    expect(SECRET_PLACE_IDS).toContain('bomoh')
+    expect(SECRET_PACK_IDS).toContain('bomoh-card')
   })
 
   it('no dato place in Core, with no card assigned, or once the card is claimed', () => {

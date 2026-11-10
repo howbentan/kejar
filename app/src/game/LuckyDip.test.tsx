@@ -122,6 +122,11 @@ describe("Dato Seri's reveal (motion design §7)", () => {
     expect(onDone).toHaveBeenCalledTimes(1)
   })
 
+  it('Bomoh has no dip or reveal, whichever QR it came from', () => {
+    expect(dipFor('KEJAR:BOMOH:Pq7-abc', { ok: true, kind: 'bomoh' }, 5, () => {})).toBeNull()
+    expect(dipFor('KEJAR:DATO:Pq7-abc', { ok: true, kind: 'bomoh' }, 5, () => {})).toBeNull()
+  })
+
   it('a refused stash scan is a calm line with no moment', () => {
     expect(dipFor('KEJAR:DATO', { ok: false, reason: 'too-far' }, 5, () => {})).toBeNull()
   })

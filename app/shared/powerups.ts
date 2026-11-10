@@ -1,7 +1,7 @@
 import { distanceM, hash, offset } from './geo.js'
 import { inPlayArea } from './playArea.js'
 import { BONUS_SEQ_BASE } from './clock.js'
-import { placedStash, type Arena, type DatoStash, type LatLng, type Phase, type Ping, type Player, type Position, type PowerUp, type PowerUpKind } from './types.js'
+import { placedStash, type Arena, type BomohStash, type DatoStash, type LatLng, type Phase, type Ping, type Player, type Position, type PowerUp, type PowerUpKind } from './types.js'
 
 /** Spec §4.8.1. */
 export const CLAIM_RADIUS_M = 30
@@ -83,6 +83,30 @@ export function judgeDatoClaim(i: {
   if (!stash || stash.claimedBy !== null) return { ok: false, reason: 'no-stash' }
   if (!withinClaimReach(i.myPos, stash, i.now)) return { ok: false, reason: 'too-far' }
   if (slotBusy(i.powerUps, i.me.id, i.pings, i.now)) return { ok: false, reason: 'hand-full' }
+  return { ok: true }
+}
+
+export type BomohClaimJudgement =
+  | { ok: true }
+  | { ok: false; reason: 'not-chasing' | 'cannot-claim' | 'no-stash' | 'too-far' }
+
+/**
+ * Scanning Bomoh's hidden stash: a chaser within reach of the dropped purple card, first come first served.
+ * Bomoh never occupies a hand slot, so a held power-up doesn't block it, and there's no jail check (chasers
+ * are never jailed).
+ */
+export function judgeBomohClaim(i: {
+  phase: Phase
+  me: Player
+  stash: BomohStash | null | undefined
+  myPos: Position | null
+  now: number
+}): BomohClaimJudgement {
+  if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
+  if (i.me.role !== 'chaser') return { ok: false, reason: 'cannot-claim' }
+  const stash = placedStash(i.stash) // made with the game, but not dropped yet: nothing to find
+  if (!stash || stash.claimedBy !== null) return { ok: false, reason: 'no-stash' }
+  if (!withinClaimReach(i.myPos, stash, i.now)) return { ok: false, reason: 'too-far' }
   return { ok: true }
 }
 
