@@ -81,13 +81,13 @@ function stationFeatures(stations: StationMark[]): FeatureCollection {
  * A pin. The walk-the-park guide sets a `label` (drawn on the pin), a `state` (todo is outlined, next pulses, placed is
  * filled) and, for Dato Seri's step, `tone: 'yellow'`. Plain pins (safety alerts) leave them out and draw as filled lime.
  */
-type Pin = { id: string; lat: number; lng: number; label?: string; state?: 'todo' | 'next' | 'placed'; tone?: 'yellow' }
+type Pin = { id: string; lat: number; lng: number; label?: string; state?: 'todo' | 'next' | 'placed'; tone?: 'yellow' | 'purple' }
 
 function pinFeatures(pins: Pin[]): FeatureCollection {
   return collection(
     pins.map((p) => ({
       type: 'Feature',
-      properties: { id: p.id, label: p.label ?? '', state: p.state ?? 'placed', yellow: p.tone === 'yellow' },
+      properties: { id: p.id, label: p.label ?? '', state: p.state ?? 'placed', yellow: p.tone === 'yellow', purple: p.tone === 'purple' },
       geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
     })),
   )
@@ -430,7 +430,7 @@ export default function GameMap({
         type: 'circle',
         source: 'pins',
         filter: ['==', ['get', 'state'], 'next'],
-        paint: { 'circle-radius': 14, 'circle-color': ['case', ['get', 'yellow'], y.main, VOLT], 'circle-opacity': 0.3 },
+        paint: { 'circle-radius': 14, 'circle-color': ['case', ['get', 'yellow'], y.main, ['get', 'purple'], p.main, VOLT], 'circle-opacity': 0.3 },
       })
       m.addLayer({
         id: 'pins',
@@ -438,8 +438,8 @@ export default function GameMap({
         source: 'pins',
         paint: {
           'circle-radius': ['case', ['!=', ['get', 'label'], ''], 11, 10],
-          'circle-color': ['case', ['get', 'yellow'], y.main, ['==', ['get', 'state'], 'todo'], BLACK, VOLT],
-          'circle-stroke-color': ['case', ['get', 'yellow'], y.deep, WHITE],
+          'circle-color': ['case', ['get', 'yellow'], y.main, ['get', 'purple'], p.main, ['==', ['get', 'state'], 'todo'], BLACK, VOLT],
+          'circle-stroke-color': ['case', ['get', 'yellow'], y.deep, ['get', 'purple'], p.deep, WHITE],
           'circle-stroke-width': ['case', ['==', ['get', 'state'], 'todo'], 2, 3],
         },
       })
@@ -448,7 +448,7 @@ export default function GameMap({
         type: 'symbol',
         source: 'pins',
         layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
-        paint: { 'text-color': ['case', ['get', 'yellow'], y.ink, ['==', ['get', 'state'], 'todo'], WHITE, BLACK] },
+        paint: { 'text-color': ['case', ['get', 'yellow'], y.ink, ['get', 'purple'], p.ink, ['==', ['get', 'state'], 'todo'], WHITE, BLACK] },
       })
       fitTo(m, latestFit.current)
       ready.current = true

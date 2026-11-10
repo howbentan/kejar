@@ -170,6 +170,7 @@ export default function HostLobby({ code }: { code: string }) {
       </div>
       {/* Below the join card, closed by default: players look at this screen to scan the join code. */}
       {view && <HiddenCard view={view} code={code} credentials={{ organiserToken: organiser.organiserToken }} refresh={refresh} />}
+      {view && <HiddenCard legendary="bomoh" view={view} code={code} credentials={{ organiserToken: organiser.organiserToken }} refresh={refresh} />}
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <button className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={inviteMarshal}>

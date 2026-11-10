@@ -12,6 +12,10 @@ describe('scanTarget', () => {
     // Each game's card carries its own code (ruling R15).
     expect(scanTarget('KEJAR:DATO:Zx9_q-4', 'runner')).toEqual({ action: 'claim', body: { qr: 'KEJAR:DATO:Zx9_q-4' } })
   })
+  it('the hidden purple card claims, for either side (the server turns runners away)', () => {
+    expect(scanTarget('KEJAR:BOMOH', 'runner')).toEqual({ action: 'claim', body: { qr: 'KEJAR:BOMOH' } })
+    expect(scanTarget('KEJAR:BOMOH:Zx9_q-4', 'chaser')).toEqual({ action: 'claim', body: { qr: 'KEJAR:BOMOH:Zx9_q-4' } })
+  })
   it('the Penjara code breaks runners out', () => {
     expect(scanTarget('KEJAR:JAIL', 'runner')).toEqual({ action: 'jailbreak', body: { qr: 'KEJAR:JAIL' } })
   })

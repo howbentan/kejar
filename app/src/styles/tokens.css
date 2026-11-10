@@ -500,3 +500,4 @@ select.input option { background: #141614; color: var(--white); }
 .settle-list label.off { opacity: 0.45; }
 .settle-list input { accent-color: var(--legendary-2); width: 18px; height: 18px; }
 .btn.btn-legendary { background: var(--legendary-2); color: var(--legendary-ink); border-color: var(--legendary-3); }
+.btn.btn-bomoh { background: var(--bomoh-2); color: var(--bomoh-ink); border-color: var(--bomoh-3); }

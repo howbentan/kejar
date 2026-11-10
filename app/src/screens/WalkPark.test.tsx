@@ -27,6 +27,8 @@ const S2 = { id: 'station-2', label: 'Station 2', lat: 3.0, lng: 101.002 }
 const PEN = { id: 'penjara', label: 'Penjara', lat: 3.001, lng: 101.0 }
 const DATO = { id: 'dato', label: 'Yellow card', lat: 3.002, lng: 101.0, tone: 'yellow' as const }
 
+const BOMOH = { id: 'bomoh', label: 'Purple card', lat: 3.003, lng: 101.0, tone: 'purple' as const }
+
 const view = (places: object[], placed: Record<string, boolean> = {}, extra: object = {}) =>
   ({ arena, kit: { items: [], places, placed }, ...extra }) as unknown as View
 
@@ -127,11 +129,27 @@ describe('WalkPark', () => {
     expect(call.mock.calls.map((c) => c[0])).toEqual(['dropDatoSeri', 'setKit'])
   })
 
+  it('the organiser walk puts Bomoh last, with the purple step and its own drop', async () => {
+    open(view([S1, DATO, BOMOH], { 'station-1': true, dato: true }, { datoCard: { letter: 'B', code: 'x' }, bomohCard: { letter: 'C', code: 'y' } }))
+    expect(mapCalls.at(-1)!.pins!.at(-1)).toMatchObject({ id: 'bomoh', label: '?', tone: 'purple' })
+    act(() => onFix!(at(BOMOH, 0, 100)))
+    expect(screen.getByText('SECRET · 3 OF 3')).toBeInTheDocument()
+    expect(screen.getByText('Hide purple card C.')).toBeInTheDocument()
+    expect(screen.getByText('Somewhere quiet, away from the yellow one. Behind a tree, under a bin.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Drop Dato Seri here' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Drop Bomoh here' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('setKit', { code: 'ABC234', organiserToken: 'h1', placed: { id: 'bomoh', on: true } }))
+    const drop = call.mock.calls.find((c) => c[0] === 'dropBomohSeri')!
+    expect(drop[1]).toMatchObject({ code: 'ABC234', organiserToken: 'h1' })
+    expect(drop[1].lat).toBeCloseTo(BOMOH.lat, 6)
+    expect(call.mock.calls.map((c) => c[0])).toEqual(['dropBomohSeri', 'setKit'])
+  })
+
   it("the helper's walk has no secret pin, step, letter or count", () => {
     // The server leaves the secret place and card out of a marshal's view; the screen adds nothing of its own.
     const { container } = open(view([S1, S2, PEN], { 'station-1': true, 'station-2': true, penjara: true }), { token: 'p1' })
     expect(mapCalls.at(-1)!.pins!.map((p) => p.id)).toEqual(['station-1', 'station-2', 'penjara'])
-    expect(container.textContent).not.toMatch(/secret|yellow|Dato|hide|\?/i)
+    expect(container.textContent).not.toMatch(/secret|yellow|purple|Dato|Bomoh|hide|\?/i)
     cleanup()
     open(view([S1, S2, PEN], { 'station-1': true }), { token: 'p1' })
     act(() => onFix!(at(S2, 0, -210)))
