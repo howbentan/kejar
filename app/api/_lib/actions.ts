@@ -26,7 +26,7 @@ import { activeShield, flareBlocked, judgeClaim, judgeDatoClaim, STATION_LOCK_MS
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
 import { validateTeams } from '../../shared/teams.js'
-import { DEFAULT_SETTINGS, type Arena, type DatoStash, type Game, type LatLng, type Player, type Position, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
+import { DEFAULT_SETTINGS, type Arena, type BomohStash, type DatoStash, type Game, type LatLng, type Player, type Position, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
 import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
 import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
@@ -158,16 +158,24 @@ async function marshalName(ctx: Ctx, game: GameRow, body: Body, marshal: Player 
   return marshal ? marshal.name : (await requireOrganiser(ctx, game, body)).name
 }
 
-/** The card letters of the secret sets assigned to this game. Only Dato Seri's yellow card is assigned yet (Bomoh isn't built). */
+/** The card letters of the secret sets assigned to this game: Dato Seri's yellow and Bomoh's purple, when assigned. */
 function secretLettersFor(game: Game): SecretLetters {
-  const letter = game.dato_stash?.card?.letter
-  return letter ? { dato: letter } : {}
+  const letters: SecretLetters = {}
+  if (game.dato_stash?.card?.letter) letters.dato = game.dato_stash.card.letter
+  if (game.bomoh_stash?.card?.letter) letters.bomoh = game.bomoh_stash.card.letter
+  return letters
 }
 
 // ---- Secret card sets: each organisation's reusable A-C yellow and A-C purple cards ----
 
+/** Which legendary a card-lifecycle function acts on: Dato Seri's yellow cards, or Bomoh's purple ones. */
+type LegendaryKind = 'dato' | 'bomoh'
+
 /** What `create` and `setMode` say when every yellow card is retired, waiting to be printed or in another game. */
 export const NO_FREE_CARD_NOTICE = 'Reprint a yellow card to use Dato Seri.'
+/** The same, for Bomoh's purple cards. */
+export const NO_FREE_BOMOH_CARD_NOTICE = 'Reprint a purple card to use Bomoh.'
+const NO_FREE_NOTICE: Record<LegendaryKind, string> = { dato: NO_FREE_CARD_NOTICE, bomoh: NO_FREE_BOMOH_CARD_NOTICE }
 /** Stash scans that don't claim before a player's later stash scans are all ignored (Review Focus 2). */
 export const STASH_MISS_LIMIT = 3
 const NO_STASH = { ok: false, reason: 'no-stash' } as const
@@ -180,38 +188,50 @@ function expiredLobby(g: Game, now: number): boolean {
   return !g.started_at && !!g.created_at && now - Date.parse(g.created_at) >= LOBBY_HOLD_MS
 }
 
+/** The stash a game holds for one legendary, by its own field (`dato_stash` or `bomoh_stash`). */
+function stashOf(g: Game, legendary: LegendaryKind): DatoStash | BomohStash | null | undefined {
+  return legendary === 'dato' ? g.dato_stash : g.bomoh_stash
+}
+
+/** Writes (or clears, with `null`) a legendary's stash onto a game, into its own field. */
+function writeStash(ctx: Ctx, gameId: string, legendary: LegendaryKind, stash: DatoStash | BomohStash | null): Promise<void> {
+  return ctx.store.updateGame(gameId, legendary === 'dato' ? { dato_stash: stash } : { bomoh_stash: stash })
+}
+
 /**
  * Whether a game holds its card right now: started and not ended (including one whose time ran out that nobody
  * has polled, so `ended_at` is still unset), or a lobby made less than LOBBY_HOLD_MS ago (ruling R3).
  */
-function holdsCard(g: Game, now: number): boolean {
-  if (!g.dato_stash?.card) return false
+function holdsCard(g: Game, now: number, legendary: LegendaryKind): boolean {
+  const stash = stashOf(g, legendary)
+  if (!stash?.card) return false
   if (g.started_at) return phaseAt(g, now).phase !== 'ended'
   // A card already hidden stays this lobby's at any age (amended ruling R3): handing it to another game would
   // leave a real card in the park that claims nothing.
-  return isDropped(g.dato_stash) || !expiredLobby(g, now)
+  return isDropped(stash) || !expiredLobby(g, now)
 }
 
-const isDropped = (s: DatoStash | null | undefined) => typeof s?.lat === 'number' && typeof s?.lng === 'number'
+const isDropped = (s: DatoStash | BomohStash | null | undefined) => typeof s?.lat === 'number' && typeof s?.lng === 'number'
 
-/** Each card held by one of the organisation's games, with the game holding it. */
-async function cardHolders(ctx: Ctx, organisationId: string): Promise<Map<string, GameRow>> {
+/** Each card of one legendary held by one of the organisation's games, with the game holding it. */
+async function cardHolders(ctx: Ctx, organisationId: string, legendary: LegendaryKind): Promise<Map<string, GameRow>> {
   const since = iso(ctx.now - LOBBY_HOLD_MS)
   const holders = new Map<string, GameRow>()
   for (const g of await ctx.store.unfinishedGames(organisationId, since)) {
-    if (holdsCard(g, ctx.now)) holders.set(g.dato_stash!.card!.id, g)
+    if (holdsCard(g, ctx.now, legendary)) holders.set(stashOf(g, legendary)!.card!.id, g)
   }
   return holders
 }
 
 /**
- * A random free yellow card (ready, and held by no other game of the organisation), or null when there's none.
- * Two creates at the same moment could pick the same card: an accepted race, very unlikely for one organisation.
+ * A random free card of the given legendary (ready, and held by no other game of the organisation), or null when
+ * there's none. Two creates at the same moment could pick the same card: an accepted race, very unlikely for one
+ * organisation.
  */
-async function freeDatoCard(ctx: Ctx, organisationId: string, exceptGameId?: string): Promise<SecretCard | null> {
-  const held = await cardHolders(ctx, organisationId)
+async function freeCard(ctx: Ctx, organisationId: string, legendary: LegendaryKind, exceptGameId?: string): Promise<SecretCard | null> {
+  const held = await cardHolders(ctx, organisationId, legendary)
   const free = (await ctx.store.secretCards(organisationId)).filter(
-    (c) => c.legendary === 'dato' && c.state === 'ready' && (!held.has(c.id) || held.get(c.id)!.id === exceptGameId),
+    (c) => c.legendary === legendary && c.state === 'ready' && (!held.has(c.id) || held.get(c.id)!.id === exceptGameId),
   )
   if (free.length === 0) return null
   return free[Math.min(free.length - 1, Math.floor(ctx.rng() * free.length))]
@@ -222,32 +242,32 @@ const stashOn = (card: SecretCard): DatoStash => ({ code: card.code, card: { id:
 
 /**
  * The lobby lets go of its card (ruling R8): no stash, and the walk's secret step is no longer placed, so a card
- * given later has to be hidden again. `placed.dato` is removed with the atomic kit write.
+ * given later has to be hidden again. `placed.<legendary>` is removed with the atomic kit write.
  */
-async function releaseDatoCard(ctx: Ctx, game: GameRow): Promise<void> {
-  if (game.dato_stash) await ctx.store.updateGame(game.id, { dato_stash: null })
-  if (game.kit?.placed?.dato) await ctx.store.setKitKey(game.id, 'placed', 'dato', null)
+async function releaseCard(ctx: Ctx, game: GameRow, legendary: LegendaryKind): Promise<void> {
+  if (stashOf(game, legendary)) await writeStash(ctx, game.id, legendary, null)
+  if (game.kit?.placed?.[legendary]) await ctx.store.setKitKey(game.id, 'placed', legendary, null)
 }
 
-/** A lobby that wants Dato Seri (Full, setting on) but holds no card yet (ruling R9). */
-const wantsDatoCard = (g: Game) =>
-  !g.started_at && g.settings.mode === 'full' && g.settings.legendaries?.dato === 'stash' && !g.dato_stash
+/** A lobby that wants a legendary (Full, setting on) but holds no card yet (ruling R9). */
+const wantsCard = (g: Game, legendary: LegendaryKind) =>
+  !g.started_at && g.settings.mode === 'full' && g.settings.legendaries?.[legendary] === 'stash' && !stashOf(g, legendary)
 
 /**
- * Gives a lobby with no card a free yellow card, not yet dropped (it has to be printed and hidden). With none free
- * the lobby keeps wanting Dato Seri and tries again later (ruling R9); returns the notice while it has none.
+ * Gives a lobby with no card a free card of that legendary, not yet dropped (it has to be printed and hidden).
+ * With none free the lobby keeps wanting it and tries again later (ruling R9); returns the notice while it has none.
  */
-async function assignFreeCard(ctx: Ctx, gameId: string, organisationId: string): Promise<string | null> {
-  const card = await freeDatoCard(ctx, organisationId, gameId)
-  if (!card) return NO_FREE_CARD_NOTICE
-  await ctx.store.updateGame(gameId, { dato_stash: stashOn(card) })
+async function assignFreeCard(ctx: Ctx, gameId: string, organisationId: string, legendary: LegendaryKind): Promise<string | null> {
+  const card = await freeCard(ctx, organisationId, legendary, gameId)
+  if (!card) return NO_FREE_NOTICE[legendary]
+  await writeStash(ctx, gameId, legendary, stashOn(card))
   return null
 }
 
 /** A lobby gives up its card (retired, or no longer its own) and takes a free one, or waits for one (ruling R9). */
-async function reassignDatoCard(ctx: Ctx, game: GameRow, organisationId: string): Promise<string | null> {
-  await releaseDatoCard(ctx, game)
-  return assignFreeCard(ctx, game.id, organisationId)
+async function reassignCard(ctx: Ctx, game: GameRow, organisationId: string, legendary: LegendaryKind): Promise<string | null> {
+  await releaseCard(ctx, game, legendary)
+  return assignFreeCard(ctx, game.id, organisationId, legendary)
 }
 
 /**
@@ -256,39 +276,41 @@ async function reassignDatoCard(ctx: Ctx, game: GameRow, organisationId: string)
  * lobby wasn't holding it); otherwise it's let go and the lobby takes another free card, or waits for one (R9).
  * Returns the notice while the lobby has no card.
  */
-async function recheckExpiredLobby(ctx: Ctx, game: GameRow, organisationId: string): Promise<string | null> {
-  const stash = game.dato_stash
+async function recheckExpiredLobby(ctx: Ctx, game: GameRow, organisationId: string, legendary: LegendaryKind): Promise<string | null> {
+  const stash = stashOf(game, legendary)
   if (!stash?.card || !expiredLobby(game, ctx.now)) return null
   const card = (await ctx.store.secretCards(organisationId)).find((c) => c.id === stash.card!.id)
-  const holder = (await cardHolders(ctx, organisationId)).get(stash.card.id)
+  const holder = (await cardHolders(ctx, organisationId, legendary)).get(stash.card.id)
   const ours = !!card && card.state !== 'retired' && (!holder || holder.id === game.id)
   // A hidden card is kept only while it still claims (amended R3). One that no longer does is let go, never kept
   // as if hidden: the new card is not dropped, so the walk asks for it to be hidden again (R8).
   if (ours && (!isDropped(stash) || card!.code === stash.code)) {
-    if (card!.code !== stash.code) await ctx.store.updateGame(game.id, { dato_stash: { ...stash, code: card!.code } })
+    if (card!.code !== stash.code) await writeStash(ctx, game.id, legendary, { ...stash, code: card!.code })
     return null
   }
-  return reassignDatoCard(ctx, game, organisationId)
+  return reassignCard(ctx, game, organisationId, legendary)
 }
 
 /**
  * Before a lobby's card is used (setMode to Full, a drop, start, the organiser's own poll): an expired lobby
- * re-checks its card (R3), and a lobby that wants Dato Seri but has none tries for a free one (R9). Returns the
- * game as it now is, and the notice while it still has no card. Player polls never run this.
+ * re-checks its card (R3), and a lobby that wants that legendary but has none tries for a free one (R9). Returns
+ * the game as it now is, and the notice while it still has no card. Player polls never run this.
  */
-async function settleLobbyCard(ctx: Ctx, game: GameRow, organisationId: string): Promise<{ game: GameRow; notice: string | null }> {
+async function settleLobbyCard(ctx: Ctx, game: GameRow, organisationId: string, legendary: LegendaryKind): Promise<{ game: GameRow; notice: string | null }> {
   if (game.started_at) return { game, notice: null }
-  await recheckExpiredLobby(ctx, game, organisationId)
+  await recheckExpiredLobby(ctx, game, organisationId, legendary)
   let fresh = (await ctx.store.gameByCode(game.code)) ?? game
-  if (wantsDatoCard(fresh) && !(await assignFreeCard(ctx, fresh.id, organisationId))) {
+  if (wantsCard(fresh, legendary) && !(await assignFreeCard(ctx, fresh.id, organisationId, legendary))) {
     fresh = (await ctx.store.gameByCode(game.code)) ?? fresh
   }
-  return { game: fresh, notice: wantsDatoCard(fresh) ? NO_FREE_CARD_NOTICE : null }
+  return { game: fresh, notice: wantsCard(fresh, legendary) ? NO_FREE_NOTICE[legendary] : null }
 }
 
 /** The cheap test the organiser's poll runs before paying for a re-check: an expired lobby's undropped card, or no card yet. */
-const needsRecheck = (g: Game, now: number) =>
-  (!!g.dato_stash?.card && !isDropped(g.dato_stash) && expiredLobby(g, now)) || wantsDatoCard(g)
+const needsRecheck = (g: Game, now: number, legendary: LegendaryKind) => {
+  const stash = stashOf(g, legendary)
+  return (!!stash?.card && !isDropped(stash) && expiredLobby(g, now)) || wantsCard(g, legendary)
+}
 
 /** The card a card action names, in the calling organiser's own set. */
 async function requireSecretCard(ctx: Ctx, body: Body): Promise<{ card: SecretCard; organisationId: string }> {
@@ -304,7 +326,10 @@ async function requireSecretCard(ctx: Ctx, body: Body): Promise<{ card: SecretCa
 /** The organiser's card set, never with codes: which are ready, retired or printing, when found, and which are in a game. */
 const listSecretCards: Action = async (ctx, body) => {
   const organiser = await requireAnyOrganiser(ctx, body)
-  const busy = await cardHolders(ctx, organiser.organisation_id)
+  const busy = new Map<string, GameRow>([
+    ...(await cardHolders(ctx, organiser.organisation_id, 'dato')),
+    ...(await cardHolders(ctx, organiser.organisation_id, 'bomoh')),
+  ])
   const order = (c: SecretCard) => `${c.legendary === 'dato' ? 0 : 1}${c.letter}`
   return (await ctx.store.secretCards(organiser.organisation_id))
     .sort((a, b) => order(a).localeCompare(order(b)))
@@ -316,20 +341,20 @@ const listSecretCards: Action = async (ctx, body) => {
  * lobby is returned, for the caller to update.
  */
 async function lobbyHolding(ctx: Ctx, card: SecretCard, organisationId: string): Promise<GameRow | null> {
-  const holder = (await cardHolders(ctx, organisationId)).get(card.id)
+  const holder = (await cardHolders(ctx, organisationId, card.legendary)).get(card.id)
   if (holder?.started_at) throw new ActionError(409, 'That card is in a game right now.')
   return holder ?? null
 }
 
 /**
  * A lost or spoilt card: never put in play again until it's reprinted. A lobby holding it gets another free card,
- * or Dato Seri off (`notice` then says so).
+ * or that legendary off (`notice` then says so).
  */
 const retireSecretCard: Action = async (ctx, body) => {
   const { card, organisationId } = await requireSecretCard(ctx, body)
   const lobby = await lobbyHolding(ctx, card, organisationId)
   await ctx.store.setSecretCard(card.id, { state: 'retired' })
-  const notice = lobby ? await reassignDatoCard(ctx, lobby, organisationId) : null
+  const notice = lobby ? await reassignCard(ctx, lobby, organisationId, card.legendary) : null
   return notice ? { ok: true, notice } : { ok: true }
 }
 
@@ -344,8 +369,9 @@ const reprintSecretCard: Action = async (ctx, body) => {
   const code = newDatoCode()
   await ctx.store.setSecretCard(card.id, { code, state: 'printing' })
   if (lobby) {
-    await ctx.store.updateGame(lobby.id, { dato_stash: { ...lobby.dato_stash!, code, lat: null, lng: null, claimedBy: null, claimedAt: null } })
-    if (lobby.kit?.placed?.dato) await ctx.store.setKitKey(lobby.id, 'placed', 'dato', null)
+    const stash = stashOf(lobby, card.legendary)!
+    await writeStash(ctx, lobby.id, card.legendary, { ...stash, code, lat: null, lng: null, claimedBy: null, claimedAt: null })
+    if (lobby.kit?.placed?.[card.legendary]) await ctx.store.setKitKey(lobby.id, 'placed', card.legendary, null)
   }
   return { ok: true }
 }
@@ -386,8 +412,7 @@ function settingsFrom(input: unknown): Settings {
   for (const v of [legendaries.dato, legendaries.bomoh]) {
     if (v !== 'off' && v !== 'stash') throw new ActionError(400, 'Legendary cards must be off or on a hidden stash')
   }
-  // Bomoh isn't built yet: whatever was sent, it stays off.
-  s.legendaries = { dato: legendaries.dato, bomoh: 'off' }
+  s.legendaries = legendaries
   return s
 }
 
@@ -595,7 +620,7 @@ const create: Action = async (ctx, body) => {
   let stash: DatoStash | null = null
   let noFreeCard = false
   if (settings.mode === 'full' && settings.legendaries.dato === 'stash') {
-    const card = await freeDatoCard(ctx, organiser.organisation_id)
+    const card = await freeCard(ctx, organiser.organisation_id, 'dato')
     if (card) stash = stashOn(card)
     else noFreeCard = true
   }
@@ -690,13 +715,13 @@ const start: Action = async (ctx, body) => {
   if (problems.length) throw new ActionError(409, problems.join(' · '))
   // A lobby left over a day re-checks its card, and one with no card tries once more (rulings R3, R9). Still none:
   // the game starts with Dato Seri off, and the organiser is told.
-  const settled = await settleLobbyCard(ctx, game, organiser.organisation_id)
+  const settled = await settleLobbyCard(ctx, game, organiser.organisation_id, 'dato')
   const notice = settled.notice
   const startedAt = iso(ctx.now)
   const started = { ...game, started_at: startedAt }
   const count = (role: Role) => Object.values(roles).filter((r) => r === role).length
   await ctx.store.updateGame(game.id, {
-    ...(wantsDatoCard(settled.game) ? { settings: { ...settled.game.settings, legendaries: { ...settled.game.settings.legendaries, dato: 'off' as const } } } : {}),
+    ...(wantsCard(settled.game, 'dato') ? { settings: { ...settled.game.settings, legendaries: { ...settled.game.settings.legendaries, dato: 'off' as const } } } : {}),
     started_at: startedAt,
     runner_sets: setsFor('runner', count('runner')),
     deck_seed: newToken(),
@@ -757,9 +782,9 @@ const state: Action = async (ctx, body) => {
   }
   // The organiser's own poll only (ruling R9): an expired lobby re-checks its card, so the print link never shows a
   // card another game holds, and a lobby with no card tries for one. Player polls never pay for this.
-  if (me.id === 'host' && needsRecheck(game, ctx.now)) {
+  if (me.id === 'host' && needsRecheck(game, ctx.now, 'dato')) {
     const org = (await ctx.store.organiserById((game as GameRow).organiser_id))?.organisation_id
-    if (org) await settleLobbyCard(ctx, game as GameRow, org)
+    if (org) await settleLobbyCard(ctx, game as GameRow, org, 'dato')
   }
   await advance(ctx, game)
   game = (await loadGame(ctx, body)) as Game
@@ -1236,7 +1261,7 @@ const dropDatoSeri: Action = async (ctx, body) => {
   if (loaded.settings.mode !== 'full') throw new ActionError(409, 'Dato Seri is in Full mode only')
   requireLobby(loaded, ctx.now)
   // An old lobby re-checks its card first, and one with none tries for one (rulings R3, R9).
-  const { game } = await settleLobbyCard(ctx, loaded, organiser.organisation_id)
+  const { game } = await settleLobbyCard(ctx, loaded, organiser.organisation_id, 'dato')
   // No card (Dato Seri off, or none is free yet): there's nothing to drop.
   if (!game.dato_stash) throw new ActionError(409, NO_FREE_CARD_NOTICE)
   const at = coordsOf(body)
@@ -1757,10 +1782,10 @@ const setMode: Action = async (ctx, body) => {
   const settings = settingsFrom({ ...loaded.settings, mode: body.mode })
   await ctx.store.updateGame(loaded.id, { settings })
   if (settings.mode !== 'full') {
-    await releaseDatoCard(ctx, loaded)
+    await releaseCard(ctx, loaded, 'dato')
     return { ok: true }
   }
-  const { notice } = await settleLobbyCard(ctx, { ...loaded, settings }, organiser.organisation_id)
+  const { notice } = await settleLobbyCard(ctx, { ...loaded, settings }, organiser.organisation_id, 'dato')
   return notice ? { ok: true, notice } : { ok: true }
 }
 

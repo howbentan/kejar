@@ -3143,9 +3143,9 @@ describe('setup settings and the packing list', () => {
     await rejects(bad({ legendaries: 'all' }), 400, 'Legendary')
   })
 
-  it('forces Bomoh off while it is not built', async () => {
+  it('lets Bomoh be turned on alongside Dato Seri, now that its cards exist', async () => {
     const { code } = await create({ legendaries: { dato: 'stash', bomoh: 'stash' } })
-    expect((await store.gameByCode(code))!.settings.legendaries.bomoh).toBe('off')
+    expect((await store.gameByCode(code))!.settings.legendaries).toEqual({ dato: 'stash', bomoh: 'stash' })
   })
 
   it('setKit ticks and unticks, storing the label it was ticked under', async () => {
@@ -3555,6 +3555,63 @@ describe('secret card sets', () => {
     expect(Object.keys(kit.ticks).sort()).toEqual(['penjara', 'tape'])
     expect(kit.placed).toEqual({ penjara: true })
   })
+  describe("Bomoh's purple cards: the same organiser lifecycle as Dato Seri's yellow ones", () => {
+    const BOMOH_NOTICE = 'Reprint a purple card to use Bomoh.'
+    const purple = async (organiserToken: string) => (await store.secretCards(await orgOf(organiserToken))).filter((c) => c.legendary === 'bomoh')
+    const bomohOf = async (code: string) => (await gameOf(code)).bomoh_stash ?? null
+
+    /** A Full lobby holding its first purple card directly: no drop/claim action exists yet (a later task adds it). */
+    async function bomohLobby() {
+      const g = await readyGame({ mode: 'full', legendaries: { bomoh: 'stash' } })
+      const card = (await purple(g.organiserToken))[0]
+      await store.updateGame((await gameOf(g.code)).id, {
+        bomoh_stash: { code: card.code, card: { id: card.id, letter: card.letter }, lat: null, lng: null, claimedBy: null, claimedAt: null },
+      })
+      return { ...g, card }
+    }
+
+    it("retiring a lobby's purple card gives it another free purple card, or leaves it waiting with Bomoh's own notice (ruling R9)", async () => {
+      const g = await bomohLobby()
+      const first = g.card
+      expect(await act(g.organiserToken, 'retireSecretCard', 'bomoh', first.letter)).toEqual({ ok: true })
+      const second = await bomohOf(g.code)
+      expect(second!.card!.id).not.toBe(first.id)
+      // Not hidden yet: it has to be printed and dropped, same as a fresh Dato Seri card.
+      expect(second).toMatchObject({ lat: null, lng: null })
+      const last = ['A', 'B', 'C'].find((l) => l !== first.letter && l !== second!.card!.letter)!
+      await act(g.organiserToken, 'retireSecretCard', 'bomoh', last)
+      expect(await act(g.organiserToken, 'retireSecretCard', 'bomoh', second!.card!.letter)).toEqual({ ok: true, notice: BOMOH_NOTICE })
+      const game = await gameOf(g.code)
+      expect(game.bomoh_stash ?? null).toBeNull()
+      expect(game.settings.legendaries.bomoh).toBe('stash')
+    })
+
+    it("reprinting a dropped lobby's purple card clears the drop and placed.bomoh, same as a yellow reprint (ruling R8)", async () => {
+      const g = await bomohLobby()
+      const DROPPED = { lat: CENTER.lat + 50 / 111_195, lng: CENTER.lng }
+      const gameId = (await gameOf(g.code)).id
+      await store.updateGame(gameId, { bomoh_stash: { ...(await bomohOf(g.code))!, ...DROPPED } })
+      await store.setKitKey(gameId, 'placed', 'bomoh', true)
+      const oldCode = (await bomohOf(g.code))!.code
+      expect(await act(g.organiserToken, 'reprintSecretCard', 'bomoh', g.card.letter)).toEqual({ ok: true })
+      const game = await gameOf(g.code)
+      expect(game.bomoh_stash).toMatchObject({ card: { id: g.card.id, letter: g.card.letter }, lat: null, lng: null, claimedBy: null, claimedAt: null })
+      expect(game.bomoh_stash!.code).not.toBe(oldCode)
+      expect(game.kit?.placed ?? {}).not.toHaveProperty('bomoh')
+    })
+
+    it("an expired lobby's unused purple card is freed to be reassigned, the same way Dato Seri's yellow card is (ruling R3)", async () => {
+      const g = await bomohLobby()
+      const held = async () =>
+        (await run('listSecretCards', { organiserToken: g.organiserToken })).find(
+          (c: { legendary: string; letter: string }) => c.legendary === 'bomoh' && c.letter === g.card.letter,
+        ).inGame
+      expect(await held()).toBe(true)
+      now = T0 + 25 * 60 * MIN
+      expect(await held()).toBe(false)
+    })
+  })
+
   describe('lobbies hold their card for 24 hours (ruling R3)', () => {
     const HOUR = 60 * MIN
 
