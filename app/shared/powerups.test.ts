@@ -3,7 +3,7 @@ import { arenaAroundPoint } from './arenas.js'
 import { iso, MIN, ping, player, pos, T0 } from './fixtures.js'
 import { circlePolygon, distanceM, offset, pointInPolygon } from './geo.js'
 import { buildPlayArea, inPlayArea } from './playArea.js'
-import { activeShield, decoySpot, flareBlocked, judgeClaim, slotBusy } from './powerups.js'
+import { activeShield, decoySpot, flareBlocked, judgeBomohClaim, judgeClaim, slotBusy } from './powerups.js'
 import { BONUS_SEQ_BASE } from './clock.js'
 import type { Ping, PowerUp } from './types.js'
 
@@ -69,6 +69,40 @@ describe('judgeClaim', () => {
   })
   it('chasers can claim too', () => {
     expect(judgeClaim({ ...base, me: ben })).toEqual({ ok: true })
+  })
+})
+
+describe('judgeBomohClaim', () => {
+  const dropped = { lat: S1.lat, lng: S1.lng, claimedBy: null, claimedAt: null }
+  const bombase = { phase: 'chasing' as const, me: ben, stash: dropped, myPos: atS1, now: NOW }
+
+  it('a chaser in reach of a dropped, unclaimed stash can claim it', () => {
+    expect(judgeBomohClaim(bombase)).toEqual({ ok: true })
+  })
+  it('only during the chase', () => {
+    expect(judgeBomohClaim({ ...bombase, phase: 'hiding' })).toEqual({ ok: false, reason: 'not-chasing' })
+  })
+  it('runners and marshals cannot claim Bomoh', () => {
+    expect(judgeBomohClaim({ ...bombase, me: aina })).toEqual({ ok: false, reason: 'cannot-claim' })
+    expect(judgeBomohClaim({ ...bombase, me: player('m1', 'marshal') })).toEqual({ ok: false, reason: 'cannot-claim' })
+  })
+  it('nothing to find when the stash is missing, not yet dropped, or already claimed', () => {
+    expect(judgeBomohClaim({ ...bombase, stash: null })).toEqual({ ok: false, reason: 'no-stash' })
+    expect(judgeBomohClaim({ ...bombase, stash: undefined })).toEqual({ ok: false, reason: 'no-stash' })
+    expect(judgeBomohClaim({ ...bombase, stash: { ...dropped, lat: null, lng: null } })).toEqual({ ok: false, reason: 'no-stash' })
+    expect(judgeBomohClaim({ ...bombase, stash: { ...dropped, claimedBy: 'c2', claimedAt: iso(NOW - MIN) } })).toEqual({
+      ok: false,
+      reason: 'no-stash',
+    })
+  })
+  it('too far from the dropped spot, or a stale fix, is too-far', () => {
+    expect(judgeBomohClaim({ ...bombase, myPos: pos(S1.lat + 200 / 111_195, S1.lng, NOW - 5_000) })).toEqual({ ok: false, reason: 'too-far' })
+    expect(judgeBomohClaim({ ...bombase, myPos: pos(S1.lat, S1.lng, NOW - 40_000) })).toEqual({ ok: false, reason: 'too-far' })
+    expect(judgeBomohClaim({ ...bombase, myPos: null })).toEqual({ ok: false, reason: 'too-far' })
+  })
+  it('never checks the hand: a chaser holding a power-up can still claim', () => {
+    // No powerUps/pings input exists; Bomoh never occupies a slot.
+    expect(judgeBomohClaim(bombase)).toEqual({ ok: true })
   })
 })
 
