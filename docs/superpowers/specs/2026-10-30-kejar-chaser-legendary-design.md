@@ -2,7 +2,7 @@
 
 > **Current rules:** `docs/superpowers/specs/2026-10-30-kejar-rules.md` is the single source of truth for the game as a whole (Core and Full modes, 2026-10-30). Where this doc disagrees with it, the rules doc wins; its §9 lists what changed.
 
-**Status:** Design agreed with the owner in chat, 2026-10-28 through 2026-10-31. **The character is settled: Bomoh** (owner's decision, 2026-10-31), after the owner's own real-world cultural check. The grant mechanism mirrors Dato Seri's hidden-stash default, so it fits the crew of two (§2a), and the card gets its own colour, purple, rather than sharing Dato Seri's yellow (§2b) — doodle card art mocked up in `docs/superpowers/mockups/2026-10-31-chaser-legendary/`. Not yet builder-checked, not built.
+**Status:** Design agreed with the owner in chat, 2026-10-28 through 2026-10-31, then the effect mechanism resolved against the real (now-built) codebase, 2026-11-10 (§2d). **The character is settled: Bomoh** (owner's decision, 2026-10-31), after the owner's own real-world cultural check. The grant mechanism mirrors Dato Seri's hidden-stash default, so it fits the crew of two (§2a), and the card gets its own colour, purple, rather than sharing Dato Seri's yellow (§2b) — doodle card art mocked up in `docs/superpowers/mockups/2026-10-31-chaser-legendary/`. Not yet builder-checked, not built.
 **Builds on:**
 - `docs/superpowers/specs/2026-10-28-kejar-malaysian-powerups-design.md`: Pak Guard's reveal radius (75 m, not 150 m) was dropped specifically to keep it clearly weaker than this power-up. §5c now also covers Bomoh's purple as its own brand exception alongside Dato Seri's yellow.
 - `docs/superpowers/specs/2026-10-28-kejar-jail-dato-seri-design.md` §4b: this doc's stash-vs-staffed split is copied directly from there, same reasoning.
@@ -16,8 +16,8 @@ Dato Seri gives runners a rare, ceremony-gated escape. The owner wants a chaser-
 - **Side:** chaser.
 - **Rarity and slot cost, matching Dato Seri:** exactly one exists per game, and claiming it takes the chaser's one power-up slot. **Full mode only** (rules doc §3).
 - **Location: stationary and hidden,** not wandering like Dato Seri's quest-giver mode — a deliberate mechanical difference between the two legendaries, kept in both grant modes below.
-- **Effect: a continuously-updating live reveal of every free runner's exact position** (not a one-shot snapshot like Pak Guard) — different from Pak Guard on scope, locality, and live-vs-snapshot, all three.
-- **Duration (owner's proposal, Claude agrees):** 1 minute if triggered with more than 5 minutes left in the game; extends to **last until the game ends** if triggered inside the final 5 minutes. The 5-minute threshold is a flat constant regardless of total game length, matching every other number in this design (`FOCUS_M`, the fuzzy-hint radius, etc.) — not yet explicitly confirmed by the owner, flag this when picking the brainstorm back up.
+- **Effect: every free runner shows exact, not fuzzy, with no radius limit** (Pak Guard's mechanism, with the 75 m cap removed) — see §2d for what "live" actually means once checked against how runner positions really reach a chaser.
+- **Duration: the next 2 ping reveals after activation, not a timer** — see §2d for why.
 - **Immune to Toyol's steal pool (Claude's call, confirming the earlier tentative note).** Same reasoning as Dato Seri's immunity to Ah Long: a single random dice roll shouldn't delete the only copy of something this rare. Toyol is the mirror tool here since it steals from chasers.
 
 ## 2a. Two ways to grant it, mirroring Dato Seri (resolved 2026-10-31)
@@ -33,7 +33,7 @@ Dato Seri solved "how does a two-person crew run a staffed ritual" by making the
 | Extra people | None — fits the crew of two. | One dedicated person, playing Bomoh, stationed for the whole event, on top of the base crew. |
 
 - **Why the stash is the default:** same reasoning as Dato Seri §4b — a volunteer is one more thing the organiser has to arrange for every event, and the stash needs only a printed card.
-- **What stays the same in both modes:** one per game, chasers only, takes the one slot, immune to Toyol, the legendary look (§2b), and the 1-minute/until-end effect duration.
+- **What stays the same in both modes:** one per game, chasers only, takes the one slot, immune to Toyol, the legendary look (§2b), and the effect itself (§2d).
 - **This resolves the staffing blocker.** The old plan assumed a dedicated ritual performer was mandatory, which didn't fit the crew of two (rules doc §5). It's now optional, exactly like Dato Seri's quest-giver mode.
 
 ## 2b. How it looks: Bomoh, in purple (owner's decision, 2026-10-31)
@@ -50,6 +50,18 @@ Dato Seri solved "how does a two-person crew run a staffed ritual" by making the
 ## 2c. Kept secret, same as Dato Seri
 
 Players are never told Bomoh exists, the same way Dato Seri is kept secret (jail design §4c, rules doc §9b): the hint zone is an unlabelled purple `?`, and the feed says `Something legendary was found.` without naming which one. The ritual mode's own moment (finding Bomoh in person) is naturally still a surprise either way.
+
+## 2d. The reveal effect, resolved against the real codebase (2026-11-10)
+
+This design was written before Dato Seri existed in code. Checking "a continuously-updating live reveal" against what's actually built changed it:
+
+- **There's no continuous tracking to extend, anywhere in this game, on purpose.** Runner phones stay pocketed between pings (core design), and `views.ts` only computes any player's dots once, at each ping reveal. A literal continuous feed would be new, more invasive tracking infrastructure this game has deliberately avoided everywhere else — not something to add for one card.
+- **What already exists and maps onto this almost exactly: Focus/Pak Guard.** `views.ts`'s `focused = focusers.some(f => distanceM(f, at) <= FOCUS_M)` already makes a runner show exact instead of fuzzy, at the next ping reveal, for whoever's holding an active Focus. Bomoh reuses this precisely, just with the `FOCUS_M` radius check dropped (every free runner qualifies, not only ones near the user) and its own, longer active window.
+- **Already whole-chaser-team, for free.** `focusers` in `views.ts` isn't filtered to the viewing player — any chaser near an active Focus already shows every other chaser an exact dot too, not just the one who used it. Bomoh inherits this automatically. This is the right weight to match Dato Seri: Dato Seri doesn't just help its holder, it changes the whole runner team's win condition; Bomoh revealing to the whole chaser team at once is the equivalent swing the other way, and it costs nothing extra to build.
+- **Duration is a ping count, not a timer, because a timer can silently do nothing.** The original "1 minute" proposal could span zero ping reveals if `pingMin` is 5 and the timing doesn't line up — Bomoh could be triggered and reveal nobody. **Decided: active through the next 2 ping reveals after activation**, however long that actually takes (as little as just over one `pingMin`, as much as two, depending when in the cycle it's triggered). This guarantees real value every time, never zero.
+- **Between those 2 reveals, the exact dots stay up, aging, instead of reverting to fuzzy.** A client-side rendering choice only (grey out a revealed runner's dot and show "N min ago" until the next reveal replaces it) — no new data, no new tracking, just not discarding information the chaser team already legitimately received. This is what makes the window *feel* like one hunt instead of two disconnected flashes.
+- **No changes needed to catching itself.** The worry was that a catch attempted after chasing down a reveal might get rejected as "too far" on a technicality. Checked `shared/catch.ts`: a catch can only be rejected as too-far when the runner's own position is **fresh** (`RUNNER_TRUSTED_MS`, 20s) and shows real distance — stale position data (which is exactly what a runner's last check-in will be, a ping cycle after the reveal) can't reject a catch at all; it just flags the catch for the existing post-catch dispute flow. By the time a chaser could plausibly act on a Bomoh reveal, the data's already past that 20-second window, so the rejection path was never actually reachable in this scenario. Nothing in `catch.ts` needs touching.
+- **The grant mechanism (§2a) should mirror Dato Seri's schema exactly, as a parallel column, not a shared/generic one.** `games.dato_stash` (jsonb) and `claim_dato()` (`supabase/migrations/0011_full_mode.sql`) are both Dato-specific, not generalised, matching this codebase's existing style of parallel-not-merged columns (`runner_sets`/`chaser_sets`, `runner_draws`/`chaser_draws`). The plan should add `games.bomoh_stash` (same shape as `DatoStash`) and a `claim_bomoh()` function that's `claim_dato()` with `kind = 'bomoh'`. **`secret_cards` (migration `0014_setup.sql`) needs no changes at all** — it was already built generic (`legendary in ('dato', 'bomoh')`), ahead of this design actually landing.
 
 ## 3. Still open
 
