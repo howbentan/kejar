@@ -919,8 +919,9 @@ function kitFor(i: ViewInput): KitView {
   const kit = kitOf(i.game)
   const places = placeItems(i.game, organiser, letters)
   // The secret step is placed only when the stash is really dropped, never from the saved flag alone (ruling R8).
-  const placed = Object.fromEntries(Object.entries(kit.placed).filter(([id]) => id !== 'dato' && places.some((p) => p.id === id)))
+  const placed = Object.fromEntries(Object.entries(kit.placed).filter(([id]) => id !== 'dato' && id !== 'bomoh' && places.some((p) => p.id === id)))
   if (places.some((p) => p.id === 'dato') && placedStash(i.game.dato_stash)) placed.dato = true
+  if (places.some((p) => p.id === 'bomoh') && placedStash(i.game.bomoh_stash)) placed.bomoh = true
   return {
     items: packItems(i.game, letters).map((item) => ({ ...item, ticked: isTicked(i.game, item) })),
     placed,

@@ -1059,6 +1059,28 @@ describe('the packing list in organiser and marshal views', () => {
     expect(JSON.stringify(v.kit)).not.toContain('Yellow card')
   })
 
+  describe("Bomoh's walk step (R8: placed only once the card is really dropped)", () => {
+    const bomohGame = (over: object = {}, placed: Record<string, boolean> = {}) =>
+      game({
+        settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } },
+        arena: { ...game().arena, stations: [{ lat: 3.001, lng: 101.001 }] },
+        kit: { ticks: {}, placed: { 'station-1': true, ...placed } },
+        ...over,
+      })
+    const bomohView = (g: ReturnType<typeof bomohGame>) => view(host, { game: g, secretLetters: { bomoh: 'C' } }).kit!
+
+    it('a saved flag with no dropped stash is not placed', () => {
+      const k = bomohView(bomohGame({}, { bomoh: true }))
+      expect(k.places.map((p) => p.id)).toContain('bomoh')
+      expect(k.placed.bomoh).toBeUndefined()
+    })
+
+    it('a dropped stash is placed even without the saved flag', () => {
+      const k = bomohView(bomohGame({ bomoh_stash: { lat: 3.002, lng: 101.002, claimedBy: null, claimedAt: null } }))
+      expect(k.placed.bomoh).toBe(true)
+    })
+  })
+
   it('a runner or chaser has no kit at all', () => {
     for (const me of [aina, chaser]) {
       const v = kitView(me)
