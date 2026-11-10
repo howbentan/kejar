@@ -204,23 +204,65 @@ describe('HostLobby mode and checks', () => {
     expect(screen.getByText('CORE')).toBeInTheDocument()
   })
 
-  it("shows setMode's notice when no yellow card is free", async () => {
+  it("with no yellow card free, setMode's notice is neutral on the open screen and full only behind Organiser tools", async () => {
+    let mode: 'core' | 'full' = 'core'
     call.mockImplementation(async (action: string) => {
-      if (action === 'setMode') return { ok: true, notice: 'Reprint a yellow card to use Dato Seri.' }
-      return action === 'state' ? lobbyView : {}
+      if (action === 'setMode') {
+        mode = 'full'
+        return { ok: true, notice: 'Reprint a yellow card to use Dato Seri.' }
+      }
+      if (action !== 'state') return {}
+      return mode === 'core' ? lobbyView : { ...lobbyView, settings: { ...DEFAULT_SETTINGS, mode: 'full' }, datoStash: null, datoCard: null }
     })
     render(<HostLobby code="ABC234" />)
     fireEvent.click(await screen.findByRole('button', { name: 'Change' }))
-    expect(await screen.findByText('Reprint a yellow card to use Dato Seri.')).toBeInTheDocument()
+    expect(await screen.findByText('Hidden card is off for now. Reprint a card to use it.')).toBeInTheDocument()
+    await screen.findByText('FULL')
+    expect(document.body.textContent).not.toMatch(/dato|yellow/i)
+    fireEvent.click(screen.getByRole('button', { name: 'Organiser tools' }))
+    expect(screen.getByText('Reprint a yellow card to use Dato Seri.')).toBeInTheDocument()
   })
 
-  it('switching Full to Core with the stash already dropped says so, with no confirm', async () => {
+  it('the no-card line stays while the lobby still has no card (ruling R9), and goes once one is assigned', async () => {
+    let card: { letter: string; code: string } | null = null
+    call.mockImplementation(async (action: string) =>
+      action === 'state' ? { ...lobbyView, settings: { ...DEFAULT_SETTINGS, mode: 'full' }, datoStash: null, datoCard: card } : {},
+    )
+    const { unmount } = render(<HostLobby code="ABC234" />)
+    expect(await screen.findByText('Hidden card is off for now. Reprint a card to use it.')).toBeInTheDocument()
+    unmount()
+    card = { letter: 'A', code: 'x'.repeat(22) }
+    render(<HostLobby code="ABC234" />)
+    await screen.findByText('FULL')
+    expect(screen.queryByText('Hidden card is off for now. Reprint a card to use it.')).toBeNull()
+  })
+
+  it('switching Full to Core with the stash already dropped says so neutrally, with no confirm', async () => {
     const dropped = { lat: 0.002, lng: 0.002, claimedBy: null, claimedAt: null }
     call.mockImplementation(async (action: string) => (action === 'state' ? { ...fullView, datoStash: dropped } : {}))
     render(<HostLobby code="ABC234" />)
     fireEvent.click(await screen.findByRole('button', { name: 'Change' }))
-    expect(await screen.findByText('Dato Seri is off for this game. Pick up the yellow card.')).toBeInTheDocument()
+    expect(await screen.findByText('Hidden card is off for this game. Pick it up.')).toBeInTheDocument()
     expect(call).toHaveBeenCalledWith('setMode', { code: 'ABC234', organiserToken: 'h1', mode: 'core' })
+  })
+
+  it("shows start's notice and waits for the organiser before going to the game", async () => {
+    const assign = vi.fn()
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, origin: 'https://kejar.test', search: '', assign } })
+    let started = false
+    call.mockImplementation(async (action: string) => {
+      if (action === 'start') {
+        started = true
+        return { startedAt: 'now', notice: 'Reprint a yellow card to use Dato Seri.' }
+      }
+      return action === 'state' ? { ...fullView, phase: started ? 'hiding' : 'lobby' } : {}
+    })
+    render(<HostLobby code="ABC234" />)
+    fireEvent.click(await screen.findByRole('button', { name: /start game/i }))
+    expect(await screen.findByText('Started without the hidden card. Reprint a card for next time.')).toBeInTheDocument()
+    expect(assign).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Go to the game' }))
+    expect(assign).toHaveBeenCalledWith('/g/ABC234')
   })
 
   it('shows Before you start, and Start game stays enabled with every check unticked', async () => {

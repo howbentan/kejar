@@ -85,7 +85,10 @@ export default function PackList({ code, view, refresh, compact = false }: { cod
   }, [items])
   const doneOf = (i: Item) => local[i.id] ?? i.ticked
   const ready = items.length > 0 && items.every(doneOf)
-  const notice = !compact && new URLSearchParams(window.location.search).get('notice') === 'dato'
+  // The notice stays while the game wants the yellow card but has none yet, and goes once one is assigned (ruling
+  // R9). A view without `datoCard` (not the organiser's) falls back to the notice the create step passed on.
+  const waitingForCard = view.settings?.mode === 'full' && view.settings.legendaries?.dato === 'stash' && view.datoCard === null
+  const notice = !compact && (view.datoCard === undefined ? new URLSearchParams(window.location.search).get('notice') === 'dato' : waitingForCard)
 
   async function tap(item: Item) {
     // No organiser session on this phone: the rows are read-only.

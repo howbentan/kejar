@@ -107,6 +107,16 @@ describe('PackList', () => {
     expect(screen.getByRole('link', { name: 'Your kit' }).getAttribute('href')).toBe('/host/kit')
   })
 
+  it('keeps the reprint notice while the game still has no card, and drops it once one is assigned (ruling R9)', () => {
+    const full = { mode: 'full', legendaries: { dato: 'stash', bomoh: 'off' } }
+    const { unmount } = render(<PackList code="ABC234" view={{ ...view(), settings: full, datoCard: null } as unknown as View} refresh={refresh} />)
+    expect(screen.getByText('Reprint a yellow card to use Dato Seri.')).toBeInTheDocument()
+    unmount()
+    at('?setup=pack&notice=dato')
+    render(<PackList code="ABC234" view={{ ...view(), settings: full, datoCard: { letter: 'A', code: 'x' } } as unknown as View} refresh={refresh} />)
+    expect(screen.queryByText('Reprint a yellow card to use Dato Seri.')).toBeNull()
+  })
+
   it('draws a yellow tick on the yellow card', () => {
     render(<PackList code="ABC234" view={view(['dato-card'])} refresh={refresh} />)
     expect(document.querySelector('.marker path')?.getAttribute('stroke')).toBe('#FFD60A')

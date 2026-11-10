@@ -55,6 +55,8 @@ export function HiddenCard({ view, code, credentials, refresh }: { view: View; c
           ? 'The ★ card is hidden at the yellow pin. Players only see a ? zone round it. Drop again to move it.'
           : 'Print the ★ card, hide it somewhere in the play area, stand next to it, then drop it here. Players only see a ? zone round it.'}
       </p>
+      {/* Wanted, but no card was free yet (ruling R9): the full wording stays behind this organiser-only toggle. */}
+      {view.datoCard === null && view.settings.legendaries?.dato === 'stash' && <p className="muted">Reprint a yellow card to use Dato Seri.</p>}
       {view.datoCard && (
         // The code goes after #, so it never reaches the server or its logs. Only this game's card claims.
         <a className="muted" href={`/print/card#${encodeURIComponent(view.datoCard.code)}`} target="_blank" rel="noopener noreferrer">

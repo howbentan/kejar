@@ -221,24 +221,40 @@ async function freeDatoCard(ctx: Ctx, organisationId: string, exceptGameId?: str
 const stashOn = (card: SecretCard): DatoStash => ({ code: card.code, card: { id: card.id, letter: card.letter }, lat: null, lng: null, claimedBy: null, claimedAt: null })
 
 /**
- * Gives a lobby a free yellow card in place of the one it has (or had), or turns Dato Seri off when none is free.
- * The new card isn't dropped yet: it has to be printed and hidden. Returns the notice when Dato Seri went off.
+ * The lobby lets go of its card (ruling R8): no stash, and the walk's secret step is no longer placed, so a card
+ * given later has to be hidden again. `placed.dato` is removed with the atomic kit write.
  */
+async function releaseDatoCard(ctx: Ctx, game: GameRow): Promise<void> {
+  if (game.dato_stash) await ctx.store.updateGame(game.id, { dato_stash: null })
+  if (game.kit?.placed?.dato) await ctx.store.setKitKey(game.id, 'placed', 'dato', null)
+}
+
+/** A lobby that wants Dato Seri (Full, setting on) but holds no card yet (ruling R9). */
+const wantsDatoCard = (g: Game) =>
+  !g.started_at && g.settings.mode === 'full' && g.settings.legendaries?.dato === 'stash' && !g.dato_stash
+
+/**
+ * Gives a lobby with no card a free yellow card, not yet dropped (it has to be printed and hidden). With none free
+ * the lobby keeps wanting Dato Seri and tries again later (ruling R9); returns the notice while it has none.
+ */
+async function assignFreeCard(ctx: Ctx, gameId: string, organisationId: string): Promise<string | null> {
+  const card = await freeDatoCard(ctx, organisationId, gameId)
+  if (!card) return NO_FREE_CARD_NOTICE
+  await ctx.store.updateGame(gameId, { dato_stash: stashOn(card) })
+  return null
+}
+
+/** A lobby gives up its card (retired, or no longer its own) and takes a free one, or waits for one (ruling R9). */
 async function reassignDatoCard(ctx: Ctx, game: GameRow, organisationId: string): Promise<string | null> {
-  const card = await freeDatoCard(ctx, organisationId, game.id)
-  if (card) {
-    await ctx.store.updateGame(game.id, { dato_stash: stashOn(card) })
-    return null
-  }
-  await ctx.store.updateGame(game.id, { dato_stash: null, settings: { ...game.settings, legendaries: { ...game.settings.legendaries, dato: 'off' } } })
-  return NO_FREE_CARD_NOTICE
+  await releaseDatoCard(ctx, game)
+  return assignFreeCard(ctx, game.id, organisationId)
 }
 
 /**
- * A lobby made over LOBBY_HOLD_MS ago stopped holding its card, so before it's used again (setMode, drop, start)
- * its card is checked (ruling R3). Kept if it's still `ready` and no other game holds it, with its current code
- * (a reprint while the lobby wasn't holding it); otherwise another free card, or Dato Seri off. Returns the
- * notice when Dato Seri went off.
+ * A lobby made over LOBBY_HOLD_MS ago stopped holding its card, so before it's used again its card is checked
+ * (ruling R3). Kept if it's still `ready` and no other game holds it, with its current code (a reprint while the
+ * lobby wasn't holding it); otherwise it's let go and the lobby takes another free card, or waits for one (R9).
+ * Returns the notice while the lobby has no card.
  */
 async function recheckExpiredLobby(ctx: Ctx, game: GameRow, organisationId: string): Promise<string | null> {
   const stash = game.dato_stash
@@ -246,22 +262,33 @@ async function recheckExpiredLobby(ctx: Ctx, game: GameRow, organisationId: stri
   const card = (await ctx.store.secretCards(organisationId)).find((c) => c.id === stash.card!.id)
   const holder = (await cardHolders(ctx, organisationId)).get(stash.card.id)
   const ours = !!card && card.state !== 'retired' && (!holder || holder.id === game.id)
-  if (isDropped(stash)) {
-    // The ghost-card guard (amended R3): a hidden card is never swapped for one nobody hid. If the hidden card is
-    // no longer this game's to claim with, Dato Seri goes off and the organiser is told.
-    if (ours && card!.code === stash.code) return null
-    await ctx.store.updateGame(game.id, { dato_stash: null, settings: { ...game.settings, legendaries: { ...game.settings.legendaries, dato: 'off' } } })
-    return NO_FREE_CARD_NOTICE
-  }
-  if (ours) {
+  // A hidden card is kept only while it still claims (amended R3). One that no longer does is let go, never kept
+  // as if hidden: the new card is not dropped, so the walk asks for it to be hidden again (R8).
+  if (ours && (!isDropped(stash) || card!.code === stash.code)) {
     if (card!.code !== stash.code) await ctx.store.updateGame(game.id, { dato_stash: { ...stash, code: card!.code } })
     return null
   }
   return reassignDatoCard(ctx, game, organisationId)
 }
 
-/** The cheap test `state` runs on every poll before paying for a re-check: an expired lobby with an undropped card. */
-const needsRecheck = (g: Game, now: number) => !!g.dato_stash?.card && !isDropped(g.dato_stash) && expiredLobby(g, now)
+/**
+ * Before a lobby's card is used (setMode to Full, a drop, start, the organiser's own poll): an expired lobby
+ * re-checks its card (R3), and a lobby that wants Dato Seri but has none tries for a free one (R9). Returns the
+ * game as it now is, and the notice while it still has no card. Player polls never run this.
+ */
+async function settleLobbyCard(ctx: Ctx, game: GameRow, organisationId: string): Promise<{ game: GameRow; notice: string | null }> {
+  if (game.started_at) return { game, notice: null }
+  await recheckExpiredLobby(ctx, game, organisationId)
+  let fresh = (await ctx.store.gameByCode(game.code)) ?? game
+  if (wantsDatoCard(fresh) && !(await assignFreeCard(ctx, fresh.id, organisationId))) {
+    fresh = (await ctx.store.gameByCode(game.code)) ?? fresh
+  }
+  return { game: fresh, notice: wantsDatoCard(fresh) ? NO_FREE_CARD_NOTICE : null }
+}
+
+/** The cheap test the organiser's poll runs before paying for a re-check: an expired lobby's undropped card, or no card yet. */
+const needsRecheck = (g: Game, now: number) =>
+  (!!g.dato_stash?.card && !isDropped(g.dato_stash) && expiredLobby(g, now)) || wantsDatoCard(g)
 
 /** The card a card action names, in the calling organiser's own set. */
 async function requireSecretCard(ctx: Ctx, body: Body): Promise<{ card: SecretCard; organisationId: string }> {
@@ -308,14 +335,18 @@ const retireSecretCard: Action = async (ctx, body) => {
 
 /**
  * A fresh code for the card, so every copy of the old one claims nothing. Not free until it's confirmed printed.
- * A lobby holding it takes the new code, so its print link and its claim stay the same card.
+ * A lobby holding it takes the new code, so its print link and its claim stay the same card. If it was already
+ * dropped, the drop goes too (ruling R8): the old print claims nothing, so the new print must be hidden again.
  */
 const reprintSecretCard: Action = async (ctx, body) => {
   const { card, organisationId } = await requireSecretCard(ctx, body)
   const lobby = await lobbyHolding(ctx, card, organisationId)
   const code = newDatoCode()
   await ctx.store.setSecretCard(card.id, { code, state: 'printing' })
-  if (lobby) await ctx.store.updateGame(lobby.id, { dato_stash: { ...lobby.dato_stash!, code } })
+  if (lobby) {
+    await ctx.store.updateGame(lobby.id, { dato_stash: { ...lobby.dato_stash!, code, lat: null, lng: null, claimedBy: null, claimedAt: null } })
+    if (lobby.kit?.placed?.dato) await ctx.store.setKitKey(lobby.id, 'placed', 'dato', null)
+  }
   return { ok: true }
 }
 
@@ -560,16 +591,13 @@ const create: Action = async (ctx, body) => {
   }
   const settings = settingsFrom(body.settings)
   // Full with Dato Seri on: a free yellow card now, so the organiser can print it before hiding it (ruling R15).
-  // With none free, the game still gets made, with Dato Seri off (Review Focus 1).
+  // With none free, the game still gets made (Review Focus 1). It keeps wanting Dato Seri and tries again later (R9).
   let stash: DatoStash | null = null
   let noFreeCard = false
   if (settings.mode === 'full' && settings.legendaries.dato === 'stash') {
     const card = await freeDatoCard(ctx, organiser.organisation_id)
     if (card) stash = stashOn(card)
-    else {
-      settings.legendaries = { ...settings.legendaries, dato: 'off' }
-      noFreeCard = true
-    }
+    else noFreeCard = true
   }
   let code = newGameCode(ctx.rng)
   while (await ctx.store.gameByCode(code)) code = newGameCode(ctx.rng)
@@ -660,12 +688,15 @@ const start: Action = async (ctx, body) => {
     ...players.filter((p) => p.role === 'runner' && p.tag_id === null).map((p) => `Runner ${p.name} has no tag`),
   ]
   if (problems.length) throw new ActionError(409, problems.join(' · '))
-  // A lobby left over a day re-checks its card before it starts (ruling R3).
-  const notice = await recheckExpiredLobby(ctx, game, organiser.organisation_id)
+  // A lobby left over a day re-checks its card, and one with no card tries once more (rulings R3, R9). Still none:
+  // the game starts with Dato Seri off, and the organiser is told.
+  const settled = await settleLobbyCard(ctx, game, organiser.organisation_id)
+  const notice = settled.notice
   const startedAt = iso(ctx.now)
   const started = { ...game, started_at: startedAt }
   const count = (role: Role) => Object.values(roles).filter((r) => r === role).length
   await ctx.store.updateGame(game.id, {
+    ...(wantsDatoCard(settled.game) ? { settings: { ...settled.game.settings, legendaries: { ...settled.game.settings.legendaries, dato: 'off' as const } } } : {}),
     started_at: startedAt,
     runner_sets: setsFor('runner', count('runner')),
     deck_seed: newToken(),
@@ -724,10 +755,11 @@ const state: Action = async (ctx, body) => {
       left_start: false,
     }
   }
-  // An expired lobby re-checks its card here too, so the organiser's print link never shows a card another game holds.
-  if (needsRecheck(game, ctx.now)) {
+  // The organiser's own poll only (ruling R9): an expired lobby re-checks its card, so the print link never shows a
+  // card another game holds, and a lobby with no card tries for one. Player polls never pay for this.
+  if (me.id === 'host' && needsRecheck(game, ctx.now)) {
     const org = (await ctx.store.organiserById((game as GameRow).organiser_id))?.organisation_id
-    if (org) await recheckExpiredLobby(ctx, game as GameRow, org)
+    if (org) await settleLobbyCard(ctx, game as GameRow, org)
   }
   await advance(ctx, game)
   game = (await loadGame(ctx, body)) as Game
@@ -1203,10 +1235,9 @@ const dropDatoSeri: Action = async (ctx, body) => {
   const organiser = await requireOrganiser(ctx, loaded, body)
   if (loaded.settings.mode !== 'full') throw new ActionError(409, 'Dato Seri is in Full mode only')
   requireLobby(loaded, ctx.now)
-  // A lobby left over a day re-checks its card first (ruling R3); it may now have another card, or none.
-  await recheckExpiredLobby(ctx, loaded, organiser.organisation_id)
-  const game = await loadGame(ctx, body)
-  // No card (Dato Seri off, or none was free): there's nothing to drop.
+  // An old lobby re-checks its card first, and one with none tries for one (rulings R3, R9).
+  const { game } = await settleLobbyCard(ctx, loaded, organiser.organisation_id)
+  // No card (Dato Seri off, or none is free yet): there's nothing to drop.
   if (!game.dato_stash) throw new ActionError(409, NO_FREE_CARD_NOTICE)
   const at = coordsOf(body)
   if (!at) throw new ActionError(400, 'Invalid location')
@@ -1716,28 +1747,21 @@ const setKit: Action = async (ctx, body) => {
 
 /**
  * The organiser switches between Core and Full while still in the lobby; never after the start (rules doc §1).
- * Switching to Full assigns a free yellow card if the game has none yet; a game keeps its card for life, so
- * Full to Core to Full never takes a second one. With none free, Dato Seri goes off, and the answer says so.
+ * Core releases the game's card (ruling R8): no stash, and the walk's secret step is no longer placed. Full
+ * assigns one fresh, not yet dropped; with none free, Dato Seri stays wanted and the answer says so (R9).
  */
 const setMode: Action = async (ctx, body) => {
   const loaded = await loadGame(ctx, body)
   const organiser = await requireOrganiser(ctx, loaded, body)
   requireLobby(loaded, ctx.now)
-  // A lobby left over a day re-checks its card first (ruling R3).
-  const rechecked = await recheckExpiredLobby(ctx, loaded, organiser.organisation_id)
-  const game = await loadGame(ctx, body)
-  const settings = settingsFrom({ ...game.settings, mode: body.mode })
-  if (settings.mode === 'full' && settings.legendaries.dato === 'stash' && !game.dato_stash) {
-    const card = await freeDatoCard(ctx, organiser.organisation_id)
-    if (!card) {
-      await ctx.store.updateGame(game.id, { settings: { ...settings, legendaries: { ...settings.legendaries, dato: 'off' } } })
-      return { ok: true, notice: NO_FREE_CARD_NOTICE }
-    }
-    await ctx.store.updateGame(game.id, { settings, dato_stash: stashOn(card) })
+  const settings = settingsFrom({ ...loaded.settings, mode: body.mode })
+  await ctx.store.updateGame(loaded.id, { settings })
+  if (settings.mode !== 'full') {
+    await releaseDatoCard(ctx, loaded)
     return { ok: true }
   }
-  await ctx.store.updateGame(game.id, { settings })
-  return rechecked ? { ok: true, notice: rechecked } : { ok: true }
+  const { notice } = await settleLobbyCard(ctx, { ...loaded, settings }, organiser.organisation_id)
+  return notice ? { ok: true, notice } : { ok: true }
 }
 
 export const actions = {
