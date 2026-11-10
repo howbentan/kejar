@@ -64,6 +64,7 @@ export function ping(seq: number, revealMs: number, over: Partial<Ping> = {}): P
     reveal_at: iso(revealMs),
     alerted: true,
     revealed: true,
+    alert_sent_at: iso(revealMs - 30_000),
     ...over,
   }
 }

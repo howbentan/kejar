@@ -198,6 +198,8 @@ export interface Ping {
   reveal_at: string
   alerted: boolean
   revealed: boolean
+  /** When the alert was claimed (store clock); null until it goes out. Late alerts don't count toward auto-jail. */
+  alert_sent_at: string | null
 }
 
 export type EventType =

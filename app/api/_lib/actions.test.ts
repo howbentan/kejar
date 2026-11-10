@@ -1102,6 +1102,88 @@ async function safetyGame(settings: object = {}) {
   return { ...g, siti, gameId }
 }
 
+describe('late pings and auto-jail', () => {
+  const poll = async (g: { code: string; organiserToken: string }, min: number) => {
+    now = T0 + min * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+  }
+  const checkIn = async (g: { code: string; aina: { token: string }; hafiz: { token: string } }, min: number) => {
+    now = T0 + min * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(30) })
+  }
+  const hafizJailed = async (g: { gameId: string; hafiz: { playerId: string } }) =>
+    (await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!.jailed
+  /** Both runners check in for pings 1 and 2, with every alert polled on time. */
+  async function onTimeStart(settings: object = {}) {
+    const g = await safetyGame(settings)
+    await poll(g, 9.25)
+    await checkIn(g, 9.75)
+    await poll(g, 10)
+    await poll(g, 14.25)
+    await checkIn(g, 14.75)
+    await poll(g, 15)
+    return g
+  }
+
+  it('(a) two misses with on-time alerts auto-jail, as before', async () => {
+    const g = await safetyGame()
+    await poll(g, 9.25)
+    await poll(g, 10)
+    await poll(g, 14.25)
+    expect(await hafizJailed(g)).toBe(false)
+    await poll(g, 15)
+    expect(await hafizJailed(g)).toBe(true)
+  })
+
+  it('(b) a ping alerted late is skipped: it is neither a miss nor a reset', async () => {
+    const g = await onTimeStart()
+    await poll(g, 19.25)
+    await poll(g, 20) // ping 3 missed
+    await poll(g, 25 - 24 / 60) // ping 4's alert first goes out with 24 s to go
+    await poll(g, 25)
+    expect(await hafizJailed(g)).toBe(false)
+    await poll(g, 29.25)
+    await poll(g, 30) // ping 5 missed: pings 3 and 5 are the last two that counted
+    expect(await hafizJailed(g)).toBe(true)
+    const jailed = (await store.events(g.gameId)).find((e) => e.type === 'auto-jailed' && e.target_id === g.hafiz.playerId)!
+    // (e) the skipped ping is not in the list the jailed runner sees
+    expect((jailed.data.checkins as { revealAt: number }[]).map((c) => c.revealAt)).toEqual([T0 + 15 * MIN, T0 + 20 * MIN, T0 + 30 * MIN])
+  })
+
+  it('(c) nobody polls between ping 4 alert and reveal: ping 4 is skipped, nobody is jailed there', async () => {
+    const g = await onTimeStart()
+    await poll(g, 19.25)
+    await poll(g, 20)
+    await poll(g, 24)
+    expect(await hafizJailed(g)).toBe(false)
+    await poll(g, 25)
+    expect(await hafizJailed(g)).toBe(false)
+  })
+
+  it('(d) in schedule mode with no pushes, two misses still auto-jail', async () => {
+    const g = await safetyGame({ checkinMode: 'schedule' })
+    await poll(g, 10)
+    await poll(g, 15)
+    expect(pushes).toEqual([])
+    expect(await hafizJailed(g)).toBe(true)
+  })
+
+  it('L2: a pause and resume after an alert went out does not move its stored alert time', async () => {
+    const g = await safetyGame()
+    await poll(g, 9.25)
+    const before = (await store.pings(g.gameId)).find((p) => p.seq === 1)!
+    expect(before.alerted).toBe(true)
+    now = T0 + 9.5 * MIN
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 12 * MIN
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    const after = (await store.pings(g.gameId)).find((p) => p.seq === 1)!
+    expect(after.alert_at).toBe(before.alert_at)
+    expect(after.reveal_at).not.toBe(before.reveal_at)
+  })
+})
+
 describe('game mode', () => {
   it('defaults to Core, and Full can be chosen', async () => {
     const core = await readyGame()

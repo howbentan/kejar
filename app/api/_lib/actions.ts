@@ -14,7 +14,7 @@ import {
   type ReportReason,
   type SosReason,
 } from '../../shared/alerts.js'
-import { autoJailDue, checkinsSince, countedCheckIn } from '../../shared/checkins.js'
+import { autoJailDue, checkinsSince, countedCheckIn, fairlyWarned } from '../../shared/checkins.js'
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
@@ -491,7 +491,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     await store.addEvent({ game_id: game.id, type: 'chase', actor_id: null, target_id: null, data: {} })
   }
 
-  const pingRows = await store.pings(game.id)
+  let pingRows = await store.pings(game.id)
   const work = dueWork(game, pingRows, now)
   // Scheduled pings come from the clock; bonus (Flare) pings carry their own times.
   const times = new Map<number, { revealAt: number }>([
@@ -506,6 +506,11 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     const runners = (await store.players(game.id)).filter((p) => p.role === 'runner' && !isOut(p))
     await pushTo(ctx, runners, { type: 'checkin', code: game.code, seq, revealAt: times.get(seq)?.revealAt })
   }
+
+  // The alerts just claimed (here or by a concurrent call) now carry their send times.
+  if (work.alert.length && work.reveal.length) pingRows = await store.pings(game.id)
+  const sentAt = new Map(pingRows.map((r) => [r.seq, r.alert_sent_at ? Date.parse(r.alert_sent_at) : null] as const))
+  const warned = (t: { seq: number; revealAt: number }) => fairlyWarned(sentAt.get(t.seq) ?? null, t.revealAt, game.settings.checkinMode)
 
   for (const seq of work.reveal) {
     if (!(await store.claimPing(game.id, seq, 'revealed'))) continue
@@ -546,8 +551,10 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     if (seq < BONUS_SEQ_BASE) {
       // Flares give only 30 s notice, so only scheduled pings count towards a missed streak.
       // The last three are loaded so a jailed runner's screen can show the check-ins it was judged on.
-      const lastThree = pingTimes(game, now).filter((t) => t.seq <= seq).slice(-3)
-      const lastTwo = lastThree.slice(-2)
+      // A ping whose alert gave under 25 s of warning is skipped: it is neither a miss nor a reset, and a
+      // skipped reveal judges nobody (fair-play §1.1).
+      const lastThree = pingTimes(game, now).filter((t) => t.seq <= seq && warned(t)).slice(-3)
+      const lastTwo = warned({ seq, revealAt }) ? lastThree.slice(-2) : []
       const atReveals = lastTwo.length === 2 ? await store.latestPositions(game.id, lastThree.map((t) => iso(t.revealAt))) : {}
       for (const p of lastTwo.length === 2 ? free : []) {
         // Only a location inside each ping's 45 s window counts as a check-in (§4.2).
@@ -750,7 +757,7 @@ const start: Action = async (ctx, body) => {
   })
   const chaseAt = iso(chaseStartOf(started)!)
   await ctx.store.addPings([
-    { game_id: game.id, seq: 0, alert_at: chaseAt, reveal_at: chaseAt, alerted: true, revealed: false },
+    { game_id: game.id, seq: 0, alert_at: chaseAt, reveal_at: chaseAt, alerted: true, revealed: false, alert_sent_at: null },
     ...pingTimes(started).map((t) => ({
       game_id: game.id,
       seq: t.seq,
@@ -758,6 +765,7 @@ const start: Action = async (ctx, body) => {
       reveal_at: iso(t.revealAt),
       alerted: false,
       revealed: false,
+      alert_sent_at: null,
     })),
   ])
   await ctx.store.addEvent({ game_id: game.id, type: 'started', actor_id: null, target_id: null, data: {} })

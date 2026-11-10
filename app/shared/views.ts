@@ -1,4 +1,4 @@
-import { alertLeadFor, checkedIn, checkinsSince, countedCheckIn } from './checkins.js'
+import { alertLeadFor, checkedIn, checkinsSince, countedCheckIn, fairlyWarned } from './checkins.js'
 import { alertsFrom, type Alert, type ReportReason } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
 import { distanceM, fuzz, hash, offset } from './geo.js'
@@ -337,6 +337,16 @@ function revealedPings(pings: Ping[]): Ping[] {
   return pings.filter((p) => p.revealed && p.seq > 0).sort((a, b) => Date.parse(a.reveal_at) - Date.parse(b.reveal_at))
 }
 
+/**
+ * Whether a scheduled ping gave fair warning (a late alert is skipped by auto-jail, so no screen may show it as
+ * missed). A ping with no row yet is taken as fair.
+ */
+function warnedFor(i: Pick<ViewInput, 'game' | 'pings'>, seq: number, revealAt: number): boolean {
+  if (seq >= BONUS_SEQ_BASE) return true
+  const row = i.pings.find((p) => p.seq === seq)
+  return !row || fairlyWarned(row.alert_sent_at ? Date.parse(row.alert_sent_at) : null, revealAt, i.game.settings.checkinMode)
+}
+
 /** Power-ups of `kind` whose effect lands on this reveal: the first reveal at or after they were used. */
 function landingAt(i: ViewInput, kind: PowerUp['kind'], revealAt: number, prevRevealAt: number): PowerUp[] {
   return i.powerUps.filter((u) => {
@@ -417,7 +427,7 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
       dot = { ...dotFor(p, at, 'runner'), ...fuzz(at, FUZZ_RADIUS_M, seed), fuzzy: true }
     }
     // Missed = no location inside this ping's check-in window (45 s scheduled, 30 s bonus).
-    if (!checkedIn(alertAt, revealAt, Date.parse(at.at))) dot.missed = true
+    if (warnedFor(i, last.seq, revealAt) && !checkedIn(alertAt, revealAt, Date.parse(at.at))) dot.missed = true
     dots.push(dot)
   }
   return { dots, notes }
@@ -467,7 +477,8 @@ function checkinFor(i: ViewInput, phase: Phase): Checkin | null {
   const next = times.find((t) => t.revealAt > i.now)
   if (!next) return null
   const lastAt = myLastAt(i)
-  const prev = times.filter((t) => t.revealAt <= i.now).at(-1)
+  // Skipped pings (under 25 s of warning) are left out, as auto-jail leaves them out.
+  const prev = times.filter((t) => t.revealAt <= i.now && warnedFor(i, t.seq, t.revealAt)).at(-1)
   const since = sinceRelease(i)
   const missedInRow = prev && prev.alertAt >= since && !checkedIn(prev.alertAt, prev.revealAt, lastAt(prev.revealAt)) ? 1 : 0
   const state = checkedIn(next.alertAt, next.revealAt, lastAt(i.now))

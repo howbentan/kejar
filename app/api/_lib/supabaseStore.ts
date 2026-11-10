@@ -165,7 +165,7 @@ export class SupabaseStore implements GameStore {
     const rows = check(
       await this.db
         .from('pings')
-        .update({ [field]: true })
+        .update(field === 'alerted' ? { alerted: true, alert_sent_at: this.nowIso() } : { [field]: true })
         .eq('game_id', gameId)
         .eq('seq', seq)
         .eq(field, false)
@@ -271,7 +271,7 @@ export class SupabaseStore implements GameStore {
     // Two Mat Rempits at once pick the same number; the primary key lets only one in (one at a time, §5a).
     const { error } = await this.db
       .from('pings')
-      .insert({ game_id: gameId, seq, alert_at: alertAt, reveal_at: revealAt, alerted: false, revealed: false })
+      .insert({ game_id: gameId, seq, alert_at: alertAt, reveal_at: revealAt, alerted: false, revealed: false, alert_sent_at: null })
     if (!error) return true
     if (error.code === '23505') return false
     throw new Error(error.message)

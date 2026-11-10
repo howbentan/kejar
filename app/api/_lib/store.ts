@@ -411,6 +411,7 @@ export class MemoryStore implements GameStore {
     const p = this.pingRows.find((x) => x.game_id === gameId && x.seq === seq)
     if (!p || p[field]) return false
     p[field] = true
+    if (field === 'alerted') p.alert_sent_at = this.nowIso()
     return true
   }
   async claimEnd(gameId: string, winner: 'runners' | 'chasers') {
@@ -545,7 +546,7 @@ export class MemoryStore implements GameStore {
   }
   async addBonusPing(gameId: string, seq: number, alertAt: string, revealAt: string) {
     if (this.pingRows.some((p) => p.game_id === gameId && p.seq === seq)) return false
-    this.pingRows.push({ game_id: gameId, seq, alert_at: alertAt, reveal_at: revealAt, alerted: false, revealed: false })
+    this.pingRows.push({ game_id: gameId, seq, alert_at: alertAt, reveal_at: revealAt, alerted: false, revealed: false, alert_sent_at: null })
     return true
   }
   async pauseGame(gameId: string) {
@@ -563,7 +564,8 @@ export class MemoryStore implements GameStore {
     const shift = (t: string) => new Date(Date.parse(t) + d).toISOString()
     for (const p of this.pingRows) {
       if (p.game_id !== gameId || p.revealed) continue
-      p.alert_at = shift(p.alert_at)
+      // An alert that already went out stays where it was, so its stored time matches the clock.
+      if (!p.alerted) p.alert_at = shift(p.alert_at)
       p.reveal_at = shift(p.reveal_at)
     }
     return d

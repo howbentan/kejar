@@ -61,6 +61,32 @@ describe('MemoryStore safety methods', () => {
     expect(await store.pauseGame(g.id)).toBe(false)
   })
 
+  it('claimPing alerted records alert_sent_at once; revealed leaves it alone', async () => {
+    const g = await startedGame()
+    await store.addPings([3, 4].map((seq) => ({ game_id: g.id, seq, alert_at: iso(T0), reveal_at: iso(T0 + MIN), alerted: false, revealed: false, alert_sent_at: null })))
+    now = T0 + 20_000
+    expect(await store.claimPing(g.id, 3, 'alerted')).toBe(true)
+    expect((await store.pings(g.id)).find((p) => p.seq === 3)!.alert_sent_at).toBe(iso(T0 + 20_000))
+    now = T0 + 40_000
+    expect(await store.claimPing(g.id, 3, 'alerted')).toBe(false)
+    expect((await store.pings(g.id)).find((p) => p.seq === 3)!.alert_sent_at).toBe(iso(T0 + 20_000))
+    expect(await store.claimPing(g.id, 4, 'revealed')).toBe(true)
+    expect((await store.pings(g.id)).find((p) => p.seq === 4)!.alert_sent_at).toBeNull()
+  })
+
+  it('resumeGame leaves the alert time of a ping that already alerted alone', async () => {
+    const g = await startedGame()
+    await store.addPings([
+      { game_id: g.id, seq: 2, alert_at: iso(T0 + 9 * MIN), reveal_at: iso(T0 + 10 * MIN), alerted: true, revealed: false, alert_sent_at: iso(T0 + 9 * MIN) },
+    ])
+    await store.pauseGame(g.id)
+    now = T0 + 90_000
+    await store.resumeGame(g.id)
+    const [p2] = await store.pings(g.id)
+    expect(p2.alert_at).toBe(iso(T0 + 9 * MIN))
+    expect(p2.reveal_at).toBe(iso(T0 + 10 * MIN + 90_000))
+  })
+
   it('resumeGame shifts only unrevealed pings and records the pause', async () => {
     const g = await startedGame()
     await store.addPings([

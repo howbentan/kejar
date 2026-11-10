@@ -286,6 +286,17 @@ describe('check-in state', () => {
   it('is missed after a revealed ping with no check-in, until the next window', () => {
     expect(checkin(hafiz, { now: T0 + 16 * MIN })).toEqual({ state: 'missed', alertAt: ALERT, revealAt: REVEAL, missedInRow: 1 })
   })
+  it('a skipped ping (under 25 s of warning) is never missed, and is not the previous ping that counted', () => {
+    // Ping 2 (+15) was alerted only 20 s ahead, so Hafiz's miss of it is ignored; ping 1 he did check in for.
+    const skipped = [ping(1, T0 + 10 * MIN), ping(2, T0 + 15 * MIN, { alert_sent_at: iso(T0 + 15 * MIN - 20_000) })]
+    const hafizIn = { ...positions, r2: [pos(3.003, 101.003, T0 + 9.9 * MIN)] }
+    expect(checkin(hafiz, { now: T0 + 16 * MIN, pings: skipped, positions: hafizIn })).toMatchObject({ state: 'early', missedInRow: 0 })
+  })
+  it('a skipped ping does not paint a runner as missed on the chaser map', () => {
+    const skipped = [ping(1, T0 + 10 * MIN), ping(2, T0 + 15 * MIN, { alert_sent_at: iso(T0 + 15 * MIN - 20_000) })]
+    const dot = view(chaser, { pings: skipped }).dots.find((d) => d.id === 'r2')!
+    expect(dot.missed).toBeUndefined()
+  })
   it("doesn't count a ping whose alert came before the runner was freed", () => {
     const freed = { ...hafiz, freed_at: new Date(T0 + 14.5 * MIN).toISOString() }
     expect(checkin(freed, { now: T0 + 16 * MIN, players: [chaser, aina, freed, wei, siti] })?.state).toBe('early')
