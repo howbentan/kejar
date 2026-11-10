@@ -1,0 +1,124 @@
+<h2>Bomoh: the reveal effect, in use</h2>
+<p class="subtitle">Resolved 2026-11-10 (design doc §2d): not continuous tracking — Focus/Pak Guard's exact-dot mechanism, radius removed, held through the next <b>2 ping reveals</b> after activation, shared with the <b>whole chaser team</b> automatically (confirmed in <code>views.ts</code>: Focus's reveal already isn't filtered to the user). Between the two reveals the dots stay up, ageing, instead of reverting to fuzzy. Two phones: the chaser who activated it, and a teammate who didn't — same moment, same map, to show the sharing is real. Step through with the button under each phone.</p>
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  .wrap { display: flex; gap: 22px; flex-wrap: wrap; justify-content: center; align-items: flex-start; }
+  .col { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 250px; }
+  .cap { font-size: 12px; opacity: .75; text-align: center; }
+  .kj-phone { width: 240px; height: 500px; border-radius: 30px; background: #0A0A0B; border: 2px solid #2a2a2a; position: relative; overflow: hidden;
+    color: #F5F5F3; font-family: 'Geist', system-ui, sans-serif; }
+  .pad { position: absolute; inset: 0; padding: 16px 12px; overflow: hidden; }
+  .eb { font: 500 9px 'Geist Mono', monospace; letter-spacing: .2em; color: rgba(245,245,243,.55); }
+  h4 { margin: 8px 0 4px; font-size: 20px; font-weight: 800; letter-spacing: -0.05em; }
+  h4 span { color: #C6FF3D; }
+  .sub { font-size: 11.5px; opacity: .7; margin: 0 0 8px; }
+  .map { position: relative; height: 260px; border-radius: 16px; background: #121412; border: 1px solid #262626; overflow: hidden; }
+  .map .edge { position: absolute; inset: 12px; border: 1px solid rgba(245,245,243,.3); border-radius: 44%; }
+  .me { position: absolute; width: 13px; height: 13px; border-radius: 50%; background: #F5F5F3; border: 2px solid rgba(245,245,243,.35); transform: translate(-50%, -50%); z-index: 3; }
+  .dot { position: absolute; width: 11px; height: 11px; border-radius: 50%; background: #F5F5F3; transform: translate(-50%, -50%); transition: opacity .4s; }
+  .dot.chaser { background: #C6FF3D; }
+  .dot.fuzzy-wrap { position: absolute; transform: translate(-50%, -50%); }
+  .fuzzyring { width: 46px; height: 46px; border-radius: 50%; background: rgba(245,245,243,.08); border: 1px solid rgba(245,245,243,.3); display: grid; place-items: center; }
+  .fuzzyring .dot { position: static; transform: none; opacity: .55; }
+  .ring { position: absolute; left: 50%; top: 50%; width: 24px; height: 24px; border-radius: 50%; border: 2px solid #9B5DE5; transform: translate(-50%, -50%); pointer-events: none; transition: opacity .4s, border-color .4s; }
+  .age { position: absolute; left: 50%; top: calc(50% + 11px); transform: translate(-50%, 0); font: 600 8px 'Geist Mono', monospace; letter-spacing: .04em; color: #C9A4FF; white-space: nowrap; transition: opacity .4s; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 5px 11px; font: 700 10px 'Geist Mono', monospace; letter-spacing: .06em;
+    background: linear-gradient(135deg, #C9A4FF, #9B5DE5); color: #2B0B45; margin-bottom: 8px; transition: opacity .3s, transform .3s; }
+  .chip i { width: 6px; height: 6px; border-radius: 50%; background: #2B0B45; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25 } }
+  .chip.off { opacity: 0; transform: translateY(-4px); pointer-events: none; }
+  .toast { position: absolute; left: 10px; right: 10px; bottom: 10px; background: #141414; border: 1px solid #9B5DE5; border-radius: 12px; padding: 9px 11px; font-size: 11px; opacity: 0; transition: opacity .3s, transform .3s; transform: translateY(6px); }
+  .toast.on { opacity: 1; transform: none; }
+  .slot { border-radius: 16px; padding: 10px 12px; display: flex; align-items: center; gap: 9px; margin-top: 10px; transition: background .3s, border-color .3s; border: 1.5px dashed rgba(245,245,243,.25); }
+  .slot.has { border: 0; background: linear-gradient(135deg, #F0E0FF 0%, #C9A4FF 45%, #9B5DE5 100%); color: #2B0B45; }
+  .slot .art { width: 30px; height: 30px; flex: none; }
+  .slot .art svg { width: 30px; height: 30px; }
+  .slot .nm { font-weight: 800; font-size: 13px; letter-spacing: -0.02em; }
+  .slot .fx { font-size: 9px; opacity: .8; }
+  .slot.empty { font-size: 11px; opacity: .6; justify-content: center; }
+  .b { width: 100%; border-radius: 999px; padding: 10px; font: 800 13px 'Geist', sans-serif; border: 0; cursor: pointer; background: #C6FF3D; color: #0A0A0B; margin-top: 6px; }
+  .b.gold { background: linear-gradient(135deg, #F0E0FF, #C9A4FF 45%, #9B5DE5); color: #2B0B45; box-shadow: 0 0 14px rgba(155,93,229,.45); }
+  .b.ghost { background: transparent; color: #F5F5F3; border: 1px solid #444; font-weight: 600; }
+  .b:disabled { opacity: .35; cursor: default; }
+  .step { font-size: 11px; opacity: .65; margin-top: 2px; text-align: center; min-height: 14px; }
+</style>
+
+<div class="wrap">
+  <div class="col">
+    <div class="kj-phone"><div class="pad" id="p1"></div></div>
+    <button class="b gold" style="width:auto;padding:9px 16px" onclick="advance()">Advance →</button>
+    <p class="step" id="step1"></p>
+    <p class="cap"><b>Ben — used Bomoh.</b> His own hand, his own activation.</p>
+  </div>
+  <div class="col">
+    <div class="kj-phone"><div class="pad" id="p2"></div></div>
+    <button class="b ghost" style="width:auto;padding:9px 16px" onclick="reset()">Reset</button>
+    <p class="step" id="step2"></p>
+    <p class="cap"><b>Syafiq — a teammate.</b> Never touched Bomoh. Same reveal, same moment, because the mechanism was never per-user to begin with.</p>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id)
+  const INK = 'stroke="#141414" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"'
+  const star = (cx, cy, R, r) => { const p = []; for (let k = 0; k < 10; k++) { const a = -Math.PI/2+(k*Math.PI)/5, rr = k%2?r:R; p.push(`${(cx+Math.cos(a)*rr).toFixed(1)} ${(cy+Math.sin(a)*rr).toFixed(1)}`) } return 'M'+p.join(' L')+' Z' }
+  const BOMOH_ART = `<path d="M16 100 Q18 68 50 68 Q82 68 84 100 Z" fill="#EDE3CC" ${INK}/><path d="M30 70 L70 96" stroke="#6B4423" stroke-width="6" stroke-linecap="round"/><path d="M30 70 L70 96" stroke="#C9A876" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 4"/><circle cx="50" cy="48" r="20" fill="#B9784F" ${INK}/><path d="M28 42 Q28 20 50 18 Q72 20 72 42 Q64 34 50 34 Q36 34 28 42 Z" fill="#8B5E3C" ${INK}/><path d="M68 26 Q82 22 78 36 Q72 32 66 30 Z" fill="#8B5E3C" ${INK}/><path d="M40 48 q3 3 6 0 M54 48 q3 3 6 0" fill="none" ${INK}/><path d="M42 58 Q50 62 58 58" fill="none" ${INK}/><ellipse cx="33" cy="80" rx="7.5" ry="9.5" fill="#B9784F" ${INK}/><ellipse cx="67" cy="80" rx="7.5" ry="9.5" fill="#B9784F" ${INK}/><circle cx="50" cy="78" r="13" fill="#7A5230" ${INK}/><path d="M40 76 Q50 70 60 76 Q58 84 50 86 Q42 84 40 76 Z" fill="#F7D154" ${INK}/><path d="${star(78,58,6,2.6)}" fill="#C9A4FF" ${INK}/>`
+  const ART = `<svg viewBox="-8 -6 116 116">${BOMOH_ART}</svg>`
+
+  // Four free runners, two teammate chasers (incl. each phone's own "me"), fixed positions on a 0-100 map.
+  const RUNNERS = [
+    { id: 'r1', x: 28, y: 30 }, { id: 'r2', x: 68, y: 22 }, { id: 'r3', x: 46, y: 70 }, { id: 'r4', x: 80, y: 62 },
+  ]
+
+  // 0 idle (no Bomoh) · 1 activated, waiting for the next ping · 2 reveal 1 (exact) · 3 between reveals (stale) · 4 reveal 2 (exact) · 5 expired
+  let phase = 0
+  const STEP_LABEL = ['', 'Activated — kicks in at the next ping', 'Reveal 1 of 2 — just landed', 'Between pings — last fix, ageing', 'Reveal 2 of 2 — refreshed', 'Expired — back to normal']
+
+  function mapHtml(meX, meY, meColor, showRevealChip) {
+    const exact = phase === 2 || phase === 4
+    const stale = phase === 3
+    const active = phase >= 2 && phase <= 4
+    const runners = RUNNERS.map((r) => {
+      if (exact) {
+        return `<div class="dot" style="left:${r.x}%;top:${r.y}%"></div><div class="ring" style="left:${r.x}%;top:${r.y}%;opacity:1"></div><div class="age" style="left:${r.x}%;top:${r.y+5}%;opacity:1">just now</div>`
+      }
+      if (stale) {
+        return `<div class="dot" style="left:${r.x}%;top:${r.y}%;opacity:.5"></div><div class="ring" style="left:${r.x}%;top:${r.y}%;opacity:.4;border-color:#6B5078"></div><div class="age" style="left:${r.x}%;top:${r.y+5}%;opacity:.7;color:#8A7A9A">1 min ago</div>`
+      }
+      // idle / expired: normal fuzzy blob, no exact info
+      return `<div class="dot-wrap" style="position:absolute;left:${r.x}%;top:${r.y}%;transform:translate(-50%,-50%)"><div class="fuzzyring"><div class="dot"></div></div></div>`
+    }).join('')
+    return `
+      ${showRevealChip ? `<span class="chip ${active ? '' : 'off'}"><i></i>BOMOH${exact ? ` · REVEAL ${phase === 2 ? 1 : 2} OF 2` : (stale ? ' ACTIVE' : '')}</span><br>` : ''}
+      <div class="map"><div class="edge"></div>
+        <div class="me" style="left:${meX}%;top:${meY}%;background:${meColor}"></div>
+        <div class="dot chaser" style="left:35%;top:50%"></div>
+        ${runners}
+        <div class="toast ${phase === 1 ? 'on' : ''}">Bomoh activated. Every free Dikejar shows exact at the next ping — and stays up for one more after that.</div>
+      </div>`
+  }
+
+  function slotHtml(usable) {
+    if (phase === 0) return `<div class="slot has"><div class="art">${ART}</div><div><div class="nm">Bomoh</div><div class="fx">Ready to use</div></div></div>${usable ? '<button class="b gold" onclick="activate()">Use Bomoh</button>' : ''}`
+    if (phase >= 5) return `<div class="slot empty">Slot empty — Bomoh is spent for this game</div>`
+    return `<div class="slot has" style="opacity:.75"><div class="art">${ART}</div><div><div class="nm">Bomoh</div><div class="fx">${phase === 1 ? 'Waiting for the next ping' : (phase === 3 ? 'Waiting for the second ping' : 'Active')}</div></div></div>`
+  }
+
+  function render() {
+    $('p1').innerHTML = `<div class="eb">KEJAR · #03</div>${mapHtml(60, 78, '#C6FF3D', true)}${slotHtml(true)}`
+    $('p2').innerHTML = `<div class="eb">KEJAR · #09</div>${mapHtml(20, 20, '#C6FF3D', true)}${slotHtml(false)}`
+    $('step1').textContent = STEP_LABEL[phase]
+    $('step2').textContent = phase === 0 ? '' : (phase === 1 ? 'Sees nothing yet — Ben hasn’t triggered a reveal' : STEP_LABEL[phase])
+  }
+
+  function activate() { if (phase === 0) { phase = 1; render(); if (navigator.vibrate) navigator.vibrate(60) } }
+  function advance() {
+    if (phase === 0) { activate(); return }
+    phase = Math.min(phase + 1, 5)
+    render()
+    if (phase === 2 || phase === 4) { if (navigator.vibrate) navigator.vibrate([80, 40, 80]) }
+  }
+  function reset() { phase = 0; render() }
+  render()
+</script>

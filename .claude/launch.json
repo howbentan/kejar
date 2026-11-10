@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "app"],
       "port": 5173
+    },
+    {
+      "name": "kejar-mockups",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "serve", "-l", "4600", "C:\\Users\\benho\\OneDrive\\Desktop\\Fun Projects\\kejar\\docs\\superpowers\\mockups"],
+      "port": 4600
     }
   ]
 }

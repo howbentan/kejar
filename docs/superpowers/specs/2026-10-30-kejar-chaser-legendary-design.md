@@ -45,6 +45,7 @@ Dato Seri solved "how does a two-person crew run a staffed ritual" by making the
 - **Mockups:**
   - `docs/superpowers/mockups/2026-10-31-chaser-legendary/1-stash-card.html` — the map hint zone, a chaser's scan-and-claim, a runner's refused attempt. Updated 2026-10-31 from a `???` placeholder to the real name, purple, and the doodle sticker.
   - `docs/superpowers/mockups/2026-10-31-chaser-legendary/2-bomoh-card-art.html` — the doodle sticker at full card size and at slot size, same gallery format as `13-card-art.html`. That gallery file itself should get Bomoh folded in during the next full motion-design pass, rather than being duplicated here.
+  - `docs/superpowers/mockups/2026-10-31-chaser-legendary/3-bomoh-reveal-effect.html` (added 2026-11-10, §2d) — the reveal itself in use: activation, the "waiting for the next ping" slot state, the exact-dot reveal with the purple ring, the ageing stale dots between the two reveals, and expiry — shown on two phones side by side (the chaser who activated it, and a teammate who didn't) to make the whole-team sharing visible, not just asserted in prose.
 - **Kept secret, same as Dato Seri (§2c below):** the hint zone carries no name, and the feed line stays generic regardless of which legendary it was.
 
 ## 2c. Kept secret, same as Dato Seri
