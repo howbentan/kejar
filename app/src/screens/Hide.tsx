@@ -2,10 +2,12 @@ import type { View } from '../../shared/views.js'
 import GameMap from '../game/Map'
 import { clock, useServerNow } from '../game/time'
 import { Screen } from '../game/ui'
+import { useWakeLock } from '../game/useWakeLock'
 
 export default function Hide({ view }: { view: View }) {
   const now = useServerNow(view.now)
   const left = clock((view.endsAt ?? now) - now)
+  useWakeLock(view.me.role === 'chaser' && view.phase === 'hiding')
 
   if (view.me.role === 'chaser') {
     return (
