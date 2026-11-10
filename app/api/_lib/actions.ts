@@ -1237,6 +1237,23 @@ const claim: Action = async (ctx, body) => {
   return { ok: true, kind }
 }
 
+/**
+ * One legendary's wrong-scan limit for one player (Review Focus 2): null once they've used up STASH_MISS_LIMIT
+ * misses on it, otherwise the function that records the next one and passes its answer through. Each legendary
+ * counts its own misses (I5), tagged `data.legendary`; an untagged miss predates Bomoh, so it is Dato Seri's.
+ */
+async function stashMisses(ctx: Ctx, game: GameRow, me: Player, legendary: LegendaryKind) {
+  const missed = (await ctx.store.events(game.id)).filter(
+    (e) => e.type === 'stash-miss' && e.actor_id === me.id && (e.data?.legendary ?? 'dato') === legendary,
+  ).length
+  if (missed >= STASH_MISS_LIMIT) return null
+  // Only a wrong or unknown code, no stash, or too far counts (ruling R4): the other refusals reveal no location.
+  return async <T extends { reason: string }>(answer: T): Promise<T> => {
+    await ctx.store.addEvent({ game_id: game.id, type: 'stash-miss', actor_id: me.id, target_id: null, data: { legendary } })
+    return answer
+  }
+}
+
 /** A ★-prefixed code that is really this game's purple card: it matches the Bomoh stash's code and not the Dato one. */
 function isLegacyBomohCode(game: GameRow, code: string | null): boolean {
   if (!code || game.settings.mode !== 'full') return false
@@ -1255,13 +1272,8 @@ function isLegacyBomohCode(game: GameRow, code: string | null): boolean {
  * slot isn't a miss: the runner is at the stash and can come back once their slot is free.
  */
 async function claimDato(ctx: Ctx, game: GameRow, me: Player, scanned: string | null) {
-  const missed = (await ctx.store.events(game.id)).filter((e) => e.type === 'stash-miss' && e.actor_id === me.id).length
-  if (missed >= STASH_MISS_LIMIT) return NO_STASH
-  // Only a wrong or unknown code, no stash, or too far counts (ruling R4): the other refusals reveal no location.
-  const miss = async <T extends { reason: string }>(answer: T): Promise<T> => {
-    await ctx.store.addEvent({ game_id: game.id, type: 'stash-miss', actor_id: me.id, target_id: null, data: {} })
-    return answer
-  }
+  const miss = await stashMisses(ctx, game, me, 'dato')
+  if (!miss) return NO_STASH
   // Only the code this game was assigned (ruling R15, R2): the one on the card the organiser printed and hid. Any
   // other ★ card, bare, another game's or another card's, gets the same answer as no stash before anything else is
   // judged, so it can't tell anyone how near they are or whether a stash exists.
@@ -1299,13 +1311,8 @@ async function claimDato(ctx: Ctx, game: GameRow, me: Player, scanned: string | 
  * the right spot.
  */
 async function claimBomoh(ctx: Ctx, game: GameRow, me: Player, scanned: string | null) {
-  const missed = (await ctx.store.events(game.id)).filter((e) => e.type === 'stash-miss' && e.actor_id === me.id).length
-  if (missed >= STASH_MISS_LIMIT) return NO_STASH
-  // Only a wrong or unknown code, no stash, or too far counts (ruling R4): the other refusals reveal no location.
-  const miss = async <T extends { reason: string }>(answer: T): Promise<T> => {
-    await ctx.store.addEvent({ game_id: game.id, type: 'stash-miss', actor_id: me.id, target_id: null, data: {} })
-    return answer
-  }
+  const miss = await stashMisses(ctx, game, me, 'bomoh')
+  if (!miss) return NO_STASH
   // Only the code this game was assigned (ruling R15, R2): the one on the card the organiser printed and hid. Any
   // other Bomoh card, bare, another game's or another card's, gets the same answer as no stash before anything else
   // is judged, so it can't tell anyone how near they are or whether a stash exists.

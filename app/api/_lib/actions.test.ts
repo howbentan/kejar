@@ -2831,7 +2831,7 @@ describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
       const feedBefore = (await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).feed
       const spots = [far, { ...far, lat: CENTER.lat - 60 / 111_195 }, { ...far, lng: CENTER.lng + 60 / 111_195 }]
       for (const where of spots) expect((await scan(g, g.aina.token, where)).ok).toBe(false)
-      expect(await misses(g)).toEqual([0, 1, 2].map(() => expect.objectContaining({ actor_id: g.aina.playerId, target_id: null, data: {} })))
+      expect(await misses(g)).toEqual([0, 1, 2].map(() => expect.objectContaining({ actor_id: g.aina.playerId, target_id: null, data: { legendary: 'dato' } })))
       // The 4th, right code at the right spot: the same neutral answer, nothing changes and nothing is recorded.
       expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'no-stash' })
       expect(await misses(g)).toHaveLength(3)
@@ -3069,7 +3069,8 @@ describe('Bomoh: the hidden stash (chaser-side legendary, mirrors Dato Seri abov
     expect((await store.events(g.gameId)).filter((e) => e.type === 'stash-miss')).toHaveLength(0)
   })
 
-  it('with Dato Seri on too, a legacy DATO-prefixed purple card claims Bomoh and the yellow card still claims Dato', async () => {
+  /** A chasing Full game with both legendaries on and both cards dropped at STASH. */
+  async function bothChasing() {
     const g = await readyGame({ mode: 'full', legendaries: { dato: 'stash', bomoh: 'stash' } })
     const chong = await run('join', { code: g.code, name: 'Chong', accepted: true })
     await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [g.hafiz.playerId]: 'chaser', [chong.playerId]: 'runner' } })
@@ -3079,6 +3080,43 @@ describe('Bomoh: the hidden stash (chaser-side legendary, mirrors Dato Seri abov
     await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 7 * MIN
     const game = (await store.gameByCode(g.code))!
+    return { ...g, game }
+  }
+
+  describe('each legendary has its own wrong-scan count (I5)', () => {
+    const misses = async (gameId: string) => (await store.events(gameId)).filter((e) => e.type === 'stash-miss')
+
+    it("3 wrong ★ scans don't lock a chaser out of Bomoh, and each miss is tagged with its legendary", async () => {
+      const { game, ...g } = await bothChasing()
+      for (let i = 0; i < STASH_MISS_LIMIT; i++) expect(await scanQr(g, g.ben.token, datoQr('x'.repeat(22)))).toEqual({ ok: false, reason: 'no-stash' })
+      expect(await misses(game.id)).toEqual([0, 1, 2].map(() => expect.objectContaining({ actor_id: g.ben.playerId, data: { legendary: 'dato' } })))
+      expect(await scanQr(g, g.ben.token, bomohQr(game.bomoh_stash!.code!))).toEqual({ ok: true, kind: 'bomoh' })
+    })
+
+    it("3 wrong purple scans don't lock a runner out of Dato Seri", async () => {
+      const { game, ...g } = await bothChasing()
+      for (let i = 0; i < STASH_MISS_LIMIT; i++) expect(await scanQr(g, g.aina.token, 'KEJAR:BOMOH')).toEqual({ ok: false, reason: 'no-stash' })
+      expect(await misses(game.id)).toEqual([0, 1, 2].map(() => expect.objectContaining({ actor_id: g.aina.playerId, data: { legendary: 'bomoh' } })))
+      expect(await scanQr(g, g.aina.token, datoQr(game.dato_stash!.code!))).toEqual({ ok: true, kind: 'dato' })
+    })
+
+    it('3 wrong purple scans still lock that chaser out of Bomoh', async () => {
+      const { game, ...g } = await bothChasing()
+      for (let i = 0; i < STASH_MISS_LIMIT; i++) await scanQr(g, g.ben.token, 'KEJAR:BOMOH')
+      expect(await scanQr(g, g.ben.token, bomohQr(game.bomoh_stash!.code!))).toEqual({ ok: false, reason: 'no-stash' })
+    })
+
+    it('untagged misses from before Bomoh count as Dato Seri misses only', async () => {
+      const { game, ...g } = await bothChasing()
+      for (const p of [g.aina, g.ben])
+        for (let i = 0; i < STASH_MISS_LIMIT; i++) await store.addEvent({ game_id: game.id, type: 'stash-miss', actor_id: p.playerId, target_id: null, data: {} })
+      expect(await scanQr(g, g.aina.token, datoQr(game.dato_stash!.code!))).toEqual({ ok: false, reason: 'no-stash' })
+      expect(await scanQr(g, g.ben.token, bomohQr(game.bomoh_stash!.code!))).toEqual({ ok: true, kind: 'bomoh' })
+    })
+  })
+
+  it('with Dato Seri on too, a legacy DATO-prefixed purple card claims Bomoh and the yellow card still claims Dato', async () => {
+    const { game, ...g } = await bothChasing()
     expect(game.dato_stash!.code).not.toBe(game.bomoh_stash!.code)
     expect(await scanQr(g, g.ben.token, datoQr(game.bomoh_stash!.code!))).toEqual({ ok: true, kind: 'bomoh' })
     expect(await scanQr(g, g.aina.token, datoQr(game.dato_stash!.code!))).toEqual({ ok: true, kind: 'dato' })
