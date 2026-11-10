@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const call = vi.hoisted(() => vi.fn())
 const scanned = vi.hoisted(() => ({ text: '' }))
+const useWakeLock = vi.hoisted(() => vi.fn())
 vi.mock('../game/api', () => ({ call, ApiError: class extends Error {} }))
 type MapProps = { ripple?: { at: number } | null; snapshot?: unknown; legendaryZone?: unknown }
 const mapProps = vi.hoisted(() => ({ last: null as null | MapProps }))
@@ -20,6 +21,7 @@ vi.mock('../game/Scanner', () => ({
     </button>
   ),
 }))
+vi.mock('../game/useWakeLock', () => ({ useWakeLock }))
 import RunnerChase from './RunnerChase'
 import { testView } from './testView'
 
@@ -39,6 +41,11 @@ async function scan(text: string) {
 }
 
 describe('RunnerChase', () => {
+  it('never asks for a wake lock', () => {
+    render(<RunnerChase code="ABC234" view={testView()} locationOff={false} />)
+    expect(useWakeLock).not.toHaveBeenCalled()
+  })
+
   it('is one screen: top bar, chip, map, slot, Scan and the ticker, with no separate break-out button', () => {
     const view = testView({
       counts: { runnersFree: 9, runnersJailed: 2, runnersLuarGarisan: 0, chasers: 2 },

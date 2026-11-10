@@ -5,6 +5,8 @@ import type { View } from '../../shared/views.js'
 import { testView } from './testView'
 
 const call = vi.hoisted(() => vi.fn())
+const useWakeLock = vi.hoisted(() => vi.fn())
+vi.mock('../game/useWakeLock', () => ({ useWakeLock }))
 vi.mock('../game/api', () => ({ call, ApiError: class extends Error {} }))
 vi.mock('../game/Map', () => ({ default: () => null }))
 // jsdom has no matchMedia, which the marshal alerts card checks.
@@ -53,6 +55,15 @@ afterEach(() => {
 })
 
 const takeover = () => screen.queryByRole('dialog', { name: 'SOS' })
+
+describe('MarshalLive wake lock', () => {
+  it('keeps the screen awake while the game runs, and not once it has ended', () => {
+    const { rerender } = render(<MarshalLive code="ABC234" view={marshal()} refresh={refresh} />)
+    expect(useWakeLock).toHaveBeenLastCalledWith(true)
+    rerender(<MarshalLive code="ABC234" view={organiser({ phase: 'ended' })} refresh={refresh} />)
+    expect(useWakeLock).toHaveBeenLastCalledWith(false)
+  })
+})
 
 describe('MarshalLive SOS takeover', () => {
   it('"See the map first" hands back the normal screen, and it stays that way across polls, without touching the server', () => {

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const call = vi.hoisted(() => vi.fn())
 const scanned = vi.hoisted(() => ({ text: '' }))
+const useWakeLock = vi.hoisted(() => vi.fn())
 vi.mock('../game/api', () => ({ call, ApiError: class extends Error {} }))
 const mapProps = vi.hoisted(() => ({ last: null as null | { legendaryZone?: unknown } }))
 vi.mock('../game/Map', () => ({
@@ -19,6 +20,7 @@ vi.mock('../game/Scanner', () => ({
     </button>
   ),
 }))
+vi.mock('../game/useWakeLock', () => ({ useWakeLock }))
 import ChaserChase, { catchMessage } from './ChaserChase'
 import { testView } from './testView'
 
@@ -47,6 +49,11 @@ async function scan(text: string) {
 }
 
 describe('ChaserChase', () => {
+  it('keeps the screen awake during the chase', () => {
+    render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    expect(useWakeLock).toHaveBeenCalledWith(true)
+  })
+
   it('is one screen: who, the ping chip, the map, Scan tag and the ticker', () => {
     render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
     expect(screen.getByText('KEJAR · BEN')).toBeInTheDocument()

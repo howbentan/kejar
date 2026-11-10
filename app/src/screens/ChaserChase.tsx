@@ -8,6 +8,7 @@ import ChaseLayout from '../game/ChaseLayout'
 import { dipFor } from '../game/LuckyDip'
 import PowerUpHand, { claimMessage, stashMessage, type ClaimResult } from '../game/PowerUpHand'
 import { clock, useServerNow } from '../game/time'
+import { useWakeLock } from '../game/useWakeLock'
 
 const REJECTIONS: Record<string, string> = {
   'too-far': 'Too far — get within 50 m',
@@ -40,6 +41,7 @@ function pingChip(view: View, now: number): string | null {
 
 export default function ChaserChase({ code, view, refresh }: { code: string; view: View; refresh: () => void }) {
   const now = useServerNow(view.now)
+  useWakeLock(view.phase === 'hiding' || view.phase === 'chasing')
   const chip = pingChip(view, now)
 
   const describe = useCallback(
