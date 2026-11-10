@@ -26,7 +26,7 @@ const stationCount = (n: number) => `${n} station${n === 1 ? '' : 's'}`
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 const CORE_STICKERS: PowerUpKind[] = ['shield', 'cloak', 'flare', 'focus']
-// Bomoh's sticker joins the end of Full's row when Bomoh is built.
+// Bomoh has no hand card (it fires the moment it's found), so it has no sticker in Full's row.
 const FULL_STICKERS: PowerUpKind[] = ['decoy', 'shield', 'cloak', 'toyol', 'grab', 'flare', 'focus', 'along', 'dato']
 
 const LENGTHS: { value: Settings['lengthMin']; text: string; sub: string }[] = [
@@ -617,28 +617,21 @@ export default function HostNew() {
                     B
                   </span>
                 }
-                title={
-                  <>
-                    Bomoh{' '}
-                    <span style={{ font: '500 8px var(--mono)', letterSpacing: '0.1em', background: 'var(--bomoh-2)', color: 'var(--bomoh-ink)', padding: '2px 5px', borderRadius: 4 }}>
-                      NOT BUILT YET
-                    </span>
-                  </>
-                }
+                title="Bomoh"
                 who="FOR KEJAR · PURPLE"
                 seg={
                   <Seg<'off' | 'stash'>
                     label="Bomoh"
-                    value="off"
+                    value={settings.legendaries.bomoh}
                     options={[
                       { value: 'off', text: 'Off' },
-                      { value: 'stash', text: 'Hidden stash', disabled: true },
+                      { value: 'stash', text: 'Hidden stash' },
                     ]}
-                    onChange={() => undefined}
+                    onChange={(v) => set({ legendaries: { ...settings.legendaries, bomoh: v } })}
                     on={{ background: 'var(--bomoh-2)', color: 'var(--bomoh-ink)' }}
                   />
                 }
-                say="You hide a second QR card. The first chaser to find it sees every free runner live for 1 minute, or until the end in the last 5 minutes."
+                say="You hide a second QR card. The first chaser to find it shows every free runner's exact spot to all Kejar for the next 2 pings."
               />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                 <span>Dikejar can see Kejar at check-in</span>
