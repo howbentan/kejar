@@ -27,6 +27,13 @@ function legendaryYellow() {
   return { fill: token('--legendary-1', '#FFF27A'), main: token('--legendary-2', '#FFD60A'), deep: token('--legendary-3', '#F5B800'), ink: token('--legendary-ink', '#1A1400') }
 }
 
+/** Bomoh's purple, read from tokens.css --bomoh-1/2/3 and --bomoh-ink; the fallbacks (#F0E0FF, #C9A4FF, #9B5DE5, #2B0B45) must change with them. */
+function legendaryPurple() {
+  const css = typeof document === 'undefined' ? null : getComputedStyle(document.documentElement)
+  const token = (name: string, fallback: string) => css?.getPropertyValue(name).trim() || fallback
+  return { fill: token('--bomoh-1', '#F0E0FF'), main: token('--bomoh-2', '#C9A4FF'), deep: token('--bomoh-3', '#9B5DE5'), ink: token('--bomoh-ink', '#2B0B45') }
+}
+
 type Feature = GeoFeature<Geometry, Record<string, unknown>>
 const collection = (features: Feature[]): FeatureCollection => ({ type: 'FeatureCollection', features })
 
@@ -141,6 +148,7 @@ export default function GameMap({
   showJailAndStart = true,
   fit = null,
   legendaryZone = null,
+  bomohZone = null,
   snapshot = null,
   stash = null,
 }: {
@@ -168,6 +176,8 @@ export default function GameMap({
   fit?: LatLng[] | null
   /** Dato Seri's hint zone: a dashed yellow circle with a twinkling ? and a slow ripple, never a name (jail design §4a, §4c). */
   legendaryZone?: LegendaryZone | null
+  /** Bomoh's hint zone: the same unlabelled ? circle as Dato Seri's, only purple. */
+  bomohZone?: LegendaryZone | null
   /** Runners: where the chasers were at their last check-in's alert. Frozen: redrawn only when it changes. */
   snapshot?: ChaserSnapshot | null
   /** Organiser and marshals before the start: the exact spot Dato Seri's card was dropped, as a yellow pin. */
@@ -177,6 +187,8 @@ export default function GameMap({
   const [loaded, setLoaded] = useState(false)
   const latestZone = useRef(legendaryZone)
   latestZone.current = legendaryZone
+  const latestBomohZone = useRef(bomohZone)
+  latestBomohZone.current = bomohZone
   const latestSnapshot = useRef(snapshot)
   latestSnapshot.current = snapshot
   const latestStash = useRef(stash)
@@ -270,6 +282,10 @@ export default function GameMap({
       m.addSource('legendary', { type: 'geojson', data: zone.zone })
       m.addLayer({ id: 'legendary-fill', type: 'fill', source: 'legendary', paint: { 'fill-color': y.main, 'fill-opacity': 0.12 } })
       m.addLayer({ id: 'legendary-line', type: 'line', source: 'legendary', paint: { 'line-color': y.main, 'line-width': 2, 'line-dasharray': [2, 2] } })
+      const p = legendaryPurple()
+      m.addSource('bomoh-legendary', { type: 'geojson', data: zoneFeatures(latestBomohZone.current).zone })
+      m.addLayer({ id: 'bomoh-legendary-fill', type: 'fill', source: 'bomoh-legendary', paint: { 'fill-color': p.main, 'fill-opacity': 0.12 } })
+      m.addLayer({ id: 'bomoh-legendary-line', type: 'line', source: 'bomoh-legendary', paint: { 'line-color': p.main, 'line-width': 2, 'line-dasharray': [2, 2] } })
       // The ? badge and its ripple are an HTML marker animated by CSS (the compositor), so the map idles.
       m.addSource('toilets', {
         type: 'geojson',
@@ -390,6 +406,18 @@ export default function GameMap({
         },
       })
       m.addLayer({
+        id: 'bomoh-reveal-ring',
+        type: 'circle',
+        source: 'points',
+        filter: ['==', ['get', 'revealedBy'], 'bomoh'],
+        paint: {
+          'circle-radius': 11,
+          'circle-color': 'rgba(0,0,0,0)',
+          'circle-stroke-color': legendaryPurple().main,
+          'circle-stroke-width': 2,
+        },
+      })
+      m.addLayer({
         id: 'labels',
         type: 'symbol',
         source: 'fuzzy',
@@ -477,6 +505,25 @@ export default function GameMap({
       marker.remove()
     }
   }, [zoneKey, reduce, loaded])
+
+  // Bomoh's hint zone: the same unlabelled ? badge, tinted purple by CSS.
+  const bomohZoneKey = JSON.stringify(bomohZone)
+  useEffect(() => {
+    const mp = map.current
+    if (!ready.current || !mp) return
+    ;(mp.getSource('bomoh-legendary') as GeoJSONSource | undefined)?.setData(zoneFeatures(latestBomohZone.current).zone)
+    const z = latestBomohZone.current
+    if (!z) return
+    const el = document.createElement('div')
+    el.className = 'legendary-marker bomoh-marker'
+    el.setAttribute('aria-hidden', 'true')
+    if (reduce) el.dataset.still = 'true'
+    el.innerHTML = '<i class="legendary-ring"></i><b>?</b>'
+    const marker = new maplibregl.Marker({ element: el }).setLngLat([z.lng, z.lat]).addTo(mp)
+    return () => {
+      marker.remove()
+    }
+  }, [bomohZoneKey, reduce, loaded])
 
   const fitKey = JSON.stringify(fit)
   useEffect(() => {
