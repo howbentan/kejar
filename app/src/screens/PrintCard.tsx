@@ -1,23 +1,24 @@
 import { useEffect, useState } from 'react'
-import { datoQr } from '../../shared/ids.js'
+import { bomohQr, datoQr } from '../../shared/ids.js'
 import { qrDataUrl } from '../game/qr'
 
 /**
  * One game's hidden ★ card, opened from Organiser tools in the lobby (ruling R15). Its QR carries that game's own
  * secret code, which arrives in the URL's # part so it never reaches the server or its logs. The card shows only a
- * ★ and kejar. so a passer-by can't tell what it is (rules doc §9b). Black on white, like the tag sheet.
+ * ★ and kejar. so a passer-by can't tell what it is (rules doc §9b). Black on white, like the tag sheet. A purple
+ * (Bomoh) card looks the same; only its QR differs (`bomohQr`).
  */
-export default function PrintCard({ cardCode }: { cardCode: string }) {
+export default function PrintCard({ cardCode, legendary = 'dato' }: { cardCode: string; legendary?: 'dato' | 'bomoh' }) {
   const [src, setSrc] = useState('')
 
   useEffect(() => {
     if (!cardCode) return
     let live = true
-    void qrDataUrl(datoQr(cardCode)).then((url) => live && setSrc(url))
+    void qrDataUrl(legendary === 'bomoh' ? bomohQr(cardCode) : datoQr(cardCode)).then((url) => live && setSrc(url))
     return () => {
       live = false
     }
-  }, [cardCode])
+  }, [cardCode, legendary])
 
   return (
     <div style={{ background: '#fff', color: '#0A0A0B', minHeight: '100dvh', padding: 16 }}>

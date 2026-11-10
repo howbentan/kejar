@@ -86,6 +86,14 @@ describe('YourKit', () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith('retireSecretCard', { organiserToken: 'ot1', legendary: 'dato', letter: 'A' }))
   })
 
+  it('a purple card prints through the Bomoh print link', async () => {
+    render(<YourKit />)
+    await screen.findByText('Purple A')
+    fireEvent.click(within(row('Purple A')).getByRole('button', { name: 'PRINT' }))
+    await waitFor(() => expect(tab.location.href).toBe('/print/card#bomoh/CODE123'))
+    expect(call).toHaveBeenCalledWith('secretCardCode', { organiserToken: 'ot1', legendary: 'bomoh', letter: 'A' })
+  })
+
   it('says when a ready card is in the game today', async () => {
     cards = set({ datoB: { inGame: true } })
     render(<YourKit />)

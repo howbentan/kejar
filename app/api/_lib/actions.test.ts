@@ -3061,6 +3061,30 @@ describe('Bomoh: the hidden stash (chaser-side legendary, mirrors Dato Seri abov
     expect(await scan(g, g.ben.token)).toEqual({ ok: true, kind: 'bomoh' })
   })
 
+  it('a purple card printed before Bomoh had its own QR (KEJAR:DATO:<purple code>) still claims Bomoh, and is no Dato miss (C1)', async () => {
+    const g = await chasing()
+    expect(await scanQr(g, g.aina.token, datoQr(await cardCode(g)))).toEqual({ ok: false, reason: 'cannot-claim' })
+    expect(await scanQr(g, g.ben.token, datoQr(await cardCode(g)))).toEqual({ ok: true, kind: 'bomoh' })
+    expect((await stash(g))!.claimedBy).toBe(g.ben.playerId)
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'stash-miss')).toHaveLength(0)
+  })
+
+  it('with Dato Seri on too, a legacy DATO-prefixed purple card claims Bomoh and the yellow card still claims Dato', async () => {
+    const g = await readyGame({ mode: 'full', legendaries: { dato: 'stash', bomoh: 'stash' } })
+    const chong = await run('join', { code: g.code, name: 'Chong', accepted: true })
+    await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [g.hafiz.playerId]: 'chaser', [chong.playerId]: 'runner' } })
+    await run('linkTag', { code: g.code, token: chong.token, tagId: 5 })
+    await run('dropBomohSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    const game = (await store.gameByCode(g.code))!
+    expect(game.dato_stash!.code).not.toBe(game.bomoh_stash!.code)
+    expect(await scanQr(g, g.ben.token, datoQr(game.bomoh_stash!.code!))).toEqual({ ok: true, kind: 'bomoh' })
+    expect(await scanQr(g, g.aina.token, datoQr(game.dato_stash!.code!))).toEqual({ ok: true, kind: 'dato' })
+    expect((await store.events(game.id)).filter((e) => e.type === 'stash-miss')).toHaveLength(0)
+  })
+
   it('with no stash dropped, scanning claims nothing', async () => {
     const g = await chasing(false)
     expect(await scanQr(g, g.ben.token, 'KEJAR:BOMOH')).toEqual({ ok: false, reason: 'no-stash' })

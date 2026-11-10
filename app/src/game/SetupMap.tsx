@@ -3,6 +3,7 @@ import type { View } from '../../shared/views.js'
 import { call } from './api'
 import { currentCoords } from './here'
 import GameMap from './Map'
+import { printCardUrl } from './printLinks'
 import { ErrorText } from './ui'
 
 /** Who is dropping: the organiser's token, or a marshal's player token. */
@@ -83,7 +84,7 @@ export function HiddenCard({
       )}
       {card && (
         // The code goes after #, so it never reaches the server or its logs. Only this game's card claims.
-        <a className="muted" href={`/print/card#${encodeURIComponent(card.code)}`} target="_blank" rel="noopener noreferrer">
+        <a className="muted" href={printCardUrl(legendary, card.code)} target="_blank" rel="noopener noreferrer">
           {bomoh ? 'Print the purple card' : 'Print the ★ card'}
         </a>
       )}

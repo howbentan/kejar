@@ -1200,8 +1200,15 @@ const claim: Action = async (ctx, body) => {
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
   if (fresh.paused_at) return { ok: false, reason: 'paused' }
-  if (isDatoQr(str(body.qr))) return claimDato(ctx, fresh as GameRow, me, str(body.qr))
-  if (isBomohQr(str(body.qr))) return claimBomoh(ctx, fresh as GameRow, me, str(body.qr))
+  const qr = str(body.qr)
+  if (isDatoQr(qr)) {
+    const code = datoCodeFromQr(qr)
+    // Purple cards printed before Bomoh had his own QR carry KEJAR:DATO:<purple code>. Cards are printed once and
+    // reused every game, so that scan is a Bomoh claim, exactly as if it were KEJAR:BOMOH:<code> (C1).
+    if (isLegacyBomohCode(fresh as GameRow, code)) return claimBomoh(ctx, fresh as GameRow, me, code)
+    return claimDato(ctx, fresh as GameRow, me, code)
+  }
+  if (isBomohQr(qr)) return claimBomoh(ctx, fresh as GameRow, me, bomohCodeFromQr(qr))
   const station = stationFromQr(str(body.qr))
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeClaim({
@@ -1230,6 +1237,13 @@ const claim: Action = async (ctx, body) => {
   return { ok: true, kind }
 }
 
+/** A ★-prefixed code that is really this game's purple card: it matches the Bomoh stash's code and not the Dato one. */
+function isLegacyBomohCode(game: GameRow, code: string | null): boolean {
+  if (!code || game.settings.mode !== 'full') return false
+  const matches = (secret: string | null | undefined) => !!secret && hashToken(secret) === hashToken(code)
+  return matches(game.bomoh_stash?.code) && !matches(game.dato_stash?.code)
+}
+
 /**
  * Scanning Dato Seri's hidden stash (jail design §4b). A refusal changes nothing, so the stash stays claimable.
  * The store claims it atomically: two runners scanning at once get one card. No 'powerup' event, which would
@@ -1240,7 +1254,7 @@ const claim: Action = async (ctx, body) => {
  * right spot, so a photo of the card can't be walked round the zone. Nothing says they're locked out. A full
  * slot isn't a miss: the runner is at the stash and can come back once their slot is free.
  */
-async function claimDato(ctx: Ctx, game: GameRow, me: Player, qr: string) {
+async function claimDato(ctx: Ctx, game: GameRow, me: Player, scanned: string | null) {
   const missed = (await ctx.store.events(game.id)).filter((e) => e.type === 'stash-miss' && e.actor_id === me.id).length
   if (missed >= STASH_MISS_LIMIT) return NO_STASH
   // Only a wrong or unknown code, no stash, or too far counts (ruling R4): the other refusals reveal no location.
@@ -1251,7 +1265,6 @@ async function claimDato(ctx: Ctx, game: GameRow, me: Player, qr: string) {
   // Only the code this game was assigned (ruling R15, R2): the one on the card the organiser printed and hid. Any
   // other ★ card, bare, another game's or another card's, gets the same answer as no stash before anything else is
   // judged, so it can't tell anyone how near they are or whether a stash exists.
-  const scanned = datoCodeFromQr(qr)
   const secret = game.settings.mode === 'full' ? (game.dato_stash?.code ?? null) : null
   if (!scanned || !secret || hashToken(scanned) !== hashToken(secret)) return miss(NO_STASH)
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
@@ -1285,7 +1298,7 @@ async function claimDato(ctx: Ctx, game: GameRow, me: Player, qr: string) {
  * after STASH_MISS_LIMIT of them every later stash scan by that player answers `no-stash`, unrecorded, even at
  * the right spot.
  */
-async function claimBomoh(ctx: Ctx, game: GameRow, me: Player, qr: string) {
+async function claimBomoh(ctx: Ctx, game: GameRow, me: Player, scanned: string | null) {
   const missed = (await ctx.store.events(game.id)).filter((e) => e.type === 'stash-miss' && e.actor_id === me.id).length
   if (missed >= STASH_MISS_LIMIT) return NO_STASH
   // Only a wrong or unknown code, no stash, or too far counts (ruling R4): the other refusals reveal no location.
@@ -1296,7 +1309,6 @@ async function claimBomoh(ctx: Ctx, game: GameRow, me: Player, qr: string) {
   // Only the code this game was assigned (ruling R15, R2): the one on the card the organiser printed and hid. Any
   // other Bomoh card, bare, another game's or another card's, gets the same answer as no stash before anything else
   // is judged, so it can't tell anyone how near they are or whether a stash exists.
-  const scanned = bomohCodeFromQr(qr)
   const secret = game.settings.mode === 'full' ? (game.bomoh_stash?.code ?? null) : null
   if (!scanned || !secret || hashToken(scanned) !== hashToken(secret)) return miss(NO_STASH)
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])

@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { call } from '../game/api'
 import { loadOrganiserSession } from '../game/organiserSession'
+import { printCardUrl } from '../game/printLinks'
 import { ErrorText, Screen } from '../game/ui'
 
 type Legendary = 'dato' | 'bomoh'
@@ -81,7 +82,7 @@ export default function YourKit() {
       const id = { organiserToken, legendary: c.legendary, letter: c.letter }
       await fn(id, async () => {
         const { code } = await call<{ code: string }>('secretCardCode', id)
-        const url = `/print/card#${encodeURIComponent(code)}`
+        const url = printCardUrl(c.legendary, code)
         // Blocked anyway: print from this tab instead.
         if (w) w.location.href = url
         else window.location.assign(url)

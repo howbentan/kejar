@@ -8,6 +8,7 @@ import HostNew from './screens/HostNew'
 import Join from './screens/Join'
 import MarshalRedeem from './screens/MarshalRedeem'
 import OrganiserRedeem from './screens/OrganiserRedeem'
+import { parsePrintCardHash } from './game/printLinks'
 import PrintCard from './screens/PrintCard'
 import YourKit from './screens/YourKit'
 import { HostWalk } from './screens/WalkPark'
@@ -41,7 +42,8 @@ function Routed() {
     case 'print-tags':
       return <PrintTags />
     case 'print-card':
-      return <PrintCard cardCode={decodeURIComponent(window.location.hash.slice(1))} />
+      const printed = parsePrintCardHash(window.location.hash)
+      return <PrintCard cardCode={printed.code} legendary={printed.legendary} />
     case 'organiser-redeem':
       return <OrganiserRedeem token={token!} />
     case 'marshal-redeem':

@@ -144,7 +144,7 @@ describe('HiddenCard: dropping Bomoh', () => {
     open()
     expect(mapProps.last?.stash).toEqual({ lat: 3.02, lng: 101.02 })
     expect(screen.getByText(/hidden at the purple pin/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Print the purple card' })).toHaveAttribute('href', '/print/card#Pq7-abc')
+    expect(screen.getByRole('link', { name: 'Print the purple card' })).toHaveAttribute('href', '/print/card#bomoh/Pq7-abc')
   })
 
   it('says to reprint a purple card when none was free', () => {
