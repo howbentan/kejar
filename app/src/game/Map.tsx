@@ -151,6 +151,7 @@ export default function GameMap({
   bomohZone = null,
   snapshot = null,
   stash = null,
+  stashTone = 'yellow',
 }: {
   arena: Arena
   dots: MapDot[]
@@ -180,8 +181,10 @@ export default function GameMap({
   bomohZone?: LegendaryZone | null
   /** Runners: where the chasers were at their last check-in's alert. Frozen: redrawn only when it changes. */
   snapshot?: ChaserSnapshot | null
-  /** Organiser and marshals before the start: the exact spot Dato Seri's card was dropped, as a yellow pin. */
+  /** Organiser and marshals before the start: the exact spot a legendary's card was dropped, as a pin. */
   stash?: LatLng | null
+  /** The stash pin's colour: Dato Seri's yellow, or Bomoh's purple. Read once, when the map loads. */
+  stashTone?: 'yellow' | 'purple'
 }) {
   const reduce = useReducedMotion()
   const [loaded, setLoaded] = useState(false)
@@ -193,6 +196,8 @@ export default function GameMap({
   latestSnapshot.current = snapshot
   const latestStash = useRef(stash)
   latestStash.current = stash
+  const latestStashTone = useRef(stashTone)
+  latestStashTone.current = stashTone
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
   const ready = useRef(false)
@@ -344,11 +349,12 @@ export default function GameMap({
         paint: { 'text-color': VOLT, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
       })
       m.addSource('stash', { type: 'geojson', data: stashFeatures(latestStash.current) })
+      const pin = latestStashTone.current === 'purple' ? legendaryPurple() : y
       m.addLayer({
         id: 'stash',
         type: 'circle',
         source: 'stash',
-        paint: { 'circle-radius': 9, 'circle-color': y.main, 'circle-stroke-color': y.deep, 'circle-stroke-width': 2 },
+        paint: { 'circle-radius': 9, 'circle-color': pin.main, 'circle-stroke-color': pin.deep, 'circle-stroke-width': 2 },
       })
       m.addSource('stations', { type: 'geojson', data: stationFeatures(latestStations.current) })
       m.addLayer({

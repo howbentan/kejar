@@ -1,4 +1,8 @@
 -- Bomoh's hidden stash (jail design §2e): same shape as Dato Seri's, { code, lat, lng, claimedBy, claimedAt }.
+-- Safe to run again: one transaction, every step guarded. Run it before the code that reads this column goes live.
+
+begin;
+
 alter table games add column if not exists bomoh_stash jsonb;
 
 -- Mirrors claim_dato() exactly (same locking and re-check), except it never inserts into powerups: Bomoh
@@ -26,3 +30,5 @@ $$;
 
 revoke execute on function claim_bomoh(uuid, uuid, timestamptz) from public, anon, authenticated;
 grant execute on function claim_bomoh(uuid, uuid, timestamptz) to service_role;
+
+commit;

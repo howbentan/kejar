@@ -238,7 +238,7 @@ async function freeCard(ctx: Ctx, organisationId: string, legendary: LegendaryKi
 }
 
 /** A fresh, not yet dropped stash on the given card: its code is the card's code, so the printed card claims. */
-const stashOn = (card: SecretCard): DatoStash => ({ code: card.code, card: { id: card.id, letter: card.letter }, lat: null, lng: null, claimedBy: null, claimedAt: null })
+const stashOn = (card: SecretCard): DatoStash | BomohStash => ({ code: card.code, card: { id: card.id, letter: card.letter }, lat: null, lng: null, claimedBy: null, claimedAt: null })
 
 /**
  * The lobby lets go of its card (ruling R8): no stash, and the walk's secret step is no longer placed, so a card
@@ -412,7 +412,9 @@ function settingsFrom(input: unknown): Settings {
   for (const v of [legendaries.dato, legendaries.bomoh]) {
     if (v !== 'off' && v !== 'stash') throw new ActionError(400, 'Legendary cards must be off or on a hidden stash')
   }
-  s.legendaries = legendaries
+  // Bomoh is accepted as sent now that he's built end to end: his own purple cards, claim, reveal and lobby toggle.
+  // Only the two known keys are stored, so nothing else a client sends ends up in the game's settings.
+  s.legendaries = { dato: legendaries.dato, bomoh: legendaries.bomoh }
   return s
 }
 
@@ -1363,7 +1365,7 @@ const dropDatoSeri: Action = async (ctx, body) => {
  * marshals are the helper, and never learn where it is. Full mode only. Dropping again before the start moves it;
  * once the game starts it stays put.
  */
-const dropBomohSeri: Action = async (ctx, body) => {
+const dropBomoh: Action = async (ctx, body) => {
   const loaded = await loadGame(ctx, body)
   const organiser = await requireOrganiser(ctx, loaded, body)
   if (loaded.settings.mode !== 'full') throw new ActionError(409, 'Bomoh is in Full mode only')
@@ -1919,7 +1921,7 @@ export const actions = {
   usePowerup,
   grabPick,
   dropDatoSeri,
-  dropBomohSeri,
+  dropBomoh,
   listSecretCards,
   retireSecretCard,
   reprintSecretCard,

@@ -50,7 +50,7 @@ export function HiddenCard({
     try {
       const here = await currentCoords()
       if (typeof here.lat !== 'number' || typeof here.lng !== 'number') return setError('Turn on location, then stand by the card and try again')
-      await call(bomoh ? 'dropBomohSeri' : 'dropDatoSeri', { code, ...credentials, ...here })
+      await call(bomoh ? 'dropBomoh' : 'dropDatoSeri', { code, ...credentials, ...here })
       refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -96,7 +96,7 @@ export function HiddenCard({
           {bomoh ? 'Print the purple card' : 'Print the ★ card'}
         </a>
       )}
-      <GameMap arena={view.arena} dots={[]} height={200} stash={stash ? { lat: stash.lat, lng: stash.lng } : null} />
+      <GameMap arena={view.arena} dots={[]} height={200} stash={stash ? { lat: stash.lat, lng: stash.lng } : null} stashTone={bomoh ? 'purple' : 'yellow'} />
       <button
         type="button"
         className={bomoh ? 'btn btn-bomoh' : 'btn btn-legendary'}

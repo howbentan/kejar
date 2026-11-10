@@ -139,10 +139,18 @@ describe('WalkPark', () => {
     expect(screen.queryByRole('button', { name: 'Drop Dato Seri here' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Drop Bomoh here' }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('setKit', { code: 'ABC234', organiserToken: 'h1', placed: { id: 'bomoh', on: true } }))
-    const drop = call.mock.calls.find((c) => c[0] === 'dropBomohSeri')!
+    const drop = call.mock.calls.find((c) => c[0] === 'dropBomoh')!
     expect(drop[1]).toMatchObject({ code: 'ABC234', organiserToken: 'h1' })
     expect(drop[1].lat).toBeCloseTo(BOMOH.lat, 6)
-    expect(call.mock.calls.map((c) => c[0])).toEqual(['dropBomohSeri', 'setKit'])
+    expect(call.mock.calls.map((c) => c[0])).toEqual(['dropBomoh', 'setKit'])
+  })
+
+  it("with Dato Seri off, the purple step doesn't mention a yellow card (M9)", () => {
+    open(view([S1, BOMOH], { 'station-1': true }, { bomohCard: { letter: 'C', code: 'y' } }))
+    act(() => onFix!(at(BOMOH, 0, 100)))
+    expect(screen.getByText('Hide purple card C.')).toBeInTheDocument()
+    expect(screen.getByText('Somewhere quiet. Behind a tree, under a bin.')).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/yellow/i)
   })
 
   it("the helper's walk has no secret pin, step, letter or count", () => {

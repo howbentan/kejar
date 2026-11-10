@@ -106,6 +106,8 @@ export default function WalkPark({
   const next = nextIndex === -1 ? null : places[nextIndex]
   const secret = next?.tone === 'yellow' || next?.tone === 'purple'
   const purple = next?.tone === 'purple'
+  // The purple step only mentions the yellow card when this game has one to keep away from.
+  const hasYellow = places.some((p) => p.tone === 'yellow')
   const metres = here && next ? distanceM(here, next) : null
   // The secret step has no spot to reach: any place nearby will do, so only stations and Penjara use the 15 m rule.
   const isHere = !secret && metres !== null && metres <= WALK_HERE_M
@@ -198,7 +200,9 @@ export default function WalkPark({
                 <p>Secret. Only you see this. Pick any spot nearby.</p>
                 <p>
                   {purple
-                    ? 'Somewhere quiet, away from the yellow one. Behind a tree, under a bin.'
+                    ? hasYellow
+                      ? 'Somewhere quiet, away from the yellow one. Behind a tree, under a bin.'
+                      : 'Somewhere quiet. Behind a tree, under a bin.'
                     : 'Hide it somewhere sneaky. Under a bench, behind a sign.'}
                 </p>
               </>
@@ -228,7 +232,7 @@ export default function WalkPark({
               disabled={busy}
               onClick={() =>
                 void mark(next!.id, () =>
-                  call(purple ? 'dropBomohSeri' : 'dropDatoSeri', { code, ...credentials, lat: here!.lat, lng: here!.lng }),
+                  call(purple ? 'dropBomoh' : 'dropDatoSeri', { code, ...credentials, lat: here!.lat, lng: here!.lng }),
                 )
               }
             >

@@ -294,6 +294,15 @@ describe('GameMap', () => {
       rerender(<GameMap arena={arena} dots={[]} stash={null} />)
       expect(created.data.stash).toMatchObject({ features: [] })
     })
+
+    it("Bomoh's stash pin is purple (M8)", () => {
+      created.layers = []
+      created.data = {}
+      render(<GameMap arena={arena} dots={[]} stash={{ lat: 3.03, lng: 101.03 }} stashTone="purple" />)
+      act(() => created.load!())
+      expect(layer('stash').paint['circle-color']).toBe('#C9A4FF')
+      expect(layer('stash').paint['circle-stroke-color']).toBe('#9B5DE5')
+    })
   })
 
   describe("Dato Seri's hint zone", () => {
