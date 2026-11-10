@@ -22,6 +22,7 @@ async function startedGame() {
     winner: null,
     paused_at: null,
     pauses: [],
+    final_whistle_at: null,
     organiser_id: 'test-organiser',
   })
 }
@@ -167,6 +168,38 @@ describe('MemoryStore safety methods', () => {
     expect((await store.playerByToken(g.id, 't-Aina'))!.removed_at).toBe(iso(T0))
   })
 
+  it('releaseCaught frees only for the catching chaser, leaves freed_once alone, and only the first call wins', async () => {
+    const g = await startedGame()
+    const p = await newPlayer(g.id, 'Aina')
+    await store.catchRunner(p.id, 'c1')
+    await store.updatePlayers([{ id: p.id, patch: { freed_once: true } }])
+    now = T0 + MIN
+    expect(await store.releaseCaught(p.id, 'c2', iso(now))).toBe(false)
+    expect((await store.players(g.id))[0].jailed).toBe(true)
+    expect(await store.releaseCaught(p.id, 'c1', iso(now))).toBe(true)
+    expect(await store.releaseCaught(p.id, 'c1', iso(now))).toBe(false)
+    const after = (await store.players(g.id))[0]
+    expect(after).toMatchObject({ jailed: false, caught_by: null, caught_at: null, freed_at: iso(now), freed_once: true })
+  })
+
+  it('releaseCaught never frees an auto-jailed runner', async () => {
+    const g = await startedGame()
+    const p = await newPlayer(g.id, 'Aina')
+    await store.catchRunner(p.id, null)
+    expect(await store.releaseCaught(p.id, 'c1', iso(now))).toBe(false)
+  })
+
+  it('claimFinalWhistle is true only the first time, never once ended, and clearFinalWhistle re-arms it', async () => {
+    const g = await startedGame()
+    expect(await store.claimFinalWhistle(g.id, iso(T0 + MIN))).toBe(true)
+    expect(await store.claimFinalWhistle(g.id, iso(T0 + 2 * MIN))).toBe(false)
+    expect((await store.gameByCode('ABC234'))!.final_whistle_at).toBe(iso(T0 + MIN))
+    await store.clearFinalWhistle(g.id)
+    expect((await store.gameByCode('ABC234'))!.final_whistle_at).toBeNull()
+    await store.claimEnd(g.id, 'runners')
+    expect(await store.claimFinalWhistle(g.id, iso(T0 + 3 * MIN))).toBe(false)
+  })
+
   it('addEvent returns the stored event', async () => {
     const g = await startedGame()
     const e = await store.addEvent({ game_id: g.id, type: 'sos', actor_id: null, target_id: null, data: {} })
@@ -272,6 +305,7 @@ describe('organiser accounts', () => {
       winner: null,
       paused_at: null,
       pauses: [],
+      final_whistle_at: null,
       organiser_id: organiser.id,
     })
     await store.createMarshalInvite({

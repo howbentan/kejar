@@ -124,6 +124,34 @@ describe('MarshalLive SOS takeover', () => {
   })
 })
 
+describe('MarshalLive Undo kejar', () => {
+  const roster = [
+    { id: 'r1', name: 'Aina', role: 'runner' as const, tag_id: 7, jailed: true, caught_by: 'Ben', undoKejarId: 'e9' },
+    { id: 'r2', name: 'Hafiz', role: 'runner' as const, tag_id: 3, jailed: true, caught_by: null, undoKejarId: null },
+    { id: 'c1', name: 'Ben', role: 'chaser' as const, tag_id: null, jailed: false },
+  ]
+  const flagged: Alert = { ...sos('e9', 'Check catch: #07 by Ben (far from their last spot)'), kind: 'flagged-catch', targetId: 'r1' }
+
+  it("a caught runner's row offers Undo kejar, and tapping it undoes that catch", async () => {
+    render(<MarshalLive code="ABC234" view={organiser({ roster })} refresh={refresh} />)
+    const buttons = screen.getAllByRole('button', { name: 'Undo kejar' })
+    expect(buttons).toHaveLength(1)
+    fireEvent.click(buttons[0])
+    await waitFor(() => expect(refresh).toHaveBeenCalled())
+    expect(call).toHaveBeenCalledWith('undoKejar', { code: 'ABC234', organiserToken: 'h1', eventId: 'e9' })
+  })
+
+  it("that catch's flagged-catch alert offers it too", async () => {
+    render(<MarshalLive code="ABC234" view={organiser({ roster, alerts: [flagged] })} refresh={refresh} />)
+    expect(screen.getAllByRole('button', { name: 'Undo kejar' })).toHaveLength(2)
+  })
+
+  it("an alert for a catch that can't be undone any more has no Undo kejar", () => {
+    render(<MarshalLive code="ABC234" view={organiser({ roster: roster.map((p) => ({ ...p, undoKejarId: null })), alerts: [flagged] })} refresh={refresh} />)
+    expect(screen.queryByRole('button', { name: 'Undo kejar' })).toBeNull()
+  })
+})
+
 describe('MarshalLive after the game', () => {
   const results = {
     winner: 'chasers' as const,

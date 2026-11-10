@@ -125,6 +125,8 @@ export default function MarshalTools({
   const needsALook = openAlerts.filter((a) => a.kind !== 'sos')
   const closedAlerts = view.alerts.filter((a) => a.handled)
   const players = view.roster.filter((p) => p.role !== 'marshal' || p.id !== view.me.id)
+  // Catches Undo kejar can still undo (fair-play §1.4), so a flagged-catch alert offers it only while it would work.
+  const undoable = new Set(view.roster.flatMap((p) => (p.undoKejarId ? [p.undoKejarId] : [])))
 
   function AlertRow(a: Alert) {
     return (
@@ -157,6 +159,11 @@ export default function MarshalTools({
               It stands
             </button>
           </span>
+        )}
+        {!a.handled && a.kind === 'flagged-catch' && undoable.has(a.id) && (
+          <button type="button" className="btn alert-btn" disabled={busy} onClick={() => act('undoKejar', { eventId: a.id })}>
+            Undo kejar
+          </button>
         )}
         {!a.handled && a.kind !== 'auto-jail' && a.kind !== 'sos' && (
           <button type="button" className="btn btn-ghost alert-btn" disabled={busy} onClick={() => act('handleAlert', { eventId: a.id })}>
@@ -307,6 +314,11 @@ export default function MarshalTools({
               <td className="mono">{p.role === 'runner' ? tagText(p.tag_id) : ''}</td>
               <td>{p.disqualified_at ? <LuarGarisanStatus /> : p.jailed && <JailStatus p={p} now={view.now} />}</td>
               <td style={{ textAlign: 'right' }}>
+                {p.undoKejarId && (
+                  <button type="button" className="pill" disabled={busy} onClick={() => act('undoKejar', { eventId: p.undoKejarId })}>
+                    Undo kejar
+                  </button>
+                )}
                 <button
                   type="button"
                   className="pill"

@@ -38,4 +38,44 @@ $$;
 revoke execute on function resume_game(uuid, timestamptz) from public, anon, authenticated;
 grant execute on function resume_game(uuid, timestamptz) to service_role;
 
+-- 3. Undo kejar and the final whistle (fair-play §1.4).
+-- When the last free Dikejar goes out, the end is held 60 s so a marshal can undo a wrong last catch.
+alter table games add column if not exists final_whistle_at timestamptz;
+
+-- Undo kejar frees a runner only while that chaser's catch still holds them. freed_at restarts their check-in
+-- count (as the auto-jail undo does); freed_once (their one escape) is left alone. True iff this call freed them.
+create or replace function release_caught(p_player uuid, p_by uuid, p_at timestamptz) returns boolean
+language plpgsql
+as $$
+begin
+  update players
+     set jailed = false, caught_by = null, caught_at = null, freed_at = p_at
+   where id = p_player and jailed and caught_by = p_by;
+  return found;
+end;
+$$;
+
+revoke execute on function release_caught(uuid, uuid, timestamptz) from public, anon, authenticated;
+grant execute on function release_caught(uuid, uuid, timestamptz) to service_role;
+
+-- Starts the final whistle only if none is pending and the game hasn't ended. True iff this call started it.
+create or replace function claim_final_whistle(p_game uuid, p_at timestamptz) returns boolean
+language plpgsql
+as $$
+begin
+  update games
+     set final_whistle_at = p_at
+   where id = p_game and final_whistle_at is null and ended_at is null;
+  return found;
+end;
+$$;
+
+revoke execute on function claim_final_whistle(uuid, timestamptz) from public, anon, authenticated;
+grant execute on function claim_final_whistle(uuid, timestamptz) to service_role;
+
+-- Each Undo kejar is kept in safety_records with who did it, so the type check gains a value.
+alter table safety_records drop constraint if exists safety_records_type_check;
+alter table safety_records add constraint safety_records_type_check
+  check (type in ('sos', 'report', 'removed', 'auto-jail-undone', 'kejar-undone'));
+
 commit;

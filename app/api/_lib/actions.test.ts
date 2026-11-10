@@ -413,6 +413,9 @@ describe('catching and jail', () => {
     await run('location', { code: g.code, token: g.hafiz.token, ...at(30) })
     await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })
     await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })
+    // The final whistle holds the end for 60 s (fair-play §1.4).
+    expect((await run<View>('state', { code: g.code, token: g.ben.token })).phase).toBe('chasing')
+    now += 61_000
     const v = await run<View>('state', { code: g.code, token: g.ben.token })
     await run('state', { code: g.code, token: g.ben.token })
     expect(v.phase).toBe('ended')
@@ -1719,6 +1722,9 @@ describe('removing a player', () => {
     await run('location', { code: g.code, token: g.aina.token, ...at(20) })
     await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })
     await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.hafiz.playerId })
+    // The final whistle holds the end for 60 s (fair-play §1.4).
+    expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).phase).toBe('chasing')
+    now += 61_000
     const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     expect(v.phase).toBe('ended')
     expect(v.results?.winner).toBe('chasers')
@@ -1936,6 +1942,9 @@ describe('Luar Garisan', () => {
     now += 30_000
     await expect(failing({ code: g.code, token: g.aina.token, ...at(250) })).resolves.toEqual({ ok: true })
     expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(1)
+    expect(await evs(g.gameId, 'final-whistle')).toHaveLength(1)
+    now += 61_000
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
     expect(await evs(g.gameId, 'ended')).toHaveLength(1)
   })
 
@@ -1957,6 +1966,11 @@ describe('Luar Garisan', () => {
     expect(await evs(g.gameId, 'ended')).toHaveLength(0)
     await report(g, g.aina.token, 250)
     expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(1)
+    // The final whistle holds the end for 60 s (fair-play §1.4).
+    expect(await evs(g.gameId, 'final-whistle')).toHaveLength(1)
+    expect(await evs(g.gameId, 'ended')).toHaveLength(0)
+    now += 61_000
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
     const ended = await evs(g.gameId, 'ended')
     expect(ended).toHaveLength(1)
     expect(ended[0].data).toEqual({ winner: 'chasers' })
@@ -2123,6 +2137,10 @@ describe('automatic alerts', () => {
       { revealAt: T0 + 10 * MIN, ok: false },
       { revealAt: T0 + 15 * MIN, ok: false },
     ])
+    // The final whistle holds the end for 60 s (fair-play §1.4).
+    expect((await store.gameByCode(g.code))!.winner).toBeNull()
+    now = T0 + 21 * MIN + 1_000
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
     expect((await store.gameByCode(g.code))!.winner).toBe('chasers')
   })
 
@@ -4253,5 +4271,160 @@ describe('secret card sets', () => {
       expect((await gameOf(g.code)).dato_stash ?? null).toBeNull()
       await rejects(run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, lat: CENTER.lat, lng: CENTER.lng }), 409)
     })
+  })
+})
+
+describe('Undo kejar and the final whistle (fair-play §1.4)', () => {
+  const S = 1000
+  type G = Awaited<ReturnType<typeof safetyGame>>
+  /** Ben scans a runner's tag at `ms`, standing 10 m from where the runner just reported. */
+  async function catchAt(g: G, who: 'aina' | 'hafiz', ms: number) {
+    now = ms
+    await run('location', { code: g.code, token: g[who].token, ...at(10) })
+    return run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(who === 'aina' ? 7 : 3), ...at(0) })
+  }
+  const catchId = async (g: G, runnerId: string) =>
+    (await store.events(g.gameId)).filter((e) => e.type === 'caught' && e.target_id === runnerId).at(-1)!.id
+  const runnerRow = async (g: G, id: string) => (await store.players(g.gameId)).find((p) => p.id === id)!
+  const gameRow = async (g: G) => (await store.gameByCode(g.code))!
+  const poll = (g: G, ms: number) => {
+    now = ms
+    return run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+  }
+  const undo = (g: G, eventId: string) => run('undoKejar', { code: g.code, eventId, token: g.siti.token })
+  const countOf = async (g: G, type: string) => (await store.events(g.gameId)).filter((e) => e.type === type).length
+
+  it('(a) an undo frees the runner without using their escape, and they can be caught again', async () => {
+    const g = await safetyGame()
+    await catchAt(g, 'aina', T0 + 7 * MIN)
+    now = T0 + 7.5 * MIN
+    expect(await undo(g, await catchId(g, g.aina.playerId))).toEqual({ ok: true })
+    const aina = await runnerRow(g, g.aina.playerId)
+    expect(aina).toMatchObject({ jailed: false, caught_by: null, freed_once: false, freed_at: new Date(now).toISOString() })
+    expect(await catchAt(g, 'aina', T0 + 8 * MIN)).toMatchObject({ ok: true })
+    expect((await runnerRow(g, g.aina.playerId)).jailed).toBe(true)
+  })
+
+  it('(b) only the latest catch can be undone, and only once', async () => {
+    const g = await safetyGame()
+    await catchAt(g, 'aina', T0 + 7 * MIN)
+    const first = await catchId(g, g.aina.playerId)
+    now = T0 + 7.5 * MIN
+    await undo(g, first)
+    expect(await undo(g, first)).toEqual({ ok: false, reason: 'not-undoable' })
+    await catchAt(g, 'aina', T0 + 8 * MIN)
+    expect(await undo(g, first)).toEqual({ ok: false, reason: 'not-undoable' })
+    expect((await runnerRow(g, g.aina.playerId)).jailed).toBe(true)
+  })
+
+  it('(c) catching the last free runner posts the final whistle; the Kejar win is final only after 60 s', async () => {
+    const g = await safetyGame()
+    await catchAt(g, 'aina', T0 + 7 * MIN)
+    await catchAt(g, 'hafiz', T0 + 8 * MIN)
+    expect(await countOf(g, 'final-whistle')).toBe(1)
+    const held = await poll(g, T0 + 8 * MIN + 59 * S)
+    expect(held.phase).toBe('chasing')
+    expect(held.feed.map((f) => f.text)).toContain('Last Dikejar caught! Final whistle in 60 s.')
+    expect((await gameRow(g)).ended_at).toBeNull()
+    const over = await poll(g, T0 + 8 * MIN + 61 * S)
+    expect(over.phase).toBe('ended')
+    expect(over.results?.winner).toBe('chasers')
+    await poll(g, T0 + 8 * MIN + 62 * S)
+    expect(await countOf(g, 'ended')).toBe(1)
+    expect(await countOf(g, 'final-whistle')).toBe(1)
+  })
+
+  it('(d) an undo during the hold keeps the game going, and the next last catch starts a fresh whistle', async () => {
+    const g = await safetyGame()
+    await catchAt(g, 'aina', T0 + 7 * MIN)
+    await catchAt(g, 'hafiz', T0 + 8 * MIN)
+    now = T0 + 8 * MIN + 30 * S
+    expect(await undo(g, await catchId(g, g.hafiz.playerId))).toEqual({ ok: true })
+    expect((await gameRow(g)).final_whistle_at).toBeNull()
+    const v = await poll(g, T0 + 8 * MIN + 61 * S)
+    expect(v.phase).toBe('chasing')
+    expect((await gameRow(g)).ended_at).toBeNull()
+    expect(v.feed[0].text).toBe('A marshal undid a kejar. Hafiz is back in.')
+    await catchAt(g, 'hafiz', T0 + 9.5 * MIN)
+    expect(await countOf(g, 'final-whistle')).toBe(2)
+    expect((await poll(g, T0 + 9.5 * MIN + 61 * S)).phase).toBe('ended')
+  })
+
+  it('(e) time runs out during the hold: no results until the undo, then a Dikejar win on the next poll', async () => {
+    // A 15-minute chase: hiding to +5, the chase to +20, scheduled pings at +10 and +15.
+    const g = await safetyGame({ lengthMin: 15, checkinMode: 'schedule' })
+    await catchAt(g, 'aina', T0 + 7 * MIN)
+    for (const m of [10, 15]) {
+      now = T0 + m * MIN - 20 * S
+      await run('location', { code: g.code, token: g.hafiz.token, ...at(30) })
+    }
+    await catchAt(g, 'hafiz', T0 + 20 * MIN - 20 * S)
+    expect(await countOf(g, 'final-whistle')).toBe(1)
+    const pastClock = await poll(g, T0 + 20 * MIN + 10 * S)
+    expect(pastClock.phase).toBe('chasing')
+    expect(pastClock.results).toBeNull()
+    expect((await run<View>('state', { code: g.code, token: g.aina.token })).phase).toBe('chasing')
+    now = T0 + 20 * MIN + 20 * S
+    expect(await run('undoKejar', { code: g.code, organiserToken: g.organiserToken, eventId: await catchId(g, g.hafiz.playerId) })).toEqual({ ok: true })
+    const over = await poll(g, T0 + 20 * MIN + 21 * S)
+    expect(over.phase).toBe('ended')
+    expect(over.results?.winner).toBe('runners')
+    expect(over.results?.survivors).toEqual([g.hafiz.playerId])
+    expect(store.safetyRows.at(-1)).toMatchObject({ type: 'kejar-undone', player_id: null, data: { by: 'Organiser' } })
+  })
+
+  it('(f) auto-jailing the last free runner gets the hold too, and undoing that auto-jail keeps the game going', async () => {
+    const g = await safetyGame({ checkinMode: 'schedule' })
+    await catchAt(g, 'aina', T0 + 7 * MIN)
+    // Hafiz misses pings 1 and 2: auto-jailed at +15.
+    await poll(g, T0 + 10 * MIN)
+    const v = await poll(g, T0 + 15 * MIN)
+    expect(v.phase).toBe('chasing')
+    expect((await runnerRow(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect(await countOf(g, 'final-whistle')).toBe(1)
+    const autoJail = v.alerts.find((a) => a.kind === 'auto-jail')!
+    now = T0 + 15 * MIN + 30 * S
+    expect(await run('undoAutoJail', { code: g.code, token: g.siti.token, eventId: autoJail.id })).toEqual({ ok: true })
+    expect((await poll(g, T0 + 15 * MIN + 61 * S)).phase).toBe('chasing')
+    const row = await gameRow(g)
+    expect(row.ended_at).toBeNull()
+    expect(row.final_whistle_at).toBeNull()
+  })
+
+  it('(g) is for marshals and the organiser only', async () => {
+    const g = await safetyGame()
+    await catchAt(g, 'aina', T0 + 7 * MIN)
+    const id = await catchId(g, g.aina.playerId)
+    await rejects(run('undoKejar', { code: g.code, token: g.hafiz.token, eventId: id }), 403, 'Marshals only')
+    await rejects(run('undoKejar', { code: g.code, token: g.ben.token, eventId: id }), 403, 'Marshals only')
+    expect((await runnerRow(g, g.aina.playerId)).jailed).toBe(true)
+  })
+
+  it('(h) writes a safety record and closes the catch alert', async () => {
+    const g = await safetyGame()
+    await catchAt(g, 'aina', T0 + 7 * MIN)
+    const id = await catchId(g, g.aina.playerId)
+    now = T0 + 7.5 * MIN
+    await undo(g, id)
+    expect(store.safetyRows.at(-1)).toMatchObject({
+      type: 'kejar-undone',
+      target_id: g.aina.playerId,
+      player_id: g.siti.playerId,
+      data: { game_code: g.code, by: 'Siti', target_name: 'Aina' },
+    })
+    const events = await store.events(g.gameId)
+    expect(events.find((e) => e.type === 'kejar-undone')).toMatchObject({ target_id: g.aina.playerId, data: { eventId: id } })
+    expect(events.find((e) => e.type === 'handled' && e.data.eventId === id)).toBeTruthy()
+  })
+
+  it('refuses a catch the runner was since freed from, and an unknown event', async () => {
+    const g = await safetyGame()
+    await catchAt(g, 'aina', T0 + 7 * MIN)
+    const id = await catchId(g, g.aina.playerId)
+    now = T0 + 7.5 * MIN
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+    expect(await run('jailbreak', { code: g.code, token: g.hafiz.token, qr: JAIL_QR })).toMatchObject({ ok: true })
+    expect(await undo(g, id)).toEqual({ ok: false, reason: 'not-undoable' })
+    expect(await undo(g, 'no-such-event')).toEqual({ ok: false, reason: 'not-undoable' })
   })
 })

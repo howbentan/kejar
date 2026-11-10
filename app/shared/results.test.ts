@@ -55,6 +55,19 @@ describe('computeResults', () => {
     expect(computeResults(g, players, events).longestSurvivor).toEqual({ id: 'r1', ms: 10 * MIN })
   })
 
+  it('a kejar a marshal undid counts for nothing: no catch, and survival goes on', () => {
+    const players = [ben, lee, player('r1', 'runner'), player('r2', 'runner', { jailed: true })]
+    const wrong = event('caught', T0 + 12 * MIN, { actor_id: 'c1', target_id: 'r1' })
+    const events = [
+      wrong,
+      event('kejar-undone', T0 + 13 * MIN, { target_id: 'r1', data: { eventId: wrong.id } }),
+      event('caught', T0 + 20 * MIN, { actor_id: 'c2', target_id: 'r2' }),
+    ]
+    const r = computeResults(g, players, events)
+    expect(r.mostCatches).toEqual({ id: 'c2', count: 1 })
+    expect(r.longestSurvivor).toEqual({ id: 'r1', ms: 45 * MIN })
+  })
+
   it('an auto-jail alone never counts for Most catches', () => {
     const r = computeResults(g, [ben, player('r1', 'runner', { jailed: true })], [event('auto-jailed', T0 + 15 * MIN, { target_id: 'r1' })])
     expect(r.mostCatches).toBeNull()

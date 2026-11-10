@@ -5,7 +5,7 @@ import { distanceM, fuzz, hash, offset } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { isTicked, kitOf, packItems, placeItems, type KitItem, type PlaceItem, type SecretLetters } from './kit.js'
 import { MOMENT_WINDOW_MS } from './moments.js'
-import { isOut } from './players.js'
+import { isOut, undoableCatchId } from './players.js'
 import { POWER_NAME } from './powerNames.js'
 import { activeShield, decoySpot, flareBlocked, SHIELD_MS, slotBusy } from './powerups.js'
 import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
@@ -57,6 +57,11 @@ export interface RosterEntry {
   freed_once?: boolean
   /** This person has push alerts on. Sent only in the organiser's and marshals' rosters. */
   pushOn?: boolean
+  /**
+   * The catch `Undo kejar` would undo (fair-play §1.4): this runner's latest catch while it still holds them, in
+   * the chase. Sent only in the organiser's and marshals' rosters; null when there is nothing to undo.
+   */
+  undoKejarId?: string | null
 }
 
 /** A report made once the game had already ended; marshal/organiser-only, for the inbox's After game tab. */
@@ -761,6 +766,11 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       return `${String(e.data.name ?? 'A player')} left the game`
     case 'auto-jail-undone':
       return target ? `${tagLabel(target)} is back in the game (marshal)` : 'A runner is back in the game (marshal)'
+    case 'kejar-undone':
+      // The runner's name only, never the tag number (fair-play §1.4).
+      return `A marshal undid a kejar. ${target?.name ?? 'A Dikejar'} is back in.`
+    case 'final-whistle':
+      return 'Last Dikejar caught! Final whistle in 60 s.'
     case 'auto-jailed':
       return target ? `${tagLabel(target)} missed 2 check-ins — sent to Penjara` : 'A runner missed 2 check-ins — sent to Penjara'
     default:
@@ -879,7 +889,9 @@ function fullView(i: ViewInput): View {
           caught_by: p.caught_by ? (i.players.find((c) => c.id === p.caught_by)?.name ?? null) : null,
           caught_at: p.caught_at,
           freed_once: p.freed_once,
-          ...(organiser || role === 'marshal' ? { pushOn: !!p.push } : {}),
+          ...(organiser || role === 'marshal'
+            ? { pushOn: !!p.push, undoKejarId: phase === 'chasing' && p.role === 'runner' ? undoableCatchId(p, i.events) : null }
+            : {}),
         }))
       : [],
     reports: postGameReportsFor(i),

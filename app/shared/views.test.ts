@@ -433,6 +433,22 @@ describe('feed wording', () => {
   it('announces an undone auto-jail', () => {
     expect(feedOf([event('auto-jail-undone', T0 + 16 * MIN, { target_id: 'r2' })])).toEqual(['#03 is back in the game (marshal)'])
   })
+  it('announces the final whistle and an undone kejar (runner name only, never the tag)', () => {
+    expect(feedOf([event('final-whistle', T0 + 16 * MIN)])).toEqual(['Last Dikejar caught! Final whistle in 60 s.'])
+    expect(feedOf([event('kejar-undone', T0 + 16 * MIN, { target_id: 'r2' })])).toEqual(['A marshal undid a kejar. Hafiz is back in.'])
+  })
+  it("a marshal's roster offers Undo kejar on a runner still held by their latest catch, during the chase only", () => {
+    const caught = { ...hafiz, jailed: true, caught_by: 'c1', caught_at: iso(T0 + 12 * MIN) }
+    const catchEvent = event('caught', T0 + 12 * MIN, { actor_id: 'c1', target_id: 'r2' })
+    const ps = [chaser, aina, caught, wei, siti]
+    const undoId = (me: Player, over: Partial<Parameters<typeof viewFor>[0]> = {}) =>
+      view(me, { players: ps, events: [catchEvent], ...over }).roster.find((p) => p.id === 'r2')!.undoKejarId
+    expect(undoId(siti)).toBe(catchEvent.id)
+    expect(undoId(organiserMe)).toBe(catchEvent.id)
+    expect(undoId(siti, { now: T0 + 2 * MIN })).toBeNull()
+    expect(undoId(siti, { players: [chaser, aina, { ...caught, freed_at: iso(T0 + 13 * MIN) }, wei, siti] })).toBeNull()
+    expect(view(siti, { players: ps, events: [catchEvent] }).roster.find((p) => p.id === 'r1')!.undoKejarId).toBeNull()
+  })
   it('announces an auto-jail', () => {
     expect(feedOf([event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2' })])).toEqual(['#03 missed 2 check-ins in a row.'])
   })

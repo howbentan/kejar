@@ -30,12 +30,21 @@ function bounds(game: Game, now?: number) {
   return { start: n.start, hideEnd: toWall(game, n.hideEnd, now), end: toWall(game, n.end, now) }
 }
 
+/**
+ * When the last free Dikejar goes out, the end is held this long so a wrong last catch can be undone (fair-play §1.4).
+ * Wall time: a pause during the hold doesn't stretch it, but the game can't end while paused.
+ */
+export const FINAL_WHISTLE_MS = 60_000
+
 export function phaseAt(game: Game, now: number): { phase: Phase; endsAt: number | null } {
   if (!game.started_at) return { phase: 'lobby', endsAt: null }
   const { hideEnd, end } = bounds(game, now)
   if (game.ended_at) return { phase: 'ended', endsAt: Math.min(end, Date.parse(game.ended_at)) }
   if (now < hideEnd) return { phase: 'hiding', endsAt: hideEnd }
   if (now < end) return { phase: 'chasing', endsAt: end }
+  // A pending final whistle holds the chase open past the clock time, until the server really ends the game:
+  // an undo during the hold must still be possible, and nobody should see results that might change.
+  if (game.final_whistle_at) return { phase: 'chasing', endsAt: Date.parse(game.final_whistle_at) + FINAL_WHISTLE_MS }
   return { phase: 'ended', endsAt: end }
 }
 

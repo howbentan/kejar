@@ -1,4 +1,4 @@
-import type { Player } from './types.js'
+import type { GameEvent, Player } from './types.js'
 
 /**
  * No longer free: jailed in Penjara, or disqualified for Luar Garisan. The one test every
@@ -7,4 +7,17 @@ import type { Player } from './types.js'
  */
 export function isOut(p: Player): boolean {
   return p.jailed || !!p.disqualified_at
+}
+
+/**
+ * The id of the catch Undo kejar would undo for this runner (fair-play §1.4), or null: only their latest `caught`
+ * event, and only while they are still held by it (jailed by that chaser, with no release since). The caller
+ * checks the phase is the chase.
+ */
+export function undoableCatchId(runner: Player, events: GameEvent[]): string | null {
+  if (!runner.jailed || !runner.caught_by) return null
+  const latest = events.filter((e) => e.type === 'caught' && e.target_id === runner.id).at(-1)
+  if (!latest || latest.actor_id !== runner.caught_by) return null
+  if (runner.freed_at && Date.parse(latest.at) < Date.parse(runner.freed_at)) return null
+  return latest.id
 }

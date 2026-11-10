@@ -18,9 +18,9 @@ import { autoJailDue, checkinsSince, countedCheckIn, fairlyWarned } from '../../
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
-import { isOut } from '../../shared/players.js'
+import { isOut, undoableCatchId } from '../../shared/players.js'
 import { judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
-import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
+import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
 import { bomohCodeFromQr, datoCodeFromQr, isBomohQr, isDatoQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { computeResults } from '../../shared/results.js'
@@ -493,6 +493,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
 
   let pingRows = await store.pings(game.id)
   const work = dueWork(game, pingRows, now)
+  let whistleNow = false
   // Scheduled pings come from the clock; bonus (Flare) pings carry their own times.
   const times = new Map<number, { revealAt: number }>([
     ...pingTimes(game, now).map((t) => [t.seq, t] as const),
@@ -572,13 +573,54 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
           await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: p.id, data: { who: who(p), seq, checkins } })
         }
       }
-      // Auto-jailing the last free runner ends the game, the same as a catch.
-      const runners = (await store.players(game.id)).filter((p) => p.role === 'runner')
-      if (runners.length > 0 && runners.every(isOut)) await finish(ctx, game)
+      // Auto-jailing the last free runner blows the final whistle, the same as a catch.
+      if (await allOutCheck(ctx, game)) whistleNow = true
     }
   }
 
-  if (work.end) await finish(ctx, game)
+  // A whistle just blown here (or by a concurrent call) isn't on `game` yet: read it back before judging the end.
+  const g = whistleNow && !game.final_whistle_at ? ((await store.gameByCode(game.code)) ?? game) : game
+  if (g.final_whistle_at && !g.ended_at) await settleWhistle(ctx, g)
+  else if (work.end) await finish(ctx, g)
+}
+
+/**
+ * Everyone is out (fair-play §1.4): instead of ending at once, the final whistle starts, and the end is held for
+ * FINAL_WHISTLE_MS so a marshal can undo a wrong last catch. The first caller posts the feed line. True when every
+ * runner is out (a whistle is pending, here or already).
+ */
+async function allOutCheck(ctx: Ctx, game: Game): Promise<boolean> {
+  const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
+  if (runners.length === 0 || !runners.every(isOut)) return false
+  if (await ctx.store.claimFinalWhistle(game.id, iso(ctx.now))) {
+    await ctx.store.addEvent({ game_id: game.id, type: 'final-whistle', actor_id: null, target_id: null, data: {} })
+  }
+  return true
+}
+
+/**
+ * A pending final whistle: someone free again calls it off (and a chase whose time ran out during the hold then
+ * ends on time, as a Dikejar win); otherwise the game ends once the hold is over. Never while paused.
+ */
+async function settleWhistle(ctx: Ctx, game: Game) {
+  const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
+  if (runners.length > 0 && runners.every(isOut)) {
+    if (!game.paused_at && ctx.now >= Date.parse(game.final_whistle_at!) + FINAL_WHISTLE_MS) await finish(ctx, game)
+    return
+  }
+  if (await callOffWhistle(ctx, game)) return
+  const cleared = { ...game, final_whistle_at: null }
+  if (phaseAt(cleared, ctx.now).phase === 'ended') await finish(ctx, cleared)
+}
+
+/**
+ * Clears the final whistle because someone is free again, then checks once more: a catch racing this call may
+ * have found the old whistle still set (so started none) just before it was cleared. True if a whistle is
+ * pending again.
+ */
+async function callOffWhistle(ctx: Ctx, game: Game): Promise<boolean> {
+  await ctx.store.clearFinalWhistle(game.id)
+  return allOutCheck(ctx, game)
 }
 
 async function finish(ctx: Ctx, game: Game) {
@@ -652,6 +694,7 @@ const create: Action = async (ctx, body) => {
     winner: null,
     paused_at: null,
     pauses: [],
+    final_whistle_at: null,
     organiser_id: organiser.id,
     ...(stash ? { dato_stash: stash } : {}),
     ...(bomohStash ? { bomoh_stash: bomohStash } : {}),
@@ -906,11 +949,8 @@ async function luarGaris(ctx: Ctx, game: Game, me: Player) {
     target_id: null,
     data: { who: who(me) },
   })
-  // Disqualifying the last free runner ends the game, the same as catching them (spec §7a).
-  if (!warned && me.role === 'runner') {
-    const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
-    if (runners.length > 0 && runners.every(isOut)) await finish(ctx, game)
-  }
+  // Disqualifying the last free runner blows the final whistle, the same as catching them (spec §7a, fair-play §1.4).
+  if (!warned && me.role === 'runner') await allOutCheck(ctx, game)
   try {
     await pushTo(ctx, [me], { type: 'notice', code: game.code, title: warned ? 'Outside the play area' : 'Luar Garisan', body: warned ? copy.warn : copy.out })
   } catch {
@@ -989,8 +1029,8 @@ const catchAction: Action = async (ctx, body) => {
     target_id: verdict.runnerId,
     data: { flagged: verdict.flagged, who: tagLabelOf(players, verdict.runnerId), chaser: me.name, ...(verdict.flagged ? { farFromLast: true } : {}) },
   })
-  const after = await ctx.store.players(game.id)
-  if (after.filter((p) => p.role === 'runner').every(isOut)) await finish(ctx, fresh)
+  // The last free runner caught: the final whistle, not the end (fair-play §1.4).
+  await allOutCheck(ctx, fresh)
   const caught = players.find((p) => p.id === verdict.runnerId)
   // Wrong-catch backstop: armbands are reused, so a scan of a photo can "catch" a runner whose pocketed phone is
   // far away. Only a borderline catch (far from their last spot, but not implausibly so) tells the runner straight
@@ -1680,6 +1720,41 @@ const undoAutoJail: Action = async (ctx, body) => {
     lng: null,
     data: { game_code: game.code, by: marshal?.name ?? 'Organiser', target_name: target.name },
   })
+  // Someone is free again: no final whistle (advance would call it off too, on the next poll).
+  if (game.final_whistle_at) await callOffWhistle(ctx, game)
+  return { ok: true }
+}
+
+/**
+ * Undo kejar (fair-play §1.4): a marshal or the organiser undoes a wrong catch. Only the runner's latest catch,
+ * only while it still holds them, and only during the chase (a pending final whistle keeps the chase open). The
+ * runner goes back to free without using their one escape, and the catch drops out of awards and stats.
+ */
+const undoKejar: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const marshal = await requireMarshal(ctx, game, body)
+  const eventId = str(body.eventId)
+  const events = await ctx.store.events(game.id)
+  const catching = events.find((e) => e.id === eventId && e.type === 'caught')
+  const target = catching && (await ctx.store.players(game.id)).find((p) => p.id === catching.target_id)
+  const undoable = !!target && phaseAt(game, ctx.now).phase === 'chasing' && undoableCatchId(target, events) === eventId
+  // Atomic, so two marshals tapping at once (or a racing release) free the runner only once.
+  if (!undoable || !(await ctx.store.releaseCaught(target.id, catching.actor_id!, iso(ctx.now)))) {
+    return { ok: false, reason: 'not-undoable' }
+  }
+  await ctx.store.addEvent({ game_id: game.id, type: 'kejar-undone', actor_id: marshal?.id ?? null, target_id: target.id, data: { eventId, who: who(target) } })
+  const name = await marshalName(ctx, game, body, marshal)
+  await ctx.store.addEvent({ game_id: game.id, type: 'handled', actor_id: marshal?.id ?? null, target_id: null, data: { eventId, name } })
+  await ctx.store.addSafetyRecord({
+    game_id: game.id,
+    type: 'kejar-undone',
+    player_id: marshal?.id ?? null,
+    target_id: target.id,
+    lat: null,
+    lng: null,
+    data: { game_code: game.code, by: marshal?.name ?? 'Organiser', target_name: target.name },
+  })
+  await callOffWhistle(ctx, game)
   return { ok: true }
 }
 
@@ -1704,12 +1779,9 @@ const removePlayer: Action = async (ctx, body) => {
     lng: null,
     data: { game_code: game.code, by: marshal?.name ?? 'Organiser', target_name: target.name },
   })
-  // The removed runner may have been the last one still free.
+  // The removed runner may have been the last one still free: the final whistle (fair-play §1.4).
   const phase = phaseAt(game, ctx.now).phase
-  if (phase === 'hiding' || phase === 'chasing') {
-    const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
-    if (runners.every(isOut)) await finish(ctx, game)
-  }
+  if (phase === 'hiding' || phase === 'chasing') await allOutCheck(ctx, game)
   return { ok: true }
 }
 
@@ -1948,6 +2020,7 @@ export const actions = {
   handleAlert,
   respondToSos,
   undoAutoJail,
+  undoKejar,
   removePlayer,
   searchParks,
   parkFeatures,

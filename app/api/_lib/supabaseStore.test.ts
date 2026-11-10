@@ -105,6 +105,21 @@ describe('SupabaseStore', () => {
     expect(rpcs).toEqual([{ fn: 'resume_game', args: { p_game: 'g1', p_at: '2026-10-25T09:07:00.000Z' } }])
   })
 
+  it('undoes a kejar through release_caught and claims the final whistle through claim_final_whistle', async () => {
+    const rpcs: { fn: string; args: Record<string, unknown> }[] = []
+    const replies = [true, false]
+    const db = {
+      rpc: async (fn: string, args: Record<string, unknown>) => (rpcs.push({ fn, args }), { data: replies.shift(), error: null }),
+    } as unknown as SupabaseClient
+    const store = new SupabaseStore(db, () => 0)
+    expect(await store.releaseCaught('p1', 'c1', '2026-10-25T09:07:00.000Z')).toBe(true)
+    expect(await store.claimFinalWhistle('g1', '2026-10-25T09:08:00.000Z')).toBe(false)
+    expect(rpcs).toEqual([
+      { fn: 'release_caught', args: { p_player: 'p1', p_by: 'c1', p_at: '2026-10-25T09:07:00.000Z' } },
+      { fn: 'claim_final_whistle', args: { p_game: 'g1', p_at: '2026-10-25T09:08:00.000Z' } },
+    ])
+  })
+
   it('draws a card through the draw_card function', async () => {
     const { db, rpcs } = fakeDb()
     expect(await new SupabaseStore(db, () => 0).drawCard('g1', 'chaser')).toBe(90000)

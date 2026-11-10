@@ -5,7 +5,7 @@ import { newDatoCode } from './secrets.js'
 import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
 const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at'
-const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit'
+const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, final_whistle_at, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -106,6 +106,15 @@ export class SupabaseStore implements GameStore {
         .select('id'),
     )
     return (rows ?? []).length > 0
+  }
+  async releaseCaught(id: string, by: string, atIso: string) {
+    return check(await this.db.rpc('release_caught', { p_player: id, p_by: by, p_at: atIso })) === true
+  }
+  async claimFinalWhistle(gameId: string, atIso: string) {
+    return check(await this.db.rpc('claim_final_whistle', { p_game: gameId, p_at: atIso })) === true
+  }
+  async clearFinalWhistle(gameId: string) {
+    check(await this.db.from('games').update({ final_whistle_at: null }).eq('id', gameId))
   }
   async catchRunner(id: string, by: string | null) {
     const rows = check(

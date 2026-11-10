@@ -76,6 +76,15 @@ export interface GameStore {
   /** Frees an auto-jailed runner (jailed, no chaser) only if still in that state; true for the first caller. */
   releaseAutoJailed(id: string, atIso: string): Promise<boolean>
   /**
+   * Undo kejar (fair-play §1.4): frees a runner only while still jailed by chaser `by`, setting `freed_at` (which
+   * restarts their check-in count) and leaving `freed_once` alone. True for the first caller.
+   */
+  releaseCaught(id: string, by: string, atIso: string): Promise<boolean>
+  /** Starts the final whistle only if none is pending and the game hasn't ended; true for the first caller. */
+  claimFinalWhistle(gameId: string, atIso: string): Promise<boolean>
+  /** Calls off a pending final whistle (someone is free again). */
+  clearFinalWhistle(gameId: string): Promise<void>
+  /**
    * With `minGapMs`, writes nothing and returns false when the player already has a fix newer than that.
    * With `since` (ms) too, only fixes at or after `since` count against the gap, so the first fix inside an
    * open check-in window always lands.
@@ -205,7 +214,7 @@ export type NewSavedArena = Omit<SavedArenaRow, 'id' | 'created_at' | 'updated_a
 
 export interface SafetyRecord {
   game_id: string
-  type: 'sos' | 'report' | 'removed' | 'auto-jail-undone'
+  type: 'sos' | 'report' | 'removed' | 'auto-jail-undone' | 'kejar-undone'
   player_id: string | null
   target_id: string | null
   lat: number | null
@@ -352,6 +361,22 @@ export class MemoryStore implements GameStore {
     if (!p || !p.jailed || p.caught_by !== null) return false
     Object.assign(p, { jailed: false, caught_at: null, freed_at: atIso, out_warned_at: null })
     return true
+  }
+  async releaseCaught(id: string, by: string, atIso: string) {
+    const p = this.playerRows.find((x) => x.id === id)
+    if (!p || !p.jailed || p.caught_by !== by) return false
+    Object.assign(p, { jailed: false, caught_by: null, caught_at: null, freed_at: atIso })
+    return true
+  }
+  async claimFinalWhistle(gameId: string, atIso: string) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g || g.ended_at || g.final_whistle_at) return false
+    g.final_whistle_at = atIso
+    return true
+  }
+  async clearFinalWhistle(gameId: string) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (g) g.final_whistle_at = null
   }
   async catchRunner(id: string, by: string | null) {
     const p = this.playerRows.find((x) => x.id === id)
