@@ -3049,6 +3049,18 @@ describe('Bomoh: the hidden stash (chaser-side legendary, mirrors Dato Seri abov
     expect(await scan(g, g.ben.token)).toEqual({ ok: true, kind: 'bomoh' })
   })
 
+  it('scans refused for not chasing or cannot claim are not misses either (ruling R4, mirrors Dato Seri)', async () => {
+    const g = await lobby()
+    await run('dropBomohSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 2 * MIN // hiding
+    for (let k = 0; k < 3; k++) expect(await scan(g, g.ben.token)).toEqual({ ok: false, reason: 'not-chasing' })
+    now = T0 + 7 * MIN
+    for (let k = 0; k < 3; k++) expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'cannot-claim' })
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'stash-miss')).toHaveLength(0)
+    expect(await scan(g, g.ben.token)).toEqual({ ok: true, kind: 'bomoh' })
+  })
+
   it('with no stash dropped, scanning claims nothing', async () => {
     const g = await chasing(false)
     expect(await scanQr(g, g.ben.token, 'KEJAR:BOMOH')).toEqual({ ok: false, reason: 'no-stash' })
@@ -3058,11 +3070,13 @@ describe('Bomoh: the hidden stash (chaser-side legendary, mirrors Dato Seri abov
 describe('dropBomohSeri (mirrors dropDatoSeri above)', () => {
   const STASH = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
 
-  it('the organiser drops it, and dropping again before the start moves it', async () => {
+  it('a Full game with Bomoh on gets its own purple card code when it is made, and the organiser drops it, moving it before the start', async () => {
     const g = await readyGame({ mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } })
-    // Bomoh's card isn't assigned until first needed (ruling R9): the first drop both assigns and places it.
-    expect(await run('dropBomohSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })).toEqual({ ok: true })
+    // create already assigned a free purple card (ruling R15), same as Dato Seri's yellow one.
     const { code, card } = (await store.gameByCode(g.code))!.bomoh_stash!
+    expect(code).toEqual(expect.stringMatching(/^[A-Za-z0-9_-]{22}$/))
+    expect(card).toEqual({ id: expect.any(String), letter: expect.stringMatching(/^[ABC]$/) })
+    expect(await run('dropBomohSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })).toEqual({ ok: true })
     expect((await store.gameByCode(g.code))!.bomoh_stash).toEqual({ code, card, ...STASH, claimedBy: null, claimedAt: null })
     const moved = { lat: CENTER.lat - 50 / 111_195, lng: CENTER.lng }
     expect(await run('dropBomohSeri', { code: g.code, organiserToken: g.organiserToken, ...moved })).toEqual({ ok: true })
@@ -3076,8 +3090,8 @@ describe('dropBomohSeri (mirrors dropDatoSeri above)', () => {
     const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
     await rejects(run('dropBomohSeri', { code: g.code, token: g.aina.token, ...STASH }), 403)
     await rejects(run('dropBomohSeri', { code: g.code, token: siti.token, ...STASH }), 403)
-    // The rejection happens before the organiser-only card lifecycle runs, so nothing was assigned either.
-    expect((await store.gameByCode(g.code))!.bomoh_stash ?? null).toBeNull()
+    // create already assigned a free purple card (ruling R15), same as Dato Seri; it just isn't dropped yet.
+    expect((await store.gameByCode(g.code))!.bomoh_stash).toMatchObject({ lat: null, lng: null })
   })
 
   it('is Full mode only, inside the play area only, and fixed once the game starts', async () => {
@@ -3093,13 +3107,104 @@ describe('dropBomohSeri (mirrors dropDatoSeri above)', () => {
     expect((await store.gameByCode(g.code))!.bomoh_stash).toMatchObject(STASH)
   })
 
-  it('with none of the organisation\'s purple cards free, dropping is refused and says so (ruling R9)', async () => {
+  it("with none of the organisation's purple cards free, create tells the organiser and dropping is refused the same way (ruling R9)", async () => {
+    // create now assigns a free purple card eagerly (ruling R15), same as Dato Seri: three games use up the
+    // organisation's three purple cards (A, B, C), each held by its own lobby.
+    const first = await readyGame({ mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } })
+    const fullBomoh = { arenaId: 'around-me', center: CENTER, settings: { mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } }, organiserToken: first.organiserToken }
+    for (let k = 0; k < 2; k++) await run('create', fullBomoh)
+    const fourth = await run('create', fullBomoh)
+    expect(fourth.notice).toBe('Reprint a purple card to use Bomoh.')
+    expect((await store.gameByCode(fourth.code))!.bomoh_stash ?? null).toBeNull()
+    await rejects(run('dropBomohSeri', { code: fourth.code, organiserToken: first.organiserToken, ...STASH }), 409, 'Reprint a purple card to use Bomoh.')
+  })
+})
+
+describe('Bomoh is threaded through create/start/the organiser poll/setMode, same as Dato Seri (fix round 1)', () => {
+  const orgOf = async (organiserToken: string) => (await store.organiserBySessionTokenHash(hashToken(organiserToken)))!.organisation_id
+  const purple = async (organiserToken: string) => (await store.secretCards(await orgOf(organiserToken))).filter((c) => c.legendary === 'bomoh')
+  const HOUR = 60 * MIN
+
+  it('create assigns a free purple card eagerly (ruling R15), so the organiser can print it before any drop happens', async () => {
+    const organiserToken = await createOrganiser()
+    const { code } = await run('create', {
+      arenaId: 'around-me',
+      center: CENTER,
+      settings: { mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } },
+      organiserToken,
+    })
+    const card = (await store.gameByCode(code))!.bomoh_stash!.card!
+    const row = (await purple(organiserToken)).find((c) => c.id === card.id)!
+    expect(row).toMatchObject({ legendary: 'bomoh', letter: card.letter, state: 'ready' })
+    expect((await store.gameByCode(code))!.bomoh_stash!.code).toBe(row.code)
+  })
+
+  it('with no free card for either legendary, create combines both notices', async () => {
+    const organiserToken = await createOrganiser()
+    for (const legendary of ['dato', 'bomoh'] as const) {
+      for (const letter of ['A', 'B', 'C']) await run('retireSecretCard', { organiserToken, legendary, letter })
+    }
+    const { code, notice } = await run('create', {
+      arenaId: 'around-me',
+      center: CENTER,
+      settings: { mode: 'full', legendaries: { dato: 'stash', bomoh: 'stash' } },
+      organiserToken,
+    })
+    expect(notice).toBe('Reprint a yellow card to use Dato Seri. Reprint a purple card to use Bomoh.')
+    const game = (await store.gameByCode(code))!
+    expect(game.dato_stash ?? null).toBeNull()
+    expect(game.bomoh_stash ?? null).toBeNull()
+  })
+
+  it('a confirmed-printed purple card is assigned on the organiser poll, same as Dato Seri (ruling R9)', async () => {
+    const organiserToken = await createOrganiser()
+    for (const letter of ['A', 'B', 'C']) await run('reprintSecretCard', { organiserToken, legendary: 'bomoh', letter })
+    const { code, notice } = await run('create', {
+      arenaId: 'around-me',
+      center: CENTER,
+      settings: { mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } },
+      organiserToken,
+    })
+    expect(notice).toBe('Reprint a purple card to use Bomoh.')
+    expect((await store.gameByCode(code))!.bomoh_stash ?? null).toBeNull()
+    await run('confirmSecretCardPrinted', { organiserToken, legendary: 'bomoh', letter: 'B' })
+    // A player poll never pays for the recheck; only the organiser's own poll does.
+    const ben = await run('join', { code, name: 'Ben', accepted: true })
+    await run('state', { code, token: ben.token })
+    expect((await store.gameByCode(code))!.bomoh_stash ?? null).toBeNull()
+    await run('state', { code, organiserToken })
+    expect((await store.gameByCode(code))!.bomoh_stash).toMatchObject({ card: { letter: 'B' }, lat: null, lng: null })
+  })
+
+  it("start re-checks an expired lobby's purple card the same way as Dato Seri, and starts with Bomoh off when none is left", async () => {
     const g = await readyGame({ mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } })
-    const org = (await store.organiserBySessionTokenHash(hashToken(g.organiserToken)))!.organisation_id
-    const cards = (await store.secretCards(org)).filter((c) => c.legendary === 'bomoh')
-    for (const c of cards) await store.setSecretCard(c.id, { state: 'retired', found_at: new Date(now).toISOString() })
-    await rejects(run('dropBomohSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH }), 409, 'Reprint a purple card to use Bomoh.')
-    expect((await store.gameByCode(g.code))!.bomoh_stash ?? null).toBeNull()
+    now = T0 + 25 * HOUR
+    const fullBomoh = { arenaId: 'around-me', center: CENTER, settings: { mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } }, organiserToken: g.organiserToken }
+    // Three fresh games now take all three purple cards, including the old lobby's own (ruling R3: no longer held).
+    for (let k = 0; k < 3; k++) await run('create', fullBomoh)
+    expect(await run('start', { code: g.code, organiserToken: g.organiserToken })).toEqual({
+      startedAt: expect.any(String),
+      notice: 'Reprint a purple card to use Bomoh.',
+    })
+    const game = (await store.gameByCode(g.code))!
+    expect(game.bomoh_stash ?? null).toBeNull()
+    expect(game.settings.legendaries.bomoh).toBe('off')
+  })
+
+  it('setMode to Full assigns a purple card too, independently of Dato Seri; Core releases both, and Full reassigns fresh ones', async () => {
+    const organiserToken = await createOrganiser()
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, settings: { mode: 'core', legendaries: { bomoh: 'stash' } }, organiserToken })
+    expect(await run('setMode', { code, organiserToken, mode: 'full' })).toEqual({ ok: true })
+    expect((await store.gameByCode(code))!.bomoh_stash!.card).toEqual({ id: expect.any(String), letter: expect.stringMatching(/^[ABC]$/) })
+    // Dato Seri defaults on too; both are held now.
+    expect((await store.gameByCode(code))!.dato_stash!.card).toBeTruthy()
+    expect(await run('setMode', { code, organiserToken, mode: 'core' })).toEqual({ ok: true })
+    // Leaving Full releases both cards (ruling R8) — this is the bug this fix round closes for Bomoh.
+    expect((await store.gameByCode(code))!.bomoh_stash ?? null).toBeNull()
+    expect((await store.gameByCode(code))!.dato_stash ?? null).toBeNull()
+    // The settings stay on, so Full again takes fresh cards for both.
+    expect(await run('setMode', { code, organiserToken, mode: 'full' })).toEqual({ ok: true })
+    expect((await store.gameByCode(code))!.bomoh_stash).toMatchObject({ card: { id: expect.any(String) }, lat: null, lng: null })
   })
 })
 

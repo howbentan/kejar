@@ -624,6 +624,14 @@ const create: Action = async (ctx, body) => {
     if (card) stash = stashOn(card)
     else noFreeCard = true
   }
+  // The same for Bomoh's purple cards, independently of Dato Seri's.
+  let bomohStash: BomohStash | null = null
+  let noFreeBomohCard = false
+  if (settings.mode === 'full' && settings.legendaries.bomoh === 'stash') {
+    const card = await freeCard(ctx, organiser.organisation_id, 'bomoh')
+    if (card) bomohStash = stashOn(card)
+    else noFreeBomohCard = true
+  }
   let code = newGameCode(ctx.rng)
   while (await ctx.store.gameByCode(code)) code = newGameCode(ctx.rng)
   await ctx.store.createGame({
@@ -637,8 +645,12 @@ const create: Action = async (ctx, body) => {
     pauses: [],
     organiser_id: organiser.id,
     ...(stash ? { dato_stash: stash } : {}),
+    ...(bomohStash ? { bomoh_stash: bomohStash } : {}),
   })
-  return noFreeCard ? { code, notice: NO_FREE_CARD_NOTICE } : { code }
+  const notices = [noFreeCard ? NO_FREE_CARD_NOTICE : null, noFreeBomohCard ? NO_FREE_BOMOH_CARD_NOTICE : null].filter(
+    (n): n is string => n !== null,
+  )
+  return notices.length ? { code, notice: notices.join(' ') } : { code }
 }
 
 export { MAX_PLAYERS_PER_GAME }
@@ -714,14 +726,21 @@ const start: Action = async (ctx, body) => {
   ]
   if (problems.length) throw new ActionError(409, problems.join(' · '))
   // A lobby left over a day re-checks its card, and one with no card tries once more (rulings R3, R9). Still none:
-  // the game starts with Dato Seri off, and the organiser is told.
-  const settled = await settleLobbyCard(ctx, game, organiser.organisation_id, 'dato')
-  const notice = settled.notice
+  // the game starts with that legendary off, and the organiser is told.
+  const datoSettled = await settleLobbyCard(ctx, game, organiser.organisation_id, 'dato')
+  const bomohSettled = await settleLobbyCard(ctx, datoSettled.game, organiser.organisation_id, 'bomoh')
+  const settled = bomohSettled.game
+  const notices = [datoSettled.notice, bomohSettled.notice].filter((n): n is string => n !== null)
   const startedAt = iso(ctx.now)
   const started = { ...game, started_at: startedAt }
   const count = (role: Role) => Object.values(roles).filter((r) => r === role).length
+  const offLegendaries: Partial<Settings['legendaries']> = {}
+  if (wantsCard(settled, 'dato')) offLegendaries.dato = 'off'
+  if (wantsCard(settled, 'bomoh')) offLegendaries.bomoh = 'off'
   await ctx.store.updateGame(game.id, {
-    ...(wantsCard(settled.game, 'dato') ? { settings: { ...settled.game.settings, legendaries: { ...settled.game.settings.legendaries, dato: 'off' as const } } } : {}),
+    ...(Object.keys(offLegendaries).length
+      ? { settings: { ...settled.settings, legendaries: { ...settled.settings.legendaries, ...offLegendaries } } }
+      : {}),
     started_at: startedAt,
     runner_sets: setsFor('runner', count('runner')),
     deck_seed: newToken(),
@@ -740,7 +759,7 @@ const start: Action = async (ctx, body) => {
     })),
   ])
   await ctx.store.addEvent({ game_id: game.id, type: 'started', actor_id: null, target_id: null, data: {} })
-  return notice ? { startedAt, notice } : { startedAt }
+  return notices.length ? { startedAt, notice: notices.join(' ') } : { startedAt }
 }
 
 const linkTag: Action = async (ctx, body) => {
@@ -781,10 +800,13 @@ const state: Action = async (ctx, body) => {
     }
   }
   // The organiser's own poll only (ruling R9): an expired lobby re-checks its card, so the print link never shows a
-  // card another game holds, and a lobby with no card tries for one. Player polls never pay for this.
-  if (me.id === 'host' && needsRecheck(game, ctx.now, 'dato')) {
+  // card another game holds, and a lobby with no card tries for one. Either legendary's. Player polls never pay for this.
+  if (me.id === 'host' && (needsRecheck(game, ctx.now, 'dato') || needsRecheck(game, ctx.now, 'bomoh'))) {
     const org = (await ctx.store.organiserById((game as GameRow).organiser_id))?.organisation_id
-    if (org) await settleLobbyCard(ctx, game as GameRow, org, 'dato')
+    if (org) {
+      if (needsRecheck(game, ctx.now, 'dato')) await settleLobbyCard(ctx, game as GameRow, org, 'dato')
+      if (needsRecheck(game, ctx.now, 'bomoh')) await settleLobbyCard(ctx, game as GameRow, org, 'bomoh')
+    }
   }
   await advance(ctx, game)
   game = (await loadGame(ctx, body)) as Game
@@ -1839,8 +1861,9 @@ const setKit: Action = async (ctx, body) => {
 
 /**
  * The organiser switches between Core and Full while still in the lobby; never after the start (rules doc §1).
- * Core releases the game's card (ruling R8): no stash, and the walk's secret step is no longer placed. Full
- * assigns one fresh, not yet dropped; with none free, Dato Seri stays wanted and the answer says so (R9).
+ * Core releases the game's cards, both legendaries' (ruling R8): no stash, and the walk's secret step is no longer
+ * placed. Full assigns each fresh, not yet dropped; with none free, that legendary stays wanted and the answer
+ * says so (R9).
  */
 const setMode: Action = async (ctx, body) => {
   const loaded = await loadGame(ctx, body)
@@ -1850,10 +1873,13 @@ const setMode: Action = async (ctx, body) => {
   await ctx.store.updateGame(loaded.id, { settings })
   if (settings.mode !== 'full') {
     await releaseCard(ctx, loaded, 'dato')
+    await releaseCard(ctx, loaded, 'bomoh')
     return { ok: true }
   }
-  const { notice } = await settleLobbyCard(ctx, { ...loaded, settings }, organiser.organisation_id, 'dato')
-  return notice ? { ok: true, notice } : { ok: true }
+  const dato = await settleLobbyCard(ctx, { ...loaded, settings }, organiser.organisation_id, 'dato')
+  const bomoh = await settleLobbyCard(ctx, dato.game, organiser.organisation_id, 'bomoh')
+  const notices = [dato.notice, bomoh.notice].filter((n): n is string => n !== null)
+  return notices.length ? { ok: true, notice: notices.join(' ') } : { ok: true }
 }
 
 export const actions = {
