@@ -5,6 +5,7 @@ import Marker from './Marker'
 import { loadOrganiserSession } from './organiserSession'
 import SetupSteps from './SetupSteps'
 import { ErrorText } from './ui'
+import { noticeLegendaries, REPRINT_LINE, waitingForCard, type Legendary } from './cardNotice'
 
 type Item = NonNullable<View['kit']>['items'][number]
 
@@ -85,10 +86,13 @@ export default function PackList({ code, view, refresh, compact = false }: { cod
   }, [items])
   const doneOf = (i: Item) => local[i.id] ?? i.ticked
   const ready = items.length > 0 && items.every(doneOf)
-  // The notice stays while the game wants the yellow card but has none yet, and goes once one is assigned (ruling
-  // R9). A view without `datoCard` (not the organiser's) falls back to the notice the create step passed on.
-  const waitingForCard = view.settings?.mode === 'full' && view.settings.legendaries?.dato === 'stash' && view.datoCard === null
-  const notice = !compact && (view.datoCard === undefined ? new URLSearchParams(window.location.search).get('notice') === 'dato' : waitingForCard)
+  // Each legendary's notice stays while the game wants its card but has none yet, and goes once one is assigned
+  // (ruling R9). A view without the cards (not the organiser's) falls back to the notice the create step passed on.
+  const notices: Legendary[] = compact
+    ? []
+    : view.datoCard === undefined
+      ? noticeLegendaries(window.location.search)
+      : (['dato', 'bomoh'] as const).filter((l) => waitingForCard(view, l))
 
   async function tap(item: Item) {
     // No organiser session on this phone: the rows are read-only.
@@ -123,14 +127,14 @@ export default function PackList({ code, view, refresh, compact = false }: { cod
       {!compact && <SetupSteps step={5} />}
       {!compact && <h1>Pack.</h1>}
       {!compact && <p className="muted">From your printed kit. Nothing to print today.</p>}
-      {notice && (
-        <p className="muted">
-          Reprint a yellow card to use Dato Seri.{' '}
+      {notices.map((l) => (
+        <p key={l} className="muted">
+          {REPRINT_LINE[l]}{' '}
           <a href="/host/kit" style={{ textDecoration: 'underline' }}>
             Your kit
           </a>
         </p>
-      )}
+      ))}
       {group('pack', 'PACK')}
       {group('day', 'ON THE DAY')}
       {ready && <Ready />}

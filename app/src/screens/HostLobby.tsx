@@ -5,7 +5,8 @@ import BeforeYouStart from '../game/BeforeYouStart'
 import CrewStep from '../game/CrewStep'
 import { AlertsOnPhone } from '../game/MarshalTools'
 import PackList from '../game/PackList'
-import SetupMap, { HiddenCard } from '../game/SetupMap'
+import { waitingForCard as waitingFor } from '../game/cardNotice'
+import SetupMap, { OrganiserTools } from '../game/SetupMap'
 import { loadOrganiserSession } from '../game/organiserSession'
 import { qrDataUrl } from '../game/qr'
 import { ErrorText, ModeBadge, Pills, Screen, tagText } from '../game/ui'
@@ -70,7 +71,8 @@ export default function HostLobby({ code }: { code: string }) {
         mode: view.settings.mode === 'full' ? 'core' : 'full',
       })
       if (res?.notice) setNotice(NO_CARD_LINE)
-      else if (view.settings.mode === 'full' && view.datoStash) setNotice(PICK_UP_LINE)
+      // Either card already dropped in the park: the organiser has to go and fetch it.
+      else if (view.settings.mode === 'full' && (view.datoStash || view.bomohStash)) setNotice(PICK_UP_LINE)
       refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -102,10 +104,12 @@ export default function HostLobby({ code }: { code: string }) {
   const runners = players.filter((p) => p.role === 'runner').length
   const chasers = players.filter((p) => p.role === 'chaser').length
   const suggested = Math.max(1, Math.round(players.length / 4))
-  // Full and wanting the hidden card, but none was free yet: the lobby keeps trying (ruling R9), so this stays
-  // until a card is assigned. `legendaries` and `datoCard` are in the organiser's own view only.
-  const waitingForCard = !!view && view.settings.mode === 'full' && view.settings.legendaries?.dato === 'stash' && view.datoCard === null
-  const shownNotice = notice === NO_CARD_LINE && view?.datoCard ? '' : notice || (waitingForCard ? NO_CARD_LINE : '')
+  // Full and wanting either hidden card, but none was free yet: the lobby keeps trying (ruling R9), so this stays
+  // until every wanted card is assigned. `legendaries` and the cards are in the organiser's own view only. setMode's
+  // own no-card line goes once the refreshed Full view has every card it wants.
+  const waitingForCard = !!view && (waitingFor(view, 'dato') || waitingFor(view, 'bomoh'))
+  const cardsSettled = !!view && view.settings.mode === 'full' && !waitingForCard
+  const shownNotice = notice === NO_CARD_LINE && cardsSettled ? '' : notice || (waitingForCard ? NO_CARD_LINE : '')
 
   if (!organiser) {
     return (
@@ -168,9 +172,9 @@ export default function HostLobby({ code }: { code: string }) {
           </p>
         </div>
       </div>
-      {/* Below the join card, closed by default: players look at this screen to scan the join code. */}
-      {view && <HiddenCard view={view} code={code} credentials={{ organiserToken: organiser.organiserToken }} refresh={refresh} />}
-      {view && <HiddenCard legendary="bomoh" view={view} code={code} credentials={{ organiserToken: organiser.organiserToken }} refresh={refresh} />}
+      {/* Below the join card, closed by default: players look at this screen to scan the join code. One toggle for
+          both hidden cards, so how many buttons there are says nothing about which legendaries are on. */}
+      {view && <OrganiserTools view={view} code={code} credentials={{ organiserToken: organiser.organiserToken }} refresh={refresh} />}
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <button className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={inviteMarshal}>

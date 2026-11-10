@@ -406,6 +406,22 @@ describe('HostNew creating', () => {
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/host/ABC234?setup=crew&notice=dato'))
   })
 
+  it.each([
+    ['Reprint a purple card to use Bomoh.', 'bomoh'],
+    ['Reprint a yellow card to use Dato Seri. Reprint a purple card to use Bomoh.', 'dato,bomoh'],
+  ])('carries a purple card notice along too (%s)', async (notice, param) => {
+    const assign = vi.fn()
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign } })
+    call.mockImplementation(async (action: string) => {
+      if (action === 'listArenas') return { arenas }
+      return { code: 'ABC234', notice }
+    })
+    render(<HostNew />)
+    await toStep3('Full')
+    createGame()
+    await waitFor(() => expect(assign).toHaveBeenCalledWith(`/host/ABC234?setup=crew&notice=${param}`))
+  })
+
   it('shows a create error and lets the organiser try again', async () => {
     call.mockImplementation(async (action: string) => {
       if (action === 'listArenas') return { arenas }

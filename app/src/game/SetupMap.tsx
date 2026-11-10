@@ -21,23 +21,29 @@ export function HiddenCard({
   credentials,
   refresh,
   legendary = 'dato',
+  onHide,
+  inTools = false,
 }: {
   view: View
   code: string
   credentials: SetupCredentials
   refresh: () => void
   legendary?: 'dato' | 'bomoh'
+  /** Inside `OrganiserTools`: the card is shown open, with a Hide button only when this is given. */
+  onHide?: () => void
+  /** Set by `OrganiserTools`, which owns the one toggle. */
+  inTools?: boolean
 }) {
-  const [open, setOpen] = useState(false)
+  const [ownOpen, setOpen] = useState(false)
+  const open = inTools || ownOpen
+  const hide = inTools ? onHide : () => setOpen(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   // The stash is only in the organiser's own view (undefined for players and marshals), so nobody else sees this.
   const bomoh = legendary === 'bomoh'
   const stash = bomoh ? view.bomohStash : view.datoStash
   const card = bomoh ? view.bomohCard : view.datoCard
-  if (view.settings.mode !== 'full' || view.phase !== 'lobby' || stash === undefined) return null
-  // Bomoh's stash is null (not undefined) whenever he's off, so he also has to be switched on to show anything.
-  if (bomoh && view.settings.legendaries?.bomoh !== 'stash') return null
+  if (!showsHiddenCard(view, legendary)) return null
   async function drop() {
     setBusy(true)
     setError('')
@@ -65,9 +71,11 @@ export function HiddenCard({
         <p className="eyebrow settle-eyebrow" style={bomoh ? { color: 'var(--bomoh-2)' } : undefined}>
           {bomoh ? '★ Purple card' : '★ Hidden card'}
         </p>
-        <button type="button" className="btn btn-ghost" style={{ padding: '6px 12px' }} onClick={() => setOpen(false)}>
-          Hide
-        </button>
+        {hide && (
+          <button type="button" className="btn btn-ghost" style={{ padding: '6px 12px' }} onClick={hide}>
+            Hide
+          </button>
+        )}
       </div>
       <p className="muted">
         {bomoh
@@ -100,6 +108,38 @@ export function HiddenCard({
       </button>
       <ErrorText>{error}</ErrorText>
     </div>
+  )
+}
+
+/** Whether a legendary's hidden card belongs in this view: the organiser's own, in a Full lobby, with it switched on. */
+function showsHiddenCard(view: View, legendary: 'dato' | 'bomoh'): boolean {
+  const stash = legendary === 'bomoh' ? view.bomohStash : view.datoStash
+  if (view.settings.mode !== 'full' || view.phase !== 'lobby' || stash === undefined) return false
+  // Bomoh's stash is null (not undefined) whenever he's off, so he also has to be switched on to show anything.
+  return legendary !== 'bomoh' || view.settings.legendaries?.bomoh === 'stash'
+}
+
+/**
+ * The lobby's one closed "Organiser tools" toggle, holding every hidden card this game has (M11). It is the same
+ * single button whether one legendary is on or both, so the open screen's button count gives nothing away.
+ */
+export function OrganiserTools(props: { view: View; code: string; credentials: SetupCredentials; refresh: () => void }) {
+  const [open, setOpen] = useState(false)
+  const shown = (['dato', 'bomoh'] as const).filter((l) => showsHiddenCard(props.view, l))
+  if (shown.length === 0) return null
+  if (!open) {
+    return (
+      <button type="button" className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} onClick={() => setOpen(true)}>
+        Organiser tools
+      </button>
+    )
+  }
+  return (
+    <>
+      {shown.map((l, i) => (
+        <HiddenCard key={l} {...props} legendary={l} inTools onHide={i === 0 ? () => setOpen(false) : undefined} />
+      ))}
+    </>
   )
 }
 

@@ -10,6 +10,7 @@ import Sticker from '../game/Sticker'
 import { ErrorText, Pills, Screen } from '../game/ui'
 import { platformOf } from '../game/device'
 import ArenaSetup, { type SavedArenaForEdit } from './ArenaSetup'
+import { noticeParam } from '../game/cardNotice'
 
 /** A saved park as listArenas returns it. */
 interface SavedPark {
@@ -261,7 +262,8 @@ export default function HostNew() {
         organiserToken,
         ...(chosen ? { savedArenaId: chosen.id, overrides } : { draft: oneOff }),
       })
-      window.location.assign(`/host/${code}?setup=crew${notice ? '&notice=dato' : ''}`)
+      const param = noticeParam(notice)
+      window.location.assign(`/host/${code}?setup=crew${param ? `&notice=${param}` : ''}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setBusy(false)

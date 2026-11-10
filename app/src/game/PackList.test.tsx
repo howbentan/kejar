@@ -117,6 +117,24 @@ describe('PackList', () => {
     expect(screen.queryByText('Reprint a yellow card to use Dato Seri.')).toBeNull()
   })
 
+  it('a purple card shortage says to reprint a purple card, not a yellow one (I4)', () => {
+    at('?setup=pack&notice=bomoh')
+    const { unmount } = render(<PackList code="ABC234" view={view()} refresh={refresh} />)
+    expect(screen.getByText('Reprint a purple card to use Bomoh.')).toBeInTheDocument()
+    expect(screen.queryByText('Reprint a yellow card to use Dato Seri.')).toBeNull()
+    unmount()
+    at('?setup=pack&notice=dato,bomoh')
+    const { unmount: unmount2 } = render(<PackList code="ABC234" view={view()} refresh={refresh} />)
+    expect(screen.getByText('Reprint a yellow card to use Dato Seri.')).toBeInTheDocument()
+    expect(screen.getByText('Reprint a purple card to use Bomoh.')).toBeInTheDocument()
+    unmount2()
+    at('?setup=pack')
+    const full = { mode: 'full', legendaries: { dato: 'stash', bomoh: 'stash' } }
+    render(<PackList code="ABC234" view={{ ...view(), settings: full, datoCard: { letter: 'A', code: 'x' }, bomohCard: null } as unknown as View} refresh={refresh} />)
+    expect(screen.getByText('Reprint a purple card to use Bomoh.')).toBeInTheDocument()
+    expect(screen.queryByText('Reprint a yellow card to use Dato Seri.')).toBeNull()
+  })
+
   it('draws a yellow tick on the yellow card', () => {
     render(<PackList code="ABC234" view={view(['dato-card'])} refresh={refresh} />)
     expect(document.querySelector('.marker path')?.getAttribute('stroke')).toBe('#FFD60A')

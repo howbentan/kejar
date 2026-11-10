@@ -88,6 +88,31 @@ describe('HostLobby', () => {
     expect(screen.getByRole('button', { name: 'Drop the ★ card here' })).toBeInTheDocument()
   })
 
+  it('one Organiser tools toggle whether or not Bomoh is on, holding both hidden cards (M11)', async () => {
+    const both = { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'stash', bomoh: 'stash' } }
+    const card = { letter: 'A', code: 'x'.repeat(22) }
+    call.mockImplementation(async (action: string) =>
+      action === 'state' ? { ...lobbyView, settings: both, datoStash: null, datoCard: card, bomohStash: null, bomohCard: card } : {},
+    )
+    const { unmount } = render(<HostLobby code="ABC234" />)
+    await screen.findByText('FULL')
+    expect(screen.getAllByRole('button', { name: 'Organiser tools' })).toHaveLength(1)
+    expect(document.body.textContent).not.toMatch(/dato|bomoh|purple|yellow/i)
+    fireEvent.click(screen.getByRole('button', { name: 'Organiser tools' }))
+    expect(screen.getByRole('button', { name: 'Drop the ★ card here' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Drop the purple card here' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
+    expect(screen.queryByRole('button', { name: 'Drop the purple card here' })).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Organiser tools' })).toHaveLength(1)
+    unmount()
+    call.mockImplementation(async (action: string) =>
+      action === 'state' ? { ...lobbyView, settings: { ...both, legendaries: { dato: 'stash', bomoh: 'off' } }, datoStash: null, datoCard: card, bomohStash: null, bomohCard: null } : {},
+    )
+    render(<HostLobby code="ABC234" />)
+    await screen.findByText('FULL')
+    expect(screen.getAllByRole('button', { name: 'Organiser tools' })).toHaveLength(1)
+  })
+
   it('lists the players with their tags', async () => {
     render(<HostLobby code="ABC234" />)
     expect(await screen.findByText('Aina')).toBeInTheDocument()
@@ -244,6 +269,45 @@ describe('HostLobby mode and checks', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Change' }))
     expect(await screen.findByText('Hidden card is off for this game. Pick it up.')).toBeInTheDocument()
     expect(call).toHaveBeenCalledWith('setMode', { code: 'ABC234', organiserToken: 'h1', mode: 'core' })
+  })
+
+  it('with Bomoh wanted but no purple card free, the neutral no-card line shows (I4)', async () => {
+    const settings = { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } }
+    call.mockImplementation(async (action: string) =>
+      action === 'state' ? { ...lobbyView, settings, datoStash: null, datoCard: null, bomohStash: null, bomohCard: null } : {},
+    )
+    render(<HostLobby code="ABC234" />)
+    expect(await screen.findByText('Hidden card is off for now. Reprint a card to use it.')).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/bomoh|purple/i)
+  })
+
+  it("a Bomoh no-card notice from setMode isn't swallowed because the yellow card exists (I4)", async () => {
+    let mode: 'core' | 'full' = 'core'
+    const settings = { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'stash', bomoh: 'stash' } }
+    call.mockImplementation(async (action: string) => {
+      if (action === 'setMode') {
+        mode = 'full'
+        return { ok: true, notice: 'Reprint a purple card to use Bomoh.' }
+      }
+      if (action !== 'state') return {}
+      return mode === 'core'
+        ? lobbyView
+        : { ...lobbyView, settings, datoStash: null, datoCard: { letter: 'A', code: 'x'.repeat(22) }, bomohStash: null, bomohCard: null }
+    })
+    render(<HostLobby code="ABC234" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Change' }))
+    await screen.findByText('FULL')
+    expect(screen.getByText('Hidden card is off for now. Reprint a card to use it.')).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/bomoh|purple/i)
+  })
+
+  it('switching Full to Core with only the purple card dropped also says to pick it up (I4)', async () => {
+    const dropped = { lat: 0.002, lng: 0.002, claimedBy: null, claimedAt: null }
+    call.mockImplementation(async (action: string) => (action === 'state' ? { ...fullView, datoStash: null, bomohStash: dropped } : {}))
+    render(<HostLobby code="ABC234" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Change' }))
+    expect(await screen.findByText('Hidden card is off for this game. Pick it up.')).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(/bomoh|purple/i)
   })
 
   it("shows start's notice and waits for the organiser before going to the game", async () => {
