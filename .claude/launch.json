@@ -12,6 +12,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["--yes", "serve", "-l", "4600", "C:\\Users\\benho\\OneDrive\\Desktop\\Fun Projects\\kejar\\docs\\superpowers\\mockups"],
       "port": 4600
+    },
+    {
+      "name": "setup-mockups",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--prefix", "app", "vite", "docs/superpowers/mockups/2026-11-09-organiser-setup", "--port", "5175", "--strictPort"],
+      "port": 5175
     }
   ]
 }

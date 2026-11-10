@@ -7,3 +7,7 @@ dist/
 .vercel
 .worktrees/
 .playwright-mcp/
+
+# Local notes and generated graph output (never commit)
+New Text Document.txt
+graphify-out/
