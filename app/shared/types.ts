@@ -93,6 +93,11 @@ export interface Game {
    */
   dato_stash?: DatoStash | null
   /**
+   * Bomoh's hidden stash (jail design §2e): the purple card's drop spot and who scanned it first. Same shape and
+   * secrecy as `dato_stash`. Older games have none.
+   */
+  bomoh_stash?: BomohStash | null
+  /**
    * The organiser's packing list: `ticks` maps an item id to the label it was ticked under (the item un-ticks
    * itself if its label changes), and `placed` is which cards are taped up. Older games have none.
    */
@@ -110,6 +115,19 @@ export interface DatoStash {
    * The organisation's reusable yellow card this game was assigned, kept for the game's life. Games made before
    * card sets existed have none, and claim against `code` alone.
    */
+  card?: { id: string; letter: string }
+  /** Where the card was dropped; null until the organiser or a marshal drops it. */
+  lat: number | null
+  lng: number | null
+  claimedBy: string | null
+  claimedAt: string | null
+}
+
+/** Bomoh's hidden stash: the same shape as `DatoStash`, kept apart so the two legendaries stay independent. */
+export interface BomohStash {
+  /** The secret on the printed purple card; never sent to players. See `DatoStash.code`. */
+  code?: string
+  /** The organisation's reusable purple card this game was assigned. See `DatoStash.card`. */
   card?: { id: string; letter: string }
   /** Where the card was dropped; null until the organiser or a marshal drops it. */
   lat: number | null
