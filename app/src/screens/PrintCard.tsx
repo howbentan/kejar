@@ -34,7 +34,7 @@ export default function PrintCard({ cardCode, legendary = 'dato' }: { cardCode: 
           <div data-testid="stash-card" className="tag" style={{ width: '70mm', border: '2px solid #0A0A0B', padding: 12, textAlign: 'center' }}>
             {src && <img src={src} alt="★" style={{ width: '55mm', height: '55mm' }} />}
             <div style={{ fontWeight: 800, fontSize: 28 }}>★</div>
-            <div style={{ fontWeight: 800, letterSpacing: '-0.05em' }}>kejar.</div>
+            <img src="/logo-ink.png" alt="kejar." style={{ height: '7mm', width: 'auto', display: 'block', margin: '0 auto' }} />
           </div>
         </>
       )}

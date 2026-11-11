@@ -29,7 +29,7 @@ export default function PrintTags() {
           <div key={n} className="tag" style={{ border: '1px dashed #999', padding: 8, textAlign: 'center' }}>
             {codes[tagQr(n)] && <img src={codes[tagQr(n)]} alt={`Tag ${n}`} style={{ width: '40mm', height: '40mm' }} />}
             <div style={{ fontWeight: 800, fontSize: 22, fontFamily: 'var(--mono)' }}>#{String(n).padStart(2, '0')}</div>
-            <div style={{ fontWeight: 800, letterSpacing: '-0.05em' }}>kejar.</div>
+            <img src="/logo-ink.png" alt="kejar." style={{ height: '7mm', width: 'auto', display: 'block', margin: '0 auto' }} />
           </div>
         ))}
       </div>

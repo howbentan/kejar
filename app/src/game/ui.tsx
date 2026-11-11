@@ -1,11 +1,10 @@
 import type { ReactNode } from 'react'
 
-/** The lowercase wordmark with the volt full stop. */
+/** The hand-drawn kejar logo (the j is a running figure), in volt on the dark screens. `size` is its height in px. */
 export function Wordmark({ size = 64 }: { size?: number }) {
   return (
-    <h1 className="wordmark" style={{ fontSize: size }}>
-      <span>kejar</span>
-      <span style={{ color: 'var(--volt)' }}>.</span>
+    <h1 className="wordmark" style={{ margin: 0, lineHeight: 0 }}>
+      <img src="/logo-volt.png" alt="kejar." style={{ height: size * 1.25, width: 'auto', display: 'block' }} />
     </h1>
   )
 }
