@@ -537,3 +537,20 @@ select.input option { background: #141614; color: var(--white); }
 @media (prefers-reduced-motion: reduce) { .reel-machine.shake, .reel-flash { animation: none; } .reel-flash { opacity: 0; } .reel-handle { transition: none; } }
 .btn.btn-legendary { background: var(--legendary-2); color: var(--legendary-ink); border-color: var(--legendary-3); }
 .btn.btn-bomoh { background: var(--bomoh-2); color: var(--bomoh-ink); border-color: var(--bomoh-3); }
+
+/* How to play doodle scenes (motion design 8.8): marker strokes that draw themselves, then stay still. */
+.kd-doodle path, .kd-doodle circle, .kd-doodle rect { fill: none; stroke: var(--volt); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.kd-doodle .kd-w { stroke: #F5F5F3; }
+.kd-doodle .kd-fill { fill: var(--volt); stroke: none; opacity: 0.9; }
+.kd-doodle .kd-band { stroke: #F5F5F3; stroke-width: 7; }
+.kd-doodle .kd-thick { stroke-width: 5.5; }
+.kd-doodle .kd-thin { stroke: #F5F5F3; stroke-width: 2; opacity: 0.55; }
+.kd-doodle .kd-ghost { opacity: 0.32; stroke-width: 1.6; }
+.kd-doodle .kd-draw { stroke-dasharray: 1; stroke-dashoffset: 1; animation: kd-draw 360ms ease-in-out var(--d, 0ms) both; }
+.kd-doodle .kd-fade { animation: kd-fade 400ms ease-out var(--d, 0ms) both; }
+@keyframes kd-draw { to { stroke-dashoffset: 0; } }
+@keyframes kd-fade { from { opacity: 0; } to { opacity: var(--o, 1); } }
+.kd-stks { position: absolute; left: 0; right: 0; top: -14px; margin: 0 auto; width: 210px; display: flex; flex-wrap: wrap; justify-content: center; }
+.kd-stks > span { display: inline-flex; }
+.kd-stks .kd-pop { animation: kd-pop 500ms ease-out both; }
+@keyframes kd-pop { from { transform: scale(0) rotate(-25deg); } 60% { transform: scale(1.1) rotate(6deg); } to { transform: none; } }

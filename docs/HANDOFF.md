@@ -62,6 +62,13 @@ A web app for organised, real-world chase games (runners vs chasers, with marsha
     - A free slot posts `{name} pulled the free slot. Keluar penjara!`. Runners who are out for good now run a GPS watch at Penjara too.
     - **To do before paid events: check the licence of `black-slot.mp3`.** The vine boom is not in; it waits on its own licence check, and the fanfare stands in for it.
   - **`5 minutes left`.** Once per game, at 5 minutes on the chase clock, one feed line and one push (`5 minutes left!`) go out, and the clock turns lime for the rest of the game, on the chase screens and the marshal's. It never fires during a pause or a final whistle. A game that starts its chase with 5 minutes or less left warns straight away.
+- **How to play (branch `how-to-play`, built 2026-11-11, not merged yet): the story that briefs every phone (motion design §8.8, rules §10 item 3).**
+  - **Before merging: run `supabase/migrations/0018_how_to_play.sql` in Supabase first.** The game select now reads `briefed_at` and the player selects read `brief_opened_at` and `brief_ready_at`. Without the migration those columns don't exist and every game poll fails.
+  - `Brief the players` in the organiser's lobby checks now opens the story on every runner and chaser phone, and shows `N of M ready` and who is still reading. It never blocks Start. Players who join later get the story when they join.
+  - Marshals get no story (they get the organiser's crew brief). Nothing in it names Dato Seri or Bomoh.
+  - The cards are per side (Dikejar 7, Kejar 6, or 7 with the snapshot switch on), 7 s each, tap right for next and left for back. The last card is `I'm ready`.
+  - The `How to play` link in game reopens the story at any time.
+  - The scenes are stick-figure doodles in `app/src/game/doodles/index.tsx`, ported from mockup 18: Dikejar in a white armband, Kejar in a lime vest, every stroke drawn twice, a line boil on the root `<svg>`, and a 1.5 s draw-on. All of it is still with reduced motion. The power-up scenes reuse the sticker art for this mode's deck.
 - **Plan 6 (polish): not started.** Replay, share card, 24 h deletion, 12-month safety-record deletion.
 
 ## Decisions made since the design doc (not yet in the spec)
