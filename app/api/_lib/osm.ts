@@ -92,7 +92,8 @@ function describe(category = '', type = ''): { label: string; unlikely: boolean 
 /** Parks, areas and other places in Malaysia matching the name: parks first, stations and buildings last. */
 export async function searchParks(query: string, deps: Deps): Promise<ParkHit[]> {
   const q = query.trim()
-  const key = `nominatim:${q.toLowerCase()}`
+  // v2: hits now carry kind/label/unlikely and include places; the new prefix skips results cached before that.
+  const key = `nominatim2:${q.toLowerCase()}`
   const cached = (await deps.cache.get(key)) as ParkHit[] | null
   if (cached) return cached
 

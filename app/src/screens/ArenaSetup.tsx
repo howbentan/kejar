@@ -233,7 +233,7 @@ export default function ArenaSetup({
               <span style={{ display: 'flex', flexDirection: 'column' }}>
                 <span>{h.name}</span>
                 <span className="muted" style={{ fontSize: 12 }}>
-                  {h.kind === 'point' ? h.label : `${h.areaHa.toFixed(1)} ha`}
+                  {h.kind === 'point' ? 'Circle here' : `${h.areaHa.toFixed(1)} ha`}
                 </span>
               </span>
               <span className="chip" style={{ fontSize: 11, padding: '2px 8px', border: '1px solid var(--hair)', borderRadius: 999 }}>
