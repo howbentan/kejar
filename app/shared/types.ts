@@ -90,6 +90,8 @@ export interface Game {
    * by a pause), and who joined it since. Null when no rescue is going.
    */
   rescue: { by: string; startedAt: string; joiners: string[] } | null
+  /** When the one '5 minutes left!' warning went out (rules §2.7). Null until then; set once per game. */
+  five_warned_at: string | null
   /** When this game's personal data was wiped (fair-play §1.8), 30 days after it ended. Null until then. */
   wiped_at: string | null
   /** Deck sets per side, fixed at start, and cards drawn so far (power-ups §5b). Older games have none. */
@@ -263,6 +265,8 @@ export type EventType =
   | 'rescue-failed'
   /** A jailed runner landed on the reel's free slot and walked out. actor: the runner. data: { who } */
   | 'reel-free'
+  /** The one '5 minutes left!' warning of the game (rules §2.7). data: {} */
+  | 'five-left'
 
 export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along' | 'grab' | 'dato'
 

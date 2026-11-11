@@ -31,13 +31,13 @@ Rules:
    - Runners keep their phone in their pocket between check-ins. Chasers and marshals keep Kejar open.
 4. **Catching:** the chaser rips the tag off the upper arm with one hand (no grabbing or tackling), the runner stops, and the chaser scans the tag. The app checks the chaser was close enough: a catch is refused (`Can't confirm that one. Get closer and try again.`) if the chaser is further than 50 m, plus both phones' GPS errors, plus 6 m/s for how old the runner's location is (capped at 10 min), from the runner's last spot. Marshals and the runner only hear about borderline catches (over 80% of that limit). A marshal or the organiser can **`Undo kejar`** on a runner's latest catch while they're still caught by it: it doesn't use the runner's escape, removes the catch from awards and is logged. Disputes go through SOS to a marshal, never settled physically.
 5. **Penjara:** caught runners walk to Penjara.
-   - They watch a spectator map delayed by 2 minutes, and get **one pull of the dare reel** per stay: a silly dare, or rarely "You're free".
-   - **The rescue:** a free runner scans the Penjara QR, then **stays within 30 m for 10 seconds** (owner's decision, 2026-10-30). Chasers are warned the moment it starts. If the rescuer is caught or leaves the 30 m in that time, nobody gets out (§9a).
+   - They watch a spectator map delayed by 2 minutes, and get **one pull of the Penjara reel** per stay: one lime free slot among nine black ones (**built, owner's decision 2026-11-11, replacing the dare reel**: no dares and no marshal confirm).
+   - **The rescue:** a free runner scans the Penjara QR, then **stays within 30 m for 10 seconds** (owner's decision, 2026-10-30; **built**, §9a). Chasers are warned the moment it starts. If the rescuer is caught or leaves the 30 m in that time, nobody gets out (§9a).
    - **Each runner can only be freed once per game,** however it happens, so games end.
 6. **Power-ups:** printed **stations** around the park. Scanning one within 30 m during the chase draws the **top card of your side's shared deck**, revealed with the lucky dip.
    - You hold **one power-up at a time**, and the slot stays busy while its effect runs.
    - Each station can be claimed once per player, and locks for everyone for 60 s after a claim.
-7. **End:** time runs out (Dikejar win if anyone is still free) or every runner is in Penjara (Kejar win). When nobody is left free, the game waits **60 s** (`Last Dikejar caught! Final whistle in 60 s.`) so a wrong last catch or auto-jail can be undone; after the 60 s the result is final, and if time runs out during the hold an undo then ends the game as a Dikejar win. There's a `5 minutes left` warning before the end. Then come the results: awards, a rating, and a post-game report.
+7. **End:** time runs out (Dikejar win if anyone is still free) or every runner is in Penjara (Kejar win). When nobody is left free, the game waits **60 s** (`Last Dikejar caught! Final whistle in 60 s.`) so a wrong last catch or auto-jail can be undone; after the 60 s the result is final, and if time runs out during the hold an undo then ends the game as a Dikejar win. There's a `5 minutes left!` warning once per game (a feed line and a push, and the clock turns lime for the rest of the game; **built**, never during a pause or a final whistle). Then come the results: awards, a rating, and a post-game report.
 
 **Safety (both modes).** A small lime **SOS icon** on every player screen (status row, top right): tap it, then hold for 1 s to send (motion §6.0). Marshals get a full-screen takeover with an arrow and distance, plus `I'm going` so only one runs, and they close it with an outcome. Automatic alerts cover leaving the play area, auto-jail, a chaser leaving the start early and flagged catches. Marshals can pause and resume the game and remove a player. Reports happen after the game.
 
@@ -45,7 +45,7 @@ Rules:
 
 | | **Core** | **Full** |
 |---|---|---|
-| Chase, check-ins, auto-jail, Penjara, jailbreak, dare reel | ✓ | ✓ |
+| Chase, check-ins, auto-jail, Penjara, jailbreak, Penjara reel | ✓ | ✓ |
 | Safety tools, motion, the marker scribble, results | ✓ | ✓ |
 | **Runners' deck** | **Durian, Ponteng** | Gostan, Durian, Ponteng, Toyol, Abang Grab |
 | **Chasers' deck** | **Mat Rempit, Pak Guard** | Mat Rempit, Pak Guard, Ah Long, Abang Grab |
@@ -163,7 +163,7 @@ Prices are from MR.DIY's online listings on 2026-10-30 and may change. Velcro st
 | Roles, joining, catching, the original jail and power-up rules, safety basics, data and privacy, kit, brand | `2026-10-19-kejar-design.md` (where not replaced below) |
 | Check-in window, auto-jail, the chaser-snapshot switch, the Penjara rename | `2026-10-30-kejar-checkins-counterping-penjara-design.md` |
 | Power-up names, effects, one slot, shared deck, Abang Grab, Toyol and Ah Long, card look | `2026-10-28-kejar-malaysian-powerups-design.md` |
-| Dare reel, Dato Seri (both modes of it), Pak Pulis | `2026-10-28-kejar-jail-dato-seri-design.md` |
+| Dare reel (now the black-slot reel, §9a), Dato Seri (both modes of it), Pak Pulis | `2026-10-28-kejar-jail-dato-seri-design.md` |
 | Everything that moves, SOS, the marshal SOS screen, the crew of two, the feed, results, the scribble | `2026-10-30-kejar-motion-design.md` |
 | Creating a game (five steps), the kit checklist, walking the park, lobby checks | `2026-10-30-kejar-organiser-setup-design.md` |
 | Organiser accounts; real parks and saved arenas | `2026-10-26-kejar-plan4a-organiser-accounts-design.md`, `2026-10-27-kejar-plan4b-arenas-design.md` |
@@ -180,7 +180,7 @@ Prices are from MR.DIY's online listings on 2026-10-30 and may change. Velcro st
 | Base §3: 1 marshal per 8–10 players | Crew of two up to about 20 players, then about 1 more per 10 (§5) |
 | Power-ups §6: Malay messages on screen | Plain English on screen; Malay lines kept as tone (§6) |
 | Power-ups §5c (first version): blue rare and purple epic tiers | No tiers: lime brand cards; yellow only for Dato Seri |
-| Jail design: "dare wheel" | It's a **dare reel** with a Penjara lever (jail §3a); the rules are unchanged |
+| Jail design: "dare wheel" / dare reel | The reel is now a **black-slot reel** with a Penjara lever: one lime free slot among nine black, no dares and no marshal confirm (owner's decision, 2026-11-11; §9a) |
 | Jail design §4: Dato Seri needs a quest-giver, a coin and Pak Pulis | Hidden stash by default; quest-giver is an option (jail §4b). Full mode only |
 | Chaser legendary notes: "fills all 3 hand slots"; a staff of 5 | One slot; it must fit the crew of two, so a hidden-stash style grant unless volunteers exist (open, §11) |
 | Endgame notes: "Last call" and other ideas | Only `5 minutes left` (a warning, the feed line and the lime clock) is agreed. The rest stays unapproved (§11) |
@@ -193,7 +193,7 @@ Prices are from MR.DIY's online listings on 2026-10-30 and may change. Velcro st
 | Dato Seri stash: what if the finder's slot is full? | **Not said before. Claude's call:** the scan is refused with `Use or lose your power-up first`, and the stash stays claimable |
 | Chaser legendary notes: character undecided (Bomoh/Pontianak/others); shared "legendary yellow" | **Named Bomoh (owner's decision, 2026-10-31).** Grant mirrors Dato Seri exactly: hidden stash by default, the ritual as an optional staffed mode. Gets its own colour, **purple**, rather than sharing Dato Seri's yellow (§5c) |
 
-## 9a. The 10-second rescue (owner's decision, 2026-10-30)
+## 9a. The 10-second rescue (owner's decision, 2026-10-30; **built** 2026-11-11)
 
 Freeing everyone with one quick scan was judged too swingy: one runner could undo 20 minutes of chaser work in 5 seconds. Instead of capping how many get out, the owner chose to keep "frees everyone" and make the rescue a risk.
 
@@ -208,7 +208,8 @@ Freeing everyone with one quick scan was judged too swingy: one runner could und
 - **Only one rescue at a time.** A second runner's scan during a hold just joins it, and the hold continues.
 - **GPS leniency** (**Claude's call**): one missing or poor-accuracy fix during the hold doesn't fail it. Only a clear "outside 30 m" does.
 - **Why:** chasers get a real chance to stop a rescue without camping on Penjara all game, and a successful rescue is earned. It's the best "hero moment" in the game.
-- **Dato Seri's Settle and the dare reel's free card are unchanged.** They free in the moment, because their cost is already the rare card.
+- **Dato Seri's Settle and the reel's free slot are unchanged.** They free in the moment, because their cost is already the rare card.
+- **The dare reel became the black-slot reel (owner's decision, 2026-11-11; built).** One pull per jail stay, at Penjara. The reel has ten slots: one lime free slot and nine black, picked by the server (about 1 in 10). A runner whose one escape is already used sees all black. There are **no dares and no marshal confirm**. A free slot frees that runner at once (`{name} pulled the free slot. Keluar penjara!`); a black slot says `Not this time. Wait for a rescue.` and plays the owner's clip.
 
 ## 9b. Dato Seri is a secret (owner's decision, 2026-10-30)
 

@@ -103,6 +103,8 @@ export interface GameStore {
   releaseCaught(id: string, by: string, atIso: string): Promise<boolean>
   /** Starts the final whistle only if none is pending and the game hasn't ended; true for the first caller. */
   claimFinalWhistle(gameId: string, atIso: string): Promise<boolean>
+  /** Sets `five_warned_at` only if it is still null and the game hasn't ended; true for the first caller (rules §2.7). */
+  claimFiveWarning(gameId: string, atIso: string): Promise<boolean>
   /** Calls off a pending final whistle (someone is free again). */
   clearFinalWhistle(gameId: string): Promise<void>
   /**
@@ -469,6 +471,12 @@ export class MemoryStore implements GameStore {
     const g = this.games.find((x) => x.id === gameId)
     if (!g || g.ended_at || g.final_whistle_at) return false
     g.final_whistle_at = atIso
+    return true
+  }
+  async claimFiveWarning(gameId: string, atIso: string) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g || g.ended_at || g.five_warned_at) return false
+    g.five_warned_at = atIso
     return true
   }
   async clearFinalWhistle(gameId: string) {

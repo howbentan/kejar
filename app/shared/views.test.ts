@@ -1155,3 +1155,15 @@ describe('the live rescue (rules §9a)', () => {
     expect(view(aina, { game: { ...g, rescue, ended_at: iso(NOW - 1) } }).rescue).toBeNull()
   })
 })
+
+describe('5 minutes left (rules §2.7)', () => {
+  it('shows one plain feed line to everyone', () => {
+    const events = [event('five-left', T0 + 45 * MIN)]
+    for (const me of [aina, chaser]) expect(view(me, { events }).feed.map((f) => f.text)).toContain('5 minutes left!')
+  })
+  it('sets fiveLeft once the game has warned, and not before', () => {
+    expect(view(aina).fiveLeft).toBe(false)
+    expect(view(aina, { game: game({ five_warned_at: iso(T0 + 45 * MIN) }) }).fiveLeft).toBe(true)
+    expect(view(chaser, { game: game({ five_warned_at: iso(T0 + 45 * MIN) }) }).fiveLeft).toBe(true)
+  })
+})

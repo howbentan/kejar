@@ -15,7 +15,8 @@ export function GameClock({ view }: { view: View }) {
   const ticking = useServerNow(view.now)
   // While paused the server holds the time left still, so don't tick between polls.
   const now = view.paused ? view.now : ticking
-  return <span className="mono">{clock((view.endsAt ?? now) - now)}</span>
+  // '5 minutes left' (rules §2.7): lime for the rest of the game, on the chase top bar and the marshal's clock alike.
+  return <span className={view.fiveLeft ? 'mono clock-lime' : 'mono'}>{clock((view.endsAt ?? now) - now)}</span>
 }
 
 type Scanned = Exclude<ScanTarget, { error: string }>

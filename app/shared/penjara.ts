@@ -1,7 +1,8 @@
 import { JAIL_RADIUS_M } from './catch.js'
+import { phaseAt } from './clock.js'
 import { distanceM } from './geo.js'
 import { isOut } from './players.js'
-import type { LatLng, Player, Position } from './types.js'
+import type { Game, LatLng, Player, Position } from './types.js'
 
 /** How long a rescuer must stay close to Penjara before everyone eligible is freed (rules §9a). */
 export const RESCUE_HOLD_MS = 10_000
@@ -51,4 +52,17 @@ export function reelPulledThisStay(p: Pick<Player, 'reel_pulled_at' | 'caught_at
 export function pickReel(rng: () => number, freedOnce: boolean): 'free' | 'black' {
   if (freedOnce) return 'black'
   return Math.floor(rng() * REEL_SLOTS) === 0 ? 'free' : 'black'
+}
+
+/** The clock turns lime, and everyone is told once, when this much of the chase is left (rules §2.7). */
+export const FIVE_LEFT_MS = 5 * 60_000
+
+/**
+ * True when `5 minutes left!` should go out now: mid-chase, not paused, no final whistle pending, not warned yet,
+ * and 5 minutes or less on the clock. A game whose chase starts with 5 minutes or less left is due straight away.
+ */
+export function fiveLeftDue(game: Game, now: number): boolean {
+  if (game.five_warned_at || game.paused_at || game.final_whistle_at || game.ended_at) return false
+  const { phase, endsAt } = phaseAt(game, now)
+  return phase === 'chasing' && endsAt !== null && endsAt - now <= FIVE_LEFT_MS
 }

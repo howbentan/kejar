@@ -122,4 +122,22 @@ $$;
 revoke execute on function pull_reel(uuid, timestamptz) from public, anon, authenticated;
 grant execute on function pull_reel(uuid, timestamptz) to service_role;
 
+-- 3. '5 minutes left' (§2.3). One warning per game: five_warned_at records it, and claim_five_warning sets it only
+-- while null (and the game is still on), so two polls at the same moment warn once.
+alter table games add column if not exists five_warned_at timestamptz;
+
+create or replace function claim_five_warning(p_game uuid, p_at timestamptz) returns boolean
+language plpgsql
+as $$
+begin
+  update games
+     set five_warned_at = p_at
+   where id = p_game and five_warned_at is null and ended_at is null;
+  return found;
+end;
+$$;
+
+revoke execute on function claim_five_warning(uuid, timestamptz) from public, anon, authenticated;
+grant execute on function claim_five_warning(uuid, timestamptz) to service_role;
+
 commit;

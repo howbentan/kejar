@@ -236,3 +236,12 @@ describe('ChaserChase: a rescue at Penjara (rules §9a)', () => {
     expect(vibrate.mock.calls.filter((c) => JSON.stringify(c[0]) === '[200,100,200]')).toHaveLength(1)
   })
 })
+
+describe('ChaserChase: 5 minutes left (rules §2.7)', () => {
+  it('turns the clock lime once the warning has fired, and not before', () => {
+    const { rerender } = render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    expect(document.querySelector('.chase-clock .mono')).not.toHaveClass('clock-lime')
+    rerender(<ChaserChase code="ABC234" view={{ ...chaser(), fiveLeft: true }} refresh={() => {}} />)
+    expect(document.querySelector('.chase-clock .mono')).toHaveClass('clock-lime')
+  })
+})

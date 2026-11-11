@@ -120,6 +120,8 @@ select.input option { background: #141614; color: var(--white); }
 }
 .chase-who { font: 600 10.5px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chase-clock { font: 500 17px var(--mono); letter-spacing: -0.03em; }
+/* '5 minutes left' (rules §2.7): the clock stays lime for the rest of the game. */
+.clock-lime { color: var(--volt); }
 .chase-count { justify-self: end; font: 500 11px var(--mono); color: var(--dim); }
 .chase-map { position: relative; flex: 1; min-height: 0; }
 .chase-map > div:first-child, .chase-map > div:first-child > div:first-child { height: 100%; }

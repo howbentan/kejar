@@ -172,6 +172,8 @@ export interface View {
    * still while paused), and who joined it. Null when none is going.
    */
   rescue: { by: string; byName: string; endsAt: number; joiners: string[] } | null
+  /** The one '5 minutes left!' warning has gone out (rules §2.7): the clock stays lime for the rest of the game. */
+  fiveLeft: boolean
   /**
    * The Penjara reel (§2.2), for a jailed runner only (null for everyone else): whether this stay's one pull is
    * spent. A spent pull that left them jailed was black, so `result` is 'black' then; null before the pull. A free
@@ -796,6 +798,8 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       return `Jailbreak! ${Number(e.data.freed ?? 0)} Dikejar free.`
     case 'reel-free':
       return `${actor?.name ?? String(e.data.who ?? 'A Dikejar')} pulled the free slot. Keluar penjara!`
+    case 'five-left':
+      return '5 minutes left!'
     case 'ended':
       return 'Game over'
     case 'powerup':
@@ -961,6 +965,7 @@ function fullView(i: ViewInput): View {
     bomohZone: bomohZoneFor(i, phase),
     settle: settleFor(i, phase),
     rescue: rescueFor(i, phase),
+    fiveLeft: Boolean(i.game.five_warned_at),
     reel: reelFor(i),
     // The stash and the card go only to the organiser, who prints and hides it (ruling R15). Marshals are the
     // helper, and never see either (rules doc §9b).

@@ -5025,3 +5025,62 @@ describe('the Penjara reel', () => {
     expect((await store.gameByCode(g.code))!.final_whistle_at).toBeNull()
   })
 })
+
+describe('5 minutes left (rules §2.7)', () => {
+  const chasing = async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    const gameId = (await store.gameByCode(g.code))!.id
+    return { ...g, gameId }
+  }
+  const poll = (g: { code: string; organiserToken: string }) => run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+  const fives = async (gameId: string) => (await store.events(gameId)).filter((e) => e.type === 'five-left')
+  const warnPushes = () => pushes.filter((p) => (p.payload as { body?: string }).body === '5 minutes left!')
+
+  it('a poll at 4:59 left posts one five-left event and one push per subscribed player', async () => {
+    const g = await chasing()
+    now = T0 + 20 * MIN
+    await poll(g)
+    expect(await fives(g.gameId)).toHaveLength(0)
+    expect(warnPushes()).toHaveLength(0)
+    now = T0 + 45 * MIN + 1_000
+    const v = await poll(g)
+    expect(await fives(g.gameId)).toHaveLength(1)
+    expect(warnPushes()).toHaveLength(3)
+    expect(warnPushes()[0].payload).toMatchObject({ type: 'notice', title: 'kejar.', body: '5 minutes left!' })
+    expect(v.feed.map((f) => f.text)).toContain('5 minutes left!')
+    expect(v.fiveLeft).toBe(true)
+  })
+
+  it('a second poll posts nothing more', async () => {
+    const g = await chasing()
+    now = T0 + 45 * MIN + 1_000
+    await poll(g)
+    now += 30_000
+    await poll(g)
+    await poll(g)
+    expect(await fives(g.gameId)).toHaveLength(1)
+    expect(warnPushes()).toHaveLength(3)
+  })
+
+  it('does not warn during a pause, and warns once after the resume', async () => {
+    const g = await chasing()
+    now = T0 + 44 * MIN
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 60 * MIN
+    await poll(g)
+    expect(await fives(g.gameId)).toHaveLength(0)
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    now += 2 * MIN
+    await poll(g)
+    expect(await fives(g.gameId)).toHaveLength(1)
+  })
+
+  it('a failing push still records the warning', async () => {
+    const g = await chasing()
+    pushFails = true
+    now = T0 + 46 * MIN
+    await poll(g)
+    expect(await fives(g.gameId)).toHaveLength(1)
+  })
+})

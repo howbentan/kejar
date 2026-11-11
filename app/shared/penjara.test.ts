@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { iso, player, T0 } from './fixtures.js'
-import { pickReel, REEL_SLOTS, RESCUE_HOLD_MS, RESCUE_PING_MS, rescueVerdict } from './penjara.js'
+import { game, iso, MIN, player, T0 } from './fixtures.js'
+import { fiveLeftDue, FIVE_LEFT_MS, pickReel, REEL_SLOTS, RESCUE_HOLD_MS, RESCUE_PING_MS, rescueVerdict } from './penjara.js'
 import { seeded } from './testing.js'
 import type { Position } from './types.js'
 
@@ -54,5 +54,35 @@ describe('the Penjara reel', () => {
   it('is always black once the escape is used', () => {
     const rng = seeded(42)
     for (let i = 0; i < 10_000; i++) expect(pickReel(rng, true)).toBe('black')
+  })
+})
+
+describe('5 minutes left (rules §2.7)', () => {
+  // Default game: 5 min hiding, then 45 min of chase, so it ends at T0 + 50 min.
+  const END = T0 + 50 * MIN
+  const g = game()
+  it('holds the exact value', () => expect(FIVE_LEFT_MS).toBe(5 * MIN))
+  it('is due at 4:59 left and not at 5:01 left', () => {
+    expect(fiveLeftDue(g, END - 4 * MIN - 59_000)).toBe(true)
+    expect(fiveLeftDue(g, END - 5 * MIN - 1_000)).toBe(false)
+    expect(fiveLeftDue(g, END - 5 * MIN)).toBe(true)
+  })
+  it('is not due while hiding, or once the game has ended', () => {
+    expect(fiveLeftDue(g, T0 + MIN)).toBe(false)
+    expect(fiveLeftDue({ ...g, ended_at: iso(END - MIN) }, END - 4 * MIN)).toBe(false)
+    expect(fiveLeftDue(g, END + 1_000)).toBe(false)
+  })
+  it('is not due while paused', () => {
+    expect(fiveLeftDue({ ...g, paused_at: iso(END - 6 * MIN) }, END - 4 * MIN)).toBe(false)
+  })
+  it('is not due with a final whistle pending', () => {
+    expect(fiveLeftDue({ ...g, final_whistle_at: iso(END - 4.5 * MIN) }, END - 4 * MIN)).toBe(false)
+  })
+  it('is not due once warned (Review Focus 5)', () => {
+    expect(fiveLeftDue({ ...g, five_warned_at: iso(END - 4.9 * MIN) }, END - 4 * MIN)).toBe(false)
+  })
+  it('is due straight away for a game that starts its chase with 5 minutes or less left', () => {
+    const short = game({ settings: { ...g.settings, lengthMin: 3 } })
+    expect(fiveLeftDue(short, T0 + 5 * MIN + 1_000)).toBe(true)
   })
 })

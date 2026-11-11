@@ -29,6 +29,7 @@ export function game(over: Partial<Game> = {}): Game {
     pauses: [],
     final_whistle_at: null,
     rescue: null,
+    five_warned_at: null,
     wiped_at: null,
     ...over,
   }

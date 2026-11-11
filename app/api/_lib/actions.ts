@@ -23,7 +23,7 @@ import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/ca
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
 import { bomohCodeFromQr, datoCodeFromQr, isBomohQr, isDatoQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
-import { pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict } from '../../shared/penjara.js'
+import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
 import { validateTeams } from '../../shared/teams.js'
@@ -519,6 +519,17 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     await store.addEvent({ game_id: game.id, type: 'chase', actor_id: null, target_id: null, data: {} })
   }
 
+  // '5 minutes left!' goes out once per game: the claim decides who posts it (rules §2.7).
+  if (fiveLeftDue(game, now) && (await store.claimFiveWarning(game.id, iso(now)))) {
+    await store.addEvent({ game_id: game.id, type: 'five-left', actor_id: null, target_id: null, data: {} })
+    const everyone = await store.players(game.id)
+    try {
+      await pushTo(ctx, everyone, { type: 'notice', code: game.code, title: 'kejar.', body: '5 minutes left!' })
+    } catch {
+      // The feed line and the lime clock still carry it.
+    }
+  }
+
   let pingRows = await store.pings(game.id)
   const work = dueWork(game, pingRows, now)
   let whistleNow = false
@@ -763,6 +774,7 @@ const create: Action = async (ctx, body) => {
     pauses: [],
     final_whistle_at: null,
     rescue: null,
+    five_warned_at: null,
     wiped_at: null,
     organiser_id: organiser.id,
     ...(stash ? { dato_stash: stash } : {}),
