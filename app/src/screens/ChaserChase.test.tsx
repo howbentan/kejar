@@ -154,6 +154,9 @@ describe('catchMessage', () => {
   it('explains a shielded catch, naming the runner', () => {
     expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'shielded', name: 'Aina' })).toBe("Durian! You can't catch Aina again this game. Hand the tag back.")
   })
+  it('puts a name in the message as typed, even one with replacement patterns like $& in it', () => {
+    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'durian-locked', name: 'A$&B$1' })).toBe("Durian! You can't catch A$&B$1 again this game.")
+  })
   it('explains a Durian lock on a later scan', () => {
     expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'durian-locked', name: 'Aina' })).toBe("Durian! You can't catch Aina again this game.")
   })

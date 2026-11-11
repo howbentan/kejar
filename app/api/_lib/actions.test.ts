@@ -1747,7 +1747,7 @@ describe('removing a player', () => {
     expect(v.results).toBeFalsy()
   })
 
-  it('removing every runner does not end the game as a Kejar win', async () => {
+  it('removing every runner does not end the game early; at time-up it is a Kejar win', async () => {
     const g = await safetyGame()
     await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.aina.playerId })
     await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.hafiz.playerId })
@@ -1756,6 +1756,11 @@ describe('removing a player', () => {
     const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     expect(v.phase).toBe('chasing')
     expect(v.results).toBeFalsy()
+    // No runner is left free, so when the clock runs out the Kejar win stands.
+    now = T0 + 3 * 60 * MIN
+    const over = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(over.phase).toBe('ended')
+    expect(over.results?.winner).toBe('chasers')
   })
 })
 

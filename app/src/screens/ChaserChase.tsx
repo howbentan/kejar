@@ -30,7 +30,7 @@ export function catchMessage(text: string, r: CatchJudgement): string {
   const tag = tagIdFromQr(text)
   const label = tag === null ? 'runner' : `#${String(tag).padStart(2, '0')}`
   if (r.ok) return r.flagged ? `Caught ${label} — flagged for marshal` : `Caught ${label} ✓`
-  return (REJECTIONS[r.reason] ?? 'Catch not recorded').replace('{name}', r.name ?? label)
+  return (REJECTIONS[r.reason] ?? 'Catch not recorded').replace('{name}', () => r.name ?? label)
 }
 
 /** "Next ping 1:42 · last 3:18 ago", or whichever half is known. */
