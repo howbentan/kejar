@@ -21,6 +21,12 @@ describe('game session storage', () => {
     expect(loadSession(storage, 'XYZ789')).toEqual({ token: 't2' })
   })
 
+  it('saving a token records the last game', () => {
+    const storage = memoryStorage()
+    saveSession(storage, 'abc234', { token: 't1' })
+    expect(JSON.parse(storage.getItem('kejar.lastGame')!)).toMatchObject({ code: 'ABC234', role: 'player' })
+  })
+
   it('returns an empty session for an unknown game or corrupt data', () => {
     const storage = memoryStorage()
     storage.setItem('kejar.game.BAD123', '{oops')

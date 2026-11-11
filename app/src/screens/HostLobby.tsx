@@ -7,6 +7,7 @@ import { AlertsOnPhone } from '../game/MarshalTools'
 import PackList from '../game/PackList'
 import { waitingForCard as waitingFor } from '../game/cardNotice'
 import SetupMap, { OrganiserTools } from '../game/SetupMap'
+import { saveLastGame } from '../game/lastGame'
 import { loadOrganiserSession } from '../game/organiserSession'
 import { qrDataUrl } from '../game/qr'
 import { ErrorText, ModeBadge, Pills, Screen, tagText } from '../game/ui'
@@ -38,6 +39,11 @@ export default function HostLobby({ code }: { code: string }) {
   useEffect(() => {
     void qrDataUrl(joinUrl).then(setQr, () => setQr(''))
   }, [joinUrl])
+
+  // Remember this game for the home screen's reconnect button.
+  useEffect(() => {
+    if (loadOrganiserSession(localStorage)) saveLastGame(localStorage, code, 'organiser')
+  }, [code])
 
   useEffect(() => {
     // A notice from the start waits for the organiser to read it before going to the game.

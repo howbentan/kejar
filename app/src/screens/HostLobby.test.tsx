@@ -68,6 +68,13 @@ afterEach(() => {
 })
 
 describe('HostLobby', () => {
+  it('opening the lobby with an organiser session records the last game', async () => {
+    render(<HostLobby code="ABC234" />)
+    await screen.findByText('CORE')
+    expect(localStorage.getItem('kejar.lastGame')).toContain('"organiser"')
+    expect(localStorage.getItem('kejar.lastGame')).toContain('"ABC234"')
+  })
+
   it('shows the game mode next to the code', async () => {
     render(<HostLobby code="ABC234" />)
     expect(await screen.findByText('CORE')).toBeInTheDocument()
