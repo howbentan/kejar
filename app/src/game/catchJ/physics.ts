@@ -52,6 +52,12 @@ export function geometry(stageW: number, playH: number, logoTop: number): Geomet
   }
 }
 
+/** The home screen's geometry: the logo centred both ways in a play area `stageW` by `playH`. */
+export function stageGeometry(stageW: number, playH: number): Geometry {
+  const logoH = TOY.LOGO_W * (stageW / TOY.STAGE) * (TOY.FRAME.h / TOY.FRAME.w)
+  return geometry(stageW, playH, (playH - logoH) / 2)
+}
+
 export function startState(g: Geometry): ToyState {
   return { x: 30 * g.scale, y: 40 * g.scale, vx: TOY.START * g.scale, vy: TOY.START * 0.8 * g.scale, rot: 0, spin: 2.4, beatLeft: 0 }
 }

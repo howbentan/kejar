@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ART } from '../stickerArt'
-import { canCatch, caught, geometry, pickSticker, relaunch, startState, step, TOY, type ToyState } from './physics'
+import { canCatch, caught, geometry, pickSticker, relaunch, stageGeometry, startState, step, TOY, type ToyState } from './physics'
 
 const g = geometry(290, 430, 150)
 const at = (over: Partial<ToyState>): ToyState => ({ ...startState(g), ...over })
@@ -13,6 +13,11 @@ describe('geometry', () => {
     expect(g.jw).toBeCloseTo((516 - 190) * (240 / 900))
     expect(g.jh).toBeCloseTo((531 - 12) * (240 / 900))
     expect(g.bounds).toEqual({ w: 290, h: 430 })
+  })
+
+  it('stageGeometry centres the logo vertically in the play area', () => {
+    const logoH = 240 * (543 / 900)
+    expect(stageGeometry(290, 430)).toEqual(geometry(290, 430, (430 - logoH) / 2))
   })
 
   it('scales with stage width', () => {

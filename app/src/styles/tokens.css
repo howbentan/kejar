@@ -554,3 +554,30 @@ select.input option { background: #141614; color: var(--white); }
 .kd-stks > span { display: inline-flex; }
 .kd-stks .kd-pop { animation: kd-pop 500ms ease-out both; }
 @keyframes kd-pop { from { transform: scale(0) rotate(-25deg); } 60% { transform: scale(1.1) rotate(6deg); } to { transform: none; } }
+
+/* catch the j: the home screen toy (design 2026-11-12) */
+.toy { position: absolute; inset: 0; overflow: hidden; cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+.toy-logo { position: absolute; pointer-events: none; }
+.toy-logo img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.toy-logo.wob { animation: toy-wob 0.5s ease-in-out; }
+.toy-j { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; }
+.toy-j.hide { opacity: 0; }
+.toy-j.jback { animation: toy-jback 0.16s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.toy-slot { position: absolute; border: 1.5px dashed transparent; border-radius: 12px; pointer-events: none; transition: border-color 0.2s; }
+.toy-slot.on { border-color: rgba(198, 255, 61, 0.55); }
+.toy-sticker { position: absolute; display: block; pointer-events: none; animation: toy-morph 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) forwards; }
+.toy-sticker svg { display: block; overflow: visible; }
+.toy-flash { position: absolute; inset: 0; background: var(--volt); opacity: 0; pointer-events: none; }
+.toy-flash.on { animation: toy-flash 0.35s ease-out; }
+@keyframes toy-wob { 0%, 100% { transform: none; } 30% { transform: rotate(-3deg) scale(1.04); } 65% { transform: rotate(2deg); } }
+@keyframes toy-flash { 0% { opacity: 0.35; } 100% { opacity: 0; } }
+@keyframes toy-jback { from { scale: 0.4; } to { scale: 1; } }
+@keyframes toy-morph {
+  0% { transform: scale(0.2) rotate(-200deg); opacity: 0; }
+  22% { transform: scale(1.18) rotate(12deg); opacity: 1; }
+  34%, 80% { transform: scale(1) rotate(0); opacity: 1; }
+  100% { transform: scale(0.2) rotate(200deg); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toy-logo.wob, .toy-j.jback, .toy-sticker, .toy-flash.on { animation: none; }
+}
