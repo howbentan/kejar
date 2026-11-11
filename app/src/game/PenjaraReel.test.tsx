@@ -111,6 +111,16 @@ describe('PenjaraReel', () => {
     expect(audio.made).toEqual([])
   })
 
+  it('keeps the winning lime card when the next poll flips freedOnce to true', async () => {
+    call.mockResolvedValue({ ok: true, result: 'free' })
+    const props = { code: 'ABC234', reel: { pulled: false, result: null } }
+    const { rerender } = render(<PenjaraReel {...props} freedOnce={false} />)
+    await pull()
+    rerender(<PenjaraReel {...props} freedOnce={true} />)
+    expect(screen.getByText("YOU'RE FREE")).toBeInTheDocument()
+    expect(screen.getAllByTestId('reel-card').filter((c) => c.dataset.kind === 'lime')).toHaveLength(1)
+  })
+
   it('with motion, the result waits for the reel to stop', async () => {
     reduce.on = false
     vi.useFakeTimers()

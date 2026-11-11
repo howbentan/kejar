@@ -78,7 +78,9 @@ export default function PenjaraReel({
   const swallowClick = useRef(false)
   const stop = useRef<(() => void) | null>(null)
   const spent = phase !== 'idle'
-  const slots = slotsFor(freedOnce)
+  // Frozen at mount: a free pull sets freed_once on the next poll, which must not repaint the winning card black.
+  const [wasFreedOnce] = useState(freedOnce)
+  const slots = slotsFor(wasFreedOnce)
   // The scroll runs over three copies of the ten slots, so it passes the marker a few times before it stops.
   const cards = rolled ? [...slots, ...slots, ...slots] : slots
 
