@@ -183,6 +183,27 @@ const NO_STASH = { ok: false, reason: 'no-stash' } as const
 /** A lobby holds its card for this long after it was made; then it must re-check it before use (ruling R3). */
 export const LOBBY_HOLD_MS = 24 * 60 * 60_000
 
+/** A game's personal data is wiped this long after it ends (fair-play §1.8). */
+export const WIPE_AFTER_MS = 30 * 24 * 60 * 60_000
+/** How many expired games one request sweeps, so the wipe stays cheap. */
+const WIPE_BATCH = 3
+
+/** Wipes a few expired games. Best effort: it runs on requests that already happen, so an error here is swallowed. */
+async function wipeExpired(ctx: Ctx): Promise<void> {
+  try {
+    const ids = await ctx.store.gamesToWipe(iso(ctx.now - WIPE_AFTER_MS), WIPE_BATCH)
+    for (const id of ids) {
+      try {
+        await ctx.store.wipeGame(id)
+      } catch {
+        // One bad game doesn't stop the rest.
+      }
+    }
+  } catch {
+    // Never fails the request.
+  }
+}
+
 /** An unstarted game made more than LOBBY_HOLD_MS ago. A row with no `created_at` (older test data) never expires. */
 function expiredLobby(g: Game, now: number): boolean {
   return !g.started_at && !!g.created_at && now - Date.parse(g.created_at) >= LOBBY_HOLD_MS
@@ -695,10 +716,12 @@ const create: Action = async (ctx, body) => {
     paused_at: null,
     pauses: [],
     final_whistle_at: null,
+    wiped_at: null,
     organiser_id: organiser.id,
     ...(stash ? { dato_stash: stash } : {}),
     ...(bomohStash ? { bomoh_stash: bomohStash } : {}),
   })
+  await wipeExpired(ctx)
   const notices = [noFreeCard ? NO_FREE_CARD_NOTICE : null, noFreeBomohCard ? NO_FREE_BOMOH_CARD_NOTICE : null].filter(
     (n): n is string => n !== null,
   )
@@ -1926,6 +1949,7 @@ const saveArena: Action = async (ctx, body) => {
 const listArenas: Action = async (ctx, body) => {
   const organiser = await requireAnyOrganiser(ctx, body)
   const rows = await ctx.store.arenasFor(organiser.organisation_id)
+  await wipeExpired(ctx)
   return {
     arenas: rows.map((r) => ({
       id: r.id,

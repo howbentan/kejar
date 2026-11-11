@@ -9,8 +9,9 @@ import { seeded } from '../../shared/testing.js'
 import type { PowerUpKind, Role } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
 import { PHONE_MOVE_TTL_MS } from '../../shared/invites.js'
-import { ActionError, actions, MAX_PLAYERS_PER_GAME, STASH_MISS_LIMIT, type ActionName } from './actions.js'
+import { ActionError, actions, MAX_PLAYERS_PER_GAME, STASH_MISS_LIMIT, WIPE_AFTER_MS, type ActionName } from './actions.js'
 import { hashToken } from './secrets.js'
+import { computeResults } from '../../shared/results.js'
 import { MemoryStore } from './store.js'
 
 const CENTER = { lat: 3.0, lng: 101.0 }
@@ -4552,5 +4553,80 @@ describe('New phone (fair-play §1.7)', () => {
       target_id: g.aina.playerId,
       data: { game_code: g.code, by: 'Siti', target_name: 'Aina' },
     })
+  })
+})
+
+describe('wiping personal data 30 days after a game', () => {
+  const DAY = 24 * 60 * MIN
+
+  async function endedGame() {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(30) })
+    await run('sos', { code: g.code, token: g.aina.token, ...at(20) })
+    await run('report', { code: g.code, token: g.aina.token, targetId: g.ben.playerId, reason: 'unsafe', note: 'shouted at me', ...at(20) })
+    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })
+    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })
+    now += 61_000
+    await run('state', { code: g.code, token: g.ben.token })
+    const game = (await store.gameByCode(g.code))!
+    expect(game.ended_at).toBeTruthy()
+    return { ...g, gameId: game.id }
+  }
+  const wipedAt = async (code: string) => (await store.gameByCode(code))!.wiped_at
+
+  it('wipes a game that ended 31 days ago on the next create, and leaves one that ended 29 days ago', async () => {
+    const old = await endedGame()
+    const endedAt = Date.parse((await store.gameByCode(old.code))!.ended_at!)
+    now = endedAt + 31 * DAY
+    await run('create', { arenaId: 'around-me', center: CENTER, organiserToken: old.organiserToken })
+    expect(await wipedAt(old.code)).toBeTruthy()
+
+    now = T0
+    const recent = await endedGame()
+    now = Date.parse((await store.gameByCode(recent.code))!.ended_at!) + 29 * DAY
+    await run('create', { arenaId: 'around-me', center: CENTER, organiserToken: recent.organiserToken })
+    expect(await wipedAt(recent.code)).toBeNull()
+    now += 2 * DAY
+    await run('listArenas', { organiserToken: recent.organiserToken })
+    expect(await wipedAt(recent.code)).toBeTruthy()
+  })
+
+  it('never wipes a game that has not ended', async () => {
+    const g = await readyGame()
+    now += 100 * DAY
+    await run('create', { arenaId: 'around-me', center: CENTER, organiserToken: g.organiserToken })
+    expect(await wipedAt(g.code)).toBeNull()
+  })
+
+  it('keeps the winner and award counts, and shows placeholder names', async () => {
+    const g = await endedGame()
+    const game = (await store.gameByCode(g.code))!
+    const before = computeResults(game, await store.players(g.gameId), await store.events(g.gameId))
+    now = Date.parse(game.ended_at!) + WIPE_AFTER_MS + MIN
+    await run('listArenas', { organiserToken: g.organiserToken })
+    const wiped = (await store.gameByCode(g.code))!
+    expect(wiped.wiped_at).toBeTruthy()
+    const players = await store.players(g.gameId)
+    expect(computeResults(wiped, players, await store.events(g.gameId))).toEqual(before)
+    expect(players.map((p) => p.name).sort()).toEqual(['Dikejar 1', 'Dikejar 2', 'Kejar 1'])
+    expect(JSON.stringify(await store.events(g.gameId))).not.toMatch(/Aina|Hafiz|Ben|shouted/)
+  })
+
+  it('a store whose wipe throws does not break create or listArenas', async () => {
+    const g = await endedGame()
+    now = Date.parse((await store.gameByCode(g.code))!.ended_at!) + 31 * DAY
+    store.wipeGame = async () => {
+      throw new Error('db down')
+    }
+    expect(await run('create', { arenaId: 'around-me', center: CENTER, organiserToken: g.organiserToken })).toMatchObject({ code: expect.any(String) })
+    expect(await run('listArenas', { organiserToken: g.organiserToken })).toMatchObject({ arenas: [] })
+    store.gamesToWipe = async () => {
+      throw new Error('db down')
+    }
+    expect(await run('listArenas', { organiserToken: g.organiserToken })).toMatchObject({ arenas: [] })
   })
 })

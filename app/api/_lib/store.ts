@@ -6,6 +6,15 @@ import { newDatoCode } from './secrets.js'
 export type GameRow = Game & { organiser_id: string; host_push?: PushSubscriptionJSON | null }
 export type PlayerRow = Player & { token_hash: string }
 
+/**
+ * Event `data` keys that can hold a player's name, free text or a position (fair-play §1.8). A game's wipe
+ * removes them from every event; the SQL `wipe_game` lists the same keys, and a test checks the two agree.
+ */
+export const WIPE_EVENT_KEYS = ['who', 'chaser', 'name', 'by', 'target_name', 'targetName', 'withName', 'with_name', 'text', 'note', 'lat', 'lng'] as const
+
+/** The placeholder a wiped player is renamed to, numbered by join order within their role. */
+export const WIPE_PLACEHOLDER: Record<string, string> = { runner: 'Dikejar', chaser: 'Kejar', marshal: 'Marshal' }
+
 export interface Organisation {
   id: string
   name: string
@@ -183,6 +192,14 @@ export interface GameStore {
   removePlayer(id: string): Promise<boolean>
   /** Kept apart from game data (spec §6); at = store clock. The app never reads these back. */
   addSafetyRecord(r: SafetyRecord): Promise<void>
+  /**
+   * Fair-play §1.8: deletes the game's locations, safety records, phone moves and marshal invites; renames players to
+   * role placeholders, clears their push and gives them fresh tokens; strips names and free text from events; sets
+   * wiped_at. Atomic, and false (a no-op) if the game is already wiped.
+   */
+  wipeGame(id: string): Promise<boolean>
+  /** Ids of up to `limit` games that ended before `endedBeforeIso` and are not wiped yet, oldest first. */
+  gamesToWipe(endedBeforeIso: string, limit: number): Promise<string[]>
   createOrganisation(o: Omit<Organisation, 'id'>): Promise<Organisation>
   createOrganiser(o: Omit<OrganiserRow, 'id'>): Promise<OrganiserRow>
   organiserBySessionTokenHash(hash: string): Promise<OrganiserRow | null>
@@ -292,6 +309,43 @@ export class MemoryStore implements GameStore {
     return copy as T
   }
 
+  async wipeGame(id: string) {
+    // No await below, so the wipe is atomic here.
+    const g = this.games.find((x) => x.id === id)
+    if (!g || g.wiped_at) return false
+    g.wiped_at = this.nowIso()
+    g.host_push = null
+    this.locs = this.locs.filter((l) => l.game_id !== id)
+    this.safetyRows = this.safetyRows.filter((r) => r.game_id !== id)
+    this.phoneMoveRows = this.phoneMoveRows.filter((r) => r.game_id !== id)
+    this.marshalInviteRows = this.marshalInviteRows.filter((r) => r.game_id !== id)
+    const mine = this.playerRows
+      .filter((p) => p.game_id === id)
+      .sort((a, b) => Date.parse(a.accepted_at) - Date.parse(b.accepted_at) || this.playerRows.indexOf(a) - this.playerRows.indexOf(b))
+    const seen: Record<string, number> = {}
+    for (const p of mine) {
+      const label = WIPE_PLACEHOLDER[p.role ?? ''] ?? 'Player'
+      seen[label] = (seen[label] ?? 0) + 1
+      p.name = `${label} ${seen[label]}`
+      p.push = null
+      p.token_hash = `wiped-${this.id('t')}`
+    }
+    for (const e of this.eventRows) {
+      if (e.game_id !== id) continue
+      const data = { ...e.data }
+      for (const k of WIPE_EVENT_KEYS) delete data[k]
+      e.data = data
+    }
+    return true
+  }
+  async gamesToWipe(endedBeforeIso: string, limit: number) {
+    const cut = Date.parse(endedBeforeIso)
+    return this.games
+      .filter((g) => g.ended_at && !g.wiped_at && Date.parse(g.ended_at) < cut)
+      .sort((a, b) => Date.parse(a.ended_at!) - Date.parse(b.ended_at!))
+      .slice(0, limit)
+      .map((g) => g.id)
+  }
   async createGame(g: Omit<GameRow, 'id'>) {
     // created_at = the store clock, like the column's default.
     const row = { created_at: this.nowIso(), ...g, id: this.id('g') }

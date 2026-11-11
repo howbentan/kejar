@@ -5,7 +5,7 @@ import { newDatoCode } from './secrets.js'
 import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PhoneMoveRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, RedeemPhoneMoveResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
 const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at'
-const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, final_whistle_at, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit'
+const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, final_whistle_at, wiped_at, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -323,6 +323,15 @@ export class SupabaseStore implements GameStore {
   }
   async addSafetyRecord(r: SafetyRecord) {
     check(await this.db.from('safety_records').insert({ ...r, at: this.nowIso() }))
+  }
+  async wipeGame(id: string) {
+    return check(await this.db.rpc('wipe_game', { p_game: id })) === true
+  }
+  async gamesToWipe(endedBeforeIso: string, limit: number) {
+    const rows = check(
+      await this.db.from('games').select('id').lt('ended_at', endedBeforeIso).is('wiped_at', null).order('ended_at').limit(limit),
+    ) as { id: string }[] | null
+    return (rows ?? []).map((r) => r.id)
   }
   async createOrganisation(o: Omit<Organisation, 'id'>): Promise<Organisation> {
     return check(await this.db.from('organisations').insert(o).select('*').single()) as Organisation

@@ -85,6 +85,8 @@ export interface Game {
    * undo a wrong last catch. Null when no whistle is pending (cleared again if someone is free).
    */
   final_whistle_at: string | null
+  /** When this game's personal data was wiped (fair-play §1.8), 30 days after it ended. Null until then. */
+  wiped_at: string | null
   /** Deck sets per side, fixed at start, and cards drawn so far (power-ups §5b). Older games have none. */
   runner_sets?: number | null
   chaser_sets?: number | null

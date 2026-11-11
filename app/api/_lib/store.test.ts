@@ -2,7 +2,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_SETTINGS } from '../../shared/types.js'
 import { iso, MIN, T0 } from '../../shared/fixtures.js'
-import { MemoryStore } from './store.js'
+import { readFileSync } from 'node:fs'
+import { MemoryStore, WIPE_EVENT_KEYS } from './store.js'
 
 let now: number
 let store: MemoryStore
@@ -12,9 +13,9 @@ beforeEach(() => {
   store = new MemoryStore(() => now)
 })
 
-async function startedGame() {
+async function startedGame(code = 'ABC234') {
   return store.createGame({
-    code: 'ABC234',
+    code,
     arena: { id: 'a', name: 'a', boundary: [], jail: { lat: 0, lng: 0 }, start: { lat: 0, lng: 0 } },
     settings: { ...DEFAULT_SETTINGS },
     started_at: iso(T0),
@@ -23,6 +24,7 @@ async function startedGame() {
     paused_at: null,
     pauses: [],
     final_whistle_at: null,
+    wiped_at: null,
     organiser_id: 'test-organiser',
   })
 }
@@ -306,6 +308,7 @@ describe('organiser accounts', () => {
       paused_at: null,
       pauses: [],
       final_whistle_at: null,
+      wiped_at: null,
       organiser_id: organiser.id,
     })
     await store.createMarshalInvite({
@@ -340,6 +343,7 @@ describe('organiser accounts', () => {
       paused_at: null,
       pauses: [],
       final_whistle_at: null,
+      wiped_at: null,
       organiser_id: organiser.id,
     })
     const player = await store.addPlayer({
@@ -603,5 +607,93 @@ describe('MemoryStore.claimBomoh', () => {
     await store.updateGame(g.id, { bomoh_stash: { ...dropped, claimedBy: 'p0', claimedAt: iso(T0) } })
     expect(await store.claimBomoh(g.id, 'p1', new Date(now))).toBe(false)
     expect(await store.claimBomoh('no-such-game', 'p1', new Date(now))).toBe(false)
+  })
+})
+
+describe('wiping a game', () => {
+  const NAMES = ['Aina', 'Hafiz', 'Ben', 'Siti']
+  async function playedGame() {
+    const g = await startedGame()
+    const mk = async (name: string, role: 'runner' | 'chaser' | 'marshal') => {
+      const p = await store.addPlayer({ ...(await newPlayerRow(g.id, name)), role, push: { endpoint: `https://push/${name}` } })
+      await store.addPosition(g.id, p.id, { lat: 3.1, lng: 101.1, accuracy_m: 5 })
+      return p
+    }
+    const aina = await mk('Aina', 'runner')
+    const hafiz = await mk('Hafiz', 'runner')
+    const ben = await mk('Ben', 'chaser')
+    const siti = await mk('Siti', 'marshal')
+    const ev = (type: string, data: Record<string, unknown>, actor: string | null = null, target: string | null = null) =>
+      store.addEvent({ game_id: g.id, type, actor_id: actor, target_id: target, data })
+    await ev('caught', { flagged: false, who: 'Aina #07', chaser: 'Ben' }, ben.id, aina.id)
+    await ev('caught', { flagged: false, who: 'Hafiz #03', chaser: 'Ben' }, ben.id, hafiz.id)
+    await ev('sos', { who: 'Aina', lat: 3.1, lng: 101.1, text: 'a man is following me' }, aina.id)
+    await ev('report', { name: 'Aina', targetName: 'Ben', reason: 'rude', note: 'shouted at me' }, aina.id, ben.id)
+    await ev('out-warned', { who: 'Hafiz' }, hafiz.id)
+    await ev('handled', { eventId: 'e1', name: 'Siti', outcome: 'ok' }, siti.id)
+    await ev('removed', { name: 'Ben' }, siti.id, ben.id)
+    await ev('ended', { winner: 'chasers' })
+    await store.addSafetyRecord({
+      game_id: g.id, type: 'sos', player_id: aina.id, target_id: null, lat: 3.1, lng: 101.1,
+      data: { game_code: 'ABC234', name: 'Aina', note: 'a man is following me' },
+    })
+    await store.addPowerUp({ game_id: g.id, player_id: aina.id, kind: 'shield', station: 1 })
+    await store.addPings([{ game_id: g.id, seq: 1, alert_at: iso(T0), reveal_at: iso(T0), alerted: true, revealed: true } as never])
+    await store.createPhoneMove({ game_id: g.id, player_id: aina.id, token_hash: 'pm-secret', created_at: iso(T0), expires_at: iso(T0 + MIN), redeemed_at: null })
+    await store.createMarshalInvite({ game_id: g.id, token_hash: 'mi-secret', created_at: iso(T0), expires_at: iso(T0 + MIN), redeemed_at: null })
+    await store.updateGame(g.id, { ended_at: iso(T0 + 45 * MIN), winner: 'chasers', host_push: { endpoint: 'https://push/host' } })
+    return g
+  }
+  const newPlayerRow = async (gameId: string, name: string) => ({
+    game_id: gameId, name, role: 'runner' as const, tag_id: null, accepted_at: iso(T0), caught_at: null, caught_by: null,
+    jailed: false, freed_once: false, freed_at: null, push: null, removed_at: null, outside: false, left_start: false, token_hash: `t-${name}`,
+  })
+  const dump = async (id: string) => {
+    const s = store as unknown as Record<string, unknown>
+    return JSON.stringify([
+      await store.players(id), await store.events(id), await store.powerUps(id), await store.pings(id),
+      (await store.gameByCode('ABC234')), s.locs, s.safetyRows, s.phoneMoveRows, s.marshalInviteRows, s.playerRows, s.games,
+    ])
+  }
+
+  it('leaves no name, SOS text, token or location behind, numbers players by join order, and only runs once', async () => {
+    const g = await playedGame()
+    expect(await dump(g.id)).toContain('a man is following me')
+    expect(await store.wipeGame(g.id)).toBe(true)
+    const left = await dump(g.id)
+    for (const secret of [...NAMES, 'following me', 'shouted', 'pm-secret', 'mi-secret', 'https://push', 't-Aina', '3.1,']) {
+      expect(left, secret).not.toContain(secret)
+    }
+    expect((await store.players(g.id)).map((p) => p.name)).toEqual(['Dikejar 1', 'Dikejar 2', 'Kejar 1', 'Marshal 1'])
+    expect((await store.gameByCode('ABC234'))!.wiped_at).toBe(iso(T0))
+    expect((await store.events(g.id)).find((e) => e.type === 'ended')!.data).toEqual({ winner: 'chasers' })
+    expect((await store.events(g.id)).find((e) => e.type === 'caught')!.data).toEqual({ flagged: false })
+    expect(await store.wipeGame(g.id)).toBe(false)
+  })
+
+  it('gives every player a fresh token, so an old session link no longer works', async () => {
+    const g = await playedGame()
+    await store.wipeGame(g.id)
+    expect(await store.playerByToken(g.id, 't-Aina')).toBeNull()
+  })
+
+  it('gamesToWipe lists ended, unwiped games older than the cut-off, oldest first, up to the limit', async () => {
+    const old = await playedGame()
+    const young = await startedGame('YNG234')
+    await store.updateGame(young.id, { ended_at: iso(T0 + 20 * MIN) })
+    const never = await startedGame('NVR234')
+    expect(await store.gamesToWipe(iso(T0 + 30 * MIN), 5)).toEqual([young.id])
+    expect(await store.gamesToWipe(iso(T0 + 60 * MIN), 5)).toEqual([young.id, old.id])
+    expect(await store.gamesToWipe(iso(T0 + 60 * MIN), 1)).toEqual([young.id])
+    await store.wipeGame(young.id)
+    expect(await store.gamesToWipe(iso(T0 + 60 * MIN), 5)).toEqual([old.id])
+    expect(never.id).toBeTruthy()
+  })
+
+  it('strips the same event keys in the SQL as in the store', () => {
+    const sql = readFileSync(new URL('../../../supabase/migrations/0016_fair_play.sql', import.meta.url), 'utf8')
+    const body = sql.slice(sql.indexOf('function wipe_game'))
+    const listed = [...body.matchAll(/array\[([^\]]+)\]/g)].flatMap((m) => [...m[1].matchAll(/'([^']+)'/g)].map((k) => k[1]))
+    expect([...listed].sort()).toEqual([...WIPE_EVENT_KEYS].sort())
   })
 })

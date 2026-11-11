@@ -128,4 +128,47 @@ alter table safety_records drop constraint if exists safety_records_type_check;
 alter table safety_records add constraint safety_records_type_check
   check (type in ('sos', 'report', 'removed', 'auto-jail-undone', 'kejar-undone', 'phone-move'));
 
+-- 5. Wipe a game's personal data 30 days after it ends (fair-play §1.8). Results, counts and the game row stay.
+alter table games add column if not exists wiped_at timestamptz;
+
+-- Runs in one transaction, and returns false (doing nothing) once the game is wiped. Players keep their rows, renamed
+-- to role placeholders numbered by join order, so results still render. Event keys that hold a name, free text or a
+-- position are removed; the list matches WIPE_EVENT_KEYS in app/api/_lib/store.ts.
+create or replace function wipe_game(p_game uuid) returns boolean
+language plpgsql
+as $$
+declare
+  claimed int;
+begin
+  update games set wiped_at = now(), host_push = null where id = p_game and wiped_at is null;
+  get diagnostics claimed = row_count;
+  if claimed = 0 then
+    return false;
+  end if;
+  delete from locations where game_id = p_game;
+  delete from safety_records where game_id = p_game;
+  delete from phone_moves where game_id = p_game;
+  delete from marshal_invites where game_id = p_game;
+  update players p
+    set name = case n.role when 'runner' then 'Dikejar ' when 'chaser' then 'Kejar ' when 'marshal' then 'Marshal ' else 'Player ' end || n.num,
+        push = null,
+        token_hash = replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')
+    from (
+      select id, role, row_number() over (partition by coalesce(role, '') order by accepted_at, id) as num
+      from players where game_id = p_game
+    ) n
+    where p.id = n.id;
+  update events
+    set data = data - array['who', 'chaser', 'name', 'by', 'target_name', 'targetName', 'withName', 'with_name', 'text', 'note', 'lat', 'lng']
+    where game_id = p_game;
+  return true;
+end;
+$$;
+
+revoke execute on function wipe_game(uuid) from public, anon, authenticated;
+grant execute on function wipe_game(uuid) to service_role;
+
+-- Finding the games to sweep: ended, not yet wiped, oldest first.
+create index if not exists games_to_wipe on games (ended_at) where wiped_at is null and ended_at is not null;
+
 commit;
