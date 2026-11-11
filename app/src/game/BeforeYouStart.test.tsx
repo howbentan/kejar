@@ -13,7 +13,7 @@ const places = [
   { id: 'dato', label: 'Yellow card', lat: 0, lng: 0, tone: 'yellow' },
 ]
 
-function make(over: { placed?: string[]; marshals?: { name: string; pushOn: boolean }[]; mePush?: boolean; briefed?: boolean } = {}) {
+function make(over: { placed?: string[]; marshals?: { name: string; pushOn: boolean }[]; mePush?: boolean; briefing?: { started: boolean; ready: number; total: number } } = {}) {
   const placed = over.placed ?? []
   return {
     me: { id: 'host', name: 'Owner', push: over.mePush ?? true },
@@ -21,8 +21,9 @@ function make(over: { placed?: string[]; marshals?: { name: string; pushOn: bool
       { id: 'p1', name: 'Wei', role: 'runner', tag_id: null, jailed: false },
       ...(over.marshals ?? []).map((m, i) => ({ id: `m${i}`, name: m.name, role: 'marshal', tag_id: null, jailed: false, pushOn: m.pushOn })),
     ],
+    briefing: { status: {}, ...(over.briefing ?? { started: false, ready: 0, total: 3 }) },
     kit: {
-      items: [{ id: 'brief-players', group: 'day', label: 'Brief the players', ticked: over.briefed ?? false }],
+      items: [{ id: 'brief-players', group: 'day', label: 'Brief the players', ticked: over.briefing?.started ?? false }],
       places,
       placed: Object.fromEntries(placed.map((id) => [id, true])),
     },
@@ -91,20 +92,20 @@ describe('BeforeYouStart', () => {
     expect(screen.getByText("You haven't turned them on")).toBeInTheDocument()
   })
 
-  it('Brief the players is a manual tick saved as kit tick brief-players', async () => {
+  it('Brief the players is a button that says it opens how to play on every phone', async () => {
     render(<BeforeYouStart code="ABC234" view={make()} refresh={refresh} />)
-    expect(screen.getByText("Tap when you've told them the rules")).toBeInTheDocument()
-    fireEvent.click(row('Brief the players'))
-    expect(row('Brief the players')).toHaveAttribute('aria-checked', 'true')
-    await waitFor(() =>
-      expect(call).toHaveBeenCalledWith('setKit', { code: 'ABC234', organiserToken: 'h1', tick: { id: 'brief-players', on: true } }),
-    )
+    expect(screen.getByText('Opens how to play on every phone')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Brief the players/ }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('startBriefing', { code: 'ABC234', organiserToken: 'h1' }))
+    expect(call).not.toHaveBeenCalledWith('setKit', expect.anything())
     expect(refresh).toHaveBeenCalled()
   })
 
-  it('shows a saved Brief the players tick', () => {
-    render(<BeforeYouStart code="ABC234" view={make({ briefed: true })} refresh={refresh} />)
-    expect(row('Brief the players')).toHaveAttribute('aria-checked', 'true')
+  it('once started it shows who is ready and counts as done', () => {
+    render(<BeforeYouStart code="ABC234" view={make({ briefing: { started: true, ready: 1, total: 3 } })} refresh={refresh} />)
+    expect(screen.getByText('1 of 3 ready')).toBeInTheDocument()
+    expect(screen.queryByText('Opens how to play on every phone')).not.toBeInTheDocument()
+    expect(screen.getByText('Brief the players').closest('[data-done]')).not.toBeNull()
   })
 
   it('Kit list opens the packing list inline', () => {

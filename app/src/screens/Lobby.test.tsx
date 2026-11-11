@@ -86,3 +86,32 @@ describe('Lobby: Walk the park', () => {
     expect(screen.queryByRole('button', { name: 'Walk the park' })).toBeNull()
   })
 })
+
+describe('Lobby how to play', () => {
+  it('opens the story when the briefing is open, marks it opened, and I’m ready marks ready', async () => {
+    localStorage.setItem('kejar.game.ABC234', JSON.stringify({ token: 'r1' }))
+    const { call } = await import('../game/api')
+    vi.mocked(call).mockClear()
+    vi.mocked(call).mockResolvedValue({ ok: true })
+    const refresh = vi.fn()
+    const view = testView({ phase: 'lobby', briefing: { open: true, ready: false } })
+    render(<Lobby code="ABC234" view={view} refresh={refresh} />)
+    expect(screen.getByRole('heading', { name: /You.re Dikejar/ })).toBeInTheDocument()
+    expect(call).toHaveBeenCalledWith('briefOpened', { code: 'ABC234', token: 'r1' })
+    for (let i = 0; i < 6; i++) fireEvent.click(screen.getByRole('button', { name: 'Next card' }))
+    fireEvent.click(screen.getByRole('button', { name: "I'm ready" }))
+    expect(call).toHaveBeenCalledWith('briefReady', { code: 'ABC234', token: 'r1' })
+    localStorage.clear()
+  })
+
+  it('shows the new side’s first headline when the side was swapped after reading', () => {
+    const base = testView({ phase: 'lobby', briefing: { open: false, ready: true } })
+    const { rerender } = render(<Lobby code="ABC234" view={base} refresh={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'How to play' }))
+    expect(screen.getByRole('heading', { name: /You.re Dikejar/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    rerender(<Lobby code="ABC234" view={{ ...base, me: { ...base.me, role: 'chaser' } }} refresh={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'How to play' }))
+    expect(screen.getByRole('heading', { name: /You.re Kejar/ })).toBeInTheDocument()
+  })
+})

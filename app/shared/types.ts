@@ -94,6 +94,8 @@ export interface Game {
   five_warned_at: string | null
   /** When this game's personal data was wiped (fair-play §1.8), 30 days after it ended. Null until then. */
   wiped_at: string | null
+  /** When the organiser tapped Brief the players (ISO): the how-to-play story opens on every player's phone from then. Set once; older games have none. */
+  briefed_at?: string | null
   /** Deck sets per side, fixed at start, and cards drawn so far (power-ups §5b). Older games have none. */
   runner_sets?: number | null
   chaser_sets?: number | null
@@ -205,6 +207,9 @@ export interface Player {
   out_warned_at?: string | null
   /** Luar Garisan: when this player was disqualified for leaving the play area twice in a row (ISO). Permanent for the round. */
   disqualified_at?: string | null
+  /** How to play: when this player opened the story, and when they tapped I'm ready (ISO). Each is set once. */
+  brief_opened_at?: string | null
+  brief_ready_at?: string | null
 }
 
 export interface Ping {

@@ -4,8 +4,8 @@ import type { Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind, Sec
 import { newDatoCode } from './secrets.js'
 import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PhoneMoveRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, RedeemPhoneMoveResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
-const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, reel_pulled_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at'
-const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, final_whistle_at, rescue, five_warned_at, wiped_at, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit'
+const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, reel_pulled_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at, brief_opened_at, brief_ready_at'
+const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, final_whistle_at, rescue, five_warned_at, wiped_at, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit, briefed_at'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -320,6 +320,13 @@ export class SupabaseStore implements GameStore {
   async resumeGame(gameId: string) {
     // The database function closes the pause and shifts the pings in one transaction.
     return check(await this.db.rpc('resume_game', { p_game: gameId, p_at: this.nowIso() })) as number | null
+  }
+  async setBriefedAt(gameId: string, atIso: string) {
+    const rows = check(await this.db.from('games').update({ briefed_at: atIso }).eq('id', gameId).is('briefed_at', null).select('id'))
+    return (rows ?? []).length > 0
+  }
+  async markBrief(playerId: string, field: 'brief_opened_at' | 'brief_ready_at', atIso: string) {
+    check(await this.db.from('players').update({ [field]: atIso }).eq('id', playerId).is(field, null))
   }
   async setFlag(playerId: string, field: 'outside' | 'left_start', value: boolean) {
     const rows = check(

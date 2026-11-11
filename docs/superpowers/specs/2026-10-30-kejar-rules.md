@@ -231,7 +231,7 @@ Dato Seri is the one legendary, so its Settle is now bigger: it frees **the hold
 
 1. ~~**Organiser setup**~~ **designed 2026-10-30:** `2026-10-30-kejar-organiser-setup-design.md` covers five setup steps, the kit checklist, walking the park, the stash drop and lobby checks.
 2. ~~**The chase screen audit**~~ **designed 2026-10-30:** motion design §8.6 (one screen, map as the hero, a dock with the slot, one Scan button, a ticker and SOS) and §8.7 (the lock-screen status notification with clock times).
-3. ~~**The how-to-play card**~~ **designed 2026-10-30:** motion design §8.8, a briefing story per side and mode with self-drawing doodle scenes.
+3. ~~**The how-to-play card**~~ **designed 2026-10-30:** motion design §8.8, a briefing story per side and mode with self-drawing doodle scenes. **Built 2026-11-11** (branch `how-to-play`): `Brief the players` opens it on every runner and chaser phone, marshals get none.
 4. ~~**The auto-jailed runner**~~ **designed 2026-10-30:** motion design §5a–§5b, with a `2× MISSED` moment, the missed check-ins crossed out, and a **marshal undo for phone faults** (auto-jail only, doesn't use the once-only escape).
 
 **All screens are now designed. Next: build plans (§12).**

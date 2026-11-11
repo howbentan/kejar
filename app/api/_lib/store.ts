@@ -105,6 +105,10 @@ export interface GameStore {
   claimFinalWhistle(gameId: string, atIso: string): Promise<boolean>
   /** Sets `five_warned_at` only if it is still null and the game hasn't ended; true for the first caller (rules §2.7). */
   claimFiveWarning(gameId: string, atIso: string): Promise<boolean>
+  /** Sets `briefed_at` only if it is still null; true for the first caller (how to play). */
+  setBriefedAt(gameId: string, atIso: string): Promise<boolean>
+  /** Sets one of a player's briefing times only if it is still null. */
+  markBrief(playerId: string, field: 'brief_opened_at' | 'brief_ready_at', atIso: string): Promise<void>
   /** Calls off a pending final whistle (someone is free again). */
   clearFinalWhistle(gameId: string): Promise<void>
   /**
@@ -480,6 +484,16 @@ export class MemoryStore implements GameStore {
     if (!g || g.ended_at || g.five_warned_at) return false
     g.five_warned_at = atIso
     return true
+  }
+  async setBriefedAt(gameId: string, atIso: string) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g || g.briefed_at) return false
+    g.briefed_at = atIso
+    return true
+  }
+  async markBrief(playerId: string, field: 'brief_opened_at' | 'brief_ready_at', atIso: string) {
+    const p = this.playerRows.find((x) => x.id === playerId)
+    if (p && !p[field]) p[field] = atIso
   }
   async clearFinalWhistle(gameId: string) {
     const g = this.games.find((x) => x.id === gameId)

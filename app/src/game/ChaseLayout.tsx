@@ -3,6 +3,7 @@ import type { View } from '../../shared/views.js'
 import { call } from './api'
 import { currentCoords } from './here'
 import GameMap from './Map'
+import HowToPlayLink from './HowToPlayLink'
 import { stationQr, tagQr } from '../../shared/ids.js'
 import { rippleOrigin } from './ripple'
 import Scanner from './Scanner'
@@ -93,7 +94,10 @@ export default function ChaseLayout(props: {
           ripple={view.lastRevealAt ? { at: view.lastRevealAt, origin: rippleOrigin(view.dots, view.arena) } : null}
         />
         <div className="chase-over">
-          <div className="chase-chips">{props.chips}</div>
+          <div className="chase-chips">
+            {props.chips}
+            <HowToPlayLink code={code} view={view} />
+          </div>
           {props.overlay}
         </div>
       </div>

@@ -1170,3 +1170,38 @@ describe('5 minutes left (rules §2.7)', () => {
     expect(view(chaser, { game: game({ five_warned_at: iso(T0 + 45 * MIN) }) }).fiveLeft).toBe(true)
   })
 })
+
+describe('how to play: briefing view', () => {
+  const lobby = (briefed: boolean) => game({ started_at: null, briefed_at: briefed ? iso(T0) : null })
+  const late = player('r9', 'runner', { name: 'Late' })
+  const all = [chaser, aina, hafiz, siti, late]
+  const v = (me: Player, over: Partial<Parameters<typeof viewFor>[0]> = {}) =>
+    viewFor({ game: lobby(true), me, players: all, positions: {}, pings: [], events: [], now: T0, results: null, powerUps: [], ...over })
+
+  it('opens for a runner who joined after the briefing started', () => {
+    expect(v(late).briefing).toEqual({ open: true, ready: false })
+  })
+  it('is not open before the briefing starts', () => {
+    expect(v(aina, { game: lobby(false) }).briefing).toEqual({ open: false, ready: false })
+  })
+  it('closes once the player is ready', () => {
+    const ready = player('r1', 'runner', { name: 'Aina', brief_ready_at: iso(T0) })
+    expect(v(ready, { players: [chaser, ready, hafiz, siti] }).briefing).toEqual({ open: false, ready: true })
+  })
+  it('gives marshals null', () => {
+    expect(v(siti).briefing).toBeNull()
+  })
+  it('gives the organiser the count and each status', () => {
+    const a = player('r1', 'runner', { name: 'Aina', brief_ready_at: iso(T0), brief_opened_at: iso(T0) })
+    const h = player('r2', 'runner', { name: 'Hafiz', brief_opened_at: iso(T0) })
+    expect(v(organiserMe, { players: [chaser, a, h, siti] }).briefing).toEqual({
+      started: true,
+      ready: 1,
+      total: 3,
+      status: { c1: 'not opened', r1: 'ready', r2: 'reading' },
+    })
+  })
+  it('tells the organiser it has not started yet', () => {
+    expect(v(organiserMe, { game: lobby(false) }).briefing).toMatchObject({ started: false, ready: 0 })
+  })
+})

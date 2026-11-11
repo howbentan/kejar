@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { View } from '../../shared/views.js'
 import AlertsCard from '../game/AlertsCard'
+import HowToPlayLink from '../game/HowToPlayLink'
 import Marker from '../game/Marker'
 import PenjaraArrival from '../game/PenjaraArrival'
 import PenjaraReel, { useReelHold } from '../game/PenjaraReel'
@@ -97,6 +98,7 @@ function AutoJailed({ code, view }: { code: string; view: View }) {
       <button type="button" className="sos-link" style={{ alignSelf: 'flex-start' }} onClick={tellMarshal}>
         Phone died or no buzz? Tell a marshal →
       </button>
+      <HowToPlayLink code={code} view={view} />
       <AlertsCard code={code} view={view} />
       <Feed view={view} />
     </Screen>
@@ -192,6 +194,7 @@ function Caught({ code, view }: { code: string; view: View }) {
       />
       <Settle code={code} view={view} onSettled={() => setLocalSettled(true)} />
       {(view.me.jailed || holding) && <WalkThenWatch code={code} view={view} onDistance={setDistanceM} />}
+      <HowToPlayLink code={code} view={view} />
       <AlertsCard code={code} view={view} />
       <Feed view={view} />
     </Screen>

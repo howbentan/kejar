@@ -416,6 +416,26 @@ const secretCardCode: Action = async (ctx, body) => {
   return { code: card.code }
 }
 
+/** The organiser taps Brief the players: how to play opens on every phone. Lobby only; the first time stays (idempotent). */
+const startBriefing: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  await requireOrganiser(ctx, game, body)
+  requireLobby(game, ctx.now)
+  await ctx.store.setBriefedAt(game.id, iso(ctx.now))
+  return { ok: true }
+}
+
+/** A runner or chaser's phone opened the story, or tapped I'm ready. Any phase (it can be reopened mid-game); set once. */
+async function markBriefing(ctx: Ctx, body: Body, field: 'brief_opened_at' | 'brief_ready_at') {
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  if (me.role === 'marshal') throw new ActionError(403, 'Marshals have no story')
+  await ctx.store.markBrief(me.id, field, iso(ctx.now))
+  return { ok: true }
+}
+const briefOpened: Action = (ctx, body) => markBriefing(ctx, body, 'brief_opened_at')
+const briefReady: Action = (ctx, body) => markBriefing(ctx, body, 'brief_ready_at')
+
 function requireLobby(game: Game, now: number) {
   if (phaseAt(game, now).phase !== 'lobby') throw new ActionError(409, 'Game already started')
 }
@@ -776,6 +796,7 @@ const create: Action = async (ctx, body) => {
     rescue: null,
     five_warned_at: null,
     wiped_at: null,
+    briefed_at: null,
     organiser_id: organiser.id,
     ...(stash ? { dato_stash: stash } : {}),
     ...(bomohStash ? { bomoh_stash: bomohStash } : {}),
@@ -819,6 +840,8 @@ const join: Action = async (ctx, body) => {
     removed_at: null,
     outside: false,
     left_start: false,
+    brief_opened_at: null,
+    brief_ready_at: null,
     token_hash: hashToken(token),
   })
   await ctx.store.addEvent({ game_id: game.id, type: 'joined', actor_id: p.id, target_id: null, data: {} })
@@ -934,6 +957,8 @@ const state: Action = async (ctx, body) => {
       removed_at: null,
       outside: false,
       left_start: false,
+      brief_opened_at: null,
+      brief_ready_at: null,
     }
   }
   // The organiser's own poll only (ruling R9): an expired lobby re-checks its card, so the print link never shows a
@@ -1358,6 +1383,8 @@ const redeemMarshalInvite: Action = async (ctx, body) => {
     removed_at: null,
     outside: false,
     left_start: false,
+    brief_opened_at: null,
+    brief_ready_at: null,
     token_hash: hashToken(token),
   })
   await ctx.store.addEvent({ game_id: game.id, type: 'joined', actor_id: p.id, target_id: null, data: {} })
@@ -2179,6 +2206,9 @@ export const actions = {
   create,
   setKit,
   setMode,
+  startBriefing,
+  briefOpened,
+  briefReady,
   join,
   setRoles,
   start,

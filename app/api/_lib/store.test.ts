@@ -811,3 +811,23 @@ describe('MemoryStore.pullReel', () => {
     expect(await store.pullReel(p.id, iso(now))).toBe(true)
   })
 })
+
+describe('MemoryStore briefing', () => {
+  it('setBriefedAt is true only once and keeps the first time', async () => {
+    const g = await startedGame()
+    expect(await store.setBriefedAt(g.id, iso(T0))).toBe(true)
+    expect(await store.setBriefedAt(g.id, iso(T0 + MIN))).toBe(false)
+    expect((await store.gameByCode('ABC234'))!.briefed_at).toBe(iso(T0))
+  })
+
+  it('markBrief sets a null field once and leaves a set one alone', async () => {
+    const g = await startedGame()
+    const p = await newPlayer(g.id, 'Aina')
+    await store.markBrief(p.id, 'brief_opened_at', iso(T0))
+    await store.markBrief(p.id, 'brief_opened_at', iso(T0 + MIN))
+    await store.markBrief(p.id, 'brief_ready_at', iso(T0 + MIN))
+    const [row] = await store.players(g.id)
+    expect(row.brief_opened_at).toBe(iso(T0))
+    expect(row.brief_ready_at).toBe(iso(T0 + MIN))
+  })
+})

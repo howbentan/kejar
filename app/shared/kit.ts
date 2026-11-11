@@ -106,9 +106,11 @@ export function placeItems(game: Game, forOrganiser: boolean, secretLetters: Sec
 
 /**
  * Ticked while the item's label is still the one it was ticked under (a new band or a different secret card
- * un-ticks it). "Walk the park" ticks itself once every non-secret place is placed.
+ * un-ticks it). "Walk the park" ticks itself once every non-secret place is placed, and "Brief the players" once
+ * the organiser has tapped the Brief the players button (`briefed_at`), never from an old manual tick.
  */
 export function isTicked(game: Game, item: KitItem): boolean {
+  if (item.id === 'brief-players') return Boolean(game.briefed_at)
   const kit = kitOf(game)
   if (item.id === 'walk') {
     const shared = placeItems(game, false, {})

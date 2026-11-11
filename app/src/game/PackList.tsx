@@ -117,7 +117,7 @@ export default function PackList({ code, view, refresh, compact = false }: { cod
     <>
       <p className="eyebrow" style={{ marginTop: 10 }}>{title}</p>
       {items.filter((i) => i.group === g).map((i) => (
-        <Row key={i.id} item={i} done={doneOf(i)} code={code} onTap={i.id === 'walk' ? undefined : () => void tap(i)} />
+        <Row key={i.id} item={i} done={doneOf(i)} code={code} onTap={i.id === 'walk' || i.id === 'brief-players' ? undefined : () => void tap(i)} />
       ))}
     </>
   )
