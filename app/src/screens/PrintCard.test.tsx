@@ -17,7 +17,8 @@ describe('PrintCard: one game’s hidden ★ card (ruling R15)', () => {
     render(<PrintCard cardCode="Zx9_q-4abcDEF123456789" />)
     await waitFor(() => expect(screen.getByAltText('★')).toHaveAttribute('src', 'data:KEJAR:DATO:Zx9_q-4abcDEF123456789'))
     const card = screen.getByTestId('stash-card')
-    expect(card.textContent).toBe('★kejar.')
+    expect(card.textContent).toBe('★')
+    expect(screen.getByAltText('kejar.')).toHaveAttribute('src', '/logo-ink.png')
     // The printed card itself never says what it is (rules doc §9b).
     expect(card.outerHTML.replace(/data:KEJAR:DATO:[^"]*/, '')).not.toMatch(/dato|seri|legend|power|scan/i)
     // Nor does the on-screen note: the page can be seen over the organiser's shoulder.
@@ -36,7 +37,8 @@ describe('PrintCard: one game’s hidden ★ card (ruling R15)', () => {
   it("a purple card prints a Bomoh QR, with the same plain star face", async () => {
     render(<PrintCard cardCode="Pq7-abc" legendary="bomoh" />)
     await waitFor(() => expect(screen.getByAltText('★')).toHaveAttribute('src', 'data:KEJAR:BOMOH:Pq7-abc'))
-    expect(screen.getByTestId('stash-card').textContent).toBe('★kejar.')
+    expect(screen.getByTestId('stash-card').textContent).toBe('★')
+    expect(screen.getByAltText('kejar.')).toHaveAttribute('src', '/logo-ink.png')
     expect(document.body.textContent).not.toMatch(/bomoh|dato|seri/i)
     expect(encoded).toEqual(['KEJAR:BOMOH:Pq7-abc'])
   })
