@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home game mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root { --volt: #C6FF3D; --ink: #0A0A0B; --paper: #F5F5F3; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #050505; color: var(--paper); font-family: 'Geist', system-ui, sans-serif; }
+  header, section { max-width: 1180px; margin: 0 auto; padding: 24px 20px 4px; }
+  header h1 { font-size: 34px; letter-spacing: -0.04em; margin: 0 0 6px; }
+  header h1 span { color: var(--volt); }
+  header p, section > p { opacity: .65; font-size: 14px; margin: 0 0 12px; max-width: 760px; line-height: 1.45; }
+  section > h2 { font-size: 20px; letter-spacing: -0.03em; margin: 16px 0 4px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 28px 20px; padding-bottom: 24px; }
+  .cell h3 { font-size: 15px; margin: 12px 4px 0; letter-spacing: -0.02em; text-align: center; }
+
+  .phone { width: 290px; height: 600px; border-radius: 34px; background: var(--ink); border: 2px solid #2a2a2a; position: relative; overflow: hidden; margin: 0 auto; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+  .pad { position: absolute; inset: 0; padding: 22px 18px 18px; display: flex; flex-direction: column; }
+  .btn { width: 100%; border-radius: 999px; padding: 15px; font: 800 16px 'Geist', sans-serif; border: 0; background: var(--volt); color: var(--ink); cursor: pointer; position: relative; z-index: 3; }
+  .btn.ghost { background: var(--ink); color: var(--paper); border: 1px solid #444; font-weight: 700; }
+  .btn.back { background: var(--paper); color: var(--ink); }
+  .stack { display: flex; flex-direction: column; gap: 10px; position: relative; z-index: 3; }
+  .link { font-size: 13px; opacity: .7; text-decoration: underline; text-align: center; margin-top: 14px; position: relative; z-index: 3; cursor: pointer; }
+  .eb { font: 500 9.5px 'Geist Mono', monospace; letter-spacing: .2em; color: rgba(245,245,243,.55); }
+  .code { border: 1px solid #333; border-radius: 14px; padding: 14px; font: 500 22px 'Geist Mono', monospace; letter-spacing: .3em; text-align: center; color: rgba(245,245,243,.35); }
+
+  /* the game */
+  .play { position: absolute; left: 0; right: 0; top: 0; bottom: 170px; cursor: pointer; z-index: 1; }
+  .word { position: absolute; width: 240px; aspect-ratio: 900 / 543; left: 25px; top: 150px; pointer-events: none; }
+  .word img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .word.whole { animation: wob .5s ease-in-out; }
+  .slot { position: absolute; border: 1.5px dashed rgba(198,255,61,.0); border-radius: 12px; pointer-events: none; transition: border-color .2s; }
+  .j { position: absolute; pointer-events: none; will-change: transform; }
+  .prize { position: absolute; width: 84px; height: 84px; pointer-events: none; z-index: 3; animation: morph .5s cubic-bezier(.2,.8,.3,1) forwards; }
+  .prize svg { width: 100%; height: 100%; display: block; overflow: visible; }
+  /* the j turns into a power-up for a moment, then turns back */
+  @keyframes morph {
+    0% { transform: scale(.2) rotate(-200deg); opacity: 0; }
+    22% { transform: scale(1.18) rotate(12deg); opacity: 1; }
+    34%, 80% { transform: scale(1) rotate(0); opacity: 1; }
+    100% { transform: scale(.2) rotate(200deg); opacity: 0; }
+  }
+  .j.hide { opacity: 0; }
+  .j.back { animation: jback .16s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes jback { from { transform-origin: center; scale: .4; } to { scale: 1; } }
+  @media (prefers-reduced-motion: reduce) { .prize { animation: none; } }
+  .flash { position: absolute; inset: 0; background: var(--volt); opacity: 0; pointer-events: none; z-index: 2; }
+  .flash.on { animation: flash .35s ease-out; }
+  @keyframes flash { 0% { opacity: .35; } 100% { opacity: 0; } }
+  @keyframes wob { 0%,100% { transform: none; } 30% { transform: rotate(-3deg) scale(1.04); } 65% { transform: rotate(2deg); } }
+
+</style>
+</head>
+<body>
+<header>
+  <h1>Catch the j<span>.</span></h1>
+  <p>Playable. The j spins and bounces around like the old DVD logo. Tap when it's in its gap between ke and ar and it snaps in, then turns into a random power-up for a moment before turning back into the j and spinning off. No score, no penalty; just something to play with.</p>
+</header>
+
+<section>
+  <h2>1. Home with the game</h2>
+  <p>Tap anywhere above the buttons.</p>
+  <div class="grid">
+    <div class="cell">
+      <div class="phone" id="game">
+        <div class="play" id="play"></div>
+        <div class="slot" id="slot"></div>
+        <div class="word" id="word">
+          <img src="letter-k-volt.png" alt=""><img src="letter-e-volt.png" alt=""><img src="letter-a-volt.png" alt=""><img src="letter-r-volt.png" alt="">
+        </div>
+        <img class="j" id="j" src="j-volt.png" alt="">
+        <div class="flash" id="flash"></div>
+        <div class="pad" style="pointer-events: none; justify-content: flex-end">
+          <div class="stack" style="pointer-events: auto"><button class="btn">join game</button><button class="btn ghost">organise game</button></div>
+          <div class="link" style="pointer-events: auto">if dk how to play click here :)</div>
+        </div>
+      </div>
+      <h3>First visit: play while you wait</h3>
+    </div>
+
+    <div class="cell">
+      <div class="phone"><div class="pad" style="justify-content: flex-end">
+        <img src="logo-volt.png" alt="kejar." style="width: 240px; position: absolute; left: 25px; top: 150px">
+        <div class="stack"><button class="btn back">reconnect</button><button class="btn">join game</button><button class="btn ghost">organise game</button></div>
+        <div class="link">if dk how to play click here :)</div>
+      </div></div>
+      <h3>Already in a game (the game runs here too)</h3>
+    </div>
+
+    <div class="cell">
+      <div class="phone"><div class="pad">
+        <div class="eb">JOIN GAME</div>
+        <h4 style="font-size: 26px; font-weight: 800; letter-spacing: -0.05em; margin: 6px 0 14px">code<span style="color: var(--volt)">?</span></h4>
+        <div class="code">ABC234</div>
+        <button class="btn" style="margin-top: 12px">join</button>
+        <button class="btn ghost" style="margin-top: 10px">scan qr</button>
+        <div class="link" style="margin-top: auto">back</div>
+      </div></div>
+      <h3>After tapping join game</h3>
+    </div>
+  </div>
+</section>
+
+<script src="stickers.js"></script>
+<script>
+  const phone = document.getElementById('game'), play = document.getElementById('play')
+  const word = document.getElementById('word'), jEl = document.getElementById('j'), slotEl = document.getElementById('slot')
+  const flash = document.getElementById('flash')
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+
+  const W = 290, FLOOR = 600 - 170
+  const scale = 240 / 900, wl = 25, wt = 150
+  // Where the j sits in the logo (cropped box 190,12 to 516,531 in the 900 x 543 frame).
+  const jw = (516 - 190) * scale, jh = (531 - 12) * scale
+  const slot = { x: wl + 190 * scale, y: wt + 12 * scale }
+  Object.assign(jEl.style, { width: jw + 'px', height: jh + 'px' })
+  Object.assign(slotEl.style, { left: slot.x - 4 + 'px', top: slot.y - 4 + 'px', width: jw + 8 + 'px', height: jh + 8 + 'px' })
+
+  const CATCH_PX = 14, START = 1.6, MAX = 4.2, SPEEDUP = 1.07
+  let s
+  function reset() {
+    s = { x: 30, y: 40, vx: START, vy: START * 0.8, rot: 0, spin: 2.4, snapped: 0, over: false }
+    word.classList.remove('whole')
+  }
+  reset()
+
+  const dist = () => Math.hypot(s.x - slot.x, s.y - slot.y)
+  function launch() {
+    const sp = Math.min(MAX, Math.hypot(s.vx, s.vy) * SPEEDUP)
+    const a = (Math.random() * 0.6 + 0.2) * Math.PI / 2 + Math.floor(Math.random() * 4) * Math.PI / 2
+    s.vx = Math.cos(a) * sp; s.vy = Math.sin(a) * sp
+    s.spin = (Math.random() < 0.5 ? -1 : 1) * (1.8 + sp * 0.7)
+  }
+  // When the j lands in its gap it becomes a random power-up for a moment, then turns back into the j.
+  const KINDS = Object.keys(window.ART)
+  let lastKind = ''
+  function prize() {
+    let k; do { k = KINDS[Math.floor(Math.random() * KINDS.length)] } while (k === lastKind && KINDS.length > 1)
+    lastKind = k
+    const el = document.createElement('div'); el.className = 'prize'
+    Object.assign(el.style, { left: slot.x + jw / 2 - 42 + 'px', top: slot.y + jh / 2 - 42 + 'px' })
+    el.innerHTML = `<svg viewBox="-8 -6 116 116"><defs>
+      <filter id="stk-p" x="-25%" y="-25%" width="150%" height="150%">
+        <feMorphology in="SourceAlpha" operator="dilate" radius="4.5" result="d"/><feFlood flood-color="#F5F5F3"/><feComposite in2="d" operator="in" result="w"/>
+        <feOffset in="w" dy="3.5" result="o"/><feFlood flood-color="#000" flood-opacity=".55"/><feComposite in2="o" operator="in" result="sh"/>
+        <feMerge><feMergeNode in="sh"/><feMergeNode in="w"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter></defs><g filter="url(#stk-p)">${window.ART[k]}</g></svg>`
+    phone.appendChild(el)
+    jEl.classList.add('hide')
+  }
+  function unPrize() {
+    document.querySelectorAll('.prize').forEach(el => el.remove())
+    jEl.classList.remove('hide', 'back'); void jEl.offsetWidth; jEl.classList.add('back')
+  }
+
+  // No score and no penalty: a catch snaps it into the logo with a flash, a wobble and a buzz, and it becomes a power-up.
+  function catchIt(bonus) {
+    prize()
+    s.x = slot.x; s.y = slot.y; s.rot = 0; s.snapped = 500
+    word.classList.remove('whole'); void word.offsetWidth; word.classList.add('whole')
+    flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on')
+    if (navigator.vibrate) navigator.vibrate(bonus ? [30, 40, 60] : 25)
+  }
+  play.addEventListener('pointerdown', () => {
+    if (s.snapped > 0) return
+    if (dist() <= CATCH_PX) catchIt(false)
+  })
+
+  let last = performance.now()
+  function frame(now) {
+    const dt = Math.min(40, now - last) / 16; last = now
+    if (!s.over && !reduce && document.visibilityState === 'visible') {
+      if (s.snapped > 0) { s.snapped -= dt * 16; if (s.snapped <= 0) { unPrize(); launch() } }
+      else {
+        const before = dist()
+        s.x += s.vx * dt; s.y += s.vy * dt; s.rot += s.spin * dt
+        const vx0 = s.vx, vy0 = s.vy
+        if (s.x <= 0) { s.x = 0; s.vx = Math.abs(s.vx) } else if (s.x + jw >= W) { s.x = W - jw; s.vx = -Math.abs(s.vx) }
+        if (s.y <= 0) { s.y = 0; s.vy = Math.abs(s.vy) } else if (s.y + jh >= FLOOR) { s.y = FLOOR - jh; s.vy = -Math.abs(s.vy) }
+        if (Math.sign(vx0) !== Math.sign(s.vx) || Math.sign(vy0) !== Math.sign(s.vy)) s.spin = -s.spin
+        // The DVD moment: it glides right through its own gap by itself.
+        if (dist() < 3 && before >= 3) catchIt(true)
+      }
+    }
+    if (reduce && !s.over) { s.x = slot.x; s.y = slot.y }
+    jEl.style.transform = `translate(${s.x}px, ${s.y}px) rotate(${s.rot}deg)`
+    slotEl.style.borderColor = !s.over && s.snapped <= 0 && dist() <= CATCH_PX ? 'rgba(198,255,61,.55)' : 'rgba(198,255,61,0)'
+    requestAnimationFrame(frame)
+  }
+  requestAnimationFrame(frame)
+
+</script>
+</body>
+</html>
