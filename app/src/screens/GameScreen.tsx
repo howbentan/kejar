@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { loadOrganiserSession } from '../game/organiserSession'
+import HowToPlay from '../game/HowToPlay'
+import { call } from '../game/api'
 import { shouldPlay } from '../game/moments'
 import { loadSession } from '../game/session'
 import SosIcon from '../game/SosIcon'
@@ -53,6 +55,7 @@ export default function GameScreen({ code }: { code: string }) {
   // lastReason ref in Jail.tsx that remembers whether this was a catch or an auto-jail) before the effect had
   // a chance to bring it back.
   const [showingFreed, setShowingFreed] = useState(false)
+  const [story, setStory] = useState(false)
   // The Penjara reel's pull may free this runner before its scroll has stopped: keep Penjara up until the result is read.
   const reelHold = useReelHold()
   const playedFreedAt = useRef<string | null>(null)
@@ -88,10 +91,31 @@ export default function GameScreen({ code }: { code: string }) {
   else if (current.me.role === 'runner' && (current.me.jailed || showingFreed || reelHold)) screen = <Jail code={code} view={current} />
   else if (current.me.role === 'chaser') screen = <ChaserChase code={code} view={current} refresh={refresh} />
   else screen = <RunnerChase code={code} view={current} locationOff={locationOff} />
+  const side = current.me.role === 'runner' || current.me.role === 'chaser' ? current.me.role : null
   return (
     <>
       {screen}
       <SosIcon code={code} view={current} />
+      {side && (
+        <button
+          type="button"
+          onClick={() => setStory(true)}
+          style={{ all: 'unset', cursor: 'pointer', position: 'fixed', left: 14, bottom: 8, zIndex: 20, fontSize: 11, opacity: 0.55, textDecoration: 'underline' }}
+        >
+          How to play
+        </button>
+      )}
+      {side && story && (
+        <HowToPlay
+          side={side}
+          mode={current.settings.mode}
+          snapshot={current.settings.chaserSnapshot === true}
+          onClose={() => setStory(false)}
+          onReady={() => {
+            if (session.token) void call('briefReady', { code, token: session.token }).then(refresh, () => {})
+          }}
+        />
+      )}
     </>
   )
 }

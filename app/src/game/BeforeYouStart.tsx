@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { SECRET_PLACE_IDS } from '../../shared/kit.js'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
+import HowToPlay from './HowToPlay'
 import Marker from './Marker'
 import { loadOrganiserSession } from './organiserSession'
 import PackList from './PackList'
@@ -40,6 +41,7 @@ const list = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join
 export default function BeforeYouStart({ code, view, refresh }: { code: string; view: View; refresh: () => void }) {
   const [showKit, setShowKit] = useState(false)
   const [error, setError] = useState('')
+  const [preview, setPreview] = useState<'runner' | 'chaser' | null>(null)
 
   const marshals = view.roster.filter((p) => p.role === 'marshal')
   // The secret card's own spot is the organiser's alone, so it isn't part of "kit placed".
@@ -116,6 +118,17 @@ export default function BeforeYouStart({ code, view, refresh }: { code: string; 
           Walk the park
         </a>
       </p>
+      <p style={{ fontSize: 12, marginTop: 4 }}>
+        Preview:{' '}
+        <button type="button" onClick={() => setPreview('runner')} style={{ all: 'unset', cursor: 'pointer', textDecoration: 'underline' }}>
+          Dikejar
+        </button>
+        {' · '}
+        <button type="button" onClick={() => setPreview('chaser')} style={{ all: 'unset', cursor: 'pointer', textDecoration: 'underline' }}>
+          Kejar
+        </button>
+      </p>
+      {preview && <HowToPlay side={preview} mode={view.settings.mode} snapshot={view.settings.chaserSnapshot === true} onClose={() => setPreview(null)} />}
       {showKit && <PackList code={code} view={view} refresh={refresh} compact />}
     </div>
   )

@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { tagIdFromQr } from '../../shared/ids.js'
 import type { View } from '../../shared/views.js'
 import AlertsCard from '../game/AlertsCard'
+import HowToPlay from '../game/HowToPlay'
 import { call } from '../game/api'
 import { loadSession } from '../game/session'
 import Scanner from '../game/Scanner'
@@ -19,6 +20,7 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
   const [scanning, setScanning] = useState(false)
   const [error, setError] = useState('')
   const [walking, setWalking] = useState(false)
+  const [story, setStory] = useState<boolean | null>(null) // null: follow the organiser's briefing; true/false: the player chose
   const role = view.me.role
 
   const link = useCallback(
@@ -38,8 +40,28 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
   const onScan = useCallback((text: string) => void link(tagIdFromQr(text)), [link])
 
   const token = loadSession(localStorage, code).token
+  const side = role === 'runner' || role === 'chaser' ? role : null
+  const briefing = view.briefing && 'open' in view.briefing ? view.briefing : null
+  const showStory = side !== null && (story ?? briefing?.open === true)
+  const tell = (action: 'briefOpened' | 'briefReady') => {
+    if (!token) return
+    void call(action, { code, token }).then(refresh, () => {})
+  }
   if (walking && role === 'marshal' && token) {
     return <WalkPark code={code} view={view} credentials={{ token }} refresh={refresh} onBack={() => setWalking(false)} />
+  }
+
+  if (showStory && side) {
+    return (
+      <HowToPlay
+        side={side}
+        mode={view.settings.mode}
+        snapshot={view.settings.chaserSnapshot === true}
+        onClose={() => setStory(false)}
+        onOpened={() => tell('briefOpened')}
+        onReady={() => tell('briefReady')}
+      />
+    )
   }
 
   return (
@@ -76,6 +98,11 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
           onCancel={() => setScanning(false)}
           numberFallback={{ label: 'Or type the tag number', onNumber: (n) => void link(n) }}
         />
+      )}
+      {side && (
+        <button type="button" className="btn btn-ghost" onClick={() => setStory(true)}>
+          How to play
+        </button>
       )}
       <ErrorText>{error}</ErrorText>
       <AlertsCard code={code} view={view} onDone={refresh} />

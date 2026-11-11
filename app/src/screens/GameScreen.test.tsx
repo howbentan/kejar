@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { View } from '../../shared/views.js'
 import { testView } from './testView'
@@ -175,5 +175,19 @@ describe('marshal header counts with Luar Garisan', () => {
     state.view = marshal(0)
     render(<GameScreen code="ABC234" />)
     expect(screen.getByText(/2 free · 1 in Penjara · 1 Kejar/)).toBeInTheDocument()
+  })
+})
+
+describe('GameScreen how to play', () => {
+  it('runners and chasers get a How to play link that opens the story; marshals do not', () => {
+    state.view = testView()
+    const { unmount } = render(<GameScreen code="ABC234" />)
+    fireEvent.click(screen.getByRole('button', { name: 'How to play' }))
+    expect(screen.getByRole('heading', { name: /You.re Dikejar/ })).toBeInTheDocument()
+    unmount()
+    const base = testView()
+    state.view = { ...base, me: { ...base.me, role: 'marshal' } }
+    render(<GameScreen code="ABC234" />)
+    expect(screen.queryByRole('button', { name: 'How to play' })).toBeNull()
   })
 })
