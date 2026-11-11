@@ -5124,3 +5124,64 @@ describe('5 minutes left (rules §2.7)', () => {
     expect(await fives(g.gameId)).toHaveLength(1)
   })
 })
+
+describe('how to play: briefing', () => {
+  const marshalOf = async (g: Awaited<ReturnType<typeof readyGame>>) => {
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    return run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+  }
+  const briefedAt = async (code: string) => (await store.gameByCode(code))!.briefed_at
+
+  it('startBriefing sets briefed_at once and keeps the first time on a second call', async () => {
+    const g = await readyGame()
+    expect(await briefedAt(g.code)).toBeFalsy()
+    expect(await run('startBriefing', { code: g.code, organiserToken: g.organiserToken })).toEqual({ ok: true })
+    expect(await briefedAt(g.code)).toBe(new Date(T0).toISOString())
+    now += MIN
+    expect(await run('startBriefing', { code: g.code, organiserToken: g.organiserToken })).toEqual({ ok: true })
+    expect(await briefedAt(g.code)).toBe(new Date(T0).toISOString())
+  })
+
+  it('startBriefing is refused for a player, a marshal and a wrong organiser', async () => {
+    const g = await readyGame()
+    await rejects(run('startBriefing', { code: g.code, token: g.aina.token }), 403)
+    const siti = await marshalOf(g)
+    await rejects(run('startBriefing', { code: g.code, token: siti.token }), 403)
+    const other = await createOrganiser()
+    await rejects(run('startBriefing', { code: g.code, organiserToken: other }), 403, 'Organiser only')
+    expect(await briefedAt(g.code)).toBeFalsy()
+  })
+
+  it('startBriefing is refused after Start (409)', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    await rejects(run('startBriefing', { code: g.code, organiserToken: g.organiserToken }), 409)
+  })
+
+  it('briefOpened and briefReady set their fields once, in any phase', async () => {
+    const g = await readyGame()
+    const row = async () => (await store.players((await store.gameByCode(g.code))!.id)).find((p) => p.id === g.aina.playerId)!
+    expect(await run('briefOpened', { code: g.code, token: g.aina.token })).toEqual({ ok: true })
+    expect((await row()).brief_opened_at).toBe(new Date(T0).toISOString())
+    now += MIN
+    await run('briefOpened', { code: g.code, token: g.aina.token })
+    expect((await row()).brief_opened_at).toBe(new Date(T0).toISOString())
+    expect(await run('briefReady', { code: g.code, token: g.aina.token })).toEqual({ ok: true })
+    now += MIN
+    await run('briefReady', { code: g.code, token: g.aina.token })
+    expect((await row()).brief_ready_at).toBe(new Date(T0 + MIN).toISOString())
+    // After Start the story can still be reopened, and a chaser can open it too.
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    expect(await run('briefOpened', { code: g.code, token: g.ben.token })).toEqual({ ok: true })
+  })
+
+  it('a marshal, the organiser and a stranger cannot call briefOpened or briefReady', async () => {
+    const g = await readyGame()
+    const siti = await marshalOf(g)
+    for (const action of ['briefOpened', 'briefReady'] as const) {
+      await rejects(run(action, { code: g.code, token: siti.token }), 403)
+      await rejects(run(action, { code: g.code, organiserToken: g.organiserToken }), 401)
+      await rejects(run(action, { code: g.code, token: 'nope' }), 401)
+    }
+  })
+})

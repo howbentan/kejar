@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { SECRET_PLACE_IDS } from '../../shared/kit.js'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
@@ -34,10 +34,10 @@ const list = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join
 
 /**
  * The lobby's four checks. They warn and never block Start: nothing here is wired to the Start button.
- * Brief the players is the only manual one (saved as kit tick `brief-players`).
+ * Brief the players is a button: it opens how to play on every phone (`startBriefing`, which sets `briefed_at`, the
+ * source of the kit item `brief-players` being done) and then shows who is ready.
  */
 export default function BeforeYouStart({ code, view, refresh }: { code: string; view: View; refresh: () => void }) {
-  const [briefed, setBriefed] = useState<boolean | null>(null)
   const [showKit, setShowKit] = useState(false)
   const [error, setError] = useState('')
 
@@ -53,24 +53,17 @@ export default function BeforeYouStart({ code, view, refresh }: { code: string; 
     ? 'Everyone has them on'
     : `${list(without)} ${without.length > 1 || without[0] === 'You' ? 'haven\'t' : 'hasn\'t'} turned them on`
 
-  const brief = view.kit?.items.find((i) => i.id === 'brief-players')
-  const briefDone = briefed ?? brief?.ticked ?? false
-  // Once the refreshed view agrees with a tap, the saved value takes over again.
-  useEffect(() => {
-    if (briefed !== null && brief?.ticked === briefed) setBriefed(null)
-  }, [briefed, brief?.ticked])
+  const briefing = view.briefing && 'started' in view.briefing ? view.briefing : null
+  const briefDone = briefing?.started ?? false
 
   async function tapBrief() {
     const organiser = loadOrganiserSession(localStorage)
     if (!organiser) return
-    const on = !briefDone
-    setBriefed(on)
     setError('')
     try {
-      await call('setKit', { code, organiserToken: organiser.organiserToken, tick: { id: 'brief-players', on } })
+      await call('startBriefing', { code, organiserToken: organiser.organiserToken })
       refresh()
     } catch (e) {
-      setBriefed(null)
       setError(e instanceof Error ? e.message : String(e))
     }
   }
@@ -89,7 +82,29 @@ export default function BeforeYouStart({ code, view, refresh }: { code: string; 
         note={marshals.length > 0 ? `${list(marshals.map((m) => m.name))} · Penjara` : 'Invite a marshal below'}
       />
       <Check label="SOS alerts on" done={sosDone} note={sosNote} />
-      <Check label="Brief the players" done={briefDone} note="Tap when you've told them the rules" onTap={() => void tapBrief()} />
+      {briefDone ? (
+        <>
+          <Check label="Brief the players" done note={`${briefing!.ready} of ${briefing!.total} ready`} />
+          <p className="muted" style={{ fontSize: 10.5, margin: '4px 0 0 29px' }}>
+            {view.roster
+              .filter((p) => briefing!.status[p.id])
+              .map((p) => `${p.name} ${briefing!.status[p.id]}`)
+              .join(' · ')}
+          </p>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => void tapBrief()}
+          style={{ all: 'unset', cursor: 'pointer', display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 0', borderBottom: '1px solid #1d1d1d', fontSize: 12.5 }}
+        >
+          <span style={{ width: 19, height: 19, borderRadius: 5, border: '1.5px solid #555', flex: 'none', marginTop: 1 }} />
+          <span>
+            <span>Brief the players</span>
+            <small style={{ display: 'block', opacity: 0.6, fontSize: 10.5 }}>Opens how to play on every phone</small>
+          </span>
+        </button>
+      )}
       <ErrorText>{error}</ErrorText>
       <p className="muted" style={{ marginTop: 8 }}>Unticked items warn you, but never block Start.</p>
       <p style={{ fontSize: 12, marginTop: 4 }}>

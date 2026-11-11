@@ -28,6 +28,8 @@ export function testView(over: Partial<View> = {}): View {
       outside: false,
       left_start: false,
       reel_pulled_at: null,
+      brief_opened_at: null,
+      brief_ready_at: null,
     },
     arena: { id: 'a', name: 'Test', boundary: [], jail: { lat: 3, lng: 101 }, start: { lat: 3, lng: 101 } },
     settings: { ...DEFAULT_SETTINGS },
@@ -61,6 +63,7 @@ export function testView(over: Partial<View> = {}): View {
     rescue: null,
     fiveLeft: false,
     reel: null,
+    briefing: null,
     results: null,
     ...over,
   }

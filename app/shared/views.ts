@@ -202,7 +202,26 @@ export interface View {
    * only (rules doc §9b); players never get this field.
    */
   kit?: KitView
+  /**
+   * How to play (the briefing). A runner or chaser: `open` while the organiser has started the briefing and I haven't
+   * tapped I'm ready (so the story opens, also for someone who joined after it started). The organiser's own view
+   * instead gets the count and each player's status. Null for marshals and for anyone without a side.
+   */
+  briefing: BriefingPlayerView | BriefingHostView | null
   results: Results | null
+}
+
+export interface BriefingPlayerView {
+  open: boolean
+  ready: boolean
+}
+
+export interface BriefingHostView {
+  started: boolean
+  ready: number
+  total: number
+  /** By player id, for every runner and chaser. */
+  status: Record<string, 'reading' | 'ready' | 'not opened'>
 }
 
 export interface KitView {
@@ -840,7 +859,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, settle: null, rescue: null, reel: null, datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, kit: undefined, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, settle: null, rescue: null, reel: null, datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
   }
   return v
 }
@@ -976,8 +995,24 @@ function fullView(i: ViewInput): View {
       : {}),
     // The packing list: marshals get the shared items, and only the organiser's own view adds the secret ones.
     ...(role === 'marshal' ? { kit: kitFor(i) } : {}),
+    briefing: briefingFor(i, organiser),
     results: i.results,
   }
+}
+
+/** The briefing view (see `View.briefing`): the organiser's tally, a player's open/ready, nothing for marshals. */
+function briefingFor(i: ViewInput, organiser: boolean): BriefingPlayerView | BriefingHostView | null {
+  const started = Boolean(i.game.briefed_at)
+  if (organiser) {
+    const sided = i.players.filter((p) => p.role === 'runner' || p.role === 'chaser')
+    const status = Object.fromEntries(
+      sided.map((p) => [p.id, p.brief_ready_at ? 'ready' : p.brief_opened_at ? 'reading' : 'not opened'] as const),
+    )
+    return { started, ready: sided.filter((p) => p.brief_ready_at).length, total: sided.length, status }
+  }
+  if (i.me.role !== 'runner' && i.me.role !== 'chaser') return null
+  const ready = Boolean(i.me.brief_ready_at)
+  return { open: started && !ready, ready }
 }
 
 /** The organiser's card: the stash's letter and the code it claims with. */
