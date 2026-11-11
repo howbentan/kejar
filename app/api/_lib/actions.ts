@@ -2056,7 +2056,7 @@ const searchParks: Action = async (ctx, body) => {
   const query = str(body.query).trim()
   if (query.length < 3 || query.length > 80) throw new ActionError(400, 'Type at least 3 letters')
   try {
-    return { results: await lookupParks(query, osmDeps(ctx)) }
+    return await lookupParks(query, osmDeps(ctx))
   } catch {
     throw new ActionError(502, 'Park search is down right now. Try again in a minute.')
   }

@@ -45,24 +45,15 @@ vi.mock('../game/PlaceMap', () => ({
 
 import ArenaSetup from './ArenaSetup'
 
-const hit = {
-  osmRef: 'way/10590000',
-  name: 'KLCC Park',
-  areaHa: 16,
-  outline: geo.park,
-  pieces: 1,
-  kind: 'outline' as const,
-  label: 'Park',
-  center: geo.C,
-  unlikely: false,
-}
-const suburb = { osmRef: 'node/1', name: 'Bukit Jalil', areaHa: 0, outline: [], pieces: 1, kind: 'point' as const, label: 'Area', center: { lat: 3.0618, lng: 101.6993 }, unlikely: false }
-const station = { osmRef: 'way/5', name: 'SP17 Bukit Jalil', areaHa: 0.5, outline: geo.lake, pieces: 1, kind: 'outline' as const, label: 'Station', center: geo.C, unlikely: true }
+const hit = { osmRef: 'way/10590000', name: 'KLCC Park', areaHa: 16, outline: geo.park, pieces: 1 }
+const jalil = { name: 'Bukit Jalil', center: { lat: 3.0618, lng: 101.6993 } }
+const taman = { osmRef: 'way/77', name: 'Taman Rekreasi Bukit Jalil', areaHa: 31.84, outline: geo.lake, pieces: 1 }
+const found = (parks: unknown[] = [], around: unknown = null, nearby: unknown[] = []) => ({ parks, around, nearby })
 
 beforeEach(() => {
   call.mockReset()
   call.mockImplementation(async (action: string) => {
-    if (action === 'searchParks') return { results: [hit] }
+    if (action === 'searchParks') return found([hit])
     if (action === 'parkFeatures') return { water: [geo.lake], toilets: [], waterChecked: true }
     if (action === 'saveArena') return { arenaId: 'ar1' }
     return {}
@@ -100,7 +91,7 @@ describe('ArenaSetup', () => {
 
   it('a failed lake check shows the warning but still allows saving', async () => {
     call.mockImplementation(async (action: string) => {
-      if (action === 'searchParks') return { results: [hit] }
+      if (action === 'searchParks') return found([hit])
       if (action === 'parkFeatures') return { water: [], toilets: [], waterChecked: false }
       if (action === 'saveArena') return { arenaId: 'ar1' }
       return {}
@@ -160,7 +151,7 @@ describe('ArenaSetup', () => {
 
   it('shows when only the largest part of a park is used', async () => {
     call.mockImplementation(async (action: string) => {
-      if (action === 'searchParks') return { results: [{ ...hit, pieces: 2 }] }
+      if (action === 'searchParks') return found([{ ...hit, pieces: 2 }])
       if (action === 'parkFeatures') return { water: [geo.lake], toilets: [], waterChecked: true }
       return {}
     })
@@ -169,65 +160,99 @@ describe('ArenaSetup', () => {
     expect(screen.getByText('Only the largest part of the park is used')).toBeInTheDocument()
   })
 
-  it('Use once is offered for a circle around me and does not save', async () => {
+  it('Use once is offered for a circle and does not save', async () => {
     const onDone = vi.fn()
     render(<ArenaSetup onDone={onDone} />)
-    fireEvent.click(screen.getByRole('radio', { name: 'Play area: Circle around me' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Play area: Circle' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Use once' }))
     expect(onDone).toHaveBeenCalledWith({ draft: expect.objectContaining({ source: 'circle', outline: null }) })
     expect(call).not.toHaveBeenCalledWith('saveArena', expect.anything())
   })
 
   describe('search results', () => {
-    async function search(results: unknown[]) {
+    async function search(result: unknown) {
       call.mockImplementation(async (action: string) => {
-        if (action === 'searchParks') return { results }
+        if (action === 'searchParks') return result
         if (action === 'parkFeatures') return { water: [], toilets: [], waterChecked: true }
         return {}
       })
       fireEvent.change(screen.getByLabelText('Park name'), { target: { value: 'Bukit Jalil' } })
       fireEvent.click(screen.getByRole('button', { name: 'Search' }))
-      await screen.findByRole('button', { name: /Bukit Jalil/ })
+      await waitFor(() => expect(call).toHaveBeenCalledWith('searchParks', expect.anything()))
     }
 
-    it('each row has the name, a size or label sub-line and a chip, plus the tip', async () => {
+    it('rows run parks, then the circle, then a Parks near heading with the nearby parks', async () => {
       render(<ArenaSetup onDone={vi.fn()} />)
-      await search([hit, suburb])
-      const park = screen.getByRole('button', { name: /^KLCC Park/ })
-      expect(park).toHaveTextContent('16.0 ha')
-      expect(park).toHaveTextContent('Park')
-      const area = screen.getByRole('button', { name: /^Bukit Jalil/ })
-      expect(area).toHaveTextContent('Area')
-      expect(area).not.toHaveTextContent('ha')
-      expect(screen.getByText("Can't find it? Try \"Taman …\", or use a circle.")).toBeInTheDocument()
+      await search(found([hit], jalil, [taman]))
+      await screen.findByRole('button', { name: /^KLCC Park/ })
+      const rows = screen
+        .getAllByRole('button')
+        .map((b) => b.textContent ?? '')
+        .filter((t) => /KLCC Park|Circle around|Taman Rekreasi/.test(t))
+      expect(rows).toEqual(['KLCC Park · 16.0 ha', 'Circle around Bukit Jalil', 'Taman Rekreasi Bukit Jalil · 31.8 ha'])
+      const heading = screen.getByText('Parks near Bukit Jalil')
+      const circle = screen.getByRole('button', { name: 'Circle around Bukit Jalil' })
+      const nearbyRow = screen.getByRole('button', { name: /^Taman Rekreasi/ })
+      expect(circle.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(heading.compareDocumentPosition(nearbyRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
-    it('picking a point result switches to a circle centred on it', async () => {
+    it('shows name and size only: no chips, no tip, no greyed rows', async () => {
       render(<ArenaSetup onDone={vi.fn()} />)
-      await search([suburb])
-      fireEvent.click(screen.getByRole('button', { name: /^Bukit Jalil/ }))
+      await search(found([hit], jalil, [taman]))
+      const row = await screen.findByRole('button', { name: /^KLCC Park/ })
+      expect(row).toHaveTextContent('16.0 ha')
+      expect(row).not.toHaveTextContent(/Park\b.*Park\b/)
+      expect(row).not.toHaveAttribute('data-unlikely')
+      expect(document.querySelector('.chip')).toBeNull()
+      expect(screen.queryByText(/Can't find it/)).toBeNull()
+    })
+
+    it('no Parks near heading when there is no circle option', async () => {
+      render(<ArenaSetup onDone={vi.fn()} />)
+      await search(found([hit]))
+      await screen.findByRole('button', { name: /^KLCC Park/ })
+      expect(screen.queryByText(/^Parks near/)).toBeNull()
+      expect(screen.queryByRole('button', { name: /^Circle around/ })).toBeNull()
+    })
+
+    it('no heading either when nothing is nearby', async () => {
+      render(<ArenaSetup onDone={vi.fn()} />)
+      await search(found([], jalil, []))
+      await screen.findByRole('button', { name: 'Circle around Bukit Jalil' })
+      expect(screen.queryByText(/^Parks near/)).toBeNull()
+    })
+
+    it('Circle around Bukit Jalil opens a draggable circle at the centre', async () => {
+      render(<ArenaSetup onDone={vi.fn()} />)
+      await search(found([], jalil, [taman]))
+      fireEvent.click(await screen.findByRole('button', { name: 'Circle around Bukit Jalil' }))
       expect(await screen.findByText('circle:3.0618,101.6993,200')).toBeInTheDocument()
-      expect(screen.getByRole('radio', { name: 'Play area: Circle around me', checked: true })).toBeInTheDocument()
+      expect(screen.getByRole('radio', { name: 'Play area: Circle', checked: true })).toBeInTheDocument()
       expect(screen.getByLabelText('Name this park')).toHaveValue('Bukit Jalil')
       expect(screen.getByText('Drag to move.')).toBeInTheDocument()
       expect(call).not.toHaveBeenCalledWith('parkFeatures', expect.anything())
     })
 
-    it('greys unlikely rows but keeps them tappable', async () => {
+    it('tapping a nearby park selects its outline and checks its lakes', async () => {
       render(<ArenaSetup onDone={vi.fn()} />)
-      await search([hit, station])
-      const row = screen.getByRole('button', { name: /^SP17 Bukit Jalil/ })
-      expect(row).toHaveAttribute('data-unlikely', 'true')
-      expect(row).toBeEnabled()
-      expect(screen.getByRole('button', { name: /^KLCC Park/ })).not.toHaveAttribute('data-unlikely')
-      fireEvent.click(row)
-      await screen.findByText('1.0 ha')
+      await search(found([], jalil, [taman]))
+      fireEvent.click(await screen.findByRole('button', { name: /^Taman Rekreasi Bukit Jalil/ }))
+      await waitFor(() => expect(call).toHaveBeenCalledWith('parkFeatures', { organiserToken: 'o1', outline: geo.lake }))
+      expect(await screen.findByText('1.0 ha')).toBeInTheDocument()
+      expect(screen.getByLabelText('Name this park')).toHaveValue('Taman Rekreasi Bukit Jalil')
+    })
+
+    it('says so when there is nothing at all', async () => {
+      render(<ArenaSetup onDone={vi.fn()} />)
+      await search(found())
+      expect(await screen.findByText("No parks found. Use a circle and drag it where you'll play.")).toBeInTheDocument()
     })
 
     it('dragging the handle moves the circle centre and the sizes stay put', async () => {
       render(<ArenaSetup onDone={vi.fn()} />)
-      await search([suburb])
-      fireEvent.click(screen.getByRole('button', { name: /^Bukit Jalil/ }))
+      await search(found([], jalil))
+      fireEvent.click(await screen.findByRole('button', { name: 'Circle around Bukit Jalil' }))
       await screen.findByText('circle:3.0618,101.6993,200')
       fireEvent.click(screen.getByRole('button', { name: 'drag the circle' }))
       const at = geo.at(10, 10)

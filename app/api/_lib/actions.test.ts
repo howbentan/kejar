@@ -2907,7 +2907,7 @@ describe('saved arenas', () => {
     await rejects(run('searchParks', { organiserToken, query: 'kl' }), 400, 'Type at least 3 letters')
     osmReplies.push([])
     await run('searchParks', { organiserToken, query: 'Taman Tasik Titiwangsa' })
-    expect(await run('searchParks', { organiserToken, query: 'taman tasik titiwangsa' })).toEqual({ results: [] })
+    expect(await run('searchParks', { organiserToken, query: 'taman tasik titiwangsa' })).toEqual({ parks: [], around: null, nearby: [] })
     expect(osmCalls).toHaveLength(1)
   })
 

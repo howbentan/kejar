@@ -3,7 +3,7 @@ import { arenaFromDraft, KL_FALLBACK, type ArenaDraft } from '../../shared/arena
 import { MAX_STATIONS } from '../../shared/ids.js'
 import { buildPlayArea } from '../../shared/playArea.js'
 import type { LatLng } from '../../shared/types.js'
-import type { ParkHit } from '../../api/_lib/osm.js'
+import type { ParkHit, ParkSearch } from '../../api/_lib/osm.js'
 import { call } from '../game/api'
 import { loadOrganiserSession } from '../game/organiserSession'
 import PlaceMap, { type PlaceMode } from '../game/PlaceMap'
@@ -13,7 +13,7 @@ const SIZES = ['150', '200', '300', '500'] as const
 type Size = (typeof SIZES)[number]
 const NO_LAKE_CHECK = "Couldn't check for lakes. Look at the map before saving."
 const LARGEST_ONLY = 'Only the largest part of the park is used'
-const SEARCH_TIP = "Can't find it? Try \"Taman …\", or use a circle."
+const NO_PARKS = "No parks found. Use a circle and drag it where you'll play."
 
 export interface SavedArenaForEdit {
   id: string
@@ -24,6 +24,19 @@ const average = (pts: LatLng[]) => ({
   lat: pts.reduce((s, p) => s + p.lat, 0) / pts.length,
   lng: pts.reduce((s, p) => s + p.lng, 0) / pts.length,
 })
+
+function ParkRow({ hit, onPick }: { hit: ParkHit; onPick: (h: ParkHit) => void }) {
+  return (
+    <button
+      type="button"
+      className="btn btn-ghost"
+      style={{ textAlign: 'left' }}
+      onClick={() => void onPick(hit)}
+    >
+      {`${hit.name} · ${hit.areaHa.toFixed(1)} ha`}
+    </button>
+  )
+}
 
 /** Set up a play area: find a park (or a circle around me), trim it, place things, then save or use once. */
 export default function ArenaSetup({
@@ -37,7 +50,7 @@ export default function ArenaSetup({
   const d0 = initial?.draft
   const [source, setSource] = useState<ArenaDraft['source']>(d0?.source ?? 'osm')
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<ParkHit[] | null>(null)
+  const [results, setResults] = useState<ParkSearch | null>(null)
   const [park, setPark] = useState<{ osmRef: string | null; outline: LatLng[]; pieces: number } | null>(
     d0?.outline ? { osmRef: d0.osmRef, outline: d0.outline, pieces: 1 } : null,
   )
@@ -93,8 +106,7 @@ export default function ArenaSetup({
     setError('')
     setBusy(true)
     try {
-      const r = await call<{ results: ParkHit[] }>('searchParks', { organiserToken, query: query.trim() })
-      setResults(r.results)
+      setResults(await call<ParkSearch>('searchParks', { organiserToken, query: query.trim() }))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -102,23 +114,24 @@ export default function ArenaSetup({
     }
   }
 
+  /** "Circle around {place}": a circle the organiser can drag, centred on the place. */
+  function pickAround(place: { name: string; center: LatLng }) {
+    setError('')
+    setSource('circle')
+    setPark(null)
+    setResults(null)
+    setJail(null)
+    setStart(null)
+    setStations([])
+    setFeatures({ water: [], toilets: [], waterChecked: true })
+    setUsePart(false)
+    setCentre(place.center)
+    setMode('circle')
+    if (!name) setName(place.name)
+  }
+
   async function pick(hit: ParkHit) {
     setError('')
-    // A place with no outline (a suburb, a hill) becomes a circle around it, which the organiser can drag.
-    if (hit.kind === 'point') {
-      setSource('circle')
-      setPark(null)
-      setResults(null)
-      setJail(null)
-      setStart(null)
-      setStations([])
-      setFeatures({ water: [], toilets: [], waterChecked: true })
-      setUsePart(false)
-      setCentre(hit.center)
-      setMode('circle')
-      if (!name) setName(hit.name)
-      return
-    }
     setBusy(true)
     setPark({ osmRef: hit.osmRef, outline: hit.outline, pieces: hit.pieces })
     setResults(null)
@@ -196,7 +209,7 @@ export default function ArenaSetup({
           value={source}
           options={[
             { value: 'osm', text: 'Find a park' },
-            { value: 'circle', text: 'Circle around me' },
+            { value: 'circle', text: 'Circle' },
           ]}
           onChange={chooseSource}
         />
@@ -220,31 +233,20 @@ export default function ArenaSetup({
               Search
             </button>
           </div>
-          {results && results.length === 0 && <p className="muted">No parks found. Try another name, or use a circle around you.</p>}
-          {results?.map((h) => (
-            <button
-              key={h.osmRef}
-              type="button"
-              className="btn btn-ghost"
-              data-unlikely={h.unlikely ? 'true' : undefined}
-              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, textAlign: 'left', opacity: h.unlikely ? 0.55 : 1 }}
-              onClick={() => void pick(h)}
-            >
-              <span style={{ display: 'flex', flexDirection: 'column' }}>
-                <span>{h.name}</span>
-                <span className="muted" style={{ fontSize: 12 }}>
-                  {h.kind === 'point' ? 'Circle here' : `${h.areaHa.toFixed(1)} ha`}
-                </span>
-              </span>
-              <span className="chip" style={{ fontSize: 11, padding: '2px 8px', border: '1px solid var(--hair)', borderRadius: 999 }}>
-                {h.label}
-              </span>
+          {results && results.parks.length === 0 && !results.around && <p className="muted">{NO_PARKS}</p>}
+          {results?.parks.map((h) => <ParkRow key={h.osmRef} hit={h} onPick={pick} />)}
+          {results?.around && (
+            <button type="button" className="btn btn-ghost" style={{ textAlign: 'left' }} onClick={() => pickAround(results.around!)}>
+              {`Circle around ${results.around.name}`}
             </button>
-          ))}
-          {results && results.length > 0 && (
-            <p className="muted" style={{ fontSize: 12 }}>
-              {SEARCH_TIP}
-            </p>
+          )}
+          {results?.around && results.nearby.length > 0 && (
+            <>
+              <p className="eyebrow">{`Parks near ${results.around.name}`}</p>
+              {results.nearby.map((h) => (
+                <ParkRow key={h.osmRef} hit={h} onPick={pick} />
+              ))}
+            </>
           )}
         </div>
       )}
