@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { arenaFromDraft, KL_FALLBACK, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { MAX_STATIONS } from '../../shared/ids.js'
 import { buildPlayArea } from '../../shared/playArea.js'
@@ -51,6 +51,9 @@ export default function ArenaSetup({
   const [source, setSource] = useState<ArenaDraft['source']>(d0?.source ?? 'osm')
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ParkSearch | null>(null)
+  // Parks near the circle option load after the rows show; `searchId` lets a late reply be ignored.
+  const [nearby, setNearby] = useState<{ loading: boolean; parks: ParkHit[] }>({ loading: false, parks: [] })
+  const searchId = useRef(0)
   const [park, setPark] = useState<{ osmRef: string | null; outline: LatLng[]; pieces: number } | null>(
     d0?.outline ? { osmRef: d0.osmRef, outline: d0.outline, pieces: 1 } : null,
   )
@@ -106,12 +109,33 @@ export default function ArenaSetup({
     setError('')
     setBusy(true)
     try {
-      setResults(await call<ParkSearch>('searchParks', { organiserToken, query: query.trim() }))
+      const id = ++searchId.current
+      setNearby({ loading: false, parks: [] })
+      const r = await call<ParkSearch>('searchParks', { organiserToken, query: query.trim() })
+      if (id !== searchId.current) return
+      setResults(r)
+      if (r.around) void loadNearby(id, r.around, r.parks)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
     }
+  }
+
+  async function loadNearby(id: number, around: NonNullable<ParkSearch['around']>, listed: ParkHit[]) {
+    setNearby({ loading: true, parks: [] })
+    let parks: ParkHit[] = []
+    try {
+      const n = await call<{ nearby: ParkHit[] }>('nearbyParks', {
+        organiserToken,
+        center: around.center,
+        skip: listed.map((p) => p.osmRef),
+      })
+      parks = n.nearby
+    } catch {
+      // No nearby list is fine: the search rows are already there.
+    }
+    if (id === searchId.current) setNearby({ loading: false, parks })
   }
 
   /** "Circle around {place}": a circle the organiser can drag, centred on the place. */
@@ -240,10 +264,11 @@ export default function ArenaSetup({
               {`Circle around ${results.around.name}`}
             </button>
           )}
-          {results?.around && results.nearby.length > 0 && (
+          {results?.around && nearby.loading && <p className="muted">{`Finding parks near ${results.around.name}…`}</p>}
+          {results?.around && nearby.parks.length > 0 && (
             <>
               <p className="eyebrow">{`Parks near ${results.around.name}`}</p>
-              {results.nearby.map((h) => (
+              {nearby.parks.map((h) => (
                 <ParkRow key={h.osmRef} hit={h} onPick={pick} />
               ))}
             </>

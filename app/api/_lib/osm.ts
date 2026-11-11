@@ -32,8 +32,6 @@ export interface ParkSearch {
   parks: ParkHit[]
   /** One place that is not a park (a suburb, a hill, a station): the app offers a circle around it. */
   around: { name: string; center: LatLng } | null
-  /** Playable areas within 1.5 km of `around`. */
-  nearby: ParkHit[]
 }
 
 interface Deps {
@@ -87,21 +85,19 @@ const NEARBY_M = 1_500
 const NEARBY_MAX = 6
 const MIN_PARK_HA = 0.5
 
-/** Playable outlines matching the name, plus one circle option and the parks around it. */
+/** Playable outlines matching the name, plus one circle option. Nearby parks come separately (they are slow). */
 export async function searchParks(query: string, deps: Deps): Promise<ParkSearch> {
   const q = query.trim()
   // v3: results are { parks, around } with playable outlines only; the new prefix skips older cached lists.
   const key = `nominatim3:${q.toLowerCase()}`
-  let base = (await deps.cache.get(key)) as Pick<ParkSearch, 'parks' | 'around'> | null
-  if (!base) {
-    base = await nominatimSearch(q, deps)
-    await deps.cache.put(key, base)
-  }
-  const nearby = base.around ? await nearbyParks(base.around.center, new Set(base.parks.map((p) => p.osmRef)), deps) : []
-  return { parks: base.parks, around: base.around, nearby }
+  const cached = (await deps.cache.get(key)) as ParkSearch | null
+  if (cached) return cached
+  const found = await nominatimSearch(q, deps)
+  await deps.cache.put(key, found)
+  return found
 }
 
-async function nominatimSearch(q: string, deps: Deps): Promise<Pick<ParkSearch, 'parks' | 'around'>> {
+async function nominatimSearch(q: string, deps: Deps): Promise<ParkSearch> {
   const now = deps.now ?? Date.now
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
   const turn = nominatimTurn.then(async () => {
@@ -152,8 +148,8 @@ async function nominatimSearch(q: string, deps: Deps): Promise<Pick<ParkSearch, 
 const LEISURE_RE = `^(${PLAYABLE.leisure.join('|')})$`
 const LANDUSE_RE = `^(${PLAYABLE.landuse.join('|')})$`
 
-/** Playable areas within 1.5 km of a point, from Overpass. Any failure just means no list (and nothing cached). */
-async function nearbyParks(center: LatLng, skip: Set<string>, deps: Deps): Promise<ParkHit[]> {
+/** Named playable areas within 1.5 km of a point, from Overpass. Any failure just means no list (and nothing cached). */
+export async function nearbyParks(center: LatLng, skip: Set<string>, deps: Deps): Promise<ParkHit[]> {
   const key = `overpassnear:${center.lat.toFixed(4)},${center.lng.toFixed(4)}`
   let found = (await deps.cache.get(key)) as ParkHit[] | null
   if (!found) {
@@ -188,8 +184,8 @@ async function nearbyParks(center: LatLng, skip: Set<string>, deps: Deps): Promi
       if (good.length === 0) continue
       const outline = good.reduce((a, b) => (ringAreaHa(b) > ringAreaHa(a) ? b : a))
       const areaHa = ringAreaHa(outline)
-      if (areaHa < MIN_PARK_HA) continue
-      found.push({ osmRef: `${e.type}/${e.id}`, name: e.tags?.name || 'Unnamed park', areaHa, outline: thin(outline), pieces: good.length })
+      if (areaHa < MIN_PARK_HA || !e.tags?.name) continue
+      found.push({ osmRef: `${e.type}/${e.id}`, name: e.tags.name, areaHa, outline: thin(outline), pieces: good.length })
     }
     found.sort((a, b) => b.areaHa - a.areaHa)
     await deps.cache.put(key, found)

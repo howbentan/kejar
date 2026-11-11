@@ -32,7 +32,7 @@ import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '.
 import { distanceM } from '../../shared/geo.js'
 import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
 import { MARSHAL_INVITE_TTL_MS, ORGANISER_INVITE_TTL_MS, PHONE_MOVE_TTL_MS } from '../../shared/invites.js'
-import { OSM_CACHE_MS, parkFeatures as lookupParkFeatures, searchParks as lookupParks, type FetchJson } from './osm.js'
+import { OSM_CACHE_MS, nearbyParks as lookupNearby, parkFeatures as lookupParkFeatures, searchParks as lookupParks, type FetchJson } from './osm.js'
 import { hashToken, newDatoCode, newToken } from './secrets.js'
 import type { GameRow, GameStore, OrganiserRow, SafetyRecord, SavedArenaRow } from './store.js'
 
@@ -2062,6 +2062,16 @@ const searchParks: Action = async (ctx, body) => {
   }
 }
 
+/** Malaysia and a margin: enough to refuse nonsense without caring about borders. */
+const inMalaysia = (c: LatLng) => c.lat >= -1 && c.lat <= 8 && c.lng >= 95 && c.lng <= 121
+
+const nearbyParks: Action = async (ctx, body) => {
+  await requireAnyOrganiser(ctx, body)
+  if (!isLatLng(body.center) || !inMalaysia(body.center)) throw new ActionError(400, 'Invalid centre')
+  const skip = Array.isArray(body.skip) ? body.skip.filter((x): x is string => typeof x === 'string').slice(0, 50) : []
+  return { nearby: await lookupNearby(body.center, new Set(skip), osmDeps(ctx)) }
+}
+
 const parkFeatures: Action = async (ctx, body) => {
   await requireAnyOrganiser(ctx, body)
   if (!isRing(body.outline)) throw new ActionError(400, 'Invalid park outline')
@@ -2242,6 +2252,7 @@ export const actions = {
   undoKejar,
   removePlayer,
   searchParks,
+  nearbyParks,
   parkFeatures,
   saveArena,
   listArenas,

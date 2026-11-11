@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest'
-import { joinWays, OSM_TIMEOUT_MS, OSM_USER_AGENT, parkFeatures, searchParks, type FetchJson, type OsmCache } from './osm.js'
+import { joinWays, OSM_TIMEOUT_MS, OSM_USER_AGENT, nearbyParks, parkFeatures, searchParks, type FetchJson, type OsmCache } from './osm.js'
 
 type Call = { url: string; init?: Parameters<FetchJson>[1] }
 let calls: Call[]
@@ -52,7 +52,7 @@ describe('searchParks', () => {
 
   it('nothing found gives empty parks, no circle and no nearby lookup', async () => {
     replies.push([])
-    expect(await searchParks('zzz', deps())).toEqual({ parks: [], around: null, nearby: [] })
+    expect(await searchParks('zzz', deps())).toEqual({ parks: [], around: null })
     expect(calls).toHaveLength(1)
   })
 
@@ -105,17 +105,17 @@ describe('searchParks', () => {
     ]
 
     it('no playable outline: parks empty, one circle around the suburb, stations gone', async () => {
-      replies.push(jalil(), { elements: [] })
+      replies.push(jalil())
       const r = await searchParks('Bukit Jalil', deps())
       expect(r.parks).toEqual([])
       expect(r.around).toEqual({ name: 'Bukit Jalil', center: { lat: 3.0618, lng: 101.6993 } })
-      expect(r.nearby).toEqual([])
+      expect(r).not.toHaveProperty('nearby')
+      expect(calls).toHaveLength(1) // Nominatim only: no Overpass wait
     })
 
     it('a playable outline is kept beside the circle', async () => {
       replies.push(
         [{ osm_type: 'way', osm_id: 6, name: 'Taman Rekreasi', category: 'leisure', type: 'park', geojson: { type: 'Polygon', coordinates: [sq(101.7, 3.07, 0.002)] } }, ...jalil()],
-        { elements: [] },
       )
       const r = await searchParks('Bukit Jalil', deps())
       expect(r.parks.map((p) => p.osmRef)).toEqual(['way/6'])
@@ -123,7 +123,7 @@ describe('searchParks', () => {
     })
 
     it('with only stations and buildings, falls back to a station point rather than nothing', async () => {
-      replies.push([jalil()[2]], { elements: [] })
+      replies.push([jalil()[2]])
       expect((await searchParks('LRT', deps())).around?.name).toBe('Bukit Jalil LRT')
     })
 
@@ -135,78 +135,67 @@ describe('searchParks', () => {
   })
 
   describe('parks nearby', () => {
-    const suburb = [{ osm_type: 'node', osm_id: 1, name: 'Bukit Jalil', category: 'place', type: 'suburb', lat: '3.0618', lon: '101.6993' }]
+    const centre = { lat: 3.0618, lng: 101.6993 }
     const way = (id: number, name: string | undefined, d: number, closed = true) => {
       const ring = sq(101.7, 3.06, d).map(([lng, lat]) => ({ lat, lon: lng }))
       return { type: 'way', id, tags: { leisure: 'park', ...(name ? { name } : {}) }, geometry: closed ? ring : ring.slice(0, 4) }
     }
 
-    it('asks Overpass for playable areas within 1500 m of the circle centre', async () => {
-      replies.push(suburb, { elements: [] })
-      await searchParks('Bukit Jalil', deps())
-      expect(calls[1].url).toBe('https://overpass-api.de/api/interpreter')
-      expect(calls[1].init?.method).toBe('POST')
-      const q = decodeURIComponent(String(calls[1].init?.body).replace(/^data=/, ''))
+    it('asks Overpass for playable areas within 1500 m of the centre', async () => {
+      replies.push({ elements: [] })
+      await nearbyParks(centre, new Set(), deps())
+      expect(calls[0].url).toBe('https://overpass-api.de/api/interpreter')
+      expect(calls[0].init?.method).toBe('POST')
+      const q = decodeURIComponent(String(calls[0].init?.body).replace(/^data=/, ''))
       expect(q).toContain('around:1500,3.0618,101.6993')
       expect(q).toContain('"leisure"')
       expect(q).toContain('"landuse"')
       expect(q).toContain('village_green')
       expect(q).toContain('out geom')
-      expect(calls[1].init?.headers?.['User-Agent']).toBe(OSM_USER_AGENT)
+      expect(calls[0].init?.headers?.['User-Agent']).toBe(OSM_USER_AGENT)
     })
 
-    it('parses ways and relations, drops under 0.5 ha, dedupes against the main list, sorts and keeps the top 6', async () => {
+    it('parses ways and relations, drops small and unnamed ones, skips listed refs, sorts and keeps the top 6', async () => {
       const big = Array.from({ length: 8 }, (_, k) => way(10 + k, `Park ${k}`, 0.003 + k * 0.0005))
-      replies.push(
-        [{ osm_type: 'way', osm_id: 10, name: 'Park 0', category: 'leisure', type: 'park', geojson: { type: 'Polygon', coordinates: [sq(101.7, 3.06, 0.003)] } }, ...suburb],
-        {
-          elements: [
-            ...big,
-            way(50, 'Tiny', 0.0005), // ~0.3 ha
-            way(51, 'Open way', 0.01, false), // not closed
-            { type: 'node', id: 60, lat: 3.06, lon: 101.7, tags: { leisure: 'park', name: 'Pin' } },
-            {
-              type: 'relation',
-              id: 70,
-              tags: { leisure: 'garden', name: 'Rel Garden' },
-              members: [
-                { type: 'way', role: 'outer', geometry: sq(101.7, 3.06, 0.01).slice(0, 3).map(([lng, lat]) => ({ lat, lon: lng })) },
-                { type: 'way', role: 'outer', geometry: [sq(101.7, 3.06, 0.01)[2], sq(101.7, 3.06, 0.01)[3], sq(101.7, 3.06, 0.01)[0]].map(([lng, lat]) => ({ lat, lon: lng })) },
-              ],
-            },
-          ],
-        },
-      )
-      const { nearby } = await searchParks('Bukit Jalil', deps())
-      expect(nearby).toHaveLength(6)
-      expect(nearby[0].osmRef).toBe('relation/70')
+      replies.push({
+        elements: [
+          ...big,
+          way(50, 'Tiny', 0.0005), // ~0.3 ha
+          way(51, 'Open way', 0.01, false), // not closed
+          way(52, undefined, 0.02), // no name
+          { type: 'node', id: 60, lat: 3.06, lon: 101.7, tags: { leisure: 'park', name: 'Pin' } },
+          {
+            type: 'relation',
+            id: 70,
+            tags: { leisure: 'garden', name: 'Rel Garden' },
+            members: [
+              { type: 'way', role: 'outer', geometry: sq(101.7, 3.06, 0.01).slice(0, 3).map(([lng, lat]) => ({ lat, lon: lng })) },
+              { type: 'way', role: 'outer', geometry: [sq(101.7, 3.06, 0.01)[2], sq(101.7, 3.06, 0.01)[3], sq(101.7, 3.06, 0.01)[0]].map(([lng, lat]) => ({ lat, lon: lng })) },
+            ],
+          },
+        ],
+      })
+      const nearby = await nearbyParks(centre, new Set(['way/10']), deps())
+      expect(nearby.map((p) => p.osmRef)).toEqual(['relation/70', 'way/17', 'way/16', 'way/15', 'way/14', 'way/13'])
       expect(nearby[0].name).toBe('Rel Garden')
-      expect(nearby.map((p) => p.areaHa)).toEqual([...nearby.map((p) => p.areaHa)].sort((x, y) => y - x))
-      const refs = nearby.map((p) => p.osmRef)
-      expect(refs).not.toContain('way/10') // already in the main list
-      expect(refs).not.toContain('way/50')
-      expect(refs).not.toContain('way/51')
-      expect(refs).not.toContain('node/60')
-      expect(refs).toEqual(['relation/70', 'way/17', 'way/16', 'way/15', 'way/14', 'way/13'])
       expect(nearby[1]).toMatchObject({ name: 'Park 7', pieces: 1 })
-      expect(nearby[1].outline.length).toBeGreaterThanOrEqual(3)
+      expect(nearby.some((p) => p.name === 'Unnamed park')).toBe(false)
     })
 
-    it('Overpass failure gives nearby: [] and the search still works, and a retry asks again', async () => {
-      replies.push(suburb, new Error('504'))
-      const r = await searchParks('Bukit Jalil', deps())
-      expect(r.around?.name).toBe('Bukit Jalil')
-      expect(r.nearby).toEqual([])
+    it('Overpass failure gives [] and caches nothing, so a retry asks again', async () => {
+      replies.push(new Error('504'))
+      expect(await nearbyParks(centre, new Set(), deps())).toEqual([])
+      expect(cacheMap.size).toBe(0)
       replies.push({ elements: [way(1, 'Taman A', 0.003)] })
-      expect((await searchParks('Bukit Jalil', deps())).nearby.map((p) => p.name)).toEqual(['Taman A'])
-      expect(calls).toHaveLength(3) // nominatim once (cached), overpass twice
+      expect((await nearbyParks(centre, new Set(), deps())).map((p) => p.name)).toEqual(['Taman A'])
     })
 
-    it('the nearby cache key includes the rounded centre', async () => {
-      replies.push(suburb, { elements: [way(1, 'Taman A', 0.003)] })
-      await searchParks('Bukit Jalil', deps())
+    it('the cache key includes the rounded centre and a second call is served from it', async () => {
+      replies.push({ elements: [way(1, 'Taman A', 0.003)] })
+      await nearbyParks(centre, new Set(), deps())
       expect([...cacheMap.keys()].some((k) => k.startsWith('overpassnear:') && k.includes('3.0618') && k.includes('101.6993'))).toBe(true)
-      expect(cacheMap.has('nominatim3:bukit jalil')).toBe(true)
+      await nearbyParks({ lat: 3.06181, lng: 101.69929 }, new Set(), deps())
+      expect(calls).toHaveLength(1)
     })
   })
 

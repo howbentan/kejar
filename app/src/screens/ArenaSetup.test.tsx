@@ -170,9 +170,12 @@ describe('ArenaSetup', () => {
   })
 
   describe('search results', () => {
-    async function search(result: unknown) {
+    /** `nearby` rides along in the fixture and is served by the separate nearbyParks action. */
+    async function search(result: unknown, nearbyReply?: () => Promise<unknown>) {
+      const { nearby = [], ...res } = result as { nearby?: unknown[] }
       call.mockImplementation(async (action: string) => {
-        if (action === 'searchParks') return result
+        if (action === 'searchParks') return res
+        if (action === 'nearbyParks') return nearbyReply ? nearbyReply() : { nearby }
         if (action === 'parkFeatures') return { water: [], toilets: [], waterChecked: true }
         return {}
       })
@@ -180,6 +183,74 @@ describe('ArenaSetup', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Search' }))
       await waitFor(() => expect(call).toHaveBeenCalledWith('searchParks', expect.anything()))
     }
+    const deferred = <T,>() => {
+      let resolve!: (v: T) => void
+      let reject!: (e: unknown) => void
+      const promise = new Promise<T>((res, rej) => ((resolve = res), (reject = rej)))
+      return { promise, resolve, reject }
+    }
+
+    it('asks for parks near the circle centre, skipping the parks already listed', async () => {
+      render(<ArenaSetup onDone={vi.fn()} />)
+      await search(found([hit], jalil, [taman]))
+      await screen.findByRole('button', { name: /^Taman Rekreasi/ })
+      expect(call).toHaveBeenCalledWith('nearbyParks', { organiserToken: 'o1', center: jalil.center, skip: [hit.osmRef] })
+    })
+
+    it('does not ask for nearby parks when there is no circle option', async () => {
+      render(<ArenaSetup onDone={vi.fn()} />)
+      await search(found([hit]))
+      await screen.findByRole('button', { name: /^KLCC Park/ })
+      expect(call).not.toHaveBeenCalledWith('nearbyParks', expect.anything())
+    })
+
+    it('shows the rows at once, a loading line while nearby parks load, then the heading and rows', async () => {
+      const slow = deferred<{ nearby: unknown[] }>()
+      render(<ArenaSetup onDone={vi.fn()} />)
+      await search(found([hit], jalil), () => slow.promise)
+      expect(await screen.findByRole('button', { name: /^KLCC Park/ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Circle around Bukit Jalil' })).toBeInTheDocument()
+      expect(screen.getByText('Finding parks near Bukit Jalil…')).toBeInTheDocument()
+      expect(screen.queryByText('Parks near Bukit Jalil')).toBeNull()
+      slow.resolve({ nearby: [taman] })
+      expect(await screen.findByText('Parks near Bukit Jalil')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^Taman Rekreasi/ })).toBeInTheDocument()
+      expect(screen.queryByText(/^Finding parks near/)).toBeNull()
+    })
+
+    it('a failed or empty nearby lookup shows nothing extra and no error', async () => {
+      const bad = deferred<unknown>()
+      render(<ArenaSetup onDone={vi.fn()} />)
+      await search(found([hit], jalil), () => bad.promise)
+      await screen.findByText('Finding parks near Bukit Jalil…')
+      bad.reject(new Error('Park search is down'))
+      await waitFor(() => expect(screen.queryByText(/^Finding parks near/)).toBeNull())
+      expect(screen.queryByText(/^Parks near/)).toBeNull()
+      expect(screen.queryByText(/down/)).toBeNull()
+      expect(screen.queryByRole('alert')).toBeNull()
+    })
+
+    it('ignores a nearby reply that arrives after the organiser searched again', async () => {
+      const first = deferred<{ nearby: unknown[] }>()
+      render(<ArenaSetup onDone={vi.fn()} />)
+      await search(found([], jalil), () => first.promise)
+      await screen.findByText('Finding parks near Bukit Jalil…')
+      const sri = { name: 'Sri Petaling', center: { lat: 3.07, lng: 101.69 } }
+      const other = { osmRef: 'way/88', name: 'Taman Sri Petaling', areaHa: 5, outline: geo.lake, pieces: 1 }
+      call.mockImplementation(async (action: string) => {
+        if (action === 'searchParks') return found([], sri)
+        if (action === 'nearbyParks') return { nearby: [other] }
+        return {}
+      })
+      fireEvent.change(screen.getByLabelText('Park name'), { target: { value: 'Sri Petaling' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+      expect(await screen.findByText('Parks near Sri Petaling')).toBeInTheDocument()
+      first.resolve({ nearby: [taman] })
+      await new Promise((r) => setTimeout(r, 20))
+      expect(screen.queryByText('Parks near Bukit Jalil')).toBeNull()
+      expect(screen.queryByRole('button', { name: /^Taman Rekreasi/ })).toBeNull()
+      expect(screen.getByRole('button', { name: /^Taman Sri Petaling/ })).toBeInTheDocument()
+    })
 
     it('rows run parks, then the circle, then a Parks near heading with the nearby parks', async () => {
       render(<ArenaSetup onDone={vi.fn()} />)
