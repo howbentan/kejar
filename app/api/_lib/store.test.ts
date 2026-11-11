@@ -191,6 +191,34 @@ describe('MemoryStore safety methods', () => {
     expect(await store.releaseCaught(p.id, 'c1', iso(now))).toBe(false)
   })
 
+  it('releaseCaught and releaseAutoJailed refuse once the game has ended', async () => {
+    const g = await startedGame()
+    const p = await newPlayer(g.id, 'Aina')
+    const q = await newPlayer(g.id, 'Ben')
+    await store.catchRunner(p.id, 'c1')
+    await store.catchRunner(q.id, null)
+    await store.updateGame(g.id, { ended_at: iso(T0 + MIN) })
+    expect(await store.releaseCaught(p.id, 'c1', iso(T0 + 2 * MIN))).toBe(false)
+    expect(await store.releaseAutoJailed(q.id, iso(T0 + 2 * MIN))).toBe(false)
+    expect((await store.players(g.id)).every((x) => x.jailed)).toBe(true)
+  })
+
+  it('resumeGame moves a pending final whistle by the pause, and leaves none alone', async () => {
+    const g = await startedGame()
+    await store.claimFinalWhistle(g.id, iso(T0 + MIN))
+    now = T0 + 2 * MIN
+    await store.pauseGame(g.id)
+    now = T0 + 5 * MIN
+    await store.resumeGame(g.id)
+    expect((await store.gameByCode('ABC234'))!.final_whistle_at).toBe(iso(T0 + 4 * MIN))
+    await store.clearFinalWhistle(g.id)
+    now = T0 + 6 * MIN
+    await store.pauseGame(g.id)
+    now = T0 + 7 * MIN
+    await store.resumeGame(g.id)
+    expect((await store.gameByCode('ABC234'))!.final_whistle_at).toBeNull()
+  })
+
   it('claimFinalWhistle is true only the first time, never once ended, and clearFinalWhistle re-arms it', async () => {
     const g = await startedGame()
     expect(await store.claimFinalWhistle(g.id, iso(T0 + MIN))).toBe(true)
@@ -665,6 +693,10 @@ describe('wiping a game', () => {
       expect(left, secret).not.toContain(secret)
     }
     expect((await store.players(g.id)).map((p) => p.name)).toEqual(['Dikejar 1', 'Dikejar 2', 'Kejar 1', 'Marshal 1'])
+    // Safety records stay as anonymous counts: no text, names or position survive.
+    expect((store as unknown as { safetyRows: unknown[] }).safetyRows).toEqual([
+      expect.objectContaining({ game_id: g.id, type: 'sos', data: {}, lat: null, lng: null }),
+    ])
     expect((await store.gameByCode('ABC234'))!.wiped_at).toBe(iso(T0))
     expect((await store.events(g.id)).find((e) => e.type === 'ended')!.data).toEqual({ winner: 'chasers' })
     expect((await store.events(g.id)).find((e) => e.type === 'caught')!.data).toEqual({ flagged: false })
@@ -690,6 +722,13 @@ describe('wiping a game', () => {
     // A game with no end recorded is swept by age since it was made; one made after the cut-off is not.
     expect(await store.gamesToWipe(iso(T0 + 60 * MIN), iso(T0 + MIN), 5)).toContain(never.id)
     expect(await store.gamesToWipe(iso(T0 + 60 * MIN), iso(T0 - MIN), 5)).not.toContain(never.id)
+  })
+
+  it('migration 0016 sets the safety_records type check once, with every value, so a re-run is safe', () => {
+    const sql = readFileSync(new URL('../../../supabase/migrations/0016_fair_play.sql', import.meta.url), 'utf8')
+    expect(sql.match(/add constraint safety_records_type_check/g)).toHaveLength(1)
+    const check = sql.slice(sql.indexOf('add constraint safety_records_type_check'))
+    for (const t of ['sos', 'report', 'removed', 'auto-jail-undone', 'kejar-undone', 'phone-move']) expect(check.slice(0, 300)).toContain(`'${t}'`)
   })
 
   it('strips the same event keys in the SQL as in the store', () => {

@@ -96,16 +96,7 @@ export class SupabaseStore implements GameStore {
     return check(await this.db.rpc('draw_card', { p_game: gameId, p_side: side })) as number
   }
   async releaseAutoJailed(id: string, atIso: string) {
-    const rows = check(
-      await this.db
-        .from('players')
-        .update({ jailed: false, caught_at: null, freed_at: atIso, out_warned_at: null })
-        .eq('id', id)
-        .eq('jailed', true)
-        .is('caught_by', null)
-        .select('id'),
-    )
-    return (rows ?? []).length > 0
+    return check(await this.db.rpc('release_auto_jailed', { p_player: id, p_at: atIso })) === true
   }
   async releaseCaught(id: string, by: string, atIso: string) {
     return check(await this.db.rpc('release_caught', { p_player: id, p_by: by, p_at: atIso })) === true

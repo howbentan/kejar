@@ -21,11 +21,13 @@ begin
     return null;
   end if;
   d := p_at - started;
+  -- A pending final whistle's 60 s hold freezes with the pause too, so an undo still has its full time.
   update games
     set pauses = pauses || jsonb_build_array(jsonb_build_object(
           'from', to_char(started at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
           'to', to_char(p_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))),
-        paused_at = null
+        paused_at = null,
+        final_whistle_at = final_whistle_at + d
     where id = p_game;
   update pings
     set alert_at = case when alerted then alert_at else alert_at + d end,
@@ -42,21 +44,39 @@ grant execute on function resume_game(uuid, timestamptz) to service_role;
 -- When the last free Dikejar goes out, the end is held 60 s so a marshal can undo a wrong last catch.
 alter table games add column if not exists final_whistle_at timestamptz;
 
--- Undo kejar frees a runner only while that chaser's catch still holds them. freed_at restarts their check-in
--- count (as the auto-jail undo does); freed_once (their one escape) is left alone. True iff this call freed them.
+-- Undo kejar frees a runner only while that chaser's catch still holds them, and never once the game has ended.
+-- freed_at restarts their check-in count (as the auto-jail undo does); freed_once (their one escape) is left alone.
+-- True iff this call freed them.
 create or replace function release_caught(p_player uuid, p_by uuid, p_at timestamptz) returns boolean
 language plpgsql
 as $$
 begin
   update players
      set jailed = false, caught_by = null, caught_at = null, freed_at = p_at
-   where id = p_player and jailed and caught_by = p_by;
+   where id = p_player and jailed and caught_by = p_by
+     and not exists (select 1 from games g where g.id = players.game_id and g.ended_at is not null);
   return found;
 end;
 $$;
 
 revoke execute on function release_caught(uuid, uuid, timestamptz) from public, anon, authenticated;
 grant execute on function release_caught(uuid, uuid, timestamptz) to service_role;
+
+-- The auto-jail undo (it was a plain update before), with the same refusal once the game has ended.
+create or replace function release_auto_jailed(p_player uuid, p_at timestamptz) returns boolean
+language plpgsql
+as $$
+begin
+  update players
+     set jailed = false, caught_at = null, freed_at = p_at, out_warned_at = null
+   where id = p_player and jailed and caught_by is null
+     and not exists (select 1 from games g where g.id = players.game_id and g.ended_at is not null);
+  return found;
+end;
+$$;
+
+revoke execute on function release_auto_jailed(uuid, timestamptz) from public, anon, authenticated;
+grant execute on function release_auto_jailed(uuid, timestamptz) to service_role;
 
 -- Starts the final whistle only if none is pending and the game hasn't ended. True iff this call started it.
 create or replace function claim_final_whistle(p_game uuid, p_at timestamptz) returns boolean
@@ -72,11 +92,6 @@ $$;
 
 revoke execute on function claim_final_whistle(uuid, timestamptz) from public, anon, authenticated;
 grant execute on function claim_final_whistle(uuid, timestamptz) to service_role;
-
--- Each Undo kejar is kept in safety_records with who did it, so the type check gains a value.
-alter table safety_records drop constraint if exists safety_records_type_check;
-alter table safety_records add constraint safety_records_type_check
-  check (type in ('sos', 'report', 'removed', 'auto-jail-undone', 'kejar-undone'));
 
 -- 4. New phone (fair-play §1.7). A marshal or the organiser makes a one-time link that moves a player onto another
 -- phone: redeeming it swaps that player's session token, so the old phone stops working.
@@ -123,7 +138,8 @@ $$;
 revoke execute on function redeem_phone_move(text, timestamptz, uuid, text) from public, anon, authenticated;
 grant execute on function redeem_phone_move(text, timestamptz, uuid, text) to service_role;
 
--- Each move is kept in safety_records with who made it, so the type check gains a value.
+-- Each Undo kejar and each move is kept in safety_records with who did it, so the type check gains two values.
+-- Dropped and re-added once, with every value, so running this file again is safe.
 alter table safety_records drop constraint if exists safety_records_type_check;
 alter table safety_records add constraint safety_records_type_check
   check (type in ('sos', 'report', 'removed', 'auto-jail-undone', 'kejar-undone', 'phone-move'));
@@ -132,7 +148,7 @@ alter table safety_records add constraint safety_records_type_check
 alter table games add column if not exists wiped_at timestamptz;
 
 -- Runs in one transaction, and returns false (doing nothing) once the game is wiped. Players keep their rows, renamed
--- to role placeholders numbered by join order, so results still render. Event keys that hold a name, free text or a
+-- to role placeholders numbered by join order, so results still render. Safety records keep their type and time only. Event keys that hold a name, free text or a
 -- position are removed; the list matches WIPE_EVENT_KEYS in app/api/_lib/store.ts.
 create or replace function wipe_game(p_game uuid) returns boolean
 language plpgsql
@@ -146,7 +162,8 @@ begin
     return false;
   end if;
   delete from locations where game_id = p_game;
-  delete from safety_records where game_id = p_game;
+  -- Safety records stay as anonymous counts: free text, names and positions go.
+  update safety_records set data = '{}'::jsonb, lat = null, lng = null where game_id = p_game;
   delete from phone_moves where game_id = p_game;
   delete from marshal_invites where game_id = p_game;
   update players p

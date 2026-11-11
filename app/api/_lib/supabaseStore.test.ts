@@ -120,6 +120,15 @@ describe('SupabaseStore', () => {
     ])
   })
 
+  it('undoes an auto-jail through release_auto_jailed, which refuses an ended game', async () => {
+    const rpcs: { fn: string; args: Record<string, unknown> }[] = []
+    const db = {
+      rpc: async (fn: string, args: Record<string, unknown>) => (rpcs.push({ fn, args }), { data: true, error: null }),
+    } as unknown as SupabaseClient
+    expect(await new SupabaseStore(db, () => 0).releaseAutoJailed('p1', '2026-10-25T09:07:00.000Z')).toBe(true)
+    expect(rpcs).toEqual([{ fn: 'release_auto_jailed', args: { p_player: 'p1', p_at: '2026-10-25T09:07:00.000Z' } }])
+  })
+
   it('draws a card through the draw_card function', async () => {
     const { db, rpcs } = fakeDb()
     expect(await new SupabaseStore(db, () => 0).drawCard('g1', 'chaser')).toBe(90000)

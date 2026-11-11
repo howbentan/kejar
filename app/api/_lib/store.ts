@@ -307,6 +307,10 @@ export class MemoryStore implements GameStore {
   private nowIso() {
     return new Date(this.clock()).toISOString()
   }
+  /** An undo can't land after the game's end is recorded. */
+  private gameEnded(gameId: string) {
+    return !!this.games.find((g) => g.id === gameId)?.ended_at
+  }
   private strip<T extends object>(row: T, key: string): T {
     const copy = { ...row } as Record<string, unknown>
     delete copy[key]
@@ -320,7 +324,8 @@ export class MemoryStore implements GameStore {
     g.wiped_at = this.nowIso()
     g.host_push = null
     this.locs = this.locs.filter((l) => l.game_id !== id)
-    this.safetyRows = this.safetyRows.filter((r) => r.game_id !== id)
+    // Safety records stay as anonymous counts: their text, names and position go.
+    for (const r of this.safetyRows) if (r.game_id === id) Object.assign(r, { data: {}, lat: null, lng: null })
     this.phoneMoveRows = this.phoneMoveRows.filter((r) => r.game_id !== id)
     this.marshalInviteRows = this.marshalInviteRows.filter((r) => r.game_id !== id)
     const mine = this.playerRows
@@ -436,13 +441,13 @@ export class MemoryStore implements GameStore {
   }
   async releaseAutoJailed(id: string, atIso: string) {
     const p = this.playerRows.find((x) => x.id === id)
-    if (!p || !p.jailed || p.caught_by !== null) return false
+    if (!p || !p.jailed || p.caught_by !== null || this.gameEnded(p.game_id)) return false
     Object.assign(p, { jailed: false, caught_at: null, freed_at: atIso, out_warned_at: null })
     return true
   }
   async releaseCaught(id: string, by: string, atIso: string) {
     const p = this.playerRows.find((x) => x.id === id)
-    if (!p || !p.jailed || p.caught_by !== by) return false
+    if (!p || !p.jailed || p.caught_by !== by || this.gameEnded(p.game_id)) return false
     Object.assign(p, { jailed: false, caught_by: null, caught_at: null, freed_at: atIso })
     return true
   }
@@ -665,6 +670,8 @@ export class MemoryStore implements GameStore {
     g.pauses = [...g.pauses, { from: g.paused_at, to: this.nowIso() }]
     g.paused_at = null
     const shift = (t: string) => new Date(Date.parse(t) + d).toISOString()
+    // The 60 s hold freezes with the pause like every other timer.
+    if (g.final_whistle_at) g.final_whistle_at = shift(g.final_whistle_at)
     for (const p of this.pingRows) {
       if (p.game_id !== gameId || p.revealed) continue
       // An alert that already went out stays where it was, so its stored time matches the clock.

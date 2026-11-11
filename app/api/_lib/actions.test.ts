@@ -4417,6 +4417,34 @@ describe('Undo kejar and the final whistle (fair-play §1.4)', () => {
     expect(row.final_whistle_at).toBeNull()
   })
 
+  it('a pause freezes the 60 s hold: an undo after the resume still works', async () => {
+    const g = await safetyGame()
+    await catchAt(g, 'aina', T0 + 7 * MIN)
+    await catchAt(g, 'hafiz', T0 + 8 * MIN)
+    now = T0 + 8 * MIN + 10 * S
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 10 * MIN + 10 * S
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    // 30 s of unpaused hold have passed (10 s + 20 s), though 2 min 30 s of wall time have.
+    now = T0 + 10 * MIN + 30 * S
+    expect(await undo(g, await catchId(g, g.hafiz.playerId))).toEqual({ ok: true })
+    const v = await poll(g, T0 + 11 * MIN)
+    expect(v.phase).toBe('chasing')
+    expect((await gameRow(g)).ended_at).toBeNull()
+  })
+
+  it('a pause during the hold: without an undo the game ends 60 s of unpaused time after the whistle', async () => {
+    const g = await safetyGame()
+    await catchAt(g, 'aina', T0 + 7 * MIN)
+    await catchAt(g, 'hafiz', T0 + 8 * MIN)
+    now = T0 + 8 * MIN + 10 * S
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 10 * MIN + 10 * S
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    expect((await poll(g, T0 + 10 * MIN + 59 * S)).phase).toBe('chasing')
+    expect((await poll(g, T0 + 10 * MIN + 61 * S)).phase).toBe('ended')
+  })
+
   it('an Undo kejar after the 60 s hold, with no poll in between, is refused and the Kejar win stands', async () => {
     const g = await safetyGame()
     await catchAt(g, 'aina', T0 + 7 * MIN)
