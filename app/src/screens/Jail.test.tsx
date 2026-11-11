@@ -14,6 +14,12 @@ vi.mock('../game/Scanner', () => ({
     </button>
   ),
 }))
+vi.mock('../game/push', () => ({
+  subscribe: vi.fn(),
+  pushSupport: () => 'ok',
+  currentPushEnv: () => ({}),
+  NotificationsDeniedError: class extends Error {},
+}))
 import { ARRIVAL_MS } from '../game/PenjaraArrival'
 import Jail from './Jail'
 import { testView } from './testView'
@@ -239,5 +245,12 @@ describe('Jail', () => {
   it('already broken out once: says they stay this time', () => {
     render(<Jail code="ABC234" view={caught(60_000, { freed_once: true })} />)
     expect(screen.getByText('You’ve already been broken out once, so you stay in Penjara this time.')).toBeInTheDocument()
+  })
+})
+
+describe('Jail: alerts after New phone', () => {
+  it('a jailed runner in push mode with no subscription can turn alerts back on', () => {
+    render(<Jail code="ABC234" view={caught(60_000)} />)
+    expect(screen.getByRole('button', { name: 'Turn on alerts' })).toBeInTheDocument()
   })
 })

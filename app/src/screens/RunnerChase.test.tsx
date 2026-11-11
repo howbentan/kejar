@@ -22,6 +22,12 @@ vi.mock('../game/Scanner', () => ({
   ),
 }))
 vi.mock('../game/useWakeLock', () => ({ useWakeLock }))
+vi.mock('../game/push', () => ({
+  subscribe: vi.fn(),
+  pushSupport: () => 'ok',
+  currentPushEnv: () => ({}),
+  NotificationsDeniedError: class extends Error {},
+}))
 import RunnerChase from './RunnerChase'
 import { testView } from './testView'
 
@@ -220,5 +226,24 @@ describe('RunnerChase', () => {
     rerender(<RunnerChase code="ABC234" view={early(130_000 + 300_000)} />)
     expect(screen.queryByText(/^Check-in opens in/)).toBeNull()
     expect(screen.getByText('Check in in 5:30')).toBeInTheDocument()
+  })
+})
+
+describe('RunnerChase: alerts after New phone', () => {
+  const withMode = (checkinMode: 'push' | 'schedule', push: unknown) => {
+    const base = testView()
+    return testView({ settings: { ...base.settings, checkinMode } as typeof base.settings, me: { ...base.me, push: push as never } })
+  }
+  it('offers Turn on alerts in push mode when the runner has no subscription', () => {
+    render(<RunnerChase code="ABC234" view={withMode('push', null)} />)
+    expect(screen.getByRole('button', { name: 'Turn on alerts' })).toBeInTheDocument()
+  })
+  it('does not when they are subscribed', () => {
+    render(<RunnerChase code="ABC234" view={withMode('push', { endpoint: 'x' })} />)
+    expect(screen.queryByRole('button', { name: 'Turn on alerts' })).toBeNull()
+  })
+  it('does not in schedule mode', () => {
+    render(<RunnerChase code="ABC234" view={withMode('schedule', null)} />)
+    expect(screen.queryByRole('button', { name: 'Turn on alerts' })).toBeNull()
   })
 })
