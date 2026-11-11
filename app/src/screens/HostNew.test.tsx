@@ -86,7 +86,7 @@ const toStep3 = async (mode: 'Core' | 'Full' = 'Core') => {
 }
 const createdWith = (match: object) => expect(call).toHaveBeenCalledWith('create', expect.objectContaining(match))
 const createCalls = () => call.mock.calls.filter((c) => c[0] === 'create')
-const parksLoaded = () => screen.findByText('KLCC · 15.7 ha · 3 stations')
+const parksLoaded = () => screen.findByText('KLCC · 3 stations')
 
 describe('HostNew step 1, the park', () => {
   it('shows the step, the heading and the progress bar', async () => {

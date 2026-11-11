@@ -69,7 +69,7 @@ async function pickKlcc() {
   fireEvent.change(screen.getByLabelText('Park name'), { target: { value: 'KLCC Park' } })
   fireEvent.click(screen.getByRole('button', { name: 'Search' }))
   fireEvent.click(await screen.findByRole('button', { name: /^KLCC Park/ }))
-  await screen.findByText('15.0 ha')
+  await screen.findByText('0 stations')
 }
 
 describe('ArenaSetup', () => {
@@ -292,7 +292,7 @@ describe('ArenaSetup', () => {
         .getAllByRole('button')
         .map((b) => b.textContent ?? '')
         .filter((t) => /KLCC Park|Circle around|Taman Rekreasi/.test(t))
-      expect(rows).toEqual(['KLCC Park · 16.0 ha', 'Circle around Bukit Jalil', 'Taman Rekreasi Bukit Jalil · 31.8 ha'])
+      expect(rows).toEqual(['KLCC Park', 'Circle around Bukit Jalil', 'Taman Rekreasi Bukit Jalil'])
       const heading = screen.getByText('Parks near Bukit Jalil')
       const circle = screen.getByRole('button', { name: 'Circle around Bukit Jalil' })
       const nearbyRow = screen.getByRole('button', { name: /^Taman Rekreasi/ })
@@ -300,11 +300,11 @@ describe('ArenaSetup', () => {
       expect(heading.compareDocumentPosition(nearbyRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
-    it('shows name and size only: no chips, no tip, no greyed rows', async () => {
+    it('shows the name only: no size, no chips, no tip, no greyed rows', async () => {
       render(<ArenaSetup onDone={vi.fn()} />)
       await search(found([hit], jalil, [taman]))
       const row = await screen.findByRole('button', { name: /^KLCC Park/ })
-      expect(row).toHaveTextContent('16.0 ha')
+      expect(row).toHaveTextContent(/^KLCC Park$/)
       expect(row).not.toHaveTextContent(/Park\b.*Park\b/)
       expect(row).not.toHaveAttribute('data-unlikely')
       expect(document.querySelector('.chip')).toBeNull()
@@ -342,7 +342,7 @@ describe('ArenaSetup', () => {
       await search(found([], jalil, [taman]))
       fireEvent.click(await screen.findByRole('button', { name: /^Taman Rekreasi Bukit Jalil/ }))
       await waitFor(() => expect(call).toHaveBeenCalledWith('parkFeatures', { organiserToken: 'o1', outline: geo.lake }))
-      expect(await screen.findByText('1.0 ha')).toBeInTheDocument()
+      expect(await screen.findByText('0 stations')).toBeInTheDocument()
       expect(screen.getByLabelText('Name this park')).toHaveValue('Taman Rekreasi Bukit Jalil')
     })
 

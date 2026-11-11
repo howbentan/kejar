@@ -33,7 +33,7 @@ function ParkRow({ hit, onPick }: { hit: ParkHit; onPick: (h: ParkHit) => void }
       style={{ textAlign: 'left' }}
       onClick={() => void onPick(hit)}
     >
-      {`${hit.name} · ${hit.areaHa.toFixed(1)} ha`}
+      {hit.name}
     </button>
   )
 }
@@ -318,8 +318,7 @@ export default function ArenaSetup({
           </p>
           {preview?.area && (
             <p className="muted">
-              Play area <span className="mono">{`${preview.area.areaHa.toFixed(1)} ha`}</span>
-              {` · ${stations.length} station${stations.length === 1 ? '' : 's'}`}
+              {`${stations.length} station${stations.length === 1 ? '' : 's'}`}
             </p>
           )}
           {preview?.problem && <p role="alert">{preview.problem}</p>}

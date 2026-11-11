@@ -355,7 +355,7 @@ export default function HostNew() {
               {parks?.length === 0 && <p className="muted">No saved parks yet.</p>}
               {parks?.map((p) => (
                 <div key={p.id} className={p.id === chosenId ? 'card park park-on' : 'card park'}>
-                  <p style={{ fontWeight: 600 }}>{`${p.name} · ${p.areaHa.toFixed(1)} ha · ${stationCount(p.arena.stations?.length ?? 0)}`}</p>
+                  <p style={{ fontWeight: 600 }}>{`${p.name} · ${stationCount(p.arena.stations?.length ?? 0)}`}</p>
                   {!p.waterChecked && (
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       <span className="muted">Lakes not checked</span>
