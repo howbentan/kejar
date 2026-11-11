@@ -9,7 +9,8 @@ const key = (code: string) => `kejar.game.${code.toUpperCase()}`
 export function loadSession(storage: Storage, code: string): GameSession {
   try {
     const raw = storage.getItem(key(code))
-    return raw ? (JSON.parse(raw) as GameSession) : {}
+    const parsed: unknown = raw ? JSON.parse(raw) : null
+    return parsed && typeof parsed === 'object' ? (parsed as GameSession) : {}
   } catch {
     return {}
   }

@@ -28,6 +28,23 @@ describe('Home', () => {
     expect(screen.queryByText(/refereed/i)).toBeNull()
   })
 
+  it('still shows the buttons when the browser blocks storage', () => {
+    const real = Object.getOwnPropertyDescriptor(window, 'localStorage')!
+    Object.defineProperty(window, 'localStorage', {
+      configurable: true,
+      get() {
+        throw new DOMException('blocked', 'SecurityError')
+      },
+    })
+    try {
+      render(<Home />)
+      expect(screen.getByRole('button', { name: 'join game' })).toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: 'reconnect' })).toBeNull()
+    } finally {
+      Object.defineProperty(window, 'localStorage', real)
+    }
+  })
+
   it('has no reconnect without a last game', () => {
     render(<Home />)
     expect(screen.queryByRole('link', { name: 'reconnect' })).toBeNull()

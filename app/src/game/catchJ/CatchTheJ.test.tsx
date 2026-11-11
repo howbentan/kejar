@@ -115,6 +115,19 @@ describe('CatchTheJ', () => {
     expect(screen.queryByTestId('toy-sticker')).toBeNull()
   })
 
+  it('pausing mid-beat ends the beat so the logo never stays without its j', () => {
+    const { rerender } = render(<CatchTheJ testStart={home} />)
+    fireEvent.pointerDown(screen.getByTestId('toy'))
+    advance(100)
+    rerender(<CatchTheJ testStart={home} paused />)
+    advance(16)
+    expect(screen.queryByTestId('toy-sticker')).toBeNull()
+    expect(screen.getByTestId('toy-j')).not.toHaveClass('hide')
+    const [x, y] = jPos()!
+    expect(x).toBeCloseTo(g.home.x)
+    expect(y).toBeCloseTo(g.home.y)
+  })
+
   it('paused does not move the j', () => {
     render(<CatchTheJ paused />)
     advance(16)

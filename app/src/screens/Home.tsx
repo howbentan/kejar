@@ -11,7 +11,14 @@ import HomeJoin from './HomeJoin'
 export default function Home() {
   const [joining, setJoining] = useState(false)
   const [story, setStory] = useState(false)
-  const [reconnect] = useState(() => reconnectHref(localStorage))
+  // Reading localStorage itself throws when the browser blocks site data; home must still work then.
+  const [reconnect] = useState(() => {
+    try {
+      return reconnectHref(localStorage)
+    } catch {
+      return null
+    }
+  })
 
   return (
     <main className="home">

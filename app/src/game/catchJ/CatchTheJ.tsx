@@ -93,6 +93,11 @@ export default function CatchTheJ({ paused = false, rand = Math.random, testStar
       if (!g || !s) return
       if (held || still || document.visibilityState !== 'visible') {
         last = null
+        // A pause mid-beat would freeze the sticker's spin-out with the j hidden, leaving "ke ar". End the beat.
+        if (s.beatLeft > 0) {
+          state.current = relaunch({ ...s, beatLeft: 0 }, g, live.current.rand)
+          setSticker(null)
+        }
         draw()
         return
       }

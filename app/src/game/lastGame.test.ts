@@ -56,6 +56,15 @@ describe('reconnect from the last game', () => {
     expect(reconnectHref(s, 2000)).toBeNull()
   })
 
+  it('is null and never throws when that game session is corrupt', () => {
+    const s = memoryStorage()
+    saveLastGame(s, 'ABC234', 'player', 1000)
+    s.setItem('kejar.game.ABC234', 'null')
+    expect(reconnectHref(s, 2000)).toBeNull()
+    s.setItem('kejar.game.ABC234', '"t"')
+    expect(reconnectHref(s, 2000)).toBeNull()
+  })
+
   it('the newest record wins', () => {
     const s = memoryStorage()
     saveSession(s, 'ABC234', { token: 't' })
