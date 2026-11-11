@@ -12,3 +12,5 @@ dist/
 New Text Document.txt
 graphify-out/
 .vite/
+
+.claude/worktrees/
