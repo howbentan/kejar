@@ -198,7 +198,7 @@ describe('HostNew step 2, which game', () => {
     expect(within(core).getAllByRole('img').map((i) => i.getAttribute('aria-label'))).toEqual(['Durian', 'Ponteng', 'Mat Rempit', 'Pak Guard'])
   })
 
-  it('Full shows its copy and stickers with Dato Seri, and leaves Bomoh out', async () => {
+  it('Full shows its copy and stickers, ending with both legendaries', async () => {
     render(<HostNew />)
     await toStep2()
     expect(screen.getByText('FOR REGULARS')).toBeInTheDocument()
@@ -206,9 +206,8 @@ describe('HostNew step 2, which game', () => {
     const names = within(screen.getByRole('radio', { name: 'Game: Full' }))
       .getAllByRole('img')
       .map((i) => i.getAttribute('aria-label'))
-    expect(names).toContain('Dato Seri')
-    expect(names).toHaveLength(9)
-    expect(names.join(' ')).not.toMatch(/bomoh/i)
+    expect(names).toHaveLength(10)
+    expect(names.slice(-2)).toEqual(['Dato Seri', 'Bomoh'])
   })
 
   it('has Back and Next', async () => {

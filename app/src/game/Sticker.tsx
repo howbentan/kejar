@@ -1,22 +1,21 @@
 import * as m from 'motion/react-m'
 import { useId } from 'react'
-import type { PowerUpKind } from '../../shared/types.js'
 import { INFO } from './powerInfo'
-import { ART } from './stickerArt'
+import { ART, type StickerKind } from './stickerArt'
 
 /**
  * A power-up's doodle sticker (motion design §7, power-ups design §5c): hand-drawn wobble, a thick white
  * sticker edge with a drop shadow, a slight tilt. Each sticker defines its own filters, so several on one
  * screen never share ids.
  */
-export default function Sticker({ kind, size = 92, tilt = 0, wiggle = false }: { kind: PowerUpKind; size?: number; tilt?: number; wiggle?: boolean }) {
+export default function Sticker({ kind, size = 92, tilt = 0, wiggle = false }: { kind: StickerKind; size?: number; tilt?: number; wiggle?: boolean }) {
   const id = useId().replace(/[^a-zA-Z0-9_-]/g, '')
   const wob = `wob-${id}`
   const stk = `stk-${id}`
   return (
     <m.svg
       role="img"
-      aria-label={INFO[kind].name}
+      aria-label={kind === 'bomoh' ? 'Bomoh' : INFO[kind].name}
       viewBox="-8 -6 116 116"
       width={size}
       height={size}

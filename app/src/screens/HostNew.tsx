@@ -7,6 +7,7 @@ import { loadOrganiserSession } from '../game/organiserSession'
 import PlaceMap from '../game/PlaceMap'
 import SetupSteps from '../game/SetupSteps'
 import Sticker from '../game/Sticker'
+import type { StickerKind } from '../game/stickerArt'
 import { ErrorText, Pills, Screen } from '../game/ui'
 import { platformOf } from '../game/device'
 import ArenaSetup, { type SavedArenaForEdit } from './ArenaSetup'
@@ -27,8 +28,8 @@ const stationCount = (n: number) => `${n} station${n === 1 ? '' : 's'}`
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 const CORE_STICKERS: PowerUpKind[] = ['shield', 'cloak', 'flare', 'focus']
-// Bomoh has no hand card (it fires the moment it's found), so it has no sticker in Full's row.
-const FULL_STICKERS: PowerUpKind[] = ['decoy', 'shield', 'cloak', 'toyol', 'grab', 'flare', 'focus', 'along', 'dato']
+// Both secret legendaries end Full's row; this row is organiser-only, so naming them here is fine.
+const FULL_STICKERS: StickerKind[] = ['decoy', 'shield', 'cloak', 'toyol', 'grab', 'flare', 'focus', 'along', 'dato', 'bomoh']
 
 const LENGTHS: { value: Settings['lengthMin']; text: string; sub: string }[] = [
   { value: 30, text: 'Quick', sub: '30 MIN' },
@@ -611,14 +612,7 @@ export default function HostNew() {
               />
               <Legendary
                 tone="purple"
-                art={
-                  <span
-                    aria-hidden
-                    style={{ width: 40, height: 40, borderRadius: 12, flex: 'none', display: 'grid', placeItems: 'center', fontWeight: 800, background: 'var(--bomoh-2)', color: 'var(--bomoh-ink)' }}
-                  >
-                    B
-                  </span>
-                }
+                art={<Sticker kind="bomoh" size={40} />}
                 title="Bomoh"
                 who="FOR KEJAR · PURPLE"
                 seg={
