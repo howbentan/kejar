@@ -18,6 +18,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["--prefix", "app", "vite", "docs/superpowers/mockups/2026-11-09-organiser-setup", "--port", "5175", "--strictPort"],
       "port": 5175
+    },
+    {
+      "name": "legendary-mockups",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--prefix", "app", "vite", "docs/superpowers/mockups/2026-11-11-legendaries-and-park", "--port", "5178", "--strictPort"],
+      "port": 5178
     }
   ]
 }

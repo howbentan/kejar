@@ -18,6 +18,7 @@ export interface OsmCache {
   put(key: string, body: unknown): Promise<void>
 }
 
+/** A place to play with its outline: what the app lists as a row and turns into a play area. */
 export interface ParkHit {
   osmRef: string
   name: string
@@ -25,6 +26,12 @@ export interface ParkHit {
   outline: LatLng[]
   /** More than 1: the park is mapped in several pieces and only the largest is used. */
   pieces: number
+}
+
+export interface ParkSearch {
+  parks: ParkHit[]
+  /** One place that is not a park (a suburb, a hill, a station): the app offers a circle around it. */
+  around: { name: string; center: LatLng } | null
 }
 
 interface Deps {
@@ -58,16 +65,40 @@ interface NominatimResult {
   osm_id: number
   name?: string
   display_name?: string
+  category?: string
+  type?: string
+  lat?: string
+  lon?: string
   geojson?: { type: string; coordinates: unknown }
 }
 
-/** Parks (and other mapped areas) in Malaysia matching the name, largest first. */
-export async function searchParks(query: string, deps: Deps): Promise<ParkHit[]> {
-  const q = query.trim()
-  const key = `nominatim:${q.toLowerCase()}`
-  const cached = (await deps.cache.get(key)) as ParkHit[] | null
-  if (cached) return cached
+/** Where a person can play tag, as OpenStreetMap tags it: category, then the types allowed in it. */
+const PLAYABLE: Record<string, string[]> = {
+  leisure: ['park', 'garden', 'recreation_ground', 'common', 'nature_reserve', 'stadium', 'sports_centre', 'pitch', 'playground'],
+  landuse: ['recreation_ground', 'grass', 'village_green'],
+  boundary: ['national_park', 'protected_area'],
+}
+const isPlayable = (category = '', type = '') => !!PLAYABLE[category]?.includes(type)
+/** Things, not places: only used as a circle centre when nothing better turns up. */
+const UNLIKELY_CATEGORIES = new Set(['railway', 'building', 'amenity', 'shop', 'office', 'highway', 'man_made'])
+const NEARBY_M = 1_500
+const NEARBY_MAX = 6
+const NEARBY_CACHE_MAX = 20
+const MIN_PARK_HA = 0.5
 
+/** Playable outlines matching the name, plus one circle option. Nearby parks come separately (they are slow). */
+export async function searchParks(query: string, deps: Deps): Promise<ParkSearch> {
+  const q = query.trim()
+  // v3: results are { parks, around } with playable outlines only; the new prefix skips older cached lists.
+  const key = `nominatim3:${q.toLowerCase()}`
+  const cached = (await deps.cache.get(key)) as ParkSearch | null
+  if (cached) return cached
+  const found = await nominatimSearch(q, deps)
+  await deps.cache.put(key, found)
+  return found
+}
+
+async function nominatimSearch(q: string, deps: Deps): Promise<ParkSearch> {
   const now = deps.now ?? Date.now
   const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)))
   const turn = nominatimTurn.then(async () => {
@@ -84,30 +115,100 @@ export async function searchParks(query: string, deps: Deps): Promise<ParkHit[]>
     countrycodes: 'my',
     format: 'jsonv2',
     polygon_geojson: '1',
-    limit: '5',
+    limit: '10',
     polygon_threshold: '0.00001',
   })
   const results = (await deps.fetchJson(`${NOMINATIM}?${params}`, { headers: { 'User-Agent': OSM_USER_AGENT } })) as NominatimResult[]
-  const hits: ParkHit[] = []
+  const parks: ParkHit[] = []
+  const circles: { name: string; center: LatLng; unlikely: boolean }[] = []
   for (const r of results ?? []) {
     const g = r.geojson
+    const name = r.name || (r.display_name ?? '').split(',')[0] || 'Unnamed area'
     let rings: LatLng[][] = []
     if (g?.type === 'Polygon') rings = [(g.coordinates as number[][][])[0].map(toLatLng)]
     else if (g?.type === 'MultiPolygon') rings = (g.coordinates as number[][][][]).map((poly) => poly[0].map(toLatLng))
-    else continue
-    rings = rings.map(openRing)
-    const outline = rings.reduce((a, b) => (ringAreaHa(b) > ringAreaHa(a) ? b : a))
-    hits.push({
-      osmRef: `${r.osm_type}/${r.osm_id}`,
-      name: r.name || (r.display_name ?? '').split(',')[0] || 'Unnamed area',
-      areaHa: ringAreaHa(outline),
-      outline,
-      pieces: rings.length,
-    })
+    if (rings.length > 0 && isPlayable(r.category, r.type)) {
+      rings = rings.map(openRing)
+      const outline = rings.reduce((a, b) => (ringAreaHa(b) > ringAreaHa(a) ? b : a))
+      parks.push({ osmRef: `${r.osm_type}/${r.osm_id}`, name, areaHa: ringAreaHa(outline), outline, pieces: rings.length })
+      continue
+    }
+    const unlikely = UNLIKELY_CATEGORIES.has(r.category ?? '')
+    // A building or track with an outline is neither a place to play nor a place to centre on.
+    if (rings.length > 0 && unlikely) continue
+    const lat = Number(r.lat)
+    const lng = Number(r.lon)
+    if (r.lat == null || r.lon == null || !Number.isFinite(lat) || !Number.isFinite(lng)) continue
+    circles.push({ name, center: { lat, lng }, unlikely })
   }
-  hits.sort((a, b) => b.areaHa - a.areaHa)
-  await deps.cache.put(key, hits)
-  return hits
+  parks.sort((a, b) => b.areaHa - a.areaHa)
+  const pick = circles.find((c) => !c.unlikely) ?? circles[0]
+  return { parks, around: pick ? { name: pick.name, center: pick.center } : null }
+}
+
+const LEISURE_RE = `^(${PLAYABLE.leisure.join('|')})$`
+const LANDUSE_RE = `^(${PLAYABLE.landuse.join('|')})$`
+
+/** Named playable areas within 1.5 km of a point, from Overpass. Any failure just means no list (and nothing cached). */
+export async function nearbyParks(center: LatLng, skip: Set<string>, deps: Deps): Promise<ParkHit[]> {
+  const key = `overpassnear:${center.lat.toFixed(4)},${center.lng.toFixed(4)}`
+  let found = (await deps.cache.get(key)) as ParkHit[] | null
+  if (!found) {
+    // Lookups for the same spot already in flight share one (slow, shared) Overpass request.
+    let flight = nearbyInFlight.get(key)
+    if (!flight) {
+      flight = fetchNearby(center, key, deps).finally(() => nearbyInFlight.delete(key))
+      nearbyInFlight.set(key, flight)
+    }
+    found = await flight
+  }
+  return found.filter((p) => !skip.has(p.osmRef)).slice(0, NEARBY_MAX)
+}
+
+const nearbyInFlight = new Map<string, Promise<ParkHit[]>>()
+
+async function fetchNearby(center: LatLng, key: string, deps: Deps): Promise<ParkHit[]> {
+  const f = `(around:${NEARBY_M},${center.lat},${center.lng})`
+  const query =
+    `[out:json][timeout:20];(` +
+    `way["leisure"~"${LEISURE_RE}"]${f};relation["leisure"~"${LEISURE_RE}"]${f};` +
+    `way["landuse"~"${LANDUSE_RE}"]${f};relation["landuse"~"${LANDUSE_RE}"]${f};` +
+    `);out geom;`
+  let elements: OverpassElement[]
+  try {
+    const res = (await deps.fetchJson(OVERPASS, {
+      method: 'POST',
+      body: `data=${encodeURIComponent(query)}`,
+      headers: { 'User-Agent': OSM_USER_AGENT, 'Content-Type': 'application/x-www-form-urlencoded' },
+    })) as { elements?: OverpassElement[]; remark?: string }
+    // A remark means Overpass gave up part way (timeout, out of memory): the elements are only some of the parks.
+    if (!res || res.remark || !Array.isArray(res.elements)) throw new Error('Unexpected Overpass reply')
+    elements = res.elements
+  } catch {
+    return []
+  }
+  const all: ParkHit[] = []
+  for (const e of elements) {
+    if (e.type === 'node') continue
+    const rings =
+      e.type === 'way'
+        ? isClosed(e.geometry)
+          ? [openRing(pts(e.geometry))]
+          : []
+        : joinWays((e.members ?? []).filter((m) => m.role === 'outer').map((m) => pts(m.geometry)))
+    const good = rings.filter((r) => r.length >= 3)
+    if (good.length === 0) continue
+    const outline = good.reduce((a, b) => (ringAreaHa(b) > ringAreaHa(a) ? b : a))
+    const areaHa = ringAreaHa(outline)
+    if (areaHa < MIN_PARK_HA || !e.tags?.name) continue
+    all.push({ osmRef: `${e.type}/${e.id}`, name: e.tags.name, areaHa, outline: thin(outline), pieces: good.length })
+  }
+  all.sort((a, b) => b.areaHa - a.areaHa)
+  // A park and a recreation ground mapped on top of each other share a name: keep the larger.
+  const seen = new Set<string>()
+  const found = all.filter((p) => !seen.has(p.name.toLowerCase()) && !!seen.add(p.name.toLowerCase())).slice(0, NEARBY_CACHE_MAX)
+  await deps.cache.put(key, found)
+  return found
 }
 
 /** Chains the separate ways of an OSM relation into closed rings (open form, no repeated last point). */
@@ -131,6 +232,7 @@ export function joinWays(ways: LatLng[][]): LatLng[][] {
 
 interface OverpassElement {
   type: 'node' | 'way' | 'relation'
+  id?: number
   lat?: number
   lon?: number
   tags?: Record<string, string>

@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { arenaFromDraft, KL_FALLBACK, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { MAX_STATIONS } from '../../shared/ids.js'
 import { buildPlayArea } from '../../shared/playArea.js'
 import type { LatLng } from '../../shared/types.js'
-import type { ParkHit } from '../../api/_lib/osm.js'
+import type { ParkHit, ParkSearch } from '../../api/_lib/osm.js'
 import { call } from '../game/api'
 import { loadOrganiserSession } from '../game/organiserSession'
 import PlaceMap, { type PlaceMode } from '../game/PlaceMap'
@@ -13,6 +13,7 @@ const SIZES = ['150', '200', '300', '500'] as const
 type Size = (typeof SIZES)[number]
 const NO_LAKE_CHECK = "Couldn't check for lakes. Look at the map before saving."
 const LARGEST_ONLY = 'Only the largest part of the park is used'
+const NO_PARKS = "No parks found. Use a circle and drag it where you'll play."
 
 export interface SavedArenaForEdit {
   id: string
@@ -23,6 +24,19 @@ const average = (pts: LatLng[]) => ({
   lat: pts.reduce((s, p) => s + p.lat, 0) / pts.length,
   lng: pts.reduce((s, p) => s + p.lng, 0) / pts.length,
 })
+
+function ParkRow({ hit, onPick }: { hit: ParkHit; onPick: (h: ParkHit) => void }) {
+  return (
+    <button
+      type="button"
+      className="btn btn-ghost"
+      style={{ textAlign: 'left' }}
+      onClick={() => void onPick(hit)}
+    >
+      {hit.name}
+    </button>
+  )
+}
 
 /** Set up a play area: find a park (or a circle around me), trim it, place things, then save or use once. */
 export default function ArenaSetup({
@@ -36,7 +50,10 @@ export default function ArenaSetup({
   const d0 = initial?.draft
   const [source, setSource] = useState<ArenaDraft['source']>(d0?.source ?? 'osm')
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<ParkHit[] | null>(null)
+  const [results, setResults] = useState<ParkSearch | null>(null)
+  // Parks near the circle option load after the rows show; `searchId` lets a late reply be ignored.
+  const [nearby, setNearby] = useState<{ loading: boolean; parks: ParkHit[] }>({ loading: false, parks: [] })
+  const searchId = useRef(0)
   const [park, setPark] = useState<{ osmRef: string | null; outline: LatLng[]; pieces: number } | null>(
     d0?.outline ? { osmRef: d0.osmRef, outline: d0.outline, pieces: 1 } : null,
   )
@@ -91,17 +108,57 @@ export default function ArenaSetup({
   async function search() {
     setError('')
     setBusy(true)
+    const id = ++searchId.current
+    setResults(null)
+    setNearby({ loading: false, parks: [] })
     try {
-      const r = await call<{ results: ParkHit[] }>('searchParks', { organiserToken, query: query.trim() })
-      setResults(r.results)
+      const r = await call<ParkSearch>('searchParks', { organiserToken, query: query.trim() })
+      if (id !== searchId.current) return
+      setResults(r)
+      if (r.around) void loadNearby(id, r.around, r.parks)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      if (id === searchId.current) setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setBusy(false)
+      if (id === searchId.current) setBusy(false)
     }
   }
 
+  async function loadNearby(id: number, around: NonNullable<ParkSearch['around']>, listed: ParkHit[]) {
+    setNearby({ loading: true, parks: [] })
+    let parks: ParkHit[] = []
+    try {
+      const n = await call<{ nearby: ParkHit[] }>('nearbyParks', {
+        organiserToken,
+        center: around.center,
+        skip: listed.map((p) => p.osmRef),
+      })
+      parks = n.nearby
+    } catch {
+      // No nearby list is fine: the search rows are already there.
+    }
+    if (id === searchId.current) setNearby({ loading: false, parks })
+  }
+
+  /** "Circle around {place}": a circle the organiser can drag, centred on the place. */
+  function pickAround(place: { name: string; center: LatLng }) {
+    searchId.current++
+    setBusy(false)
+    setError('')
+    setSource('circle')
+    setPark(null)
+    setResults(null)
+    setJail(null)
+    setStart(null)
+    setStations([])
+    setFeatures({ water: [], toilets: [], waterChecked: true })
+    setUsePart(false)
+    setCentre(place.center)
+    setMode('circle')
+    if (!name) setName(place.name)
+  }
+
   async function pick(hit: ParkHit) {
+    searchId.current++
     setError('')
     setBusy(true)
     setPark({ osmRef: hit.osmRef, outline: hit.outline, pieces: hit.pieces })
@@ -180,7 +237,7 @@ export default function ArenaSetup({
           value={source}
           options={[
             { value: 'osm', text: 'Find a park' },
-            { value: 'circle', text: 'Circle around me' },
+            { value: 'circle', text: 'Circle' },
           ]}
           onChange={chooseSource}
         />
@@ -204,12 +261,22 @@ export default function ArenaSetup({
               Search
             </button>
           </div>
-          {results && results.length === 0 && <p className="muted">No parks found. Try another name, or use a circle around you.</p>}
-          {results?.map((h) => (
-            <button key={h.osmRef} type="button" className="btn btn-ghost" onClick={() => void pick(h)}>
-              {`${h.name} · ${h.areaHa.toFixed(1)} ha`}
+          {results && results.parks.length === 0 && !results.around && <p className="muted">{NO_PARKS}</p>}
+          {results?.parks.map((h) => <ParkRow key={h.osmRef} hit={h} onPick={pick} />)}
+          {results?.around && (
+            <button type="button" className="btn btn-ghost" style={{ textAlign: 'left' }} onClick={() => pickAround(results.around!)}>
+              {`Circle around ${results.around.name}`}
             </button>
-          ))}
+          )}
+          {results?.around && nearby.loading && <p className="muted">{`Finding parks near ${results.around.name}…`}</p>}
+          {results?.around && nearby.parks.length > 0 && (
+            <>
+              <p className="eyebrow">{`Parks near ${results.around.name}`}</p>
+              {nearby.parks.map((h) => (
+                <ParkRow key={h.osmRef} hit={h} onPick={pick} />
+              ))}
+            </>
+          )}
         </div>
       )}
 
@@ -224,7 +291,12 @@ export default function ArenaSetup({
             </label>
           )}
           {circleOn && (
-            <Pills<Size> label="Circle size" value={size} options={SIZES.map((s) => ({ value: s, text: `${s} m` }))} onChange={setSize} />
+            <>
+              <Pills<Size> label="Circle size" value={size} options={SIZES.map((s) => ({ value: s, text: `${s} m` }))} onChange={setSize} />
+              <p className="muted" style={{ fontSize: 12 }}>
+                Drag to move.
+              </p>
+            </>
           )}
           <Pills<PlaceMode> label="Place" value={mode} options={placeOptions} onChange={setMode} />
           <PlaceMap
@@ -238,6 +310,7 @@ export default function ArenaSetup({
             start={start}
             toilets={draft.toilets}
             onTap={tap}
+            onCircleMove={setCentre}
             onStationRemove={(k) => setStations(stations.filter((_, i) => i !== k))}
           />
           <p className="muted" style={{ fontSize: 12 }}>
@@ -245,8 +318,7 @@ export default function ArenaSetup({
           </p>
           {preview?.area && (
             <p className="muted">
-              Play area <span className="mono">{`${preview.area.areaHa.toFixed(1)} ha`}</span>
-              {` · ${stations.length} station${stations.length === 1 ? '' : 's'}`}
+              {`${stations.length} station${stations.length === 1 ? '' : 's'}`}
             </p>
           )}
           {preview?.problem && <p role="alert">{preview.problem}</p>}

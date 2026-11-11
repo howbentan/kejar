@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it } from 'vitest'
-import { joinWays, OSM_TIMEOUT_MS, OSM_USER_AGENT, parkFeatures, searchParks, type FetchJson, type OsmCache } from './osm.js'
+import { joinWays, OSM_TIMEOUT_MS, OSM_USER_AGENT, nearbyParks, parkFeatures, searchParks, type FetchJson, type OsmCache } from './osm.js'
 
 type Call = { url: string; init?: Parameters<FetchJson>[1] }
 let calls: Call[]
@@ -44,30 +44,201 @@ describe('searchParks', () => {
       countrycodes: 'my',
       format: 'jsonv2',
       polygon_geojson: '1',
-      limit: '5',
+      limit: '10',
       polygon_threshold: '0.00001',
     })
     expect(calls[0].init?.headers?.['User-Agent']).toBe(OSM_USER_AGENT)
   })
 
-  it('drops point results and keeps the largest ring of a MultiPolygon', async () => {
+  it('nothing found gives empty parks, no circle and no nearby lookup', async () => {
+    replies.push([])
+    expect(await searchParks('zzz', deps())).toEqual({ parks: [], around: null })
+    expect(calls).toHaveLength(1)
+  })
+
+  it('keeps the largest ring of a MultiPolygon, biggest park first, with no label', async () => {
     replies.push([
-      { osm_type: 'node', osm_id: 1, name: 'A sign', geojson: { type: 'Point', coordinates: [101.71, 3.15] } },
-      { osm_type: 'way', osm_id: 10590000, name: 'KLCC Park', geojson: { type: 'Polygon', coordinates: [sq(101.71, 3.15, 0.003)] } },
+      { osm_type: 'way', osm_id: 10590000, name: 'KLCC Park', category: 'leisure', type: 'park', geojson: { type: 'Polygon', coordinates: [sq(101.71, 3.15, 0.003)] } },
       {
         osm_type: 'relation',
         osm_id: 7,
         name: 'Split Park',
+        category: 'leisure',
+        type: 'garden',
         geojson: { type: 'MultiPolygon', coordinates: [[sq(101.7, 3.1, 0.001)], [sq(101.72, 3.1, 0.004)]] },
       },
     ])
-    const hits = await searchParks('park', deps())
-    expect(hits.map((h) => [h.osmRef, h.name, h.pieces])).toEqual([
+    const { parks } = await searchParks('park', deps())
+    expect(parks.map((h) => [h.osmRef, h.name, h.pieces])).toEqual([
       ['relation/7', 'Split Park', 2],
       ['way/10590000', 'KLCC Park', 1],
     ])
-    expect(hits[0].outline[0]).toEqual({ lat: 3.1, lng: 101.72 })
-    expect(hits[1].areaHa).toBeCloseTo(11.1, 0)
+    expect(parks[0].outline[0]).toEqual({ lat: 3.1, lng: 101.72 })
+    expect(parks[1].areaHa).toBeCloseTo(11.1, 0)
+    expect(Object.keys(parks[0]).sort()).toEqual(['areaHa', 'name', 'osmRef', 'outline', 'pieces'])
+  })
+
+  it('keeps every kind of playable outline and drops the rest', async () => {
+    const poly = (lat: number) => ({ type: 'Polygon', coordinates: [sq(101.7, lat, 0.001)] })
+    const playable: [string, string][] = [
+      ['leisure', 'park'], ['leisure', 'garden'], ['leisure', 'recreation_ground'], ['leisure', 'common'],
+      ['leisure', 'nature_reserve'], ['leisure', 'stadium'], ['leisure', 'sports_centre'], ['leisure', 'pitch'],
+      ['leisure', 'playground'], ['landuse', 'recreation_ground'], ['landuse', 'grass'], ['landuse', 'village_green'],
+      ['boundary', 'national_park'], ['boundary', 'protected_area'],
+    ]
+    const no: [string, string][] = [['railway', 'station'], ['building', 'yes'], ['highway', 'footway'], ['amenity', 'school'], ['shop', 'mall'], ['leisure', 'swimming_pool'], ['landuse', 'residential']]
+    replies.push([
+      ...playable.map(([category, type], k) => ({ osm_type: 'way', osm_id: k + 1, name: `P${k}`, category, type, geojson: poly(3 + k * 0.01) })),
+      ...no.map(([category, type], k) => ({ osm_type: 'way', osm_id: 100 + k, name: `N${k}`, category, type, geojson: poly(4 + k * 0.01) })),
+    ])
+    const { parks } = await searchParks('x', deps())
+    expect(parks).toHaveLength(14)
+    expect(parks.every((h) => h.name.startsWith('P'))).toBe(true)
+  })
+
+  describe('Bukit Jalil', () => {
+    const jalil = () => [
+      { osm_type: 'way', osm_id: 5, name: 'SP17 Bukit Jalil', category: 'railway', type: 'station', lat: '3.0610', lon: '101.6990', geojson: { type: 'Polygon', coordinates: [sq(101.69, 3.06, 0.0007)] } },
+      { osm_type: 'node', osm_id: 1, name: 'Bukit Jalil', category: 'place', type: 'suburb', lat: '3.0618', lon: '101.6993', geojson: { type: 'Point', coordinates: [101.6993, 3.0618] } },
+      { osm_type: 'node', osm_id: 2, name: 'Bukit Jalil LRT', category: 'railway', type: 'stop', lat: '3.0620', lon: '101.6990', geojson: { type: 'Point', coordinates: [101.699, 3.062] } },
+      { osm_type: 'node', osm_id: 3, name: 'Bukit Jalil', category: 'natural', type: 'peak', lat: '3.05', lon: '101.7' },
+    ]
+
+    it('no playable outline: parks empty, one circle around the suburb, stations gone', async () => {
+      replies.push(jalil())
+      const r = await searchParks('Bukit Jalil', deps())
+      expect(r.parks).toEqual([])
+      expect(r.around).toEqual({ name: 'Bukit Jalil', center: { lat: 3.0618, lng: 101.6993 } })
+      expect(r).not.toHaveProperty('nearby')
+      expect(calls).toHaveLength(1) // Nominatim only: no Overpass wait
+    })
+
+    it('a playable outline is kept beside the circle', async () => {
+      replies.push(
+        [{ osm_type: 'way', osm_id: 6, name: 'Taman Rekreasi', category: 'leisure', type: 'park', geojson: { type: 'Polygon', coordinates: [sq(101.7, 3.07, 0.002)] } }, ...jalil()],
+      )
+      const r = await searchParks('Bukit Jalil', deps())
+      expect(r.parks.map((p) => p.osmRef)).toEqual(['way/6'])
+      expect(r.around?.name).toBe('Bukit Jalil')
+    })
+
+    it('with only stations and buildings, falls back to a station point rather than nothing', async () => {
+      replies.push([jalil()[2]])
+      expect((await searchParks('LRT', deps())).around?.name).toBe('Bukit Jalil LRT')
+    })
+
+    it('a building outline never becomes the circle', async () => {
+      replies.push([jalil()[0]])
+      expect((await searchParks('SP17', deps())).around).toBeNull()
+      expect(calls).toHaveLength(1)
+    })
+  })
+
+  describe('parks nearby', () => {
+    const centre = { lat: 3.0618, lng: 101.6993 }
+    const way = (id: number, name: string | undefined, d: number, closed = true) => {
+      const ring = sq(101.7, 3.06, d).map(([lng, lat]) => ({ lat, lon: lng }))
+      return { type: 'way', id, tags: { leisure: 'park', ...(name ? { name } : {}) }, geometry: closed ? ring : ring.slice(0, 4) }
+    }
+
+    it('asks Overpass for playable areas within 1500 m of the centre', async () => {
+      replies.push({ elements: [] })
+      await nearbyParks(centre, new Set(), deps())
+      expect(calls[0].url).toBe('https://overpass-api.de/api/interpreter')
+      expect(calls[0].init?.method).toBe('POST')
+      const q = decodeURIComponent(String(calls[0].init?.body).replace(/^data=/, ''))
+      expect(q).toContain('around:1500,3.0618,101.6993')
+      expect(q).toContain('"leisure"')
+      expect(q).toContain('"landuse"')
+      expect(q).toContain('village_green')
+      expect(q).toContain('out geom')
+      expect(calls[0].init?.headers?.['User-Agent']).toBe(OSM_USER_AGENT)
+    })
+
+    it('parses ways and relations, drops small and unnamed ones, skips listed refs, sorts and keeps the top 6', async () => {
+      const big = Array.from({ length: 8 }, (_, k) => way(10 + k, `Park ${k}`, 0.003 + k * 0.0005))
+      replies.push({
+        elements: [
+          ...big,
+          way(50, 'Tiny', 0.0005), // ~0.3 ha
+          way(51, 'Open way', 0.01, false), // not closed
+          way(52, undefined, 0.02), // no name
+          { type: 'node', id: 60, lat: 3.06, lon: 101.7, tags: { leisure: 'park', name: 'Pin' } },
+          {
+            type: 'relation',
+            id: 70,
+            tags: { leisure: 'garden', name: 'Rel Garden' },
+            members: [
+              { type: 'way', role: 'outer', geometry: sq(101.7, 3.06, 0.01).slice(0, 3).map(([lng, lat]) => ({ lat, lon: lng })) },
+              { type: 'way', role: 'outer', geometry: [sq(101.7, 3.06, 0.01)[2], sq(101.7, 3.06, 0.01)[3], sq(101.7, 3.06, 0.01)[0]].map(([lng, lat]) => ({ lat, lon: lng })) },
+            ],
+          },
+        ],
+      })
+      const nearby = await nearbyParks(centre, new Set(['way/10']), deps())
+      expect(nearby.map((p) => p.osmRef)).toEqual(['relation/70', 'way/17', 'way/16', 'way/15', 'way/14', 'way/13'])
+      expect(nearby[0].name).toBe('Rel Garden')
+      expect(nearby[1]).toMatchObject({ name: 'Park 7', pieces: 1 })
+      expect(nearby.some((p) => p.name === 'Unnamed park')).toBe(false)
+    })
+
+    it('Overpass failure gives [] and caches nothing, so a retry asks again', async () => {
+      replies.push(new Error('504'))
+      expect(await nearbyParks(centre, new Set(), deps())).toEqual([])
+      expect(cacheMap.size).toBe(0)
+      replies.push({ elements: [way(1, 'Taman A', 0.003)] })
+      expect((await nearbyParks(centre, new Set(), deps())).map((p) => p.name)).toEqual(['Taman A'])
+    })
+
+    it('a degraded reply (a remark, e.g. timeout or out of memory) is a failure and is not cached', async () => {
+      replies.push({ remark: 'runtime error: Query timed out in "query" at line 1', elements: [way(1, 'Half', 0.003)] })
+      expect(await nearbyParks(centre, new Set(), deps())).toEqual([])
+      expect(cacheMap.size).toBe(0)
+      replies.push({ elements: [way(1, 'Taman A', 0.003)] })
+      expect((await nearbyParks(centre, new Set(), deps())).map((p) => p.name)).toEqual(['Taman A'])
+    })
+
+    it('identical lookups in flight share one Overpass request', async () => {
+      let release!: () => void
+      const gate = new Promise<void>((r) => (release = r))
+      let n = 0
+      const slow = {
+        fetchJson: async () => {
+          n++
+          await gate
+          return { elements: [way(1, 'Taman A', 0.003)] }
+        },
+        cache,
+        now: () => 0,
+        sleep: async () => {},
+      }
+      const a = nearbyParks(centre, new Set(), slow)
+      const b = nearbyParks(centre, new Set(['way/99']), slow)
+      await Promise.resolve()
+      release()
+      expect((await a).map((p) => p.name)).toEqual(['Taman A'])
+      expect((await b).map((p) => p.name)).toEqual(['Taman A'])
+      expect(n).toBe(1)
+    })
+
+    it('caches only the 20 biggest, and keeps just the larger of two same-name areas', async () => {
+      const many = Array.from({ length: 25 }, (_, k) => way(100 + k, `Taman ${k}`, 0.003 + k * 0.0002))
+      const twin = { ...way(200, 'Taman 24', 0.002), tags: { landuse: 'recreation_ground', name: 'Taman 24' } }
+      replies.push({ elements: [...many, twin] })
+      const nearby = await nearbyParks(centre, new Set(), deps())
+      expect(nearby.filter((p) => p.name === 'Taman 24')).toHaveLength(1)
+      expect(nearby[0].osmRef).toBe('way/124')
+      const cached = [...cacheMap.values()][0] as unknown[]
+      expect(cached).toHaveLength(20)
+    })
+
+    it('the cache key includes the rounded centre and a second call is served from it', async () => {
+      replies.push({ elements: [way(1, 'Taman A', 0.003)] })
+      await nearbyParks(centre, new Set(), deps())
+      expect([...cacheMap.keys()].some((k) => k.startsWith('overpassnear:') && k.includes('3.0618') && k.includes('101.6993'))).toBe(true)
+      await nearbyParks({ lat: 3.06181, lng: 101.69929 }, new Set(), deps())
+      expect(calls).toHaveLength(1)
+    })
   })
 
   it('a repeated search is served from the cache', async () => {

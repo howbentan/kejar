@@ -7,6 +7,7 @@ import { loadOrganiserSession } from '../game/organiserSession'
 import PlaceMap from '../game/PlaceMap'
 import SetupSteps from '../game/SetupSteps'
 import Sticker from '../game/Sticker'
+import type { StickerKind } from '../game/stickerArt'
 import { ErrorText, Pills, Screen } from '../game/ui'
 import { platformOf } from '../game/device'
 import ArenaSetup, { type SavedArenaForEdit } from './ArenaSetup'
@@ -27,8 +28,8 @@ const stationCount = (n: number) => `${n} station${n === 1 ? '' : 's'}`
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 const CORE_STICKERS: PowerUpKind[] = ['shield', 'cloak', 'flare', 'focus']
-// Bomoh has no hand card (it fires the moment it's found), so it has no sticker in Full's row.
-const FULL_STICKERS: PowerUpKind[] = ['decoy', 'shield', 'cloak', 'toyol', 'grab', 'flare', 'focus', 'along', 'dato']
+// Both secret legendaries end Full's row; this row is organiser-only, so naming them here is fine.
+const FULL_STICKERS: StickerKind[] = ['decoy', 'shield', 'cloak', 'toyol', 'grab', 'flare', 'focus', 'along', 'dato', 'bomoh']
 
 const LENGTHS: { value: Settings['lengthMin']; text: string; sub: string }[] = [
   { value: 30, text: 'Quick', sub: '30 MIN' },
@@ -107,7 +108,7 @@ const label = (text: string) => (
   </p>
 )
 
-/** One legendary card's setting: a coloured block with its title, an Off / Hidden stash choice and a line on what it does. */
+/** One legendary card's setting: a coloured block with its title, an Off / On choice and a line on what it does. */
 function Legendary(props: {
   tone: 'yellow' | 'purple'
   art: ReactNode
@@ -354,7 +355,7 @@ export default function HostNew() {
               {parks?.length === 0 && <p className="muted">No saved parks yet.</p>}
               {parks?.map((p) => (
                 <div key={p.id} className={p.id === chosenId ? 'card park park-on' : 'card park'}>
-                  <p style={{ fontWeight: 600 }}>{`${p.name} · ${p.areaHa.toFixed(1)} ha · ${stationCount(p.arena.stations?.length ?? 0)}`}</p>
+                  <p style={{ fontWeight: 600 }}>{`${p.name} · ${stationCount(p.arena.stations?.length ?? 0)}`}</p>
                   {!p.waterChecked && (
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       <span className="muted">Lakes not checked</span>
@@ -601,24 +602,17 @@ export default function HostNew() {
                     value={settings.legendaries.dato}
                     options={[
                       { value: 'off', text: 'Off' },
-                      { value: 'stash', text: 'Hidden stash' },
+                      { value: 'stash', text: 'On' },
                     ]}
                     onChange={(v) => set({ legendaries: { ...settings.legendaries, dato: v } })}
                     on={{ background: 'var(--legendary-2)', color: 'var(--legendary-ink)' }}
                   />
                 }
-                say="You hide a QR card. The first runner to find it can free themselves and 2 friends from Penjara."
+                say="A hidden QR card. The runner who finds it can free themselves and 2 more from Penjara. You'll hide it during the walk."
               />
               <Legendary
                 tone="purple"
-                art={
-                  <span
-                    aria-hidden
-                    style={{ width: 40, height: 40, borderRadius: 12, flex: 'none', display: 'grid', placeItems: 'center', fontWeight: 800, background: 'var(--bomoh-2)', color: 'var(--bomoh-ink)' }}
-                  >
-                    B
-                  </span>
-                }
+                art={<Sticker kind="bomoh" size={40} />}
                 title="Bomoh"
                 who="FOR KEJAR · PURPLE"
                 seg={
@@ -627,13 +621,13 @@ export default function HostNew() {
                     value={settings.legendaries.bomoh}
                     options={[
                       { value: 'off', text: 'Off' },
-                      { value: 'stash', text: 'Hidden stash' },
+                      { value: 'stash', text: 'On' },
                     ]}
                     onChange={(v) => set({ legendaries: { ...settings.legendaries, bomoh: v } })}
                     on={{ background: 'var(--bomoh-2)', color: 'var(--bomoh-ink)' }}
                   />
                 }
-                say="You hide a second QR card. The first chaser to find it shows every free runner's exact spot to all Kejar for the next 2 pings."
+                say="A hidden QR card. The chaser who finds it shows every runner to Kejar for 2 pings. You'll hide it during the walk."
               />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                 <span>Dikejar can see Kejar at check-in</span>

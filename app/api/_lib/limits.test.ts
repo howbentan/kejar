@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { hashToken } from './secrets.js'
-import { FAIL_LIMIT_PER_MIN, IP_KEYED_ACTIONS, IP_KEYED_LIMIT_PER_MIN, IP_LIMIT_PER_MIN, LIMIT_WINDOW_MS, limitKey, TOKEN_LIMIT_PER_MIN } from './limits.js'
+import { FAIL_LIMIT_PER_MIN, IP_KEYED_ACTIONS, IP_KEYED_LIMIT_PER_MIN, IP_LIMIT_PER_MIN, NEARBY_LIMIT_PER_MIN, LIMIT_WINDOW_MS, limitKey, TOKEN_LIMIT_PER_MIN } from './limits.js'
 
 describe('limitKey', () => {
   it('has the agreed limits', () => {
@@ -34,6 +34,14 @@ describe('limitKey', () => {
 
   it('never puts the raw token in the key', () => {
     expect(limitKey('state', { token: 'super-secret-token' }, null).key).not.toContain('super-secret-token')
+  })
+
+  it('gives nearbyParks its own tighter bucket per organiser token (Overpass queries are slow and shared)', () => {
+    expect(NEARBY_LIMIT_PER_MIN).toBe(20)
+    const r = limitKey('nearbyParks', { organiserToken: 'org' }, '1.2.3.4')
+    expect(r).toEqual({ key: `nearby:${hashToken('org')}`, limit: 20 })
+    expect(r.key).not.toBe(limitKey('state', { organiserToken: 'org' }, null).key)
+    expect(limitKey('nearbyParks', {}, '1.2.3.4')).toEqual({ key: 'ip:1.2.3.4', limit: 60 })
   })
 
   it('keys join and the invite redeems by IP with 200 a minute, even with a token', () => {

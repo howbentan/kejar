@@ -2907,8 +2907,38 @@ describe('saved arenas', () => {
     await rejects(run('searchParks', { organiserToken, query: 'kl' }), 400, 'Type at least 3 letters')
     osmReplies.push([])
     await run('searchParks', { organiserToken, query: 'Taman Tasik Titiwangsa' })
-    expect(await run('searchParks', { organiserToken, query: 'taman tasik titiwangsa' })).toEqual({ results: [] })
+    expect(await run('searchParks', { organiserToken, query: 'taman tasik titiwangsa' })).toEqual({ parks: [], around: null })
     expect(osmCalls).toHaveLength(1)
+  })
+
+  it('nearbyParks is organiser-only and checks the centre', async () => {
+    await rejects(run('nearbyParks', { organiserToken: 'nope', center: { lat: 3.06, lng: 101.7 } }), 403)
+    const organiserToken = await createOrganiser()
+    for (const center of [undefined, null, { lat: 'x', lng: 101 }, { lat: NaN, lng: 101 }, { lat: 3 }, { lat: 51.5, lng: -0.1 }, { lat: 3.06, lng: 301 }]) {
+      await rejects(run('nearbyParks', { organiserToken, center }), 400)
+    }
+    expect(osmCalls).toHaveLength(0)
+  })
+
+  it('nearbyParks returns named parks, skips listed refs, and answers [] when Overpass fails', async () => {
+    const organiserToken = await createOrganiser()
+    const ring = (id: number, name?: string) => ({
+      type: 'way',
+      id,
+      tags: { leisure: 'park', ...(name ? { name } : {}) },
+      geometry: [
+        { lat: 3.06, lon: 101.7 },
+        { lat: 3.06, lon: 101.703 },
+        { lat: 3.063, lon: 101.703 },
+        { lat: 3.063, lon: 101.7 },
+        { lat: 3.06, lon: 101.7 },
+      ],
+    })
+    osmReplies.push({ elements: [ring(1, 'Taman A'), ring(2, 'Taman B'), ring(3)] })
+    const r = (await run('nearbyParks', { organiserToken, center: { lat: 3.0618, lng: 101.6993 }, skip: ['way/2'] })) as { nearby: { name: string }[] }
+    expect(r.nearby.map((p) => p.name)).toEqual(['Taman A'])
+    osmReplies.push(new Error('504'))
+    expect(await run('nearbyParks', { organiserToken, center: { lat: 3.1, lng: 101.6 } })).toEqual({ nearby: [] })
   })
 
   it('parkFeatures returns lakes and toilets for an outline', async () => {

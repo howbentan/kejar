@@ -86,7 +86,7 @@ const toStep3 = async (mode: 'Core' | 'Full' = 'Core') => {
 }
 const createdWith = (match: object) => expect(call).toHaveBeenCalledWith('create', expect.objectContaining(match))
 const createCalls = () => call.mock.calls.filter((c) => c[0] === 'create')
-const parksLoaded = () => screen.findByText('KLCC · 15.7 ha · 3 stations')
+const parksLoaded = () => screen.findByText('KLCC · 3 stations')
 
 describe('HostNew step 1, the park', () => {
   it('shows the step, the heading and the progress bar', async () => {
@@ -198,7 +198,7 @@ describe('HostNew step 2, which game', () => {
     expect(within(core).getAllByRole('img').map((i) => i.getAttribute('aria-label'))).toEqual(['Durian', 'Ponteng', 'Mat Rempit', 'Pak Guard'])
   })
 
-  it('Full shows its copy and stickers with Dato Seri, and leaves Bomoh out', async () => {
+  it('Full shows its copy and stickers, ending with both legendaries', async () => {
     render(<HostNew />)
     await toStep2()
     expect(screen.getByText('FOR REGULARS')).toBeInTheDocument()
@@ -206,9 +206,8 @@ describe('HostNew step 2, which game', () => {
     const names = within(screen.getByRole('radio', { name: 'Game: Full' }))
       .getAllByRole('img')
       .map((i) => i.getAttribute('aria-label'))
-    expect(names).toContain('Dato Seri')
-    expect(names).toHaveLength(9)
-    expect(names.join(' ')).not.toMatch(/bomoh/i)
+    expect(names).toHaveLength(10)
+    expect(names.slice(-2)).toEqual(['Dato Seri', 'Bomoh'])
   })
 
   it('has Back and Next', async () => {
@@ -277,9 +276,9 @@ describe('HostNew step 3, how long', () => {
     expect(screen.getByText('LEGENDARY CARDS · SECRET FROM PLAYERS')).toBeInTheDocument()
     expect(screen.getByText('FOR DIKEJAR · YELLOW')).toBeInTheDocument()
     expect(screen.getByText('FOR KEJAR · PURPLE')).toBeInTheDocument()
-    expect(screen.getByText('You hide a QR card. The first runner to find it can free themselves and 2 friends from Penjara.')).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Dato Seri: Hidden stash' })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByRole('radio', { name: 'Bomoh: Hidden stash' })).toBeEnabled()
+    expect(screen.getByText("A hidden QR card. The runner who finds it can free themselves and 2 more from Penjara. You'll hide it during the walk.")).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Dato Seri: On' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'Bomoh: On' })).toBeEnabled()
     expect(screen.getByRole('radio', { name: 'Bomoh: Off' })).toHaveAttribute('aria-checked', 'true')
     createGame()
     await waitFor(() =>
@@ -300,9 +299,9 @@ describe('HostNew step 3, how long', () => {
     await toStep3('Full')
     expect(screen.queryByText('NOT BUILT YET')).not.toBeInTheDocument()
     expect(
-      screen.getByText("You hide a second QR card. The first chaser to find it shows every free runner's exact spot to all Kejar for the next 2 pings."),
+      screen.getByText("A hidden QR card. The chaser who finds it shows every runner to Kejar for 2 pings. You'll hide it during the walk."),
     ).toBeInTheDocument()
-    const stash = screen.getByRole('radio', { name: 'Bomoh: Hidden stash' })
+    const stash = screen.getByRole('radio', { name: 'Bomoh: On' })
     expect(stash).toBeEnabled()
     fireEvent.click(stash)
     expect(stash).toHaveAttribute('aria-checked', 'true')
