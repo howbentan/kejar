@@ -1,42 +1,51 @@
 import { useState } from 'react'
-import { Screen, Wordmark } from '../game/ui'
+import CatchTheJ from '../game/catchJ/CatchTheJ'
+import HowToPlay from '../game/HowToPlay'
+import { reconnectHref } from '../game/lastGame'
+import HomeJoin from './HomeJoin'
 
+/**
+ * The home screen (design 2026-11-12): the logo as a toy to play with while friends gather, then the ways
+ * out. The buttons sit below the toy's play area, so a tap on them is never a tap on the toy.
+ */
 export default function Home() {
-  const [code, setCode] = useState('')
-  const valid = /^[A-Za-z0-9]{6}$/.test(code)
+  const [joining, setJoining] = useState(false)
+  const [story, setStory] = useState(false)
+  // Reading localStorage itself throws when the browser blocks site data; home must still work then.
+  const [reconnect] = useState(() => {
+    try {
+      return reconnectHref(localStorage)
+    } catch {
+      return null
+    }
+  })
+
   return (
-    <Screen>
-      <Wordmark />
-      <p className="muted">Real-life chase, refereed by your phone.</p>
-      {/* A form so Enter (or the phone keyboard's Go) joins too; `display: contents` keeps Screen's layout. */}
-      <form
-        style={{ display: 'contents' }}
-        onSubmit={(e) => {
-          e.preventDefault()
-          if (valid) window.location.assign(`/join/${code.toUpperCase()}`)
-        }}
-      >
-        <label className="eyebrow" htmlFor="code">
-          Game code
-        </label>
-        <input
-          id="code"
-          className="input mono"
-          style={{ letterSpacing: '0.3em', textTransform: 'uppercase' }}
-          maxLength={6}
-          placeholder="ABC234"
-          enterKeyHint="go"
-          autoCapitalize="characters"
-          value={code}
-          onChange={(e) => setCode(e.target.value.trim())}
-        />
-        <button type="submit" className="btn" disabled={!valid}>
-          Join
-        </button>
-      </form>
-      <a className="muted" href="/host/new" style={{ marginTop: 24 }}>
-        Organise a game →
-      </a>
-    </Screen>
+    <main className="home">
+      <div className="home-play">
+        <CatchTheJ paused={joining || story} />
+      </div>
+      {joining ? (
+        <HomeJoin onBack={() => setJoining(false)} />
+      ) : (
+        <div className="home-actions">
+          {reconnect && (
+            <a className="btn btn-paper" href={reconnect}>
+              reconnect
+            </a>
+          )}
+          <button type="button" className="btn" onClick={() => setJoining(true)}>
+            join game
+          </button>
+          <a className="btn btn-ghost" href="/host/new">
+            organise game
+          </a>
+          <button type="button" className="home-link" onClick={() => setStory(true)}>
+            if dk how to play click here :)
+          </button>
+        </div>
+      )}
+      {story && <HowToPlay side="runner" mode="core" snapshot={false} onClose={() => setStory(false)} />}
+    </main>
   )
 }
