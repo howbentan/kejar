@@ -168,10 +168,10 @@ export interface View {
    */
   settle: { canFreeSelf: boolean; options: { id: string; name: string; eligible: boolean }[] } | null
   /**
-   * The live 10-second rescue at Penjara (rules §9a), for every role: who scanned first, when the hold ends (held
-   * still while paused), and who joined it. Null when none is going.
+   * The live 10-second rescue at Penjara (rules §9a): when the hold ends (held still while paused). Everyone but a
+   * chaser also gets who scanned first and who joined it; a chaser is never told who is rescuing. Null when none is going.
    */
-  rescue: { by: string; byName: string; endsAt: number; joiners: string[] } | null
+  rescue: { endsAt: number; by?: string; byName?: string; joiners?: string[] } | null
   /** The one '5 minutes left!' warning has gone out (rules §2.7): the clock stays lime for the rest of the game. */
   fiveLeft: boolean
   /**
@@ -646,8 +646,10 @@ function rescueFor(i: ViewInput, phase: Phase): View['rescue'] {
   if (!r || phase !== 'chasing' || i.game.ended_at) return null
   const started = Date.parse(r.startedAt)
   const frozen = i.game.paused_at ? i.now - Math.max(Date.parse(i.game.paused_at), started) : 0
+  const endsAt = started + RESCUE_HOLD_MS + Math.max(0, frozen)
+  if (i.me.role === 'chaser') return { endsAt }
   const byName = i.players.find((p) => p.id === r.by)?.name ?? 'A Dikejar'
-  return { by: r.by, byName, endsAt: started + RESCUE_HOLD_MS + Math.max(0, frozen), joiners: [...r.joiners] }
+  return { by: r.by, byName, endsAt, joiners: [...r.joiners] }
 }
 
 function jailCheckinsFor(i: ViewInput, reason: View['jailReason']): View['jailCheckins'] {

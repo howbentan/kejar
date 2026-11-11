@@ -646,7 +646,7 @@ async function settleRescue(ctx: Ctx, game: Game, phase = phaseAt(game, ctx.now)
     fixes = (await store.latestPositions(game.id, [iso(Math.min(now, startedAt + RESCUE_HOLD_MS))]))[r.by] ?? []
   }
   // A removed rescuer has left the game: the same as being caught.
-  const verdict = rescuer ? rescueVerdict({ rescue: { by: r.by, startedAt }, rescuer, fixes, jail: game.arena.jail, now }) : 'failed'
+  const verdict = rescuer ? rescueVerdict({ rescue: { by: r.by, startedAt }, rescuer, fixes, jail: game.arena.jail, now, pauses: game.pauses, pausedAt: game.paused_at }) : 'failed'
   if (verdict === 'holding' || !(await store.endRescue(game.id, r.startedAt))) return
   if (verdict === 'failed') {
     await store.addEvent({ game_id: game.id, type: 'rescue-failed', actor_id: r.by, target_id: null, data: {} })
@@ -985,7 +985,7 @@ const location: Action = async (ctx, body) => {
   // The rescuer's phone sends a fix every RESCUE_PING_MS (1.5 s) during the hold, under the 2 s gap: their fixes
   // are the hold's heartbeat, so none is dropped. The hold is 10 s, so that is a handful of extra rows.
   const rescuing = game.rescue?.by === me.id
-  const stored = await ctx.store.addPosition(game.id, me.id, fix, rescuing ? undefined : LOCATION_MIN_GAP_MS, since)
+  const stored = await ctx.store.addPosition(game.id, me.id, fix, rescuing && !game.paused_at ? undefined : LOCATION_MIN_GAP_MS, since)
   if (!stored) {
     // Bonus (Flare) windows live in the pings table, so it is read only when the gap dropped this fix.
     const bonus = openWindowAlert(
@@ -1200,8 +1200,13 @@ const pullReel: Action = async (ctx, body) => {
   if (!(await ctx.store.pullReel(me.id, iso(ctx.now)))) return { ok: false, reason: 'already-pulled' }
   const result = pickReel(ctx.rng, current.freed_once)
   if (result === 'free') {
-    await ctx.store.updatePlayers([{ id: me.id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now), out_warned_at: null } }])
-    await ctx.store.addEvent({ game_id: game.id, type: 'reel-free', actor_id: me.id, target_id: null, data: { who: who(me) } })
+    try {
+      await ctx.store.updatePlayers([{ id: me.id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now), out_warned_at: null } }])
+      await ctx.store.addEvent({ game_id: game.id, type: 'reel-free', actor_id: me.id, target_id: null, data: { who: who(me) } })
+    } catch (e) {
+      await ctx.store.releaseReelPull(me.id) // give the pull back
+      throw e
+    }
     // Someone is free again: no final whistle (advance would call it off too, on the next poll).
     if (fresh.final_whistle_at) await callOffWhistle(ctx, fresh)
   }

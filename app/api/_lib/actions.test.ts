@@ -486,10 +486,11 @@ describe('the 10-second rescue at Penjara (rules §9a)', () => {
     expect(await jailedIds(g)).toEqual([g.aina.playerId, g.hafiz.playerId])
     expect(await events(g, 'rescue-started')).toMatchObject([{ actor_id: g.wei.playerId, data: { who: 'Wei #14' } }])
     const rescue = { by: g.wei.playerId, byName: 'Wei', endsAt: t + RESCUE_HOLD_MS, joiners: [] }
-    for (const who of [{ token: g.ben.token }, { token: g.aina.token }, { token: g.wei.token }, { organiserToken: g.organiserToken }]) {
+    for (const who of [{ token: g.aina.token }, { token: g.wei.token }, { organiserToken: g.organiserToken }]) {
       expect((await run<View>('state', { code: g.code, ...who })).rescue).toEqual(rescue)
     }
     const ben = await run<View>('state', { code: g.code, token: g.ben.token })
+    expect(ben.rescue).toEqual({ endsAt: t + RESCUE_HOLD_MS }) // a chaser is never told who
     expect(ben.feed[0]).toMatchObject({ text: 'Rescue starting at Penjara!', means: 'Catch them in 10 s and nobody gets out.', act: true })
   })
 
@@ -637,6 +638,28 @@ describe('the 10-second rescue at Penjara (rules §9a)', () => {
     // Still free, so they can try again.
     now = t + 9_000
     expect(await scan(g, g.wei.token)).toMatchObject({ ok: true, rescue: 'started' })
+  })
+
+  it('a fix sent during a safety pause is not judged after resuming: still holding, then success', async () => {
+    const g = await inPenjara()
+    const t = now
+    await scan(g, g.wei.token)
+    now = t + 4_000
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    // Phones keep sending while paused. The resumed window starts inside the pause, so this 60 m fix lands in it.
+    now = t + 4_000 + 118_000
+    expect(await run('location', { code: g.code, token: g.wei.token, ...at(60), accuracy_m: 5 })).toEqual({ ok: true })
+    now = t + 4_000 + 2 * MIN
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    const resumed = now
+    await poll(g)
+    expect((await store.gameByCode(g.code))!.rescue).not.toBeNull()
+    expect(await jailedIds(g)).toHaveLength(2)
+    expect(await events(g, 'rescue-failed')).toEqual([])
+    now = resumed + 6_000
+    await poll(g)
+    expect(await events(g, 'rescue-failed')).toEqual([])
+    expect(await jailedIds(g)).toEqual([])
   })
 
   it('a rescuer who goes out some other way (Luar Garisan, removed) fails the rescue at the next poll', async () => {
@@ -4956,6 +4979,23 @@ describe('the Penjara reel', () => {
     expect(await pull(g, g.aina.token, FREE, {})).toEqual({ ok: false, reason: 'too-far-from-jail' })
     expect((await aina(g)).reel_pulled_at).toBeNull()
     expect(await pull(g, g.aina.token, BLACK)).toEqual({ ok: true, result: 'black' })
+  })
+
+  it('a free-slot freeing that throws gives the pull back, then a retry can pull', async () => {
+    const g = await jailedAina()
+    const real = store.updatePlayers.bind(store)
+    let fail = true
+    store.updatePlayers = async (u: Parameters<typeof real>[0]) => {
+      if (fail) {
+        fail = false
+        throw new Error('db down')
+      }
+      return real(u)
+    }
+    await expect(pull(g, g.aina.token, FREE)).rejects.toThrow('db down')
+    expect((await aina(g)).reel_pulled_at).toBeNull()
+    expect(await pull(g, g.aina.token, FREE)).toEqual({ ok: true, result: 'free' })
+    store.updatePlayers = real
   })
 
   it('a runner who is not jailed cannot pull', async () => {

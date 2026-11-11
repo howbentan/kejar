@@ -117,6 +117,8 @@ export interface GameStore {
    * pulled since they were last caught. True for the first caller.
    */
   pullReel(playerId: string, atIso: string): Promise<boolean>
+  /** Gives a spent reel pull back (the free result failed to land). */
+  releaseReelPull(playerId: string): Promise<void>
   /** Clears the live rescue only if it is still the one that started at `startedAtIso`. True for the first caller. */
   endRescue(gameId: string, startedAtIso: string): Promise<boolean>
   /** Adds a joiner to the live rescue, once; never the rescuer. Does nothing with no rescue. */
@@ -495,6 +497,10 @@ export class MemoryStore implements GameStore {
     if (p.reel_pulled_at && !(p.caught_at && Date.parse(p.reel_pulled_at) < Date.parse(p.caught_at))) return false
     p.reel_pulled_at = atIso
     return true
+  }
+  async releaseReelPull(playerId: string) {
+    const p = this.playerRows.find((x) => x.id === playerId)
+    if (p) p.reel_pulled_at = null
   }
   async endRescue(gameId: string, startedAtIso: string) {
     const g = this.games.find((x) => x.id === gameId)

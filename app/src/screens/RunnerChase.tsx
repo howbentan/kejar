@@ -115,7 +115,7 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
   const banner = !!checkin && (checkin.state !== 'early' || openedByPush)
   // While paused the hold is frozen: count from the server's moment, not the ticking clock.
   const rescue = view.rescue
-  const inHold = !!rescue && !view.me.jailed && (rescue.by === view.me.id || rescue.joiners.includes(view.me.id))
+  const inHold = !!rescue && !view.me.jailed && (rescue.by === view.me.id || !!rescue.joiners?.includes(view.me.id))
   const holdNow = view.paused ? view.now : now
   useRescuePings(code, !!rescue && rescue.by === view.me.id && !view.me.jailed && !view.paused)
 

@@ -54,7 +54,8 @@ A web app for organised, real-world chase games (runners vs chasers, with marsha
     - A free runner scanning the Penjara code starts a hold. They must stay within 30 m for 10 s (`Stay close · N s`), and their phone sends its location every 1.5 s.
     - Chasers get `Rescue starting at Penjara!` and `Catch them in 10 s and nobody gets out.`. Jailed runners and marshals see `{name} is breaking you out · N s`.
     - Catching the rescuer, or a clear fix outside 30 m, fails it (`Rescue failed. Nobody gets out.`). Success frees everyone not already freed once (`Jailbreak! {n} Dikejar free.`).
-    - A second scan joins the hold. A pause freezes it. Dato Seri's Settle still frees at once.
+    - A second scan joins the hold. A pause freezes it (fixes sent during a pause are ignored). Dato Seri's Settle still frees at once.
+    - A rescuer whose phone stops sending location still succeeds: only a clear fix outside 30 m fails (the rules doc's GPS leniency). Revisit after playtesting.
   - **The Penjara reel (owner's decision, 2026-11-11, replacing the dare reel).**
     - One pull per jail stay, at Penjara. The slots are one lime free slot among nine black, and the server picks (about 1 in 10). A runner whose escape is used sees all black.
     - A black slot plays the owner's clip `app/public/sounds/black-slot.mp3`. A free slot plays a generated fanfare. There's a mute toggle per viewer.

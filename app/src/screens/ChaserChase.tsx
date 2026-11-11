@@ -47,7 +47,7 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
   useWakeLock(view.phase === 'hiding' || view.phase === 'chasing')
   const chip = pingChip(view, now)
   // A rescue starting at Penjara (rules §9a): one buzz per rescue, on top of the ticker's lime line.
-  const rescueBy = view.rescue?.by ?? null
+  const rescueBy = view.rescue ? 'on' : null
   useEffect(() => {
     if (rescueBy) navigator.vibrate?.([200, 100, 200])
   }, [rescueBy])

@@ -116,6 +116,9 @@ export class SupabaseStore implements GameStore {
   async pullReel(playerId: string, atIso: string) {
     return check(await this.db.rpc('pull_reel', { p_player: playerId, p_at: atIso })) === true
   }
+  async releaseReelPull(playerId: string) {
+    check(await this.db.from('players').update({ reel_pulled_at: null }).eq('id', playerId))
+  }
   async endRescue(gameId: string, startedAtIso: string) {
     return check(await this.db.rpc('end_rescue', { p_game: gameId, p_started: startedAtIso })) === true
   }

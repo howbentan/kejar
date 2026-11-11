@@ -15,7 +15,7 @@ export const RESCUE_MAX_ACCURACY_M = 20
 
 /**
  * Where a live rescue stands (rules §9a). It fails if the rescuer is out, or if any fix they sent during the hold
- * is clearly outside Penjara's 30 m plus its GPS error. A poor fix (over 20 m accuracy) is ignored, so one bad
+ * is clearly outside Penjara's 30 m plus its GPS error. A fix sent during a pause is ignored. A poor fix (over 20 m accuracy) is ignored, so one bad
  * reading never fails it. Otherwise it succeeds once the 10 s are up.
  */
 export function rescueVerdict(i: {
@@ -24,12 +24,17 @@ export function rescueVerdict(i: {
   fixes: Position[]
   jail: LatLng
   now: number
+  /** The game's finished pauses and the open one: a fix sent during a pause is ignored (rules §9a). */
+  pauses?: { from: string; to: string }[]
+  pausedAt?: string | null
 }): 'holding' | 'success' | 'failed' {
   if (isOut(i.rescuer)) return 'failed'
   const endsAt = i.rescue.startedAt + RESCUE_HOLD_MS
   const away = i.fixes.some((f) => {
     const at = Date.parse(f.at)
     if (at < i.rescue.startedAt || at > endsAt || !(f.accuracy_m <= RESCUE_MAX_ACCURACY_M)) return false
+    if (i.pausedAt && at >= Date.parse(i.pausedAt)) return false
+    if (i.pauses?.some((p) => at >= Date.parse(p.from) && at <= Date.parse(p.to))) return false
     return distanceM(f, i.jail) > RESCUE_RADIUS_M + Math.max(f.accuracy_m, 0)
   })
   if (away) return 'failed'

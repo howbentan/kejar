@@ -13,7 +13,7 @@ export default function RescueBanner({ view }: { view: View }) {
   const s = Math.max(0, Math.ceil((rescue.endsAt - now) / 1000))
   return (
     <div role="status" aria-label="Rescue" className="pill pill-on" style={{ alignSelf: 'flex-start', borderColor: 'var(--volt)', color: 'var(--volt)' }}>
-      {`${rescue.byName} is breaking you out · ${s} s`}
+      {`${rescue.byName ?? 'A Dikejar'} is breaking you out · ${s} s`}
     </div>
   )
 }
