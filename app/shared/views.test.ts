@@ -340,11 +340,11 @@ describe('deck and slot', () => {
     expect(view(siti, { game: { ...g, runner_sets: 1, runner_draws: 2 } }).deckLeft).toBeNull()
   })
   it('names a power-up whose effect is still running', () => {
-    const durian: PowerUp = { id: 'u9', game_id: 'g1', player_id: 'r1', kind: 'shield', station: 1, claimed_at: '', used_at: new Date(NOW - MIN).toISOString(), consumed_at: null, sealed: false, taken_at: null, offer: null }
+    const durian: PowerUp = { id: 'u9', game_id: 'g1', player_id: 'r1', kind: 'shield', station: 1, claimed_at: '', used_at: new Date(NOW - MIN).toISOString(), consumed_at: null, sealed: false, taken_at: null, offer: null, twin_of: null, spot: null }
     expect(view(aina, { powerUps: [durian] }).activePowerUp).toBe('shield')
     expect(view(aina).activePowerUp).toBeNull()
   })
-  const card = (over: Partial<PowerUp>): PowerUp => ({ id: 'u9', game_id: 'g1', player_id: 'r1', kind: 'shield', station: 1, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null, ...over })
+  const card = (over: Partial<PowerUp>): PowerUp => ({ id: 'u9', game_id: 'g1', player_id: 'r1', kind: 'shield', station: 1, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null, twin_of: null, spot: null, ...over })
   it('a running Durian says when it ends; other running effects wait for the next ping', () => {
     const usedAt = NOW - MIN
     expect(view(aina, { powerUps: [card({ used_at: new Date(usedAt).toISOString() })] }).activeEndsAt).toBe(usedAt + 10 * MIN)
@@ -380,12 +380,12 @@ describe('Toyol and Ah Long', () => {
     expect(view(aina, { events: [stolen('toyol')] }).feed[0]).toMatchObject({ act: false })
   })
   it('a taken card leaves the hand', () => {
-    const c = (over: Partial<PowerUp>): PowerUp => ({ id: 'u9', game_id: 'g1', player_id: 'c1', kind: 'flare', station: 1, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null, ...over })
+    const c = (over: Partial<PowerUp>): PowerUp => ({ id: 'u9', game_id: 'g1', player_id: 'c1', kind: 'flare', station: 1, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null, twin_of: null, spot: null, ...over })
     expect(view(chaser, { powerUps: [c({})] }).hand).toHaveLength(1)
     expect(view(chaser, { powerUps: [c({ taken_at: new Date(NOW).toISOString() })] }).hand).toEqual([])
   })
   it('a card row from before migration 0011 (no taken_at at all) still counts as in the hand', () => {
-    const { taken_at: _, ...old } = { id: 'u9', game_id: 'g1', player_id: 'c1', kind: 'flare' as const, station: 1, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null }
+    const { taken_at: _, ...old } = { id: 'u9', game_id: 'g1', player_id: 'c1', kind: 'flare' as const, station: 1, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null, twin_of: null, spot: null }
     expect(view(chaser, { powerUps: [old as PowerUp] }).hand).toHaveLength(1)
     // And a jailed holder of such a Dato Seri can still Settle.
     const holder = { ...aina, jailed: true }
@@ -485,7 +485,7 @@ describe('power-up effects', () => {
     used_at: new Date(usedAt).toISOString(),
     consumed_at: null,
     sealed: false,
-    taken_at: null, offer: null,
+    taken_at: null, offer: null, twin_of: null, spot: null,
   })
 
   it('cloaked runner is missing from the next reveal only', () => {
@@ -630,7 +630,7 @@ describe("Bomoh's team-wide reveal (jail design §2e)", () => {
       consumed_at: null,
       sealed: false,
       taken_at: null,
-      offer: null,
+      offer: null, twin_of: null, spot: null,
     }
     const v = view(chaser, { game: { ...g, bomoh_stash: bomohStash(T0 + 12 * MIN) }, positions: ps, powerUps: [focus] })
     const dot = v.dots.find((d) => d.id === 'r1')!
@@ -658,7 +658,7 @@ describe("Bomoh's team-wide reveal (jail design §2e)", () => {
       consumed_at: null,
       sealed: false,
       taken_at: null,
-      offer: null,
+      offer: null, twin_of: null, spot: null,
     }
     const dot = view(chaser, { game: { ...g, bomoh_stash: bomohStash(T0 + 12 * MIN) }, powerUps: [decoy] }).dots.find(
       (d) => d.id === 'r1',
@@ -681,7 +681,7 @@ describe('power-up secrecy', () => {
     used_at: new Date(usedAt).toISOString(),
     consumed_at: null,
     sealed: false,
-    taken_at: null, offer: null,
+    taken_at: null, offer: null, twin_of: null, spot: null,
   })
 
   it('a cloaked runner looks exactly like a runner who never checked in', () => {
@@ -927,7 +927,7 @@ describe("Dato Seri's hint zone (jail design §4b)", () => {
 
   it("the Settle picker is offered only during the chase, and not while paused", () => {
     const holder = { ...aina, jailed: true }
-    const dato: PowerUp = { id: 'u1', game_id: 'g1', player_id: 'r1', kind: 'dato', station: null, claimed_at: iso(NOW), used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null }
+    const dato: PowerUp = { id: 'u1', game_id: 'g1', player_id: 'r1', kind: 'dato', station: null, claimed_at: iso(NOW), used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null, twin_of: null, spot: null }
     const over = { players: [chaser, holder, hafiz, wei, siti], powerUps: [dato] }
     expect(view(holder, over).settle).toEqual({ canFreeSelf: true, options: [] })
     expect(view(holder, { ...over, game: game({ paused_at: iso(NOW - MIN) }) }).settle).toBeNull()

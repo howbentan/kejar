@@ -4,7 +4,7 @@ import type { Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind, Sec
 import { newDatoCode } from './secrets.js'
 import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PhoneMoveRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, RedeemPhoneMoveResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
-const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, reel_pulled_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at, brief_opened_at, brief_ready_at'
+const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, reel_pulled_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at, brief_opened_at, brief_ready_at, frozen_until'
 const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, final_whistle_at, rescue, five_warned_at, wiped_at, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit, briefed_at'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
@@ -288,6 +288,17 @@ export class SupabaseStore implements GameStore {
   async claimBomoh(gameId: string, playerId: string, at: Date): Promise<boolean> {
     // The database function locks the game row, re-checks the stash is unclaimed, and marks it claimed. True for the winner.
     return check(await this.db.rpc('claim_bomoh', { p_game: gameId, p_player: playerId, p_at: at.toISOString() })) === true
+  }
+  async freezeChaser(chaserId: string, untilIso: string): Promise<boolean> {
+    // One conditional update in the database: only a chaser who isn't frozen right now takes it. True for the winner.
+    return check(await this.db.rpc('freeze_chaser', { p_player: chaserId, p_until: untilIso, p_at: this.nowIso() })) === true
+  }
+  async applyCombo(playerId: string, powerUpId: string): Promise<PowerUp | null> {
+    // The database function locks the ready combo, consumes it and inserts the twin together.
+    const rows = check(await this.db.rpc('apply_combo', { p_player: playerId, p_powerup: powerUpId, p_at: this.nowIso() })) as
+      | PowerUp[]
+      | null
+    return rows?.[0] ?? null
   }
   async consumeShield(id: string) {
     const rows = check(

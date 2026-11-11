@@ -15,4 +15,7 @@ export const INFO: Record<PowerUpKind, { name: string; effect: string; used: str
   // Used only through Settle at Penjara, so the slot shows where instead of a Use button; the feed line for
   // everyone is `Something legendary freed N Dikejar!`.
   dato: { name: POWER_NAME.dato, effect: 'Settle: at Penjara, free yourself and up to 2 others', used: 'Use it at Penjara' },
+  cheese: { name: POWER_NAME.cheese, effect: 'Placeholder', used: 'Placeholder' },
+  combo: { name: POWER_NAME.combo, effect: 'Placeholder', used: 'Placeholder' },
+  toll: { name: POWER_NAME.toll, effect: 'Placeholder', used: 'Placeholder' },
 }

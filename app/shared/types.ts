@@ -210,6 +210,8 @@ export interface Player {
   /** How to play: when this player opened the story, and when they tapped I'm ready (ISO). Each is set once. */
   brief_opened_at?: string | null
   brief_ready_at?: string | null
+  /** Tuch and Ga: this chaser is frozen until this time (ISO). Null or past means free. */
+  frozen_until?: string | null
 }
 
 export interface Ping {
@@ -272,8 +274,10 @@ export type EventType =
   | 'reel-free'
   /** The one '5 minutes left!' warning of the game (rules §2.7). data: {} */
   | 'five-left'
+  /** A chaser walked into a Tuch and Ga gate and froze. actor: the runner, target: the chaser. data: { until } */
+  | 'frozen'
 
-export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along' | 'grab' | 'dato'
+export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along' | 'grab' | 'dato' | 'cheese' | 'combo' | 'toll'
 
 export interface PowerUp {
   id: string
@@ -291,6 +295,10 @@ export interface PowerUp {
   taken_at: string | null
   /** Abang Grab's open offer (power-ups §6.3): the top 3 cards of the holder's deck, until one is picked. */
   offer: PowerUpKind[] | null
+  /** Nasi Lemak KFC: the id of the card this one doubles; null for an ordinary card. */
+  twin_of: string | null
+  /** Tuch and Ga: where the gate stands once placed; null otherwise. */
+  spot: LatLng | null
 }
 
 export interface GameEvent {
