@@ -27,8 +27,9 @@ Rules:
    - **Pings** every 5 min (2, 3 or 5). **45 s before** each ping, every free runner's phone buzzes: open Kejar to **check in**. Only a location sent inside that 45 s window counts.
    - At the ping, chasers see each runner as a **fuzzy circle** (about 15 m) where they checked in. A runner who missed is shown dashed at their last spot.
    - **Two missed check-ins in a row sends a runner to Penjara automatically** (auto-jail). One miss is free. The count restarts after a runner is freed.
+   - **Late pings:** a missed check-in only counts if its alert push went out at least 25 s before the reveal. A ping that was sent late or skipped neither adds a miss nor resets the count. Schedule check-in mode treats every ping as warned. Chasers, marshals and the organiser keep their screens awake (Wake Lock) during hide and chase.
    - Runners keep their phone in their pocket between check-ins. Chasers and marshals keep Kejar open.
-4. **Catching:** the chaser rips the tag off the upper arm with one hand (no grabbing or tackling), the runner stops, and the chaser scans the tag. The app checks the chaser was close enough. Disputes go through SOS to a marshal, never settled physically.
+4. **Catching:** the chaser rips the tag off the upper arm with one hand (no grabbing or tackling), the runner stops, and the chaser scans the tag. The app checks the chaser was close enough: a catch is refused (`Can't confirm that one. Get closer and try again.`) if the chaser is further than 50 m, plus both phones' GPS errors, plus 6 m/s for how old the runner's location is (capped at 10 min), from the runner's last spot. Marshals and the runner only hear about borderline catches (over 80% of that limit). A marshal or the organiser can **`Undo kejar`** on a runner's latest catch while they're still caught by it: it doesn't use the runner's escape, removes the catch from awards and is logged. Disputes go through SOS to a marshal, never settled physically.
 5. **Penjara:** caught runners walk to Penjara.
    - They watch a spectator map delayed by 2 minutes, and get **one pull of the dare reel** per stay: a silly dare, or rarely "You're free".
    - **The rescue:** a free runner scans the Penjara QR, then **stays within 30 m for 10 seconds** (owner's decision, 2026-10-30). Chasers are warned the moment it starts. If the rescuer is caught or leaves the 30 m in that time, nobody gets out (§9a).
@@ -36,7 +37,7 @@ Rules:
 6. **Power-ups:** printed **stations** around the park. Scanning one within 30 m during the chase draws the **top card of your side's shared deck**, revealed with the lucky dip.
    - You hold **one power-up at a time**, and the slot stays busy while its effect runs.
    - Each station can be claimed once per player, and locks for everyone for 60 s after a claim.
-7. **End:** time runs out (Dikejar win if anyone is still free) or every runner is in Penjara (Kejar win). There's a `5 minutes left` warning before the end. Then come the results: awards, a rating, and a post-game report.
+7. **End:** time runs out (Dikejar win if anyone is still free) or every runner is in Penjara (Kejar win). When nobody is left free, the game waits **60 s** (`Last Dikejar caught! Final whistle in 60 s.`) so a wrong last catch, auto-jail or removal can be undone; after the 60 s the result is final, and if time runs out during the hold an undo then ends the game as a Dikejar win. There's a `5 minutes left` warning before the end. Then come the results: awards, a rating, and a post-game report.
 
 **Safety (both modes).** A small lime **SOS icon** on every player screen (status row, top right): tap it, then hold for 1 s to send (motion §6.0). Marshals get a full-screen takeover with an arrow and distance, plus `I'm going` so only one runs, and they close it with an outcome. Automatic alerts cover leaving the play area, auto-jail, a chaser leaving the start early and flagged catches. Marshals can pause and resume the game and remove a player. Reports happen after the game.
 
@@ -72,7 +73,7 @@ Rules:
 | Runner circle | about 15 m | base §4.5 |
 | Chaser circle at check-in (Full, switch on) | about 30 m, frozen at the alert | check-ins §5 |
 | Pak Guard | runners within 75 m show exactly at the next ping | power-ups §6.1 |
-| Durian | blocks the next catch, up to 10 min, no head start | power-ups §6.1 |
+| Durian | blocks the next catch, up to 10 min. The stung chaser can never catch that runner again this game, and no chaser can catch them for 15 s | power-ups §6.1 |
 | Gostan | next ping shows you 120–180 m away | power-ups §6.1 |
 | Mat Rempit | extra ping in 30 s, one at a time, 3 min team cooldown | power-ups §5a |
 | Station claim | within 30 m, once per player per station, station locks 60 s | base §4.8.1 |
@@ -174,7 +175,7 @@ Prices are from MR.DIY's online listings on 2026-10-30 and may change. Velcro st
 | Older text | Now |
 |---|---|
 | Base §4.5: check-in alert 30 s before the ping; marshals alerted after 2 missed check-ins | 45 s window; 2 misses means **auto-jail** (with a marshal alert instead) |
-| Base §4.8: Decoy, Shield (with a 10 s head start), Cloak, Flare, Focus 150 m | Gostan, Durian (no head start), Ponteng, Mat Rempit, Pak Guard 75 m |
+| Base §4.8: Decoy, Shield (with a 10 s head start), Cloak, Flare, Focus 150 m | Gostan, Durian (the stung chaser is locked out for the game, a 15 s head start from the others), Ponteng, Mat Rempit, Pak Guard 75 m |
 | Base §4.8.1: hand of 3; a random power-up per claim | **One slot**; draw the top card of the shared deck |
 | Base §3: 1 marshal per 8–10 players | Crew of two up to about 20 players, then about 1 more per 10 (§5) |
 | Power-ups §6: Malay messages on screen | Plain English on screen; Malay lines kept as tone (§6) |

@@ -1731,6 +1731,30 @@ describe('removing a player', () => {
     expect(v.phase).toBe('ended')
     expect(v.results?.winner).toBe('chasers')
   })
+
+  it('removing the last free runner while others are jailed starts the final whistle instead of ending at once (audit L1)', async () => {
+    const g = await safetyGame()
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })
+    await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.hafiz.playerId })
+    const events = await store.events(g.gameId)
+    expect(events.filter((e) => e.type === 'final-whistle')).toHaveLength(1)
+    const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(v.phase).toBe('chasing')
+    expect(v.results).toBeFalsy()
+  })
+
+  it('removing every runner does not end the game as a Kejar win', async () => {
+    const g = await safetyGame()
+    await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.aina.playerId })
+    await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.hafiz.playerId })
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'final-whistle')).toHaveLength(0)
+    now += 61_000
+    const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(v.phase).toBe('chasing')
+    expect(v.results).toBeFalsy()
+  })
 })
 
 describe('Luar Garisan', () => {
