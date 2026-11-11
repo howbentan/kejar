@@ -13,7 +13,8 @@ vi.mock('../game/Map', () => ({
     return <div data-testid="map" />
   },
 }))
-vi.mock('../game/here', () => ({ currentCoords: async () => ({}) }))
+const here = vi.hoisted(() => ({ coords: {} as Record<string, number> }))
+vi.mock('../game/here', () => ({ currentCoords: async () => here.coords }))
 vi.mock('../game/Scanner', () => ({
   default: ({ onResult }: { onResult: (t: string) => void }) => (
     <button type="button" onClick={() => onResult(scanned.text)}>
@@ -83,12 +84,16 @@ describe('RunnerChase', () => {
     expect(screen.queryByText(/^Check in in/)).toBeNull()
   })
 
-  it('scanning the Penjara code breaks people out', async () => {
-    call.mockResolvedValue({ ok: true, freedIds: ['r2', 'r3'] })
+  it('scanning the Penjara code starts the rescue, or joins one already going', async () => {
+    call.mockResolvedValue({ ok: true, rescue: 'started', endsAt: 110_000 })
     render(<RunnerChase code="ABC234" view={testView({ counts: { runnersFree: 3, runnersJailed: 2, runnersLuarGarisan: 0, chasers: 1 } })} />)
     await scan('KEJAR:JAIL')
     expect(call).toHaveBeenCalledWith('jailbreak', { code: 'ABC234', token: 't1', qr: 'KEJAR:JAIL' })
-    expect(screen.getByText('Freed 2 Dikejar ✓')).toBeInTheDocument()
+    expect(screen.getByText('Rescue on! Stay close to Penjara for 10 s.')).toBeInTheDocument()
+    call.mockResolvedValue({ ok: true, rescue: 'joined', endsAt: 110_000 })
+    fireEvent.click(screen.getByText('Rescue on! Stay close to Penjara for 10 s.'))
+    await scan('KEJAR:JAIL')
+    expect(screen.getByText('You joined the rescue. Stay close!')).toBeInTheDocument()
   })
 
   it('scanning a station claims it, opens the lucky dip, and no other scan can start meanwhile', async () => {
@@ -226,6 +231,54 @@ describe('RunnerChase', () => {
     rerender(<RunnerChase code="ABC234" view={early(130_000 + 300_000)} />)
     expect(screen.queryByText(/^Check-in opens in/)).toBeNull()
     expect(screen.getByText('Check in in 5:30')).toBeInTheDocument()
+  })
+})
+
+describe('RunnerChase: the 10-second rescue (rules §9a)', () => {
+  const holding = (by = 'r1', joiners: string[] = []) => testView({ rescue: { by, byName: by === 'r1' ? 'Aina' : 'Wei', endsAt: 107_000, joiners } })
+  beforeEach(() => {
+    here.coords = { lat: 3, lng: 101, accuracy_m: 5 }
+  })
+  afterEach(() => vi.useRealTimers())
+  const locationCalls = () => call.mock.calls.filter((c) => c[0] === 'location')
+
+  it('shows the rescuer the hold ring: Stay close · 7 s', () => {
+    render(<RunnerChase code="ABC234" view={holding()} />)
+    expect(screen.getByRole('status', { name: 'Rescue hold' })).toHaveTextContent('Stay close · 7 s')
+  })
+
+  it('shows a joiner the ring too, and nobody else', () => {
+    render(<RunnerChase code="ABC234" view={holding('r3', ['r1'])} />)
+    expect(screen.getByText('Stay close · 7 s')).toBeInTheDocument()
+    cleanup()
+    render(<RunnerChase code="ABC234" view={holding('r3')} />)
+    expect(screen.queryByText(/Stay close/)).toBeNull()
+  })
+
+  it('sends location about every 1.5 s while holding', async () => {
+    vi.useFakeTimers()
+    call.mockResolvedValue({ ok: true })
+    render(<RunnerChase code="ABC234" view={holding()} />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_600)
+    })
+    expect(locationCalls()).toHaveLength(3)
+    expect(locationCalls()[0][1]).toEqual({ code: 'ABC234', token: 't1', lat: 3, lng: 101, accuracy_m: 5 })
+  })
+
+  it('a joiner, or a runner with no rescue going, sends no extra fixes', async () => {
+    vi.useFakeTimers()
+    call.mockResolvedValue({ ok: true })
+    render(<RunnerChase code="ABC234" view={holding('r3', ['r1'])} />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_600)
+    })
+    cleanup()
+    render(<RunnerChase code="ABC234" view={testView()} />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(4_600)
+    })
+    expect(locationCalls()).toHaveLength(0)
   })
 })
 

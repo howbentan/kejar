@@ -5,6 +5,7 @@ import { distanceM, fuzz, hash, offset } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { isTicked, kitOf, packItems, placeItems, type KitItem, type PlaceItem, type SecretLetters } from './kit.js'
 import { MOMENT_WINDOW_MS } from './moments.js'
+import { reelPulledThisStay, RESCUE_HOLD_MS } from './penjara.js'
 import { isOut, undoableCatchId } from './players.js'
 import { POWER_NAME } from './powerNames.js'
 import { activeShield, decoySpot, flareBlocked, SHIELD_MS, slotBusy } from './powerups.js'
@@ -166,6 +167,19 @@ export interface View {
    * listed as not eligible (greyed out).
    */
   settle: { canFreeSelf: boolean; options: { id: string; name: string; eligible: boolean }[] } | null
+  /**
+   * The live 10-second rescue at Penjara (rules §9a): when the hold ends (held still while paused). Everyone but a
+   * chaser also gets who scanned first and who joined it; a chaser is never told who is rescuing. Null when none is going.
+   */
+  rescue: { endsAt: number; by?: string; byName?: string; joiners?: string[] } | null
+  /** The one '5 minutes left!' warning has gone out (rules §2.7): the clock stays lime for the rest of the game. */
+  fiveLeft: boolean
+  /**
+   * The Penjara reel (§2.2), for a jailed runner only (null for everyone else): whether this stay's one pull is
+   * spent. A spent pull that left them jailed was black, so `result` is 'black' then; null before the pull. A free
+   * pull frees them, so it never shows here.
+   */
+  reel: { pulled: boolean; result: 'free' | 'black' | null } | null
   /**
    * The organiser only: exactly where the stash is (null if none), and who claimed it. Left out of players' and
    * marshals' views entirely, so not even the key's name reaches their phones (rules doc §9b).
@@ -619,6 +633,25 @@ function settleFor(i: ViewInput, phase: Phase): View['settle'] {
   return { canFreeSelf: !i.me.freed_once, options }
 }
 
+/** The reel for the jailed runner: spent this stay or not. */
+function reelFor(i: ViewInput): View['reel'] {
+  if (i.me.role !== 'runner' || !i.me.jailed) return null
+  const pulled = reelPulledThisStay(i.me)
+  return { pulled, result: pulled ? 'black' : null }
+}
+
+/** The live rescue as players see it: its end moves later while the game is paused, as resuming will move it. */
+function rescueFor(i: ViewInput, phase: Phase): View['rescue'] {
+  const r = i.game.rescue
+  if (!r || phase !== 'chasing' || i.game.ended_at) return null
+  const started = Date.parse(r.startedAt)
+  const frozen = i.game.paused_at ? i.now - Math.max(Date.parse(i.game.paused_at), started) : 0
+  const endsAt = started + RESCUE_HOLD_MS + Math.max(0, frozen)
+  if (i.me.role === 'chaser') return { endsAt }
+  const byName = i.players.find((p) => p.id === r.by)?.name ?? 'A Dikejar'
+  return { by: r.by, byName, endsAt, joiners: [...r.joiners] }
+}
+
 function jailCheckinsFor(i: ViewInput, reason: View['jailReason']): View['jailCheckins'] {
   if (reason !== 'missed-checkins') return null
   const latest = i.events.filter((e) => e.type === 'auto-jailed' && e.target_id === i.me.id).at(-1)
@@ -650,7 +683,7 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
   const actor = e.actor_id ? byId.get(e.actor_id) : undefined
   const target = e.target_id ? byId.get(e.target_id) : undefined
   const tag = target ? tagLabel(target) : 'A Dikejar'
-  const two = (text: string, label: string, dikejar: string, kejar: string, actFor: 'runner' | null = null): Line => ({
+  const two = (text: string, label: string, dikejar: string, kejar: string, actFor: 'runner' | 'chaser' | null = null): Line => ({
     text,
     label,
     means: ctx.side === 'runner' ? dikejar : ctx.side === 'chaser' ? kejar : null,
@@ -703,10 +736,28 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
       return two(`${actor.name} caught ${tag}.`, 'CATCH', `${tag} is walking to Penjara. ${ctx.freeNow} Dikejar still free.`, `Nice. ${ctx.freeNow} Dikejar left to find.`)
     case 'shielded':
       return two(`${tag} blocked a catch with Durian.`, 'Durian', `${tag} is still free. Their Durian is used up.`, `That catch didn't count. ${tag} has no Durian now.`)
+    case 'rescue-started':
+      // Chasers need to move now (rules §9a): their line is outlined and buzzes.
+      return two(
+        'Rescue starting at Penjara!',
+        'RESCUE',
+        ctx.jailedNow === 0 ? 'Hold Penjara for 10 s.' : `Hold for 10 s and ${ctx.jailedNow} could get out.`,
+        'Catch them in 10 s and nobody gets out.',
+        'chaser',
+      )
+    case 'reel-free':
+      return plain(`${actor?.name ?? String(e.data.who ?? 'A Dikejar')} pulled the free slot. Keluar penjara!`)
+    case 'rescue-failed':
+      return two(
+        'Rescue failed. Nobody gets out.',
+        'RESCUE',
+        'The rescuer can try again if they are still free.',
+        'Penjara holds. Nice.',
+      )
     case 'jailbreak': {
       const n = Number(e.data.freed ?? 0)
       return two(
-        `${actor?.name ?? 'A Dikejar'} freed ${n} Dikejar from Penjara.`,
+        `Jailbreak! ${n} Dikejar free.`,
         'FREE',
         ctx.jailedNow === 0 ? 'Penjara is empty again.' : `${ctx.jailedNow} still inside.`,
         `${n} more Dikejar ${n === 1 ? 'is' : 'are'} loose near Penjara.`,
@@ -746,7 +797,11 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
     case 'caught':
       return target && actor ? `${tagLabel(target)} caught by ${actor.name}` : 'A runner was caught'
     case 'jailbreak':
-      return `${actor?.name ?? 'A runner'} broke ${count(Number(e.data.freed ?? 0), 'runner')} out of Penjara`
+      return `Jailbreak! ${Number(e.data.freed ?? 0)} Dikejar free.`
+    case 'reel-free':
+      return `${actor?.name ?? String(e.data.who ?? 'A Dikejar')} pulled the free slot. Keluar penjara!`
+    case 'five-left':
+      return '5 minutes left!'
     case 'ended':
       return 'Game over'
     case 'powerup':
@@ -785,7 +840,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, settle: null, datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, kit: undefined, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, settle: null, rescue: null, reel: null, datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, kit: undefined, reports: [], ratings: [] }
   }
   return v
 }
@@ -911,6 +966,9 @@ function fullView(i: ViewInput): View {
     legendaryZone: legendaryZoneFor(i, phase),
     bomohZone: bomohZoneFor(i, phase),
     settle: settleFor(i, phase),
+    rescue: rescueFor(i, phase),
+    fiveLeft: Boolean(i.game.five_warned_at),
+    reel: reelFor(i),
     // The stash and the card go only to the organiser, who prints and hides it (ruling R15). Marshals are the
     // helper, and never see either (rules doc §9b).
     ...(organiser

@@ -85,6 +85,13 @@ export interface Game {
    * undo a wrong last catch. Null when no whistle is pending (cleared again if someone is free).
    */
   final_whistle_at: string | null
+  /**
+   * The live 10-second rescue at Penjara (rules §9a): who scanned first, when the hold started (ISO, moved later
+   * by a pause), and who joined it since. Null when no rescue is going.
+   */
+  rescue: { by: string; startedAt: string; joiners: string[] } | null
+  /** When the one '5 minutes left!' warning went out (rules §2.7). Null until then; set once per game. */
+  five_warned_at: string | null
   /** When this game's personal data was wiped (fair-play §1.8), 30 days after it ended. Null until then. */
   wiped_at: string | null
   /** Deck sets per side, fixed at start, and cards drawn so far (power-ups §5b). Older games have none. */
@@ -186,6 +193,8 @@ export interface Player {
   freed_once: boolean
   /** When this runner was last released from Penjara (ISO), or null if never. */
   freed_at: string | null
+  /** When this runner last pulled the Penjara reel (ISO), or null. One pull per jail stay: a pull older than `caught_at` is spent. */
+  reel_pulled_at: string | null
   push: PushSubscriptionJSON | null
   /** Set when a marshal removed this player from the game. */
   removed_at: string | null
@@ -250,6 +259,14 @@ export type EventType =
   | 'kejar-undone'
   /** The last free Dikejar went out: the end is held for 60 s (fair-play §1.4). data: {} */
   | 'final-whistle'
+  /** A free runner scanned Penjara and the 10-second hold began (rules §9a). actor: the rescuer. data: { who } */
+  | 'rescue-started'
+  /** The rescuer was caught, went out, or left Penjara during the hold: nobody gets out. actor: the rescuer. data: {} */
+  | 'rescue-failed'
+  /** A jailed runner landed on the reel's free slot and walked out. actor: the runner. data: { who } */
+  | 'reel-free'
+  /** The one '5 minutes left!' warning of the game (rules §2.7). data: {} */
+  | 'five-left'
 
 export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along' | 'grab' | 'dato'
 

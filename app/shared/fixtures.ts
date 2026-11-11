@@ -28,6 +28,8 @@ export function game(over: Partial<Game> = {}): Game {
     paused_at: null,
     pauses: [],
     final_whistle_at: null,
+    rescue: null,
+    five_warned_at: null,
     wiped_at: null,
     ...over,
   }
@@ -50,6 +52,7 @@ export function player(id: string, role: Role | null, over: Partial<Player> = {}
     removed_at: null,
     outside: false,
     left_start: false,
+    reel_pulled_at: null,
     ...over,
   }
 }

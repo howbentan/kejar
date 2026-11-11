@@ -7,6 +7,7 @@ import { ErrorText, Screen } from '../game/ui'
 import { useGameState, type LocationMode } from '../game/useGameState'
 import ChaserChase from './ChaserChase'
 import Hide from './Hide'
+import { useReelHold } from '../game/PenjaraReel'
 import Jail from './Jail'
 import Lobby from './Lobby'
 import LuarGarisan from './LuarGarisan'
@@ -52,6 +53,8 @@ export default function GameScreen({ code }: { code: string }) {
   // lastReason ref in Jail.tsx that remembers whether this was a catch or an auto-jail) before the effect had
   // a chance to bring it back.
   const [showingFreed, setShowingFreed] = useState(false)
+  // The Penjara reel's pull may free this runner before its scroll has stopped: keep Penjara up until the result is read.
+  const reelHold = useReelHold()
   const playedFreedAt = useRef<string | null>(null)
   const freedAt = current?.me.freed_at ?? null
   if (current && freedAt && freedAt !== playedFreedAt.current) {
@@ -82,7 +85,7 @@ export default function GameScreen({ code }: { code: string }) {
   if (current.paused) screen = <Paused view={current} />
   else if (current.me.role === 'runner' && current.me.disqualified_at) screen = <LuarGarisan view={current} />
   else if (current.phase === 'hiding') screen = <Hide code={code} view={current} />
-  else if (current.me.role === 'runner' && (current.me.jailed || showingFreed)) screen = <Jail code={code} view={current} />
+  else if (current.me.role === 'runner' && (current.me.jailed || showingFreed || reelHold)) screen = <Jail code={code} view={current} />
   else if (current.me.role === 'chaser') screen = <ChaserChase code={code} view={current} refresh={refresh} />
   else screen = <RunnerChase code={code} view={current} locationOff={locationOff} />
   return (

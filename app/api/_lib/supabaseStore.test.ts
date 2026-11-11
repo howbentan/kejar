@@ -120,6 +120,23 @@ describe('SupabaseStore', () => {
     ])
   })
 
+  it('starts, joins and ends a rescue through start_rescue, join_rescue and end_rescue', async () => {
+    const rpcs: { fn: string; args: Record<string, unknown> }[] = []
+    const replies = [true, null, false]
+    const db = {
+      rpc: async (fn: string, args: Record<string, unknown>) => (rpcs.push({ fn, args }), { data: replies.shift(), error: null }),
+    } as unknown as SupabaseClient
+    const store = new SupabaseStore(db, () => 0)
+    expect(await store.startRescue('g1', 'p1', '2026-10-25T09:07:00.000Z')).toBe(true)
+    await store.joinRescue('g1', 'p2')
+    expect(await store.endRescue('g1', '2026-10-25T09:07:00.000Z')).toBe(false)
+    expect(rpcs).toEqual([
+      { fn: 'start_rescue', args: { p_game: 'g1', p_by: 'p1', p_at: '2026-10-25T09:07:00.000Z' } },
+      { fn: 'join_rescue', args: { p_game: 'g1', p_player: 'p2' } },
+      { fn: 'end_rescue', args: { p_game: 'g1', p_started: '2026-10-25T09:07:00.000Z' } },
+    ])
+  })
+
   it('undoes an auto-jail through release_auto_jailed, which refuses an ended game', async () => {
     const rpcs: { fn: string; args: Record<string, unknown> }[] = []
     const db = {

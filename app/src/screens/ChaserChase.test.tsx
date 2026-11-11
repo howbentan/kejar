@@ -214,3 +214,34 @@ describe('ChaserChase Luar Garisan', () => {
     expect(screen.getByText("You're Luar Garisan, so no power-ups this round.")).toBeInTheDocument()
   })
 })
+
+describe('ChaserChase: a rescue at Penjara (rules §9a)', () => {
+  const rescueLine = { at: new Date(99_000).toISOString(), text: 'Rescue starting at Penjara!', means: 'Catch them in 10 s and nobody gets out.', act: true, label: 'RESCUE' }
+  afterEach(() => vi.restoreAllMocks())
+  it('shows both chaser lines in the ticker', () => {
+    render(<ChaserChase code="ABC234" view={{ ...chaser(), feed: [rescueLine], rescue: { by: 'r3', byName: 'Wei', endsAt: 107_000, joiners: [] } }} refresh={() => {}} />)
+    const ticker = screen.getByRole('button', { name: /^Feed:/ })
+    expect(ticker).toHaveTextContent('Rescue starting at Penjara!')
+    expect(ticker).toHaveTextContent('Catch them in 10 s and nobody gets out.')
+  })
+  it('buzzes once when a rescue starts, and not again for the same one', () => {
+    const vibrate = vi.fn()
+    Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true })
+    const { rerender } = render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    expect(vibrate).not.toHaveBeenCalled()
+    const live = { ...chaser(), feed: [rescueLine], rescue: { by: 'r3', byName: 'Wei', endsAt: 107_000, joiners: [] } }
+    rerender(<ChaserChase code="ABC234" view={live} refresh={() => {}} />)
+    rerender(<ChaserChase code="ABC234" view={{ ...live, now: 101_000 }} refresh={() => {}} />)
+    // The ticker adds its own short buzz for a line that needs you; the rescue's own pattern comes once.
+    expect(vibrate.mock.calls.filter((c) => JSON.stringify(c[0]) === '[200,100,200]')).toHaveLength(1)
+  })
+})
+
+describe('ChaserChase: 5 minutes left (rules §2.7)', () => {
+  it('turns the clock lime once the warning has fired, and not before', () => {
+    const { rerender } = render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    expect(document.querySelector('.chase-clock .mono')).not.toHaveClass('clock-lime')
+    rerender(<ChaserChase code="ABC234" view={{ ...chaser(), fiveLeft: true }} refresh={() => {}} />)
+    expect(document.querySelector('.chase-clock .mono')).toHaveClass('clock-lime')
+  })
+})

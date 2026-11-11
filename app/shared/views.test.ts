@@ -246,8 +246,19 @@ describe('two-part feed', () => {
   })
   it('jailbreak', () => {
     const { runner, chaser: c } = both('jailbreak', { actor_id: 'r3', data: { freed: 2 } })
-    expect(runner).toMatchObject({ text: 'Wei freed 2 Dikejar from Penjara.', means: 'Penjara is empty again.', label: 'FREE' })
+    expect(runner).toMatchObject({ text: 'Jailbreak! 2 Dikejar free.', means: 'Penjara is empty again.', label: 'FREE' })
     expect(c).toMatchObject({ means: '2 more Dikejar are loose near Penjara.' })
+  })
+  it('a rescue starting: the chasers get both lines and are told to act', () => {
+    const { runner, chaser: c } = both('rescue-started', { actor_id: 'r3', data: { who: 'Wei #14' } })
+    expect(c).toMatchObject({ text: 'Rescue starting at Penjara!', means: 'Catch them in 10 s and nobody gets out.', act: true, label: 'RESCUE' })
+    expect(runner).toMatchObject({ text: 'Rescue starting at Penjara!', act: false, label: 'RESCUE' })
+    expect(line(siti, { actor_id: 'r3' }, 'rescue-started')).toMatchObject({ text: 'Rescue starting at Penjara!', means: null, act: false })
+  })
+  it('a rescue failing', () => {
+    const { runner, chaser: c } = both('rescue-failed', { actor_id: 'r3' })
+    expect(runner).toMatchObject({ text: 'Rescue failed. Nobody gets out.', label: 'RESCUE' })
+    expect(c).toMatchObject({ text: 'Rescue failed. Nobody gets out.', act: false })
   })
   it('auto-jail', () => {
     const { runner, chaser: c } = both('auto-jailed', { target_id: 'r2' })
@@ -422,7 +433,7 @@ describe('feed wording', () => {
         event('ping', T0 + 10 * MIN, { data: { seen: 1 } }),
         event('jailbreak', T0 + 11 * MIN, { actor_id: 'r3', data: { freed: 1 } }),
       ]),
-    ).toEqual(['Wei freed 1 Dikejar from Penjara.', 'Ping: 1 Dikejar seen.'])
+    ).toEqual(['Jailbreak! 1 Dikejar free.', 'Ping: 1 Dikejar seen.'])
   })
   it('announces pauses and resumes', () => {
     expect(feedOf([event('paused', T0 + 10 * MIN), event('resumed', T0 + 11 * MIN)])).toEqual([
@@ -1124,5 +1135,38 @@ describe('the packing list in organiser and marshal views', () => {
 
   it('a removed marshal gets no kit', () => {
     expect(kitView({ ...siti, removed_at: '2026-01-01T00:00:00Z' }).kit).toBeUndefined()
+  })
+})
+
+describe('the live rescue (rules §9a)', () => {
+  const rescue = { by: 'r3', startedAt: iso(NOW - 3_000), joiners: ['r1'] }
+  it('every role sees who is breaking them out and when the hold ends', () => {
+    for (const me of [aina, hafiz, siti, organiserMe]) {
+      expect(view(me, { game: { ...g, rescue } }).rescue).toEqual({ by: 'r3', byName: 'Wei', endsAt: NOW + 7_000, joiners: ['r1'] })
+    }
+  })
+  it('a chaser sees only when the hold ends, never who is breaking them out', () => {
+    expect(view(chaser, { game: { ...g, rescue } }).rescue).toEqual({ endsAt: NOW + 7_000 })
+  })
+  it('is null with no rescue, and frozen while paused', () => {
+    expect(view(aina).rescue).toBeNull()
+    const paused = { ...g, rescue, paused_at: iso(NOW - 1_000) }
+    expect(view(aina, { game: paused }).rescue!.endsAt).toBe(NOW + 8_000)
+  })
+  it('is null for a removed player and once the game has ended', () => {
+    expect(view({ ...aina, removed_at: iso(NOW) }, { game: { ...g, rescue } }).rescue).toBeNull()
+    expect(view(aina, { game: { ...g, rescue, ended_at: iso(NOW - 1) } }).rescue).toBeNull()
+  })
+})
+
+describe('5 minutes left (rules §2.7)', () => {
+  it('shows one plain feed line to everyone', () => {
+    const events = [event('five-left', T0 + 45 * MIN)]
+    for (const me of [aina, chaser]) expect(view(me, { events }).feed.map((f) => f.text)).toContain('5 minutes left!')
+  })
+  it('sets fiveLeft once the game has warned, and not before', () => {
+    expect(view(aina).fiveLeft).toBe(false)
+    expect(view(aina, { game: game({ five_warned_at: iso(T0 + 45 * MIN) }) }).fiveLeft).toBe(true)
+    expect(view(chaser, { game: game({ five_warned_at: iso(T0 + 45 * MIN) }) }).fiveLeft).toBe(true)
   })
 })

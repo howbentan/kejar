@@ -4,8 +4,8 @@ import type { Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind, Sec
 import { newDatoCode } from './secrets.js'
 import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PhoneMoveRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, RedeemPhoneMoveResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
-const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at'
-const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, final_whistle_at, wiped_at, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit'
+const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, reel_pulled_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at'
+const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, final_whistle_at, rescue, five_warned_at, wiped_at, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -106,6 +106,24 @@ export class SupabaseStore implements GameStore {
   }
   async clearFinalWhistle(gameId: string) {
     check(await this.db.from('games').update({ final_whistle_at: null }).eq('id', gameId))
+  }
+  async claimFiveWarning(gameId: string, atIso: string) {
+    return check(await this.db.rpc('claim_five_warning', { p_game: gameId, p_at: atIso })) === true
+  }
+  async startRescue(gameId: string, by: string, atIso: string) {
+    return check(await this.db.rpc('start_rescue', { p_game: gameId, p_by: by, p_at: atIso })) === true
+  }
+  async pullReel(playerId: string, atIso: string) {
+    return check(await this.db.rpc('pull_reel', { p_player: playerId, p_at: atIso })) === true
+  }
+  async releaseReelPull(playerId: string) {
+    check(await this.db.from('players').update({ reel_pulled_at: null }).eq('id', playerId))
+  }
+  async endRescue(gameId: string, startedAtIso: string) {
+    return check(await this.db.rpc('end_rescue', { p_game: gameId, p_started: startedAtIso })) === true
+  }
+  async joinRescue(gameId: string, playerId: string) {
+    check(await this.db.rpc('join_rescue', { p_game: gameId, p_player: playerId }))
   }
   async catchRunner(id: string, by: string | null) {
     const rows = check(

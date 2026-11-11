@@ -1,6 +1,6 @@
 # Kejar: handoff notes
 
-Start here on a new machine or in a new Claude session. Last updated 2026-10-30.
+Start here on a new machine or in a new Claude session. Last updated 2026-11-11.
 
 **Read `docs/superpowers/specs/2026-10-30-kejar-rules.md` first.** It's the single source of truth for the game (Core and Full modes, every number, which spec owns what, and what's still open). The notes below are history and status.
 
@@ -48,6 +48,20 @@ A web app for organised, real-world chase games (runners vs chasers, with marsha
   - The endgame shrinking zone can reuse `buildPlayArea` (`app/shared/playArea.ts`) with a smaller circle.
   - Walk-only and hand-drawn no-go zones were dropped (owner's decision); walk-only is a briefing rule.
   - Overpass's main server is often overloaded. Lookups wait up to 60 s; a failed one leaves the park marked "lakes not checked".
+- **Penjara (branch `penjara`, built 2026-11-11, not merged yet): the 10-second rescue, the Penjara reel and `5 minutes left`.**
+  - **Before merging: run `supabase/migrations/0017_penjara.sql` in Supabase first.** The game select now reads `rescue` and `five_warned_at`, and players gain `reel_pulled_at`. Without the migration those columns don't exist and every game poll fails.
+  - **The 10-second rescue (rules §9a).**
+    - A free runner scanning the Penjara code starts a hold. They must stay within 30 m for 10 s (`Stay close · N s`), and their phone sends its location every 1.5 s.
+    - Chasers get `Rescue starting at Penjara!` and `Catch them in 10 s and nobody gets out.`. Jailed runners and marshals see `{name} is breaking you out · N s`.
+    - Catching the rescuer, or a clear fix outside 30 m, fails it (`Rescue failed. Nobody gets out.`). Success frees everyone not already freed once (`Jailbreak! {n} Dikejar free.`).
+    - A second scan joins the hold. A pause freezes it (fixes sent during a pause are ignored). Dato Seri's Settle still frees at once.
+    - A rescuer whose phone stops sending location still succeeds: only a clear fix outside 30 m fails (the rules doc's GPS leniency). Revisit after playtesting.
+  - **The Penjara reel (owner's decision, 2026-11-11, replacing the dare reel).**
+    - One pull per jail stay, at Penjara. The slots are one lime free slot among nine black, and the server picks (about 1 in 10). A runner whose escape is used sees all black.
+    - A black slot plays the owner's clip `app/public/sounds/black-slot.mp3`. A free slot plays a generated fanfare. There's a mute toggle per viewer.
+    - A free slot posts `{name} pulled the free slot. Keluar penjara!`. Runners who are out for good now run a GPS watch at Penjara too.
+    - **To do before paid events: check the licence of `black-slot.mp3`.** The vine boom is not in; it waits on its own licence check, and the fanfare stands in for it.
+  - **`5 minutes left`.** Once per game, at 5 minutes on the chase clock, one feed line and one push (`5 minutes left!`) go out, and the clock turns lime for the rest of the game, on the chase screens and the marshal's. It never fires during a pause or a final whistle. A game that starts its chase with 5 minutes or less left warns straight away.
 - **Plan 6 (polish): not started.** Replay, share card, 24 h deletion, 12-month safety-record deletion.
 
 ## Decisions made since the design doc (not yet in the spec)

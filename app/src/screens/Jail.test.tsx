@@ -242,6 +242,29 @@ describe('Jail', () => {
     }
   })
 
+  it('the reel shows only once the runner has arrived at Penjara', () => {
+    let arrive: (p: unknown) => void = () => {}
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: { watchPosition: (ok: (p: unknown) => void) => ((arrive = ok), 1), clearWatch: () => {} },
+    })
+    try {
+      render(<Jail code="ABC234" view={{ ...caught(60_000), reel: { pulled: false, result: null } }} />)
+      expect(screen.queryByText('Your pull.')).toBeNull()
+      act(() => arrive({ coords: { latitude: 3.01, longitude: 101 } })) // ~1.1 km away
+      expect(screen.queryByText('Your pull.')).toBeNull()
+      act(() => arrive({ coords: { latitude: 3, longitude: 101 } }))
+      expect(screen.getByText('Your pull.')).toBeInTheDocument()
+    } finally {
+      Object.defineProperty(navigator, 'geolocation', { configurable: true, value: undefined })
+    }
+  })
+
+  it('no reel without a view of one (not jailed this stay)', () => {
+    render(<Jail code="ABC234" view={caught(60_000)} />)
+    expect(screen.queryByText('Your pull.')).toBeNull()
+  })
+
   it('already broken out once: says they stay this time', () => {
     render(<Jail code="ABC234" view={caught(60_000, { freed_once: true })} />)
     expect(screen.getByText('You’ve already been broken out once, so you stay in Penjara this time.')).toBeInTheDocument()
@@ -252,5 +275,25 @@ describe('Jail: alerts after New phone', () => {
   it('a jailed runner in push mode with no subscription can turn alerts back on', () => {
     render(<Jail code="ABC234" view={caught(60_000)} />)
     expect(screen.getByRole('button', { name: 'Turn on alerts' })).toBeInTheDocument()
+  })
+})
+
+describe('a rescue at Penjara (rules §9a)', () => {
+  const rescue = { by: 'r3', byName: 'Hafiz', endsAt: 107_000, joiners: [] }
+  it('tells a jailed runner who is breaking them out, counting down', () => {
+    render(<Jail code="ABC234" view={{ ...caught(60_000), rescue }} />)
+    expect(screen.getByRole('status', { name: 'Rescue' })).toHaveTextContent('Hafiz is breaking you out · 7 s')
+  })
+  it('tells an auto-jailed runner too', () => {
+    const view = testView({ jailReason: 'missed-checkins', jailCheckins: [], rescue })
+    render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true, caught_at: new Date(40_000).toISOString() } }} />)
+    expect(screen.getByText('Hafiz is breaking you out · 7 s')).toBeInTheDocument()
+  })
+  it('says nothing to a runner who already used their one escape, or with no rescue going', () => {
+    render(<Jail code="ABC234" view={{ ...caught(60_000, { freed_once: true }), rescue }} />)
+    expect(screen.queryByText(/breaking you out/)).toBeNull()
+    cleanup()
+    render(<Jail code="ABC234" view={caught(60_000)} />)
+    expect(screen.queryByText(/breaking you out/)).toBeNull()
   })
 })

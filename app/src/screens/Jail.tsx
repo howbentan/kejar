@@ -3,7 +3,9 @@ import type { View } from '../../shared/views.js'
 import AlertsCard from '../game/AlertsCard'
 import Marker from '../game/Marker'
 import PenjaraArrival from '../game/PenjaraArrival'
+import PenjaraReel, { useReelHold } from '../game/PenjaraReel'
 import PenjaraTicket from '../game/PenjaraTicket'
+import RescueBanner from '../game/RescueBanner'
 import SettlePanel from '../game/SettlePanel'
 import Stamp from '../game/Stamp'
 import { WalkGuide } from '../game/WalkGuide'
@@ -43,6 +45,7 @@ function AutoJailed({ code, view }: { code: string; view: View }) {
   const [playing, setPlaying] = useState(() => shouldPlay('auto', view.me.caught_at, view.now, sessionStorage))
   const [distanceM, setDistanceM] = useState<number | null>(null)
   const [localSettled, setLocalSettled] = useState(false)
+  const holding = useReelHold()
   useEffect(() => {
     if (playing) navigator.vibrate?.([300, 100, 300])
   }, [playing])
@@ -51,7 +54,8 @@ function AutoJailed({ code, view }: { code: string; view: View }) {
   // Not jailed any more but GameScreen is still showing this screen: Settle just freed them (self-scanned or
   // one of the up to 2 others picked alongside the holder), and the SETTLE stamp is why it's still up.
   const settled = localSettled || !view.me.jailed
-  const outForGood = view.me.freed_once
+  // Used their escape and still inside. Not once freed (by Settle or the reel), even for the beat the screen stays up.
+  const outForGood = view.me.freed_once && view.me.jailed
   const lastOk = view.jailCheckins?.filter((c) => c.ok).at(-1) ?? null
   // Opens the SOS sheet with Something else picked: a marshal can undo an auto-jail for a phone fault (§5b).
   const tellMarshal = () => window.dispatchEvent(new CustomEvent('kejar:sos', { detail: { reason: 'other' } }))
@@ -72,6 +76,7 @@ function AutoJailed({ code, view }: { code: string; view: View }) {
         {outForGood ? 'You were already freed once, so you stay in Penjara until the end. Watch the chase from here.' : lineFor(view.me.id)}
       </p>
       {view.jailCheckins && view.jailCheckins.length > 0 && <CheckinRow checkins={view.jailCheckins} />}
+      {view.me.jailed && !view.me.freed_once && <RescueBanner view={view} />}
       <PenjaraTicket
         playerId={view.me.id}
         variant={{ kind: 'auto', lastSeenMs: lastOk?.at ?? null }}
@@ -81,16 +86,12 @@ function AutoJailed({ code, view }: { code: string; view: View }) {
       />
       <Settle code={code} view={view} onSettled={() => setLocalSettled(true)} />
       {outForGood ? (
-        <>
-          <GameMap arena={view.arena} dots={view.dots} height={240} />
-          <p className="eyebrow" style={{ textAlign: 'center' }}>
-            {`Spectator view · ${view.settings.spectatorDelayMin} min delayed`}
-          </p>
-        </>
-      ) : view.me.jailed ? (
+        // Out for good: the map from the start, and the (all black) reel once they reach Penjara.
+        <WalkThenWatch code={code} view={view} spectate />
+      ) : view.me.jailed || holding ? (
         <>
           <p className="muted">A free runner can still break you out, but only once.</p>
-          <WalkThenWatch view={view} onDistance={setDistanceM} />
+          <WalkThenWatch code={code} view={view} onDistance={setDistanceM} />
         </>
       ) : null}
       <button type="button" className="sos-link" style={{ alignSelf: 'flex-start' }} onClick={tellMarshal}>
@@ -107,16 +108,34 @@ const CAUGHT_LINES = ['Masuk penjara, bossku!', 'Lepak kat Penjara dulu, bro.', 
 const pick = (lines: string[], id: string) => lines[[...id].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 0) % lines.length]
 
 /** The walk to Penjara, then today's spectator view once there (or straight away with no GPS). */
-function WalkThenWatch({ view, onDistance }: { view: View; onDistance?: (m: number | null) => void }) {
+function WalkThenWatch({
+  code,
+  view,
+  onDistance,
+  spectate = false,
+}: {
+  code: string
+  view: View
+  onDistance?: (m: number | null) => void
+  /** Show the spectator view from the start (the walk guide still runs, so the reel knows when they arrive). */
+  spectate?: boolean
+}) {
   const [arrived, setArrived] = useState(false)
+  // The reel, once at Penjara and while jailed this stay. A free pull frees them at once, so the last reel is kept
+  // (and Penjara held up by the game screen) until its result has been read.
+  const holding = useReelHold()
+  const lastReel = useRef(view.reel)
+  if (view.reel) lastReel.current = view.reel
+  const reel = view.me.jailed || holding ? lastReel.current : null
   const [lost, setLost] = useState(false)
   const onArrived = useCallback(() => setArrived(true), [])
   const onLost = useCallback(() => setLost(true), [])
   return (
     <>
-      {!arrived && <WalkGuide jail={view.arena.jail} arena={view.arena} onArrived={onArrived} onLost={onLost} onDistance={onDistance} />}
+      {!arrived && <WalkGuide jail={view.arena.jail} arena={spectate ? undefined : view.arena} onArrived={onArrived} onLost={onLost} onDistance={onDistance} />}
+      {arrived && reel && <PenjaraReel code={code} freedOnce={view.me.freed_once} reel={reel} />}
       {/* No GPS fix (none, denied, or none in 10 s): the spectator view, with the Penjara pin on it. */}
-      {arrived || lost || !navigator.geolocation ? (
+      {arrived || lost || spectate || !navigator.geolocation ? (
         <>
           <GameMap arena={view.arena} dots={view.dots} height={240} />
           <p className="eyebrow" style={{ textAlign: 'center' }}>
@@ -133,6 +152,7 @@ function Caught({ code, view }: { code: string; view: View }) {
   const [playing, setPlaying] = useState(() => shouldPlay('caught', view.me.caught_at, view.now, sessionStorage))
   const [distanceM, setDistanceM] = useState<number | null>(null)
   const [localSettled, setLocalSettled] = useState(false)
+  const holding = useReelHold()
   const name = useRef<HTMLSpanElement>(null)
   useEffect(() => {
     if (playing) navigator.vibrate?.([100, 50, 300])
@@ -158,19 +178,20 @@ function Caught({ code, view }: { code: string; view: View }) {
       </h1>
       <p className="muted">{pick(CAUGHT_LINES, view.me.id)}</p>
       <p className="muted">
-        {view.me.freed_once
+        {view.me.freed_once && view.me.jailed
           ? 'You’ve already been broken out once, so you stay in Penjara this time.'
           : 'A free runner can still break you out, but only once. A marshal will give your tag back.'}
       </p>
+      {view.me.jailed && !view.me.freed_once && <RescueBanner view={view} />}
       <PenjaraTicket
         playerId={view.me.id}
         variant={{ kind: 'catch', caughtBy: view.caughtBy ?? 'a chaser', caughtAtMs: view.me.caught_at ? Date.parse(view.me.caught_at) : null }}
         distanceM={distanceM}
-        outForGood={view.me.freed_once}
+        outForGood={view.me.freed_once && view.me.jailed}
         settled={settled}
       />
       <Settle code={code} view={view} onSettled={() => setLocalSettled(true)} />
-      {view.me.jailed && <WalkThenWatch view={view} onDistance={setDistanceM} />}
+      {(view.me.jailed || holding) && <WalkThenWatch code={code} view={view} onDistance={setDistanceM} />}
       <AlertsCard code={code} view={view} />
       <Feed view={view} />
     </Screen>

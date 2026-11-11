@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect } from 'react'
 import type { CatchJudgement } from '../../shared/catch.js'
 import { isBomohQr, isDatoQr, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
@@ -46,6 +46,11 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
   const now = useServerNow(view.now)
   useWakeLock(view.phase === 'hiding' || view.phase === 'chasing')
   const chip = pingChip(view, now)
+  // A rescue starting at Penjara (rules §9a): one buzz per rescue, on top of the ticker's lime line.
+  const rescueBy = view.rescue ? 'on' : null
+  useEffect(() => {
+    if (rescueBy) navigator.vibrate?.([200, 100, 200])
+  }, [rescueBy])
 
   const describe = useCallback(
     (s: { action: string }, text: string, r: unknown) =>

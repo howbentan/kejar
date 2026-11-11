@@ -19,10 +19,11 @@ import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
 import { isOut, undoableCatchId } from '../../shared/players.js'
-import { judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
+import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
 import { bomohCodeFromQr, datoCodeFromQr, isBomohQr, isDatoQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
+import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
 import { validateTeams } from '../../shared/teams.js'
@@ -512,9 +513,21 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
   const { store, now } = ctx
   const phase = phaseAt(game, now).phase
   if (phase === 'lobby') return
+  if (game.rescue) await settleRescue(ctx, game, phase)
 
   if ((phase === 'chasing' || phase === 'ended') && (await store.claimPing(game.id, 0, 'revealed'))) {
     await store.addEvent({ game_id: game.id, type: 'chase', actor_id: null, target_id: null, data: {} })
+  }
+
+  // '5 minutes left!' goes out once per game: the claim decides who posts it (rules §2.7).
+  if (fiveLeftDue(game, now) && (await store.claimFiveWarning(game.id, iso(now)))) {
+    await store.addEvent({ game_id: game.id, type: 'five-left', actor_id: null, target_id: null, data: {} })
+    const everyone = await store.players(game.id)
+    try {
+      await pushTo(ctx, everyone, { type: 'notice', code: game.code, title: 'kejar.', body: '5 minutes left!' })
+    } catch {
+      // The feed line and the lime clock still carry it.
+    }
   }
 
   let pingRows = await store.pings(game.id)
@@ -608,6 +621,42 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
   const g = whistleNow && !game.final_whistle_at ? ((await store.gameByCode(game.code)) ?? game) : game
   if (g.final_whistle_at && !g.ended_at) await settleWhistle(ctx, g)
   else if (work.end) await finish(ctx, g)
+}
+
+/**
+ * Settles a live rescue (rules §9a). Once the game has ended (the clock ran out) it is cleared and frees nobody;
+ * while paused it waits. Otherwise the rescuer's fixes during the hold decide it: `fix` is one just sent (the
+ * `location` heartbeat judges each fix as it lands), else their latest stored fix within the hold. `end_rescue`
+ * decides who settles it, so a success frees once and a failure posts once.
+ */
+async function settleRescue(ctx: Ctx, game: Game, phase = phaseAt(game, ctx.now).phase, fix?: Position): Promise<void> {
+  const { store, now } = ctx
+  const r = game.rescue
+  if (!r) return
+  if (phase === 'ended' || game.ended_at) {
+    await store.endRescue(game.id, r.startedAt)
+    return
+  }
+  if (game.paused_at) return
+  const startedAt = Date.parse(r.startedAt)
+  const players = await store.players(game.id)
+  const rescuer = players.find((p) => p.id === r.by)
+  let fixes: Position[] = fix ? [fix] : []
+  if (!fix && rescuer) {
+    fixes = (await store.latestPositions(game.id, [iso(Math.min(now, startedAt + RESCUE_HOLD_MS))]))[r.by] ?? []
+  }
+  // A removed rescuer has left the game: the same as being caught.
+  const verdict = rescuer ? rescueVerdict({ rescue: { by: r.by, startedAt }, rescuer, fixes, jail: game.arena.jail, now, pauses: game.pauses, pausedAt: game.paused_at }) : 'failed'
+  if (verdict === 'holding' || !(await store.endRescue(game.id, r.startedAt))) return
+  if (verdict === 'failed') {
+    await store.addEvent({ game_id: game.id, type: 'rescue-failed', actor_id: r.by, target_id: null, data: {} })
+    return
+  }
+  // Frees exactly as the scan used to: everyone in Penjara who hasn't used their one escape.
+  const freedIds = players.filter((p) => p.role === 'runner' && p.jailed && !p.freed_once).map((p) => p.id)
+  if (freedIds.length === 0) return
+  await store.updatePlayers(freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(now), out_warned_at: null } })))
+  await store.addEvent({ game_id: game.id, type: 'jailbreak', actor_id: r.by, target_id: null, data: { freed: freedIds.length } })
 }
 
 /** What put the last free Dikejar out: it picks the feed line (views.ts). */
@@ -724,6 +773,8 @@ const create: Action = async (ctx, body) => {
     paused_at: null,
     pauses: [],
     final_whistle_at: null,
+    rescue: null,
+    five_warned_at: null,
     wiped_at: null,
     organiser_id: organiser.id,
     ...(stash ? { dato_stash: stash } : {}),
@@ -763,6 +814,7 @@ const join: Action = async (ctx, body) => {
     jailed: false,
     freed_once: false,
     freed_at: null,
+    reel_pulled_at: null,
     push: null,
     removed_at: null,
     outside: false,
@@ -877,6 +929,7 @@ const state: Action = async (ctx, body) => {
       jailed: false,
       freed_once: false,
       freed_at: null,
+      reel_pulled_at: null,
       push: (game as GameRow).host_push ?? null,
       removed_at: null,
       outside: false,
@@ -929,7 +982,10 @@ const location: Action = async (ctx, body) => {
   // The gap never drops the first fix inside an open check-in window (a still phone re-sends its last fix
   // right after the alert), so only rows since the window's alert count against it.
   const since = openWindowAlert(pingTimes(game, ctx.now), ctx.now)
-  const stored = await ctx.store.addPosition(game.id, me.id, fix, LOCATION_MIN_GAP_MS, since)
+  // The rescuer's phone sends a fix every RESCUE_PING_MS (1.5 s) during the hold, under the 2 s gap: their fixes
+  // are the hold's heartbeat, so none is dropped. The hold is 10 s, so that is a handful of extra rows.
+  const rescuing = game.rescue?.by === me.id
+  const stored = await ctx.store.addPosition(game.id, me.id, fix, rescuing && !game.paused_at ? undefined : LOCATION_MIN_GAP_MS, since)
   if (!stored) {
     // Bonus (Flare) windows live in the pings table, so it is read only when the gap dropped this fix.
     const bonus = openWindowAlert(
@@ -943,6 +999,8 @@ const location: Action = async (ctx, body) => {
     }
   }
   await checkWhere(ctx, game, me, { lat, lng }, accuracy)
+  // Each fix is judged as it lands, so a step outside and back between two polls still counts (rules §9a).
+  if (rescuing) await settleRescue(ctx, game, undefined, { ...fix, at: iso(ctx.now) })
   return { ok: true }
 }
 
@@ -1060,6 +1118,10 @@ const catchAction: Action = async (ctx, body) => {
     target_id: verdict.runnerId,
     data: { flagged: verdict.flagged, who: tagLabelOf(players, verdict.runnerId), chaser: me.name, ...(verdict.flagged ? { farFromLast: true } : {}) },
   })
+  // Catching the rescuer fails a live rescue: nobody gets out, even with a joiner still close (rules §9a).
+  if (fresh.rescue?.by === verdict.runnerId && (await ctx.store.endRescue(game.id, fresh.rescue.startedAt))) {
+    await ctx.store.addEvent({ game_id: game.id, type: 'rescue-failed', actor_id: verdict.runnerId, target_id: null, data: {} })
+  }
   // The last free runner caught: the final whistle, not the end (fair-play §1.4).
   await allOutCheck(ctx, fresh)
   const caught = players.find((p) => p.id === verdict.runnerId)
@@ -1102,15 +1164,53 @@ const jailbreak: Action = async (ctx, body) => {
     now: ctx.now,
   })
   if (!verdict.ok) return verdict
-  await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now), out_warned_at: null } })))
-  await ctx.store.addEvent({
-    game_id: game.id,
-    type: 'jailbreak',
-    actor_id: me.id,
-    target_id: null,
-    data: { freed: verdict.freedIds.length },
-  })
-  return verdict
+  // The scan starts the 10-second hold instead of freeing at once (rules §9a); `advance` settles it.
+  if (await ctx.store.startRescue(game.id, me.id, iso(ctx.now))) {
+    await ctx.store.addEvent({ game_id: game.id, type: 'rescue-started', actor_id: me.id, target_id: null, data: { who: who(me) } })
+    return { ok: true, rescue: 'started', endsAt: ctx.now + RESCUE_HOLD_MS }
+  }
+  // One rescue at a time: a scan during a hold joins it, and the hold keeps its own time. Only the first
+  // rescuer's catch or fixes decide it.
+  const live = (await loadGame(ctx, body)).rescue
+  if (!live) return { ok: false, reason: 'try-again' }
+  await ctx.store.joinRescue(game.id, me.id)
+  return { ok: true, rescue: live.by === me.id ? 'started' : 'joined', endsAt: Date.parse(live.startedAt) + RESCUE_HOLD_MS }
+}
+
+/**
+ * The Penjara reel (§2.2): a jailed runner at Penjara pulls once per stay. The server picks the slot (one in ten is
+ * free, none once the escape is used) and the phone only animates to it. The pull is spent first, atomically, so a
+ * double tap or two phones pull once. A free slot frees the runner like a jailbreak, so a pending final whistle is
+ * called off; a black slot changes nothing and posts nothing.
+ */
+const pullReel: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  if (me.disqualified_at) return { ok: false, reason: 'disqualified' }
+  await recordScanLocation(ctx, game, me, body)
+  await advance(ctx, game)
+  const fresh = (await loadGame(ctx, body)) as Game
+  if (fresh.paused_at) return { ok: false, reason: 'paused' }
+  if (phaseAt(fresh, ctx.now).phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
+  const current = (await ctx.store.players(game.id)).find((p) => p.id === me.id)
+  if (!current || current.role !== 'runner' || !current.jailed) return { ok: false, reason: 'not-jailed' }
+  if (reelPulledThisStay(current)) return { ok: false, reason: 'already-pulled' }
+  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
+  if (!atJail(latest(positions[me.id]), game.arena.jail, ctx.now)) return { ok: false, reason: 'too-far-from-jail' }
+  if (!(await ctx.store.pullReel(me.id, iso(ctx.now)))) return { ok: false, reason: 'already-pulled' }
+  const result = pickReel(ctx.rng, current.freed_once)
+  if (result === 'free') {
+    try {
+      await ctx.store.updatePlayers([{ id: me.id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now), out_warned_at: null } }])
+      await ctx.store.addEvent({ game_id: game.id, type: 'reel-free', actor_id: me.id, target_id: null, data: { who: who(me) } })
+    } catch (e) {
+      await ctx.store.releaseReelPull(me.id) // give the pull back
+      throw e
+    }
+    // Someone is free again: no final whistle (advance would call it off too, on the next poll).
+    if (fresh.final_whistle_at) await callOffWhistle(ctx, fresh)
+  }
+  return { ok: true, result }
 }
 
 /**
@@ -1253,6 +1353,7 @@ const redeemMarshalInvite: Action = async (ctx, body) => {
     jailed: false,
     freed_once: false,
     freed_at: null,
+    reel_pulled_at: null,
     push: null,
     removed_at: null,
     outside: false,
@@ -2086,6 +2187,7 @@ export const actions = {
   location,
   catch: catchAction,
   jailbreak,
+  pullReel,
   settle,
   subscribe,
   claim,
