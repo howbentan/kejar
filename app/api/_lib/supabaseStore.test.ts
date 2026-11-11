@@ -129,6 +129,27 @@ describe('SupabaseStore', () => {
     expect(rpcs).toEqual([{ fn: 'release_auto_jailed', args: { p_player: 'p1', p_at: '2026-10-25T09:07:00.000Z' } }])
   })
 
+  it('events() pages past the 1000-row cap, oldest first, so the newest events are never dropped', async () => {
+    const all = Array.from({ length: 1003 }, (_, i) => ({ id: `e${i}`, game_id: 'g1', type: 'ping', at: `t${i}` }))
+    const ranges: [number, number][] = []
+    const orders: string[] = []
+    const builder = {
+      select: () => builder,
+      eq: () => builder,
+      order: (col: string) => (orders.push(col), builder),
+      range: (from: number, to: number) => {
+        ranges.push([from, to])
+        // The server hands back at most 1000 rows per request, whatever the range asks for.
+        return Promise.resolve({ data: all.slice(from, Math.min(to + 1, from + 1000)), error: null })
+      },
+    }
+    const db = { from: () => builder } as unknown as SupabaseClient
+    const events = await new SupabaseStore(db, () => 0).events('g1')
+    expect(events.map((e) => e.id)).toEqual(all.map((e) => e.id))
+    expect(ranges).toEqual([[0, 999], [1000, 1999]])
+    expect(orders).toEqual(['at', 'id', 'at', 'id'])
+  })
+
   it('draws a card through the draw_card function', async () => {
     const { db, rpcs } = fakeDb()
     expect(await new SupabaseStore(db, () => 0).drawCard('g1', 'chaser')).toBe(90000)

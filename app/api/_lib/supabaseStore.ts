@@ -188,7 +188,17 @@ export class SupabaseStore implements GameStore {
     return check(await this.db.from('events').insert({ ...e, at: this.nowIso() }).select('*').single()) as GameEvent
   }
   async events(gameId: string): Promise<GameEvent[]> {
-    return check(await this.db.from('events').select('*').eq('game_id', gameId).order('at')) as GameEvent[]
+    // PostgREST caps a response (1000 rows by default) and would silently drop the newest events, so read in pages.
+    // `id` breaks ties between events stamped the same millisecond, keeping the page boundaries stable.
+    const PAGE = 1000
+    const out: GameEvent[] = []
+    for (let from = 0; ; from += PAGE) {
+      const rows = check(
+        await this.db.from('events').select('*').eq('game_id', gameId).order('at').order('id').range(from, from + PAGE - 1),
+      ) as GameEvent[]
+      out.push(...rows)
+      if (rows.length < PAGE) return out
+    }
   }
   async addPowerUp(p: NewPowerUp): Promise<PowerUp> {
     return check(await this.db.from('powerups').insert({ ...p, claimed_at: this.nowIso() }).select('*').single()) as PowerUp
