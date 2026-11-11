@@ -50,13 +50,18 @@ describe('useGameState', () => {
     let onFix: (p: unknown) => void = () => {}
     Object.defineProperty(navigator, 'geolocation', {
       configurable: true,
-      value: { watchPosition: (ok: (p: unknown) => void) => ((onFix = ok), 1), clearWatch: () => {} },
+      value: {
+        watchPosition: (ok: (p: unknown) => void) => ((onFix = ok), 1),
+        clearWatch: () => {},
+        // The first fix is 30 s old when the window opens, so the phone asks for a fresh one.
+        getCurrentPosition: (ok: (p: unknown) => void) => ok({ timestamp: Date.now(), coords: { latitude: 3, longitude: 101, accuracy: 8 } }),
+      },
     })
     const alertAt = Date.now() + 30_000
     call.mockImplementation(async (action: string) => (action === 'state' ? { phase: 'chasing', now: Date.now(), nextAlertAt: alertAt } : { ok: true }))
     renderHook(() => useGameState('ABC234', { sendLocation: 'when-open' }))
     await act(async () => {})
-    act(() => onFix({ coords: { latitude: 3, longitude: 101, accuracy: 8 } }))
+    act(() => onFix({ timestamp: Date.now(), coords: { latitude: 3, longitude: 101, accuracy: 8 } }))
     const locationCalls = () => call.mock.calls.filter(([a]) => a === 'location').length
     expect(locationCalls()).toBe(1)
     // The runner stays still: no more fixes. The window opens at +30 s.
@@ -112,5 +117,62 @@ describe('useGameState', () => {
     const { result } = renderHook(() => useGameState('ABC234', { sendLocation: 'never' }))
     await act(async () => {})
     expect(result.current.error).toBe('Something went wrong')
+  })
+
+  describe('check-in re-send', () => {
+    const fixAt = (timestamp: number) => ({ timestamp, coords: { latitude: 3, longitude: 101, accuracy: 8 } })
+    const locationCalls = () => call.mock.calls.filter(([a]) => a === 'location')
+    const setup = (getCurrentPosition: (ok: (p: unknown) => void, bad: (e: unknown) => void, o: unknown) => void) => {
+      let onFix: (p: unknown) => void = () => {}
+      Object.defineProperty(navigator, 'geolocation', {
+        configurable: true,
+        value: { watchPosition: (ok: (p: unknown) => void) => ((onFix = ok), 1), clearWatch: () => {}, getCurrentPosition },
+      })
+      // The window opens 2 s in, so the second poll (at 3 s) is the first inside it.
+      const alertAt = Date.now() + 2_000
+      call.mockImplementation(async (action: string) => (action === 'state' ? { phase: 'chasing', now: Date.now(), nextAlertAt: alertAt } : { ok: true }))
+      renderHook(() => useGameState('ABC234', { sendLocation: 'when-open' }))
+      return (p: unknown) => act(() => onFix(p))
+    }
+
+    it('re-sends a last fix that is 5 s old', async () => {
+      const getCurrentPosition = vi.fn()
+      const deliver = setup(getCurrentPosition)
+      await act(async () => {})
+      deliver(fixAt(Date.now() - 5_000))
+      expect(locationCalls()).toHaveLength(1) // the watch send
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_000)
+      })
+      expect(getCurrentPosition).not.toHaveBeenCalled()
+      expect(locationCalls()).toHaveLength(2)
+    })
+
+    it('asks for a fresh fix when the last one is 3 min old, and sends that', async () => {
+      const getCurrentPosition = vi.fn((ok: (p: unknown) => void, _bad?: unknown, _opts?: unknown) => ok({ timestamp: Date.now(), coords: { latitude: 4, longitude: 102, accuracy: 5 } }))
+      const deliver = setup(getCurrentPosition)
+      await act(async () => {})
+      deliver(fixAt(Date.now() - 180_000))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_000)
+      })
+      expect(getCurrentPosition).toHaveBeenCalledTimes(1)
+      expect(getCurrentPosition.mock.calls[0][2]).toEqual({ maximumAge: 0, enableHighAccuracy: true, timeout: 15_000 })
+      const sent = locationCalls()
+      expect(sent).toHaveLength(2)
+      expect(sent[1][1]).toMatchObject({ lat: 4, lng: 102, accuracy_m: 5 })
+    })
+
+    it('sends nothing and does not throw when the fresh fix fails', async () => {
+      const getCurrentPosition = vi.fn((_ok: unknown, bad: (e: unknown) => void) => bad({ code: 3, message: 'timeout' }))
+      const deliver = setup(getCurrentPosition)
+      await act(async () => {})
+      deliver(fixAt(Date.now() - 180_000))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(3_000)
+      })
+      expect(getCurrentPosition).toHaveBeenCalled()
+      expect(locationCalls()).toHaveLength(1) // only the watch send
+    })
   })
 })
