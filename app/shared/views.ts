@@ -5,7 +5,7 @@ import { distanceM, fuzz, hash, offset } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { isTicked, kitOf, packItems, placeItems, type KitItem, type PlaceItem, type SecretLetters } from './kit.js'
 import { MOMENT_WINDOW_MS } from './moments.js'
-import { RESCUE_HOLD_MS } from './penjara.js'
+import { reelPulledThisStay, RESCUE_HOLD_MS } from './penjara.js'
 import { isOut, undoableCatchId } from './players.js'
 import { POWER_NAME } from './powerNames.js'
 import { activeShield, decoySpot, flareBlocked, SHIELD_MS, slotBusy } from './powerups.js'
@@ -172,6 +172,12 @@ export interface View {
    * still while paused), and who joined it. Null when none is going.
    */
   rescue: { by: string; byName: string; endsAt: number; joiners: string[] } | null
+  /**
+   * The Penjara reel (§2.2), for a jailed runner only (null for everyone else): whether this stay's one pull is
+   * spent. A spent pull that left them jailed was black, so `result` is 'black' then; null before the pull. A free
+   * pull frees them, so it never shows here.
+   */
+  reel: { pulled: boolean; result: 'free' | 'black' | null } | null
   /**
    * The organiser only: exactly where the stash is (null if none), and who claimed it. Left out of players' and
    * marshals' views entirely, so not even the key's name reaches their phones (rules doc §9b).
@@ -625,6 +631,13 @@ function settleFor(i: ViewInput, phase: Phase): View['settle'] {
   return { canFreeSelf: !i.me.freed_once, options }
 }
 
+/** The reel for the jailed runner: spent this stay or not. */
+function reelFor(i: ViewInput): View['reel'] {
+  if (i.me.role !== 'runner' || !i.me.jailed) return null
+  const pulled = reelPulledThisStay(i.me)
+  return { pulled, result: pulled ? 'black' : null }
+}
+
 /** The live rescue as players see it: its end moves later while the game is paused, as resuming will move it. */
 function rescueFor(i: ViewInput, phase: Phase): View['rescue'] {
   const r = i.game.rescue
@@ -728,6 +741,8 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
         'Catch them in 10 s and nobody gets out.',
         'chaser',
       )
+    case 'reel-free':
+      return plain(`${actor?.name ?? String(e.data.who ?? 'A Dikejar')} pulled the free slot. Keluar penjara!`)
     case 'rescue-failed':
       return two(
         'Rescue failed. Nobody gets out.',
@@ -779,6 +794,8 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       return target && actor ? `${tagLabel(target)} caught by ${actor.name}` : 'A runner was caught'
     case 'jailbreak':
       return `Jailbreak! ${Number(e.data.freed ?? 0)} Dikejar free.`
+    case 'reel-free':
+      return `${actor?.name ?? String(e.data.who ?? 'A Dikejar')} pulled the free slot. Keluar penjara!`
     case 'ended':
       return 'Game over'
     case 'powerup':
@@ -817,7 +834,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, settle: null, rescue: null, datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, kit: undefined, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, settle: null, rescue: null, reel: null, datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, kit: undefined, reports: [], ratings: [] }
   }
   return v
 }
@@ -944,6 +961,7 @@ function fullView(i: ViewInput): View {
     bomohZone: bomohZoneFor(i, phase),
     settle: settleFor(i, phase),
     rescue: rescueFor(i, phase),
+    reel: reelFor(i),
     // The stash and the card go only to the organiser, who prints and hides it (ruling R15). Marshals are the
     // helper, and never see either (rules doc §9b).
     ...(organiser

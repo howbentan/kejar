@@ -19,11 +19,11 @@ import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
 import { isOut, undoableCatchId } from '../../shared/players.js'
-import { judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
+import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
 import { bomohCodeFromQr, datoCodeFromQr, isBomohQr, isDatoQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
-import { RESCUE_HOLD_MS, rescueVerdict } from '../../shared/penjara.js'
+import { pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
 import { validateTeams } from '../../shared/teams.js'
@@ -802,6 +802,7 @@ const join: Action = async (ctx, body) => {
     jailed: false,
     freed_once: false,
     freed_at: null,
+    reel_pulled_at: null,
     push: null,
     removed_at: null,
     outside: false,
@@ -916,6 +917,7 @@ const state: Action = async (ctx, body) => {
       jailed: false,
       freed_once: false,
       freed_at: null,
+      reel_pulled_at: null,
       push: (game as GameRow).host_push ?? null,
       removed_at: null,
       outside: false,
@@ -1164,6 +1166,37 @@ const jailbreak: Action = async (ctx, body) => {
 }
 
 /**
+ * The Penjara reel (§2.2): a jailed runner at Penjara pulls once per stay. The server picks the slot (one in ten is
+ * free, none once the escape is used) and the phone only animates to it. The pull is spent first, atomically, so a
+ * double tap or two phones pull once. A free slot frees the runner like a jailbreak, so a pending final whistle is
+ * called off; a black slot changes nothing and posts nothing.
+ */
+const pullReel: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  if (me.disqualified_at) return { ok: false, reason: 'disqualified' }
+  await recordScanLocation(ctx, game, me, body)
+  await advance(ctx, game)
+  const fresh = (await loadGame(ctx, body)) as Game
+  if (fresh.paused_at) return { ok: false, reason: 'paused' }
+  if (phaseAt(fresh, ctx.now).phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
+  const current = (await ctx.store.players(game.id)).find((p) => p.id === me.id)
+  if (!current || current.role !== 'runner' || !current.jailed) return { ok: false, reason: 'not-jailed' }
+  if (reelPulledThisStay(current)) return { ok: false, reason: 'already-pulled' }
+  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
+  if (!atJail(latest(positions[me.id]), game.arena.jail, ctx.now)) return { ok: false, reason: 'too-far-from-jail' }
+  if (!(await ctx.store.pullReel(me.id, iso(ctx.now)))) return { ok: false, reason: 'already-pulled' }
+  const result = pickReel(ctx.rng, current.freed_once)
+  if (result === 'free') {
+    await ctx.store.updatePlayers([{ id: me.id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now), out_warned_at: null } }])
+    await ctx.store.addEvent({ game_id: game.id, type: 'reel-free', actor_id: me.id, target_id: null, data: { who: who(me) } })
+    // Someone is free again: no final whistle (advance would call it off too, on the next poll).
+    if (fresh.final_whistle_at) await callOffWhistle(ctx, fresh)
+  }
+  return { ok: true, result }
+}
+
+/**
  * Settle (jail design §4b, §4d): the jailed Dato Seri holder scans the Penjara code and picks up to 2 jailed
  * friends. Frees whoever is eligible exactly as a jailbreak does. The card is spent first, atomically, so a
  * double tap settles once, and given back if the freeing fails. Visible to everyone, without naming the card.
@@ -1303,6 +1336,7 @@ const redeemMarshalInvite: Action = async (ctx, body) => {
     jailed: false,
     freed_once: false,
     freed_at: null,
+    reel_pulled_at: null,
     push: null,
     removed_at: null,
     outside: false,
@@ -2136,6 +2170,7 @@ export const actions = {
   location,
   catch: catchAction,
   jailbreak,
+  pullReel,
   settle,
   subscribe,
   claim,

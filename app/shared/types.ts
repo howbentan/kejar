@@ -191,6 +191,8 @@ export interface Player {
   freed_once: boolean
   /** When this runner was last released from Penjara (ISO), or null if never. */
   freed_at: string | null
+  /** When this runner last pulled the Penjara reel (ISO), or null. One pull per jail stay: a pull older than `caught_at` is spent. */
+  reel_pulled_at: string | null
   push: PushSubscriptionJSON | null
   /** Set when a marshal removed this player from the game. */
   removed_at: string | null
@@ -259,6 +261,8 @@ export type EventType =
   | 'rescue-started'
   /** The rescuer was caught, went out, or left Penjara during the hold: nobody gets out. actor: the rescuer. data: {} */
   | 'rescue-failed'
+  /** A jailed runner landed on the reel's free slot and walked out. actor: the runner. data: { who } */
+  | 'reel-free'
 
 export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along' | 'grab' | 'dato'
 

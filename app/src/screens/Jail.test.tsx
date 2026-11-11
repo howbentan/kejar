@@ -242,6 +242,29 @@ describe('Jail', () => {
     }
   })
 
+  it('the reel shows only once the runner has arrived at Penjara', () => {
+    let arrive: (p: unknown) => void = () => {}
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: { watchPosition: (ok: (p: unknown) => void) => ((arrive = ok), 1), clearWatch: () => {} },
+    })
+    try {
+      render(<Jail code="ABC234" view={{ ...caught(60_000), reel: { pulled: false, result: null } }} />)
+      expect(screen.queryByText('Your pull.')).toBeNull()
+      act(() => arrive({ coords: { latitude: 3.01, longitude: 101 } })) // ~1.1 km away
+      expect(screen.queryByText('Your pull.')).toBeNull()
+      act(() => arrive({ coords: { latitude: 3, longitude: 101 } }))
+      expect(screen.getByText('Your pull.')).toBeInTheDocument()
+    } finally {
+      Object.defineProperty(navigator, 'geolocation', { configurable: true, value: undefined })
+    }
+  })
+
+  it('no reel without a view of one (not jailed this stay)', () => {
+    render(<Jail code="ABC234" view={caught(60_000)} />)
+    expect(screen.queryByText('Your pull.')).toBeNull()
+  })
+
   it('already broken out once: says they stay this time', () => {
     render(<Jail code="ABC234" view={caught(60_000, { freed_once: true })} />)
     expect(screen.getByText('You’ve already been broken out once, so you stay in Penjara this time.')).toBeInTheDocument()

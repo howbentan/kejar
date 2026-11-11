@@ -100,4 +100,26 @@ $$;
 revoke execute on function resume_game(uuid, timestamptz) from public, anon, authenticated;
 grant execute on function resume_game(uuid, timestamptz) to service_role;
 
+-- 2. The Penjara reel (§2.2). A jailed runner at Penjara gets one pull per jail stay: reel_pulled_at records it, and a
+-- pull older than the latest catch (caught_at) is spent, so a fresh catch allows a new one.
+alter table players add column if not exists reel_pulled_at timestamptz;
+
+-- Spends the pull only if the player is jailed and hasn't pulled since they were caught. True iff this call spent
+-- it, so two phones (or two taps) pull once.
+create or replace function pull_reel(p_player uuid, p_at timestamptz) returns boolean
+language plpgsql
+as $$
+begin
+  update players
+     set reel_pulled_at = p_at
+   where id = p_player
+     and jailed
+     and (reel_pulled_at is null or reel_pulled_at < caught_at);
+  return found;
+end;
+$$;
+
+revoke execute on function pull_reel(uuid, timestamptz) from public, anon, authenticated;
+grant execute on function pull_reel(uuid, timestamptz) to service_role;
+
 commit;

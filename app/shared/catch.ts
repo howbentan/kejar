@@ -113,7 +113,7 @@ export function judgeJailbreak(i: {
 }
 
 /** At Penjara: a fix within `JAIL_FRESH_MS`, within `JAIL_RADIUS_M` plus its GPS error (capped). */
-function atJail(p: Position | null, jail: LatLng, now: number): boolean {
+export function atJail(p: Position | null, jail: LatLng, now: number): boolean {
   return !!p && now - Date.parse(p.at) <= JAIL_FRESH_MS && distanceM(p, jail) <= JAIL_RADIUS_M + slack(p)
 }
 

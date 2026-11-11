@@ -499,5 +499,39 @@ select.input option { background: #141614; color: var(--white); }
 .settle-list label { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--hair); border-radius: 12px; }
 .settle-list label.off { opacity: 0.45; }
 .settle-list input { accent-color: var(--legendary-2); width: 18px; height: 18px; }
+
+/* The Penjara reel (jail design §3a): a lime window of ten cards, one lime and nine black, a lever underneath. */
+.reel-machine { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+.reel-top { display: flex; justify-content: space-between; align-items: center; }
+.reel-title { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.05em; }
+.reel-mute { background: transparent; border: 1px solid var(--hair); color: inherit; border-radius: 999px; padding: 4px 10px; font: 600 11px var(--font); cursor: pointer; }
+.reel-win { position: relative; height: 150px; border-radius: 18px; border: 2px solid var(--volt); background: #141614; overflow: hidden; }
+.reel-win::before, .reel-win::after { content: ''; position: absolute; left: 0; right: 0; height: 34px; z-index: 2; pointer-events: none; }
+.reel-win::before { top: 0; background: linear-gradient(#141614, transparent); }
+.reel-win::after { bottom: 0; background: linear-gradient(transparent, #141614); }
+.reel-strip { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
+.reel-card { height: 150px; background: #0A0A0B; border-bottom: 1px solid #1d1f1d; }
+.reel-card.lime { background: var(--volt); }
+.reel-mark { position: absolute; left: -2px; right: -2px; top: 50%; height: 0; z-index: 3; }
+.reel-mark::before, .reel-mark::after { content: ''; position: absolute; top: -7px; border: 7px solid transparent; }
+.reel-mark::before { left: 0; border-left-color: var(--volt); }
+.reel-mark::after { right: 0; border-right-color: var(--volt); }
+.reel-flash { position: absolute; inset: 0; z-index: 4; background: var(--volt); pointer-events: none; animation: reel-flash 0.6s ease-out forwards; }
+@keyframes reel-flash { from { opacity: 0.85; } to { opacity: 0; } }
+.reel-lever { align-self: center; width: 150px; height: 104px; position: relative; padding: 0; border: 0; background: transparent; cursor: grab; touch-action: none; }
+.reel-lever:disabled { cursor: default; }
+.reel-lever.spent { opacity: 0.45; }
+.reel-track { position: absolute; left: 50%; top: 6px; bottom: 6px; width: 10px; transform: translateX(-50%); border-radius: 5px; background: #141614; border: 1px solid #333; }
+.reel-handle { position: absolute; left: 0; right: 0; top: 0; height: 36px; border-radius: 12px; background: var(--volt); color: #0A0A0B; display: grid; place-items: center; box-shadow: 0 4px 0 #7da522; transition: top 0.5s cubic-bezier(0.2, 1.6, 0.4, 1); }
+.reel-handle i { display: flex; gap: 5px; }
+.reel-handle i b { width: 4px; height: 18px; background: #0A0A0B; border-radius: 1px; display: block; }
+.reel-hint { margin: 0; text-align: center; font: 500 10px var(--mono); letter-spacing: 0.15em; color: var(--volt); }
+.reel-out { border-radius: 16px; padding: 12px; background: #141614; border: 1px solid var(--hair); font-size: 14px; }
+.reel-out p { margin: 0; }
+.reel-out.free { background: var(--volt); color: #0A0A0B; border-color: var(--volt); }
+.reel-k { font: 500 10px var(--mono); letter-spacing: 0.2em; margin-bottom: 4px !important; }
+.reel-machine.shake { animation: reel-shake 0.3s ease-in-out; }
+@keyframes reel-shake { 25% { transform: translateY(-3px); } 75% { transform: translateY(2px); } }
+@media (prefers-reduced-motion: reduce) { .reel-machine.shake, .reel-flash { animation: none; } .reel-flash { opacity: 0; } .reel-handle { transition: none; } }
 .btn.btn-legendary { background: var(--legendary-2); color: var(--legendary-ink); border-color: var(--legendary-3); }
 .btn.btn-bomoh { background: var(--bomoh-2); color: var(--bomoh-ink); border-color: var(--bomoh-3); }

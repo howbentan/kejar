@@ -34,3 +34,21 @@ export function rescueVerdict(i: {
   if (away) return 'failed'
   return i.now >= endsAt ? 'success' : 'holding'
 }
+
+/** The Penjara reel's slots (rules §9a): nine black and one lime free slot. */
+export const REEL_SLOTS = 10
+
+/** True once this runner has pulled the reel during their current jail stay (a pull older than their catch is spent). */
+export function reelPulledThisStay(p: Pick<Player, 'reel_pulled_at' | 'caught_at'>): boolean {
+  if (!p.reel_pulled_at) return false
+  return !p.caught_at || Date.parse(p.reel_pulled_at) >= Date.parse(p.caught_at)
+}
+
+/**
+ * Where one pull of the reel lands. The server picks; the phone only animates to it. One slot in `REEL_SLOTS` is
+ * free, except for a runner who has used their one escape: their reel is all black.
+ */
+export function pickReel(rng: () => number, freedOnce: boolean): 'free' | 'black' {
+  if (freedOnce) return 'black'
+  return Math.floor(rng() * REEL_SLOTS) === 0 ? 'free' : 'black'
+}

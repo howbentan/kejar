@@ -46,6 +46,7 @@ const newPlayer = (gameId: string, name: string) =>
     removed_at: null,
     outside: false,
     left_start: false,
+    reel_pulled_at: null,
     token_hash: `t-${name}`,
   })
 
@@ -778,5 +779,35 @@ describe('wiping a game', () => {
     const body = sql.slice(sql.indexOf('function wipe_game'))
     const listed = [...body.matchAll(/array\[([^\]]+)\]/g)].flatMap((m) => [...m[1].matchAll(/'([^']+)'/g)].map((k) => k[1]))
     expect([...listed].sort()).toEqual([...WIPE_EVENT_KEYS].sort())
+  })
+})
+
+describe('MemoryStore.pullReel', () => {
+  it('two concurrent pulls give one true', async () => {
+    const g = await startedGame()
+    const p = await newPlayer(g.id, 'Aina')
+    await store.catchRunner(p.id, 'c1')
+    now += MIN
+    const results = await Promise.all([store.pullReel(p.id, iso(now)), store.pullReel(p.id, iso(now))])
+    expect(results.filter(Boolean)).toHaveLength(1)
+    expect((await store.players(g.id))[0].reel_pulled_at).toBe(iso(now))
+  })
+
+  it('refuses a runner who is not jailed', async () => {
+    const g = await startedGame()
+    const p = await newPlayer(g.id, 'Aina')
+    expect(await store.pullReel(p.id, iso(now))).toBe(false)
+  })
+
+  it('allows a new pull after a fresh catch', async () => {
+    const g = await startedGame()
+    const p = await newPlayer(g.id, 'Aina')
+    await store.catchRunner(p.id, 'c1')
+    now += MIN
+    expect(await store.pullReel(p.id, iso(now))).toBe(true)
+    await store.updatePlayers([{ id: p.id, patch: { jailed: false } }])
+    now += MIN
+    await store.catchRunner(p.id, 'c1')
+    expect(await store.pullReel(p.id, iso(now))).toBe(true)
   })
 })

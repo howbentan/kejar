@@ -158,7 +158,7 @@ describe('lobby cap, location gap and accuracy', () => {
       const p = await store.addPlayer({
         game_id: gameId, name: `P${i}`, role: null, tag_id: null, accepted_at: new Date(now).toISOString(),
         caught_at: null, caught_by: null, jailed: false, freed_once: false, freed_at: null, push: null,
-        removed_at: null, outside: false, left_start: false, token_hash: `h${i}`,
+        removed_at: null, outside: false, left_start: false, reel_pulled_at: null, token_hash: `h${i}`,
       })
       ids.push(p.id)
     }
@@ -4927,5 +4927,101 @@ describe('wiping personal data 30 days after a game', () => {
       throw new Error('db down')
     }
     expect(await run('listArenas', { organiserToken: g.organiserToken })).toMatchObject({ arenas: [] })
+  })
+})
+
+describe('the Penjara reel', () => {
+  /** Ben chases; Aina #07 is in Penjara, Hafiz #03 is free. In the chase at +7 min. */
+  async function jailedAina() {
+    const g = await readyGame({ mode: 'full' })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    const gameId = (await store.gameByCode(g.code))!.id
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: true, caught_at: new Date(now).toISOString(), caught_by: g.ben.playerId } }])
+    return { ...g, gameId }
+  }
+  type G = Awaited<ReturnType<typeof jailedAina>>
+  /** The reel's lever pulled with a fixed roll: 0 lands on the free slot, 0.99 on a black one. */
+  const pull = (g: G, token: string, roll: number, extra: object = at(10)) =>
+    actions.pullReel({ store, now, rng: () => roll, push: async () => {}, fetchJson: async () => ({}) }, { code: g.code, token, ...extra }) as Promise<any>
+  const FREE = 0
+  const BLACK = 0.99
+  const aina = async (g: G) => (await store.players(g.gameId)).find((p) => p.id === g.aina.playerId)!
+  const events = async (g: G, type: string) => (await store.events(g.gameId)).filter((e) => e.type === type)
+
+  it('a pull away from Penjara is refused and does not spend the pull', async () => {
+    const g = await jailedAina()
+    expect(await pull(g, g.aina.token, FREE, at(500))).toEqual({ ok: false, reason: 'too-far-from-jail' })
+    expect(await pull(g, g.aina.token, FREE, {})).toEqual({ ok: false, reason: 'too-far-from-jail' })
+    expect((await aina(g)).reel_pulled_at).toBeNull()
+    expect(await pull(g, g.aina.token, BLACK)).toEqual({ ok: true, result: 'black' })
+  })
+
+  it('a runner who is not jailed cannot pull', async () => {
+    const g = await jailedAina()
+    expect(await pull(g, g.hafiz.token, FREE)).toEqual({ ok: false, reason: 'not-jailed' })
+    expect(await pull(g, g.ben.token, FREE)).toEqual({ ok: false, reason: 'not-jailed' })
+  })
+
+  it('allows one pull per stay', async () => {
+    const g = await jailedAina()
+    expect(await pull(g, g.aina.token, BLACK)).toEqual({ ok: true, result: 'black' })
+    expect(await pull(g, g.aina.token, FREE)).toEqual({ ok: false, reason: 'already-pulled' })
+    expect((await aina(g)).jailed).toBe(true)
+  })
+
+  it('a fresh catch allows a new pull', async () => {
+    const g = await jailedAina()
+    expect(await pull(g, g.aina.token, BLACK)).toMatchObject({ ok: true })
+    now += MIN
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: false, caught_at: null } }])
+    await store.catchRunner(g.aina.playerId, g.ben.playerId)
+    expect(await pull(g, g.aina.token, BLACK)).toEqual({ ok: true, result: 'black' })
+  })
+
+  it('the free slot frees the runner, spends the escape and posts the feed line', async () => {
+    const g = await jailedAina()
+    expect(await pull(g, g.aina.token, FREE)).toEqual({ ok: true, result: 'free' })
+    expect(await aina(g)).toMatchObject({ jailed: false, freed_once: true, freed_at: new Date(now).toISOString(), out_warned_at: null })
+    expect(await events(g, 'reel-free')).toMatchObject([{ actor_id: g.aina.playerId, data: { who: 'Aina #07' } }])
+    const v = await run<View>('state', { code: g.code, token: g.ben.token })
+    expect(v.feed[0].text).toBe('Aina pulled the free slot. Keluar penjara!')
+  })
+
+  it('a black slot posts nothing', async () => {
+    const g = await jailedAina()
+    expect(await pull(g, g.aina.token, BLACK)).toEqual({ ok: true, result: 'black' })
+    expect(await events(g, 'reel-free')).toEqual([])
+    expect((await aina(g)).jailed).toBe(true)
+  })
+
+  it('a runner whose escape is used can pull but never wins (Review Focus 4)', async () => {
+    const g = await jailedAina()
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { freed_once: true } }])
+    expect(await pull(g, g.aina.token, FREE)).toEqual({ ok: true, result: 'black' })
+    expect((await aina(g)).jailed).toBe(true)
+  })
+
+  it('the jailed runner sees whether they have pulled', async () => {
+    const g = await jailedAina()
+    expect((await run<View>('state', { code: g.code, token: g.aina.token })).reel).toEqual({ pulled: false, result: null })
+    await pull(g, g.aina.token, BLACK)
+    expect((await run<View>('state', { code: g.code, token: g.aina.token })).reel).toEqual({ pulled: true, result: 'black' })
+    expect((await run<View>('state', { code: g.code, token: g.hafiz.token })).reel).toBeNull()
+  })
+
+  it('is refused while the game is paused', async () => {
+    const g = await jailedAina()
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    expect(await pull(g, g.aina.token, FREE)).toEqual({ ok: false, reason: 'paused' })
+  })
+
+  it('freeing the last free runner calls off a pending final whistle', async () => {
+    const g = await jailedAina()
+    await store.updatePlayers([{ id: g.hafiz.playerId, patch: { jailed: true, caught_at: new Date(now).toISOString(), caught_by: g.ben.playerId } }])
+    await store.claimFinalWhistle(g.gameId, new Date(now).toISOString())
+    expect(await pull(g, g.aina.token, FREE)).toEqual({ ok: true, result: 'free' })
+    expect((await store.gameByCode(g.code))!.final_whistle_at).toBeNull()
   })
 })

@@ -51,6 +51,7 @@ export function player(id: string, role: Role | null, over: Partial<Player> = {}
     removed_at: null,
     outside: false,
     left_start: false,
+    reel_pulled_at: null,
     ...over,
   }
 }

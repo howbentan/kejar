@@ -110,6 +110,11 @@ export interface GameStore {
    * hasn't ended. True for the first caller.
    */
   startRescue(gameId: string, by: string, atIso: string): Promise<boolean>
+  /**
+   * Spends a jailed runner's one reel pull for this stay: sets `reel_pulled_at` only if they are jailed and haven't
+   * pulled since they were last caught. True for the first caller.
+   */
+  pullReel(playerId: string, atIso: string): Promise<boolean>
   /** Clears the live rescue only if it is still the one that started at `startedAtIso`. True for the first caller. */
   endRescue(gameId: string, startedAtIso: string): Promise<boolean>
   /** Adds a joiner to the live rescue, once; never the rescuer. Does nothing with no rescue. */
@@ -474,6 +479,13 @@ export class MemoryStore implements GameStore {
     const g = this.games.find((x) => x.id === gameId)
     if (!g || g.ended_at || g.rescue) return false
     g.rescue = { by, startedAt: atIso, joiners: [] }
+    return true
+  }
+  async pullReel(playerId: string, atIso: string) {
+    const p = this.playerRows.find((x) => x.id === playerId)
+    if (!p || !p.jailed) return false
+    if (p.reel_pulled_at && !(p.caught_at && Date.parse(p.reel_pulled_at) < Date.parse(p.caught_at))) return false
+    p.reel_pulled_at = atIso
     return true
   }
   async endRescue(gameId: string, startedAtIso: string) {
