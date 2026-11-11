@@ -108,7 +108,7 @@ const label = (text: string) => (
   </p>
 )
 
-/** One legendary card's setting: a coloured block with its title, an Off / Hidden stash choice and a line on what it does. */
+/** One legendary card's setting: a coloured block with its title, an Off / On choice and a line on what it does. */
 function Legendary(props: {
   tone: 'yellow' | 'purple'
   art: ReactNode
@@ -602,13 +602,13 @@ export default function HostNew() {
                     value={settings.legendaries.dato}
                     options={[
                       { value: 'off', text: 'Off' },
-                      { value: 'stash', text: 'Hidden stash' },
+                      { value: 'stash', text: 'On' },
                     ]}
                     onChange={(v) => set({ legendaries: { ...settings.legendaries, dato: v } })}
                     on={{ background: 'var(--legendary-2)', color: 'var(--legendary-ink)' }}
                   />
                 }
-                say="You hide a QR card. The first runner to find it can free themselves and 2 friends from Penjara."
+                say="A hidden QR card. The runner who finds it can free themselves and 2 more from Penjara. You'll hide it during the walk."
               />
               <Legendary
                 tone="purple"
@@ -621,13 +621,13 @@ export default function HostNew() {
                     value={settings.legendaries.bomoh}
                     options={[
                       { value: 'off', text: 'Off' },
-                      { value: 'stash', text: 'Hidden stash' },
+                      { value: 'stash', text: 'On' },
                     ]}
                     onChange={(v) => set({ legendaries: { ...settings.legendaries, bomoh: v } })}
                     on={{ background: 'var(--bomoh-2)', color: 'var(--bomoh-ink)' }}
                   />
                 }
-                say="You hide a second QR card. The first chaser to find it shows every free runner's exact spot to all Kejar for the next 2 pings."
+                say="A hidden QR card. The chaser who finds it shows every runner to Kejar for 2 pings. You'll hide it during the walk."
               />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                 <span>Dikejar can see Kejar at check-in</span>

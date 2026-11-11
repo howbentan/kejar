@@ -276,9 +276,9 @@ describe('HostNew step 3, how long', () => {
     expect(screen.getByText('LEGENDARY CARDS · SECRET FROM PLAYERS')).toBeInTheDocument()
     expect(screen.getByText('FOR DIKEJAR · YELLOW')).toBeInTheDocument()
     expect(screen.getByText('FOR KEJAR · PURPLE')).toBeInTheDocument()
-    expect(screen.getByText('You hide a QR card. The first runner to find it can free themselves and 2 friends from Penjara.')).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Dato Seri: Hidden stash' })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByRole('radio', { name: 'Bomoh: Hidden stash' })).toBeEnabled()
+    expect(screen.getByText("A hidden QR card. The runner who finds it can free themselves and 2 more from Penjara. You'll hide it during the walk.")).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Dato Seri: On' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'Bomoh: On' })).toBeEnabled()
     expect(screen.getByRole('radio', { name: 'Bomoh: Off' })).toHaveAttribute('aria-checked', 'true')
     createGame()
     await waitFor(() =>
@@ -299,9 +299,9 @@ describe('HostNew step 3, how long', () => {
     await toStep3('Full')
     expect(screen.queryByText('NOT BUILT YET')).not.toBeInTheDocument()
     expect(
-      screen.getByText("You hide a second QR card. The first chaser to find it shows every free runner's exact spot to all Kejar for the next 2 pings."),
+      screen.getByText("A hidden QR card. The chaser who finds it shows every runner to Kejar for 2 pings. You'll hide it during the walk."),
     ).toBeInTheDocument()
-    const stash = screen.getByRole('radio', { name: 'Bomoh: Hidden stash' })
+    const stash = screen.getByRole('radio', { name: 'Bomoh: On' })
     expect(stash).toBeEnabled()
     fireEvent.click(stash)
     expect(stash).toHaveAttribute('aria-checked', 'true')
