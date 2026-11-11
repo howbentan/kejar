@@ -4,6 +4,7 @@ import AlertsCard from '../game/AlertsCard'
 import Marker from '../game/Marker'
 import PenjaraArrival from '../game/PenjaraArrival'
 import PenjaraTicket from '../game/PenjaraTicket'
+import RescueBanner from '../game/RescueBanner'
 import SettlePanel from '../game/SettlePanel'
 import Stamp from '../game/Stamp'
 import { WalkGuide } from '../game/WalkGuide'
@@ -72,6 +73,7 @@ function AutoJailed({ code, view }: { code: string; view: View }) {
         {outForGood ? 'You were already freed once, so you stay in Penjara until the end. Watch the chase from here.' : lineFor(view.me.id)}
       </p>
       {view.jailCheckins && view.jailCheckins.length > 0 && <CheckinRow checkins={view.jailCheckins} />}
+      {view.me.jailed && !view.me.freed_once && <RescueBanner view={view} />}
       <PenjaraTicket
         playerId={view.me.id}
         variant={{ kind: 'auto', lastSeenMs: lastOk?.at ?? null }}
@@ -162,6 +164,7 @@ function Caught({ code, view }: { code: string; view: View }) {
           ? 'You’ve already been broken out once, so you stay in Penjara this time.'
           : 'A free runner can still break you out, but only once. A marshal will give your tag back.'}
       </p>
+      {view.me.jailed && !view.me.freed_once && <RescueBanner view={view} />}
       <PenjaraTicket
         playerId={view.me.id}
         variant={{ kind: 'catch', caughtBy: view.caughtBy ?? 'a chaser', caughtAtMs: view.me.caught_at ? Date.parse(view.me.caught_at) : null }}

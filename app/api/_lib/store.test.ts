@@ -24,6 +24,7 @@ async function startedGame(code = 'ABC234') {
     paused_at: null,
     pauses: [],
     final_whistle_at: null,
+    rescue: null,
     wiped_at: null,
     organiser_id: 'test-organiser',
   })
@@ -230,6 +231,45 @@ describe('MemoryStore safety methods', () => {
     expect(await store.claimFinalWhistle(g.id, iso(T0 + 3 * MIN))).toBe(false)
   })
 
+  it('startRescue is true for only one of two calls, and endRescue needs the right startedAt', async () => {
+    const g = await startedGame()
+    const results = await Promise.all([store.startRescue(g.id, 'p1', iso(T0 + MIN)), store.startRescue(g.id, 'p2', iso(T0 + MIN))])
+    expect(results.filter(Boolean)).toHaveLength(1)
+    expect((await store.gameByCode('ABC234'))!.rescue).toEqual({ by: 'p1', startedAt: iso(T0 + MIN), joiners: [] })
+    expect(await store.endRescue(g.id, iso(T0 + 2 * MIN))).toBe(false)
+    expect((await store.gameByCode('ABC234'))!.rescue).not.toBeNull()
+    expect(await store.endRescue(g.id, iso(T0 + MIN))).toBe(true)
+    expect((await store.gameByCode('ABC234'))!.rescue).toBeNull()
+    expect(await store.endRescue(g.id, iso(T0 + MIN))).toBe(false)
+  })
+
+  it('joinRescue adds each joiner once, never the rescuer, and does nothing with no rescue', async () => {
+    const g = await startedGame()
+    await store.joinRescue(g.id, 'p2')
+    expect((await store.gameByCode('ABC234'))!.rescue ?? null).toBeNull()
+    await store.startRescue(g.id, 'p1', iso(T0))
+    await store.joinRescue(g.id, 'p2')
+    await store.joinRescue(g.id, 'p2')
+    await store.joinRescue(g.id, 'p1')
+    expect((await store.gameByCode('ABC234'))!.rescue).toEqual({ by: 'p1', startedAt: iso(T0), joiners: ['p2'] })
+  })
+
+  it('startRescue refuses an ended game', async () => {
+    const g = await startedGame()
+    await store.claimEnd(g.id, 'runners')
+    expect(await store.startRescue(g.id, 'p1', iso(T0))).toBe(false)
+  })
+
+  it('resumeGame moves a live rescue by the pause, so the hold keeps its time', async () => {
+    const g = await startedGame()
+    await store.startRescue(g.id, 'p1', iso(T0 + MIN))
+    now = T0 + MIN + 4_000
+    await store.pauseGame(g.id)
+    now = T0 + 3 * MIN + 4_000
+    await store.resumeGame(g.id)
+    expect((await store.gameByCode('ABC234'))!.rescue).toEqual({ by: 'p1', startedAt: iso(T0 + 3 * MIN), joiners: [] })
+  })
+
   it('addEvent returns the stored event', async () => {
     const g = await startedGame()
     const e = await store.addEvent({ game_id: g.id, type: 'sos', actor_id: null, target_id: null, data: {} })
@@ -336,6 +376,7 @@ describe('organiser accounts', () => {
       paused_at: null,
       pauses: [],
       final_whistle_at: null,
+      rescue: null,
       wiped_at: null,
       organiser_id: organiser.id,
     })
@@ -371,6 +412,7 @@ describe('organiser accounts', () => {
       paused_at: null,
       pauses: [],
       final_whistle_at: null,
+      rescue: null,
       wiped_at: null,
       organiser_id: organiser.id,
     })

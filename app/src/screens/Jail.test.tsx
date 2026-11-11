@@ -254,3 +254,23 @@ describe('Jail: alerts after New phone', () => {
     expect(screen.getByRole('button', { name: 'Turn on alerts' })).toBeInTheDocument()
   })
 })
+
+describe('a rescue at Penjara (rules §9a)', () => {
+  const rescue = { by: 'r3', byName: 'Hafiz', endsAt: 107_000, joiners: [] }
+  it('tells a jailed runner who is breaking them out, counting down', () => {
+    render(<Jail code="ABC234" view={{ ...caught(60_000), rescue }} />)
+    expect(screen.getByRole('status', { name: 'Rescue' })).toHaveTextContent('Hafiz is breaking you out · 7 s')
+  })
+  it('tells an auto-jailed runner too', () => {
+    const view = testView({ jailReason: 'missed-checkins', jailCheckins: [], rescue })
+    render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true, caught_at: new Date(40_000).toISOString() } }} />)
+    expect(screen.getByText('Hafiz is breaking you out · 7 s')).toBeInTheDocument()
+  })
+  it('says nothing to a runner who already used their one escape, or with no rescue going', () => {
+    render(<Jail code="ABC234" view={{ ...caught(60_000, { freed_once: true }), rescue }} />)
+    expect(screen.queryByText(/breaking you out/)).toBeNull()
+    cleanup()
+    render(<Jail code="ABC234" view={caught(60_000)} />)
+    expect(screen.queryByText(/breaking you out/)).toBeNull()
+  })
+})

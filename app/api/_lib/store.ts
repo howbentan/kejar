@@ -106,6 +106,15 @@ export interface GameStore {
   /** Calls off a pending final whistle (someone is free again). */
   clearFinalWhistle(gameId: string): Promise<void>
   /**
+   * Starts the 10-second rescue (rules §9a) as `{ by, startedAt, joiners: [] }`, only if none is live and the game
+   * hasn't ended. True for the first caller.
+   */
+  startRescue(gameId: string, by: string, atIso: string): Promise<boolean>
+  /** Clears the live rescue only if it is still the one that started at `startedAtIso`. True for the first caller. */
+  endRescue(gameId: string, startedAtIso: string): Promise<boolean>
+  /** Adds a joiner to the live rescue, once; never the rescuer. Does nothing with no rescue. */
+  joinRescue(gameId: string, playerId: string): Promise<void>
+  /**
    * With `minGapMs`, writes nothing and returns false when the player already has a fix newer than that.
    * With `since` (ms) too, only fixes at or after `since` count against the gap, so the first fix inside an
    * open check-in window always lands.
@@ -461,6 +470,24 @@ export class MemoryStore implements GameStore {
     const g = this.games.find((x) => x.id === gameId)
     if (g) g.final_whistle_at = null
   }
+  async startRescue(gameId: string, by: string, atIso: string) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g || g.ended_at || g.rescue) return false
+    g.rescue = { by, startedAt: atIso, joiners: [] }
+    return true
+  }
+  async endRescue(gameId: string, startedAtIso: string) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g?.rescue || g.rescue.startedAt !== startedAtIso) return false
+    g.rescue = null
+    return true
+  }
+  async joinRescue(gameId: string, playerId: string) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g?.rescue || g.rescue.by === playerId || g.rescue.joiners.includes(playerId)) return
+    // A fresh object: gameByCode hands out shallow copies that share the old one.
+    g.rescue = { ...g.rescue, joiners: [...g.rescue.joiners, playerId] }
+  }
   async catchRunner(id: string, by: string | null) {
     const p = this.playerRows.find((x) => x.id === id)
     if (!p || p.jailed || p.disqualified_at) return false
@@ -674,6 +701,11 @@ export class MemoryStore implements GameStore {
     // The 60 s hold freezes with the pause like every other timer (one that blew during the pause counts from now).
     if (g.final_whistle_at) {
       g.final_whistle_at = new Date(Date.parse(g.final_whistle_at) + this.clock() - Math.max(Date.parse(g.final_whistle_at), pausedAt)).toISOString()
+    }
+    // A live rescue's 10 s hold freezes the same way, so it still needs the time it had left (rules §9a).
+    if (g.rescue) {
+      const started = Date.parse(g.rescue.startedAt)
+      g.rescue = { ...g.rescue, startedAt: new Date(started + this.clock() - Math.max(started, pausedAt)).toISOString() }
     }
     for (const p of this.pingRows) {
       if (p.game_id !== gameId || p.revealed) continue

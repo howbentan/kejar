@@ -5,6 +5,7 @@ import { credentials } from '../game/auth'
 import GameMap from '../game/Map'
 import MarshalTools from '../game/MarshalTools'
 import PingRipple from '../game/PingRipple'
+import RescueBanner from '../game/RescueBanner'
 import SosTakeover from '../game/SosTakeover'
 import { useServerNow } from '../game/time'
 import { useWakeLock } from '../game/useWakeLock'
@@ -53,6 +54,7 @@ export default function MarshalLive({ code, view, refresh }: { code: string; vie
           {view.counts.chasers} Kejar
         </span>
       </div>
+      <RescueBanner view={view} />
       <PingRipple role="marshal" lastRevealAt={view.lastRevealAt} now={now} />
       <GameMap arena={view.arena} dots={view.dots} stations={view.stations} pins={pins} height={340} />
       <MarshalTools

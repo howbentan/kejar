@@ -231,3 +231,14 @@ describe('MarshalLive after the game', () => {
     expect(screen.queryByRole('link', { name: 'Play again' })).toBeNull()
   })
 })
+
+describe('MarshalLive: a rescue at Penjara (rules §9a)', () => {
+  it('shows the marshal who is breaking them out, counting down', () => {
+    render(<MarshalLive code="ABC234" view={marshal({ rescue: { by: 'r3', byName: 'Hafiz', endsAt: 107_000, joiners: [] } })} refresh={refresh} />)
+    expect(screen.getByRole('status', { name: 'Rescue' })).toHaveTextContent('Hafiz is breaking you out · 7 s')
+  })
+  it('shows nothing with no rescue going', () => {
+    render(<MarshalLive code="ABC234" view={marshal()} refresh={refresh} />)
+    expect(screen.queryByText(/breaking you out/)).toBeNull()
+  })
+})
