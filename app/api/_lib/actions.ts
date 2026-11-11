@@ -186,12 +186,17 @@ export const LOBBY_HOLD_MS = 24 * 60 * 60_000
 /** A game's personal data is wiped this long after it ends (fair-play §1.8). */
 export const WIPE_AFTER_MS = 30 * 24 * 60 * 60_000
 /** How many expired games one request sweeps, so the wipe stays cheap. */
+/**
+ * A game that never recorded an end (ended_at is written lazily from requests) is wiped this long after it was made. A lobby
+ * holds its card for 24 h and a game runs a couple of hours, so any game this old is certainly over.
+ */
+export const WIPE_UNENDED_AFTER_MS = 32 * 24 * 60 * 60_000
 const WIPE_BATCH = 3
 
 /** Wipes a few expired games. Best effort: it runs on requests that already happen, so an error here is swallowed. */
 async function wipeExpired(ctx: Ctx): Promise<void> {
   try {
-    const ids = await ctx.store.gamesToWipe(iso(ctx.now - WIPE_AFTER_MS), WIPE_BATCH)
+    const ids = await ctx.store.gamesToWipe(iso(ctx.now - WIPE_AFTER_MS), iso(ctx.now - WIPE_UNENDED_AFTER_MS), WIPE_BATCH)
     for (const id of ids) {
       try {
         await ctx.store.wipeGame(id)

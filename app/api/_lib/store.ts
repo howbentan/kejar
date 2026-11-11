@@ -198,8 +198,12 @@ export interface GameStore {
    * wiped_at. Atomic, and false (a no-op) if the game is already wiped.
    */
   wipeGame(id: string): Promise<boolean>
-  /** Ids of up to `limit` games that ended before `endedBeforeIso` and are not wiped yet, oldest first. */
-  gamesToWipe(endedBeforeIso: string, limit: number): Promise<string[]>
+  /**
+   * Ids of up to `limit` unwiped games, oldest first: those that ended before `endedBeforeIso`, plus those with no
+   * ended_at made before `createdBeforeIso` (the end is recorded lazily, so abandoned games never get one).
+   * A game with no created_at (older test data) is never swept by the second rule.
+   */
+  gamesToWipe(endedBeforeIso: string, createdBeforeIso: string, limit: number): Promise<string[]>
   createOrganisation(o: Omit<Organisation, 'id'>): Promise<Organisation>
   createOrganiser(o: Omit<OrganiserRow, 'id'>): Promise<OrganiserRow>
   organiserBySessionTokenHash(hash: string): Promise<OrganiserRow | null>
@@ -338,11 +342,15 @@ export class MemoryStore implements GameStore {
     }
     return true
   }
-  async gamesToWipe(endedBeforeIso: string, limit: number) {
-    const cut = Date.parse(endedBeforeIso)
+  async gamesToWipe(endedBeforeIso: string, createdBeforeIso: string, limit: number) {
+    const endedCut = Date.parse(endedBeforeIso)
+    const createdCut = Date.parse(createdBeforeIso)
+    const since = (g: GameRow) => Date.parse(g.ended_at ?? g.created_at!)
     return this.games
-      .filter((g) => g.ended_at && !g.wiped_at && Date.parse(g.ended_at) < cut)
-      .sort((a, b) => Date.parse(a.ended_at!) - Date.parse(b.ended_at!))
+      .filter((g) =>
+        g.wiped_at ? false : g.ended_at ? Date.parse(g.ended_at) < endedCut : !!g.created_at && Date.parse(g.created_at) < createdCut,
+      )
+      .sort((a, b) => since(a) - since(b))
       .slice(0, limit)
       .map((g) => g.id)
   }

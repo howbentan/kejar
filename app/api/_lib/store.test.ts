@@ -682,12 +682,14 @@ describe('wiping a game', () => {
     const young = await startedGame('YNG234')
     await store.updateGame(young.id, { ended_at: iso(T0 + 20 * MIN) })
     const never = await startedGame('NVR234')
-    expect(await store.gamesToWipe(iso(T0 + 30 * MIN), 5)).toEqual([young.id])
-    expect(await store.gamesToWipe(iso(T0 + 60 * MIN), 5)).toEqual([young.id, old.id])
-    expect(await store.gamesToWipe(iso(T0 + 60 * MIN), 1)).toEqual([young.id])
+    expect(await store.gamesToWipe(iso(T0 + 30 * MIN), iso(T0 - MIN), 5)).toEqual([young.id])
+    expect(await store.gamesToWipe(iso(T0 + 60 * MIN), iso(T0 - MIN), 5)).toEqual([young.id, old.id])
+    expect(await store.gamesToWipe(iso(T0 + 60 * MIN), iso(T0 - MIN), 1)).toEqual([young.id])
     await store.wipeGame(young.id)
-    expect(await store.gamesToWipe(iso(T0 + 60 * MIN), 5)).toEqual([old.id])
-    expect(never.id).toBeTruthy()
+    expect(await store.gamesToWipe(iso(T0 + 60 * MIN), iso(T0 - MIN), 5)).toEqual([old.id])
+    // A game with no end recorded is swept by age since it was made; one made after the cut-off is not.
+    expect(await store.gamesToWipe(iso(T0 + 60 * MIN), iso(T0 + MIN), 5)).toContain(never.id)
+    expect(await store.gamesToWipe(iso(T0 + 60 * MIN), iso(T0 - MIN), 5)).not.toContain(never.id)
   })
 
   it('strips the same event keys in the SQL as in the store', () => {

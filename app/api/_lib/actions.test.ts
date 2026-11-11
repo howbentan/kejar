@@ -4595,9 +4595,28 @@ describe('wiping personal data 30 days after a game', () => {
     expect(await wipedAt(recent.code)).toBeTruthy()
   })
 
-  it('never wipes a game that has not ended', async () => {
+  it('wipes a lobby or started game that never recorded an end once it is 32 days old, not before', async () => {
+    const lobby = await readyGame()
+    const started = await readyGame()
+    await run('start', { code: started.code, organiserToken: started.organiserToken })
+    const young = await readyGame()
+    expect((await store.gameByCode(started.code))!.ended_at).toBeNull()
+    // The three were made at T0; age them by moving the clock, with a different organiser's create as the trigger.
+    now = T0 + 31 * DAY
+    await run('create', { arenaId: 'around-me', center: CENTER, organiserToken: lobby.organiserToken })
+    expect(await wipedAt(lobby.code)).toBeNull()
+    now = T0 + 33 * DAY
+    await run('create', { arenaId: 'around-me', center: CENTER, organiserToken: lobby.organiserToken })
+    expect(await wipedAt(lobby.code)).toBeTruthy()
+    expect(await wipedAt(started.code)).toBeTruthy()
+    expect(await wipedAt(young.code)).toBeTruthy() // also 33 days old, only the batch limit of 3 is in play
+    const gid = (await store.gameByCode(lobby.code))!.id
+    expect((await store.players(gid)).map((p) => p.name).sort()).toEqual(['Dikejar 1', 'Dikejar 2', 'Kejar 1'])
+  })
+
+  it('does not wipe a game that has not ended while it is under 32 days old', async () => {
     const g = await readyGame()
-    now += 100 * DAY
+    now += 20 * DAY
     await run('create', { arenaId: 'around-me', center: CENTER, organiserToken: g.organiserToken })
     expect(await wipedAt(g.code)).toBeNull()
   })

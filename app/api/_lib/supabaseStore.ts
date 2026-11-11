@@ -327,9 +327,16 @@ export class SupabaseStore implements GameStore {
   async wipeGame(id: string) {
     return check(await this.db.rpc('wipe_game', { p_game: id })) === true
   }
-  async gamesToWipe(endedBeforeIso: string, limit: number) {
+  async gamesToWipe(endedBeforeIso: string, createdBeforeIso: string, limit: number) {
+    // Quoted: the timestamps' ':' and '.' are reserved in PostgREST's or-filter syntax.
     const rows = check(
-      await this.db.from('games').select('id').lt('ended_at', endedBeforeIso).is('wiped_at', null).order('ended_at').limit(limit),
+      await this.db
+        .from('games')
+        .select('id')
+        .is('wiped_at', null)
+        .or(`ended_at.lt."${endedBeforeIso}",and(ended_at.is.null,created_at.lt."${createdBeforeIso}")`)
+        .order('created_at')
+        .limit(limit),
     ) as { id: string }[] | null
     return (rows ?? []).map((r) => r.id)
   }

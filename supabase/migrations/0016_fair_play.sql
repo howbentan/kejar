@@ -170,5 +170,7 @@ grant execute on function wipe_game(uuid) to service_role;
 
 -- Finding the games to sweep: ended, not yet wiped, oldest first.
 create index if not exists games_to_wipe on games (ended_at) where wiped_at is null and ended_at is not null;
+-- ...and games that never recorded an end (it is written lazily), swept by age since they were made.
+create index if not exists games_unended_to_wipe on games (created_at) where wiped_at is null and ended_at is null;
 
 commit;
