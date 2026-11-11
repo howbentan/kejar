@@ -128,19 +128,20 @@ export default function CatchTheJ({ paused = false, rand = Math.random, testStar
   const size = geo ? TOY.STICKER * geo.scale : 0
   return (
     <div ref={root} className="toy" data-testid="toy" onPointerDown={onTap}>
+      {/* Always in the page, so the logo is there for screen readers even before the first measure. */}
+      <div
+        ref={logo}
+        className="toy-logo"
+        role="img"
+        aria-label="kejar."
+        style={geo ? { width: logoW, height: logoH, left: (geo.bounds.w - logoW) / 2, top: geo.home.y - (TOY.J_BOX.y0 * logoW) / TOY.FRAME.w } : { opacity: 0 }}
+      >
+        {['k', 'e', 'a', 'r'].map((l) => (
+          <img key={l} src={`/home/letter-${l}.png`} alt="" draggable={false} />
+        ))}
+      </div>
       {geo && (
         <>
-          <div
-            ref={logo}
-            className="toy-logo"
-            role="img"
-            aria-label="kejar."
-            style={{ width: logoW, height: logoH, left: (geo.bounds.w - logoW) / 2, top: geo.home.y - (TOY.J_BOX.y0 * logoW) / TOY.FRAME.w }}
-          >
-            {['k', 'e', 'a', 'r'].map((l) => (
-              <img key={l} src={`/home/letter-${l}.png`} alt="" draggable={false} />
-            ))}
-          </div>
           <div ref={slot} className="toy-slot" style={{ left: geo.home.x - 4, top: geo.home.y - 4, width: geo.jw + 8, height: geo.jh + 8 }} />
           <img ref={jEl} className={`toy-j${sticker ? ' hide' : ''}`} data-testid="toy-j" src="/home/j.png" alt="" draggable={false} style={{ width: geo.jw, height: geo.jh }} />
           {sticker && (
