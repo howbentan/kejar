@@ -319,6 +319,54 @@ describe('organiser accounts', () => {
     expect(first).toEqual({ ok: true, gameId: game.id })
     expect(await store.redeemMarshalInvite('mtok1', 1_500, game.id)).toEqual({ ok: false, reason: 'redeemed' })
   })
+
+  it('two concurrent phone-move redeems: only one wins, and the player keeps the winning token', async () => {
+    const store = new MemoryStore(() => 1_000)
+    const org = await store.createOrganisation({ name: 'kejar.', created_at: new Date(1_000).toISOString() })
+    const organiser = await store.createOrganiser({
+      organisation_id: org.id,
+      name: 'Owner',
+      created_at: new Date(1_000).toISOString(),
+      session_token_hash: 'h',
+      session_created_at: new Date(1_000).toISOString(),
+    })
+    const game = await store.createGame({
+      code: 'ABC234',
+      arena: { id: 'a', name: 'A', boundary: [], jail: { lat: 0, lng: 0 }, start: { lat: 0, lng: 0 } },
+      settings: { lengthMin: 45, hideMin: 5, pingMin: 5, spectatorDelayMin: 2, checkinMode: 'push' },
+      started_at: null,
+      ended_at: null,
+      winner: null,
+      paused_at: null,
+      pauses: [],
+      final_whistle_at: null,
+      organiser_id: organiser.id,
+    })
+    const player = await store.addPlayer({
+      game_id: game.id, name: 'Aina', role: 'runner', tag_id: null, accepted_at: new Date(1_000).toISOString(),
+      caught_at: null, caught_by: null, jailed: false, freed_once: false, freed_at: null,
+      push: { endpoint: 'https://push/Aina' }, removed_at: null, outside: false, left_start: false, token_hash: 'old',
+    })
+    await store.createPhoneMove({
+      game_id: game.id,
+      player_id: player.id,
+      token_hash: 'ptok1',
+      created_at: new Date(1_000).toISOString(),
+      expires_at: new Date(2_000).toISOString(),
+      redeemed_at: null,
+    })
+    const results = await Promise.all([
+      store.redeemPhoneMove('ptok1', 1_500, game.id, 'newA'),
+      store.redeemPhoneMove('ptok1', 1_500, game.id, 'newB'),
+    ])
+    expect(results.filter((r) => r.ok)).toEqual([{ ok: true, playerId: player.id }])
+    expect(results.filter((r) => !r.ok)).toEqual([{ ok: false, reason: 'redeemed' }])
+    const winner = results[0].ok ? 'newA' : 'newB'
+    expect(await store.playerByToken(game.id, 'old')).toBeNull()
+    expect(await store.playerByToken(game.id, winner)).toMatchObject({ id: player.id, push: null })
+    expect(await store.redeemPhoneMove('nope', 1_500, game.id, 'x')).toEqual({ ok: false, reason: 'invalid' })
+    expect(await store.redeemPhoneMove('ptok1', 2_500, game.id, 'x')).toEqual({ ok: false, reason: 'redeemed' })
+  })
 })
 
 describe('saved arenas', () => {

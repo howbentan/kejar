@@ -78,4 +78,54 @@ alter table safety_records drop constraint if exists safety_records_type_check;
 alter table safety_records add constraint safety_records_type_check
   check (type in ('sos', 'report', 'removed', 'auto-jail-undone', 'kejar-undone'));
 
+-- 4. New phone (fair-play §1.7). A marshal or the organiser makes a one-time link that moves a player onto another
+-- phone: redeeming it swaps that player's session token, so the old phone stops working.
+create table if not exists phone_moves (
+  id uuid primary key default gen_random_uuid(),
+  game_id uuid not null references games (id) on delete cascade,
+  player_id uuid not null references players (id) on delete cascade,
+  token_hash text not null unique,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  redeemed_at timestamptz
+);
+alter table phone_moves enable row level security;
+
+-- Claims the move and swaps the player's token in one statement block, so two phones racing for one link can't
+-- both win. A player moved this way has no push subscription until they turn alerts on again on the new phone.
+-- Returns the player id, or a reason: invalid, redeemed or expired.
+create or replace function redeem_phone_move(p_token_hash text, p_now timestamptz, p_game uuid, p_new_token_hash text)
+returns table (out_player uuid, out_reason text)
+language plpgsql
+as $$
+declare
+  mv phone_moves%rowtype;
+begin
+  select * into mv from phone_moves where token_hash = p_token_hash and game_id = p_game for update;
+  if not found then
+    return query select null::uuid, 'invalid'::text;
+    return;
+  end if;
+  if mv.redeemed_at is not null then
+    return query select null::uuid, 'redeemed'::text;
+    return;
+  end if;
+  if p_now >= mv.expires_at then
+    return query select null::uuid, 'expired'::text;
+    return;
+  end if;
+  update phone_moves set redeemed_at = p_now where id = mv.id;
+  update players set token_hash = p_new_token_hash, push = null where id = mv.player_id;
+  return query select mv.player_id, null::text;
+end;
+$$;
+
+revoke execute on function redeem_phone_move(text, timestamptz, uuid, text) from public, anon, authenticated;
+grant execute on function redeem_phone_move(text, timestamptz, uuid, text) to service_role;
+
+-- Each move is kept in safety_records with who made it, so the type check gains a value.
+alter table safety_records drop constraint if exists safety_records_type_check;
+alter table safety_records add constraint safety_records_type_check
+  check (type in ('sos', 'report', 'removed', 'auto-jail-undone', 'kejar-undone', 'phone-move'));
+
 commit;

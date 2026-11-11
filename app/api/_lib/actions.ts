@@ -30,7 +30,7 @@ import { DEFAULT_SETTINGS, type Arena, type BomohStash, type DatoStash, type Gam
 import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
 import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
-import { MARSHAL_INVITE_TTL_MS, ORGANISER_INVITE_TTL_MS } from '../../shared/invites.js'
+import { MARSHAL_INVITE_TTL_MS, ORGANISER_INVITE_TTL_MS, PHONE_MOVE_TTL_MS } from '../../shared/invites.js'
 import { OSM_CACHE_MS, parkFeatures as lookupParkFeatures, searchParks as lookupParks, type FetchJson } from './osm.js'
 import { hashToken, newDatoCode, newToken } from './secrets.js'
 import type { GameRow, GameStore, OrganiserRow, SafetyRecord, SavedArenaRow } from './store.js'
@@ -1232,6 +1232,53 @@ const redeemMarshalInvite: Action = async (ctx, body) => {
   return { token, playerId: p.id }
 }
 
+/**
+ * New phone (fair-play §1.7): a marshal or the organiser makes a one-time link that moves a runner or chaser onto
+ * another phone. Any phase but ended. Redeeming it swaps the player's session token, so the old phone stops working.
+ */
+const createPhoneMove: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const marshal = await requireMarshal(ctx, game, body)
+  if (phaseAt(game, ctx.now).phase === 'ended') throw new ActionError(409, 'The game has ended')
+  const target = (await ctx.store.players(game.id)).find((p) => p.id === str(body.playerId))
+  if (!target || target.removed_at || (target.role !== 'runner' && target.role !== 'chaser')) {
+    throw new ActionError(400, 'Pick a runner or a chaser who is still in the game')
+  }
+  const inviteToken = newToken()
+  await ctx.store.createPhoneMove({
+    game_id: game.id,
+    player_id: target.id,
+    token_hash: hashToken(inviteToken),
+    created_at: iso(ctx.now),
+    expires_at: iso(ctx.now + PHONE_MOVE_TTL_MS),
+    redeemed_at: null,
+  })
+  await ctx.store.addSafetyRecord({
+    game_id: game.id,
+    type: 'phone-move',
+    player_id: marshal?.id ?? null,
+    target_id: target.id,
+    lat: null,
+    lng: null,
+    data: { game_code: game.code, by: await marshalName(ctx, game, body, marshal), target_name: target.name },
+  })
+  return { inviteToken }
+}
+
+const redeemPhoneMove: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const inviteToken = str(body.inviteToken)
+  if (!inviteToken) throw new ActionError(400, 'Missing invite token')
+  const token = newToken()
+  const result = await ctx.store.redeemPhoneMove(hashToken(inviteToken), ctx.now, game.id, hashToken(token))
+  if (!result.ok) {
+    if (result.reason === 'invalid') throw new ActionError(404, 'That invite link is not valid')
+    if (result.reason === 'redeemed') throw new ActionError(410, 'That invite link has already been used')
+    throw new ActionError(410, 'That invite link has expired')
+  }
+  return { token, playerId: result.playerId }
+}
+
 const sideOf = (p: Player): 'runner' | 'chaser' => (p.role === 'chaser' ? 'chaser' : 'runner')
 
 /** The card at a given draw number of a side's shared deck. Games started before decks existed have no sets. */
@@ -2040,6 +2087,8 @@ export const actions = {
   redeemOrganiserInvite,
   createMarshalInvite,
   redeemMarshalInvite,
+  createPhoneMove,
+  redeemPhoneMove,
 } satisfies Record<string, Action>
 
 export type ActionName = keyof typeof actions

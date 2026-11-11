@@ -29,4 +29,8 @@ describe('routeFor', () => {
   it('maps a marshal invite link, uppercasing the code but not the token', () => {
     expect(routeFor('/m/abc234/XyZ-9_tok')).toEqual({ route: 'marshal-redeem', code: 'ABC234', token: 'XyZ-9_tok' })
   })
+
+  it('maps a new-phone link, uppercasing the code but not the token', () => {
+    expect(routeFor('/p/abc234/XyZ-9_tok')).toEqual({ route: 'phone-move', code: 'ABC234', token: 'XyZ-9_tok' })
+  })
 })

@@ -8,6 +8,7 @@ import { bomohQr, datoQr, JAIL_QR, stationQr, tagQr } from '../../shared/ids.js'
 import { seeded } from '../../shared/testing.js'
 import type { PowerUpKind, Role } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
+import { PHONE_MOVE_TTL_MS } from '../../shared/invites.js'
 import { ActionError, actions, MAX_PLAYERS_PER_GAME, STASH_MISS_LIMIT, type ActionName } from './actions.js'
 import { hashToken } from './secrets.js'
 import { MemoryStore } from './store.js'
@@ -4450,5 +4451,106 @@ describe('Undo kejar and the final whistle (fair-play §1.4)', () => {
     expect(await run('jailbreak', { code: g.code, token: g.hafiz.token, qr: JAIL_QR })).toMatchObject({ ok: true })
     expect(await undo(g, id)).toEqual({ ok: false, reason: 'not-undoable' })
     expect(await undo(g, 'no-such-event')).toEqual({ ok: false, reason: 'not-undoable' })
+  })
+})
+
+describe('New phone (fair-play §1.7)', () => {
+  type G = Awaited<ReturnType<typeof safetyGame>>
+  const link = (g: G, playerId: string, who: { token: string } | { organiserToken: string } = { token: g.siti.token }) =>
+    run<{ inviteToken: string }>('createPhoneMove', { code: g.code, playerId, ...who })
+  const row = async (g: G, id: string) => (await store.players(g.gameId)).find((p) => p.id === id)!
+  /** Aina caught by Ben mid-chase, so she is jailed. */
+  async function jailedAina() {
+    const g = await safetyGame()
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7), ...at(0) })
+    return g
+  }
+
+  it('moves a jailed runner mid-chase onto a new token: same player, old token dead, push cleared', async () => {
+    const g = await jailedAina()
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { freed_once: true } }])
+    const before = await run<View>('state', { code: g.code, token: g.aina.token })
+    const { inviteToken } = await link(g, g.aina.playerId)
+    const moved = await run<{ token: string; playerId: string }>('redeemPhoneMove', { code: g.code, inviteToken })
+    expect(moved.playerId).toBe(g.aina.playerId)
+    expect(moved.token).not.toBe(g.aina.token)
+    const after = await run<View>('state', { code: g.code, token: moved.token })
+    expect(after.me.id).toBe(g.aina.playerId)
+    expect(after.me.jailed).toBe(true)
+    expect(after.hand).toEqual(before.hand)
+    expect(await row(g, g.aina.playerId)).toMatchObject({ freed_once: true, jailed: true, push: null })
+    await rejects(run('state', { code: g.code, token: g.aina.token }), 401)
+  })
+
+  it('works for a chaser, and for the organiser as the maker', async () => {
+    const g = await safetyGame()
+    const { inviteToken } = await link(g, g.ben.playerId, { organiserToken: g.organiserToken })
+    const moved = await run<{ token: string; playerId: string }>('redeemPhoneMove', { code: g.code, inviteToken })
+    expect(moved.playerId).toBe(g.ben.playerId)
+    await rejects(run('state', { code: g.code, token: g.ben.token }), 401)
+  })
+
+  it('a link works once: a second redeem is 410 used', async () => {
+    const g = await safetyGame()
+    const { inviteToken } = await link(g, g.aina.playerId)
+    await run('redeemPhoneMove', { code: g.code, inviteToken })
+    await rejects(run('redeemPhoneMove', { code: g.code, inviteToken }), 410, 'already been used')
+  })
+
+  it('a link expires after PHONE_MOVE_TTL_MS: 410 expired, and the old token still works', async () => {
+    const g = await safetyGame()
+    const { inviteToken } = await link(g, g.aina.playerId)
+    now += PHONE_MOVE_TTL_MS
+    await rejects(run('redeemPhoneMove', { code: g.code, inviteToken }), 410, 'expired')
+    expect((await run<View>('state', { code: g.code, token: g.aina.token })).me.id).toBe(g.aina.playerId)
+  })
+
+  it('an unknown or missing link is refused', async () => {
+    const g = await safetyGame()
+    await rejects(run('redeemPhoneMove', { code: g.code, inviteToken: 'nope' }), 404, 'not valid')
+    await rejects(run('redeemPhoneMove', { code: g.code, inviteToken: '' }), 400)
+  })
+
+  it('a link made for one game does not work on another', async () => {
+    const g = await safetyGame()
+    const other = await readyGame()
+    const { inviteToken } = await link(g, g.aina.playerId)
+    await rejects(run('redeemPhoneMove', { code: other.code, inviteToken }), 404)
+  })
+
+  it('a runner cannot make one (403), and a stranger cannot (401)', async () => {
+    const g = await safetyGame()
+    await rejects(link(g, g.hafiz.playerId, { token: g.aina.token }), 403)
+    await rejects(link(g, g.hafiz.playerId, { token: 'bogus' }), 401)
+  })
+
+  it("refuses a marshal's row, an unknown player and a removed player", async () => {
+    const g = await safetyGame()
+    await rejects(link(g, g.siti.playerId), 400)
+    await rejects(link(g, 'no-such-player'), 400)
+    await run('removePlayer', { code: g.code, token: g.siti.token, playerId: g.hafiz.playerId })
+    await rejects(link(g, g.hafiz.playerId), 400)
+  })
+
+  it('works before the game starts, and is refused once it has ended', async () => {
+    const lobby = await readyGame()
+    const made = await run<{ inviteToken: string }>('createPhoneMove', { code: lobby.code, playerId: lobby.aina.playerId, organiserToken: lobby.organiserToken })
+    expect(made.inviteToken).toBeTruthy()
+    const g = await safetyGame()
+    now = T0 + 200 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    await rejects(link(g, g.aina.playerId), 409)
+  })
+
+  it('writes a safety record saying who moved whom', async () => {
+    const g = await safetyGame()
+    await link(g, g.aina.playerId)
+    expect(store.safetyRows.at(-1)).toMatchObject({
+      type: 'phone-move',
+      player_id: g.siti.playerId,
+      target_id: g.aina.playerId,
+      data: { game_code: g.code, by: 'Siti', target_name: 'Aina' },
+    })
   })
 })

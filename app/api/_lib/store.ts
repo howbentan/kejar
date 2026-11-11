@@ -42,6 +42,18 @@ export interface MarshalInviteRow {
   redeemed_at: string | null
 }
 
+export interface PhoneMoveRow {
+  id: string
+  game_id: string
+  player_id: string
+  token_hash: string
+  created_at: string
+  expires_at: string
+  redeemed_at: string | null
+}
+
+export type RedeemPhoneMoveResult = { ok: true; playerId: string } | { ok: false; reason: 'invalid' | 'redeemed' | 'expired' }
+
 export type RedeemInviteResult = { ok: true; organiserId: string } | { ok: false; reason: 'invalid' | 'expired' | 'redeemed' }
 export type RedeemMarshalInviteResult = { ok: true; gameId: string } | { ok: false; reason: 'invalid' | 'expired' | 'redeemed' }
 
@@ -181,6 +193,9 @@ export interface GameStore {
   createMarshalInvite(inv: Omit<MarshalInviteRow, 'id'>): Promise<MarshalInviteRow>
   /** Atomically claims the invite (unredeemed, unexpired at `now`, for this specific game). */
   redeemMarshalInvite(tokenHash: string, now: number, gameId: string): Promise<RedeemMarshalInviteResult>
+  createPhoneMove(row: Omit<PhoneMoveRow, 'id'>): Promise<void>
+  /** Atomically claims the move (unredeemed, unexpired at `now`, this game), swaps that player's token to `newTokenHash` and clears their push. */
+  redeemPhoneMove(tokenHash: string, nowMs: number, gameId: string, newTokenHash: string): Promise<RedeemPhoneMoveResult>
   /** created_at = updated_at = store clock. */
   addArena(r: NewSavedArena): Promise<SavedArenaRow>
   /** updated_at = store clock. */
@@ -214,7 +229,7 @@ export type NewSavedArena = Omit<SavedArenaRow, 'id' | 'created_at' | 'updated_a
 
 export interface SafetyRecord {
   game_id: string
-  type: 'sos' | 'report' | 'removed' | 'auto-jail-undone' | 'kejar-undone'
+  type: 'sos' | 'report' | 'removed' | 'auto-jail-undone' | 'kejar-undone' | 'phone-move'
   player_id: string | null
   target_id: string | null
   lat: number | null
@@ -255,6 +270,7 @@ export class MemoryStore implements GameStore {
   private organiserRows: OrganiserRow[] = []
   private organiserInviteRows: OrganiserInviteRow[] = []
   private marshalInviteRows: MarshalInviteRow[] = []
+  private phoneMoveRows: PhoneMoveRow[] = []
   private arenaRows: SavedArenaRow[] = []
   private osmCacheRows = new Map<string, { body: unknown; fetched_at: number }>()
   private secretCardRows: SecretCard[] = []
@@ -681,6 +697,20 @@ export class MemoryStore implements GameStore {
     if (now >= Date.parse(inv.expires_at)) return { ok: false, reason: 'expired' }
     inv.redeemed_at = new Date(now).toISOString()
     return { ok: true, gameId: inv.game_id }
+  }
+  async createPhoneMove(row: Omit<PhoneMoveRow, 'id'>) {
+    this.phoneMoveRows.push({ ...row, id: this.id('pm') })
+  }
+  async redeemPhoneMove(tokenHash: string, nowMs: number, gameId: string, newTokenHash: string): Promise<RedeemPhoneMoveResult> {
+    // No await between the checks and the writes, so two calls can't both claim the move.
+    const mv = this.phoneMoveRows.find((x) => x.token_hash === tokenHash && x.game_id === gameId)
+    if (!mv) return { ok: false, reason: 'invalid' }
+    if (mv.redeemed_at) return { ok: false, reason: 'redeemed' }
+    if (nowMs >= Date.parse(mv.expires_at)) return { ok: false, reason: 'expired' }
+    mv.redeemed_at = new Date(nowMs).toISOString()
+    const p = this.playerRows.find((x) => x.id === mv.player_id)
+    if (p) Object.assign(p, { token_hash: newTokenHash, push: null })
+    return { ok: true, playerId: mv.player_id }
   }
   async addArena(r: NewSavedArena) {
     const row: SavedArenaRow = { ...r, id: this.id('ar'), created_at: this.nowIso(), updated_at: this.nowIso() }

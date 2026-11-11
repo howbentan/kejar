@@ -152,6 +152,51 @@ describe('MarshalLive Undo kejar', () => {
   })
 })
 
+describe('MarshalLive New phone', () => {
+  const roster = [
+    { id: 'r1', name: 'Aina', role: 'runner' as const, tag_id: 7, jailed: false },
+    { id: 'c1', name: 'Ben', role: 'chaser' as const, tag_id: null, jailed: false },
+    { id: 'm2', name: 'Lee', role: 'marshal' as const, tag_id: null, jailed: false },
+  ]
+  const share = vi.fn()
+  beforeEach(() => {
+    share.mockReset()
+    share.mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'share', { configurable: true, value: share })
+  })
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'share')
+  })
+
+  it('is offered on runner and chaser rows only', () => {
+    render(<MarshalLive code="ABC234" view={organiser({ roster })} refresh={refresh} />)
+    expect(screen.getAllByRole('button', { name: /^New phone/ })).toHaveLength(2)
+  })
+
+  it('makes the link on the first tap, then Send link shares it inside that tap', async () => {
+    call.mockResolvedValue({ inviteToken: 'tk9' })
+    render(<MarshalLive code="ABC234" view={organiser({ roster })} refresh={refresh} />)
+    fireEvent.click(screen.getByRole('button', { name: 'New phone for Aina' }))
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith('createPhoneMove', { code: 'ABC234', organiserToken: 'h1', playerId: 'r1' }),
+    )
+    expect(await screen.findByText("Link ready. Send it to Aina's new phone.")).toBeInTheDocument()
+    expect(share).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Send link' }))
+    // No await before this: the share has to happen synchronously inside the click.
+    expect(share).toHaveBeenCalledTimes(1)
+    expect(share.mock.calls[0][0].text).toContain(`${window.location.origin}/p/ABC234/tk9`)
+  })
+
+  it('shows the error when the link cannot be made', async () => {
+    call.mockRejectedValue(new Error('The game has ended'))
+    render(<MarshalLive code="ABC234" view={organiser({ roster })} refresh={refresh} />)
+    fireEvent.click(screen.getByRole('button', { name: 'New phone for Aina' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('The game has ended')
+    expect(screen.queryByRole('button', { name: 'Send link' })).toBeNull()
+  })
+})
+
 describe('MarshalLive after the game', () => {
   const results = {
     winner: 'chasers' as const,

@@ -3,6 +3,9 @@ export const ORGANISER_INVITE_TTL_MS = 48 * 60 * 60 * 1000
 /** Spec §5: a marshal invite stops working after 6 hours, or when the game leaves lobby — whichever first. */
 export const MARSHAL_INVITE_TTL_MS = 6 * 60 * 60 * 1000
 
+/** Fair play §1.7: a new-phone link stops working after 30 minutes. */
+export const PHONE_MOVE_TTL_MS = 30 * 60_000
+
 export function isExpired(expiresAtIso: string, now: number): boolean {
   return now >= Date.parse(expiresAtIso)
 }

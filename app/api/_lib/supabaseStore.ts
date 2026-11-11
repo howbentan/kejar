@@ -2,7 +2,7 @@ import { LUAR_GARISAN_GRACE_MS } from '../../shared/alerts.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard } from '../../shared/types.js'
 import { newDatoCode } from './secrets.js'
-import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
+import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PhoneMoveRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, RedeemPhoneMoveResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
 const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at'
 const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, final_whistle_at, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit'
@@ -404,6 +404,22 @@ export class SupabaseStore implements GameStore {
     ) as { redeemed_at: string | null; expires_at: string } | null
     if (!exists) return { ok: false, reason: 'invalid' }
     return { ok: false, reason: exists.redeemed_at ? 'redeemed' : 'expired' }
+  }
+  async createPhoneMove(row: Omit<PhoneMoveRow, 'id'>): Promise<void> {
+    check(await this.db.from('phone_moves').insert(row))
+  }
+  async redeemPhoneMove(tokenHash: string, nowMs: number, gameId: string, newTokenHash: string): Promise<RedeemPhoneMoveResult> {
+    const rows = check(
+      await this.db.rpc('redeem_phone_move', {
+        p_token_hash: tokenHash,
+        p_now: new Date(nowMs).toISOString(),
+        p_game: gameId,
+        p_new_token_hash: newTokenHash,
+      }),
+    ) as { out_player: string | null; out_reason: 'invalid' | 'redeemed' | 'expired' | null }[]
+    const r = rows[0]
+    if (r?.out_player) return { ok: true, playerId: r.out_player }
+    return { ok: false, reason: r?.out_reason ?? 'invalid' }
   }
   async addArena(r: NewSavedArena): Promise<SavedArenaRow> {
     const at = this.nowIso()

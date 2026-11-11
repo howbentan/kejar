@@ -97,6 +97,8 @@ export default function MarshalTools({
   const [error, setError] = useState('')
   const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null)
   const [tab, setTab] = useState<'live' | 'after'>('live')
+  // New phone links made on this screen, by player id. Each link is made on one tap and shared on the next.
+  const [phoneLinks, setPhoneLinks] = useState<Record<string, string>>({})
 
   // Buzz when a new SOS comes in: marshals may be looking at the park, not the screen.
   const openSos = view.alerts.filter((a) => a.kind === 'sos' && !a.handled).length
@@ -117,6 +119,32 @@ export default function MarshalTools({
     } finally {
       setBusy(false)
     }
+  }
+
+  async function makePhoneLink(playerId: string) {
+    setBusy(true)
+    setError('')
+    try {
+      const { inviteToken } = await call<{ inviteToken: string }>('createPhoneMove', { code, ...credentials(code), playerId })
+      setPhoneLinks((l) => ({ ...l, [playerId]: `${window.location.origin}/p/${code}/${inviteToken}` }))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Called straight from a tap: nothing is awaited before `navigator.share`, or iPhone drops the share. */
+  function sendPhoneLink(name: string, link: string) {
+    setError('')
+    if (typeof navigator.share !== 'function') {
+      void navigator.clipboard.writeText(link)
+      setError('Link copied. Paste it to their new phone.')
+      return
+    }
+    navigator.share({ text: `Your new phone link for Kejar, ${name}: ${link}` }).catch((e) => {
+      if (!(e instanceof DOMException && e.name === 'AbortError')) setError(e instanceof Error ? e.message : String(e))
+    })
   }
 
   // Live tab order (motion design): open SOS pinned up top, then everything else open, then closed.
@@ -319,6 +347,19 @@ export default function MarshalTools({
                     Undo kejar
                   </button>
                 )}
+                {(p.role === 'runner' || p.role === 'chaser') &&
+                  (phoneLinks[p.id] ? (
+                    <>
+                      <span className="muted">{`Link ready. Send it to ${p.name}'s new phone.`}</span>{' '}
+                      <button type="button" className="pill" onClick={() => sendPhoneLink(p.name, phoneLinks[p.id])}>
+                        Send link
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" className="pill" aria-label={`New phone for ${p.name}`} disabled={busy} onClick={() => makePhoneLink(p.id)}>
+                      New phone
+                    </button>
+                  ))}
                 <button
                   type="button"
                   className="pill"
