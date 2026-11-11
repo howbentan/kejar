@@ -1698,8 +1698,13 @@ const handleAlert: Action = async (ctx, body) => {
 
 /** A marshal frees an auto-jailed runner after a phone fault, without using their one escape (motion design §5b). */
 const undoAutoJail: Action = async (ctx, body) => {
+  const loaded = await loadGame(ctx, body)
+  const marshal = await requireMarshal(ctx, loaded, body)
+  // Bring the game up to date first: a final whistle that ran out with nobody polling has ended the game.
+  await advance(ctx, loaded)
   const game = await loadGame(ctx, body)
-  const marshal = await requireMarshal(ctx, game, body)
+  // Once the game has ended its result is final (fair-play §1.4: after 60 s the Kejar win is final).
+  if (phaseAt(game, ctx.now).phase === 'ended') return { ok: false, reason: 'not-undoable' }
   const eventId = str(body.eventId)
   const jailing = (await ctx.store.events(game.id)).find((e) => e.id === eventId && e.type === 'auto-jailed')
   const target = jailing && (await ctx.store.players(game.id)).find((p) => p.id === jailing.target_id)
@@ -1731,8 +1736,11 @@ const undoAutoJail: Action = async (ctx, body) => {
  * runner goes back to free without using their one escape, and the catch drops out of awards and stats.
  */
 const undoKejar: Action = async (ctx, body) => {
+  const loaded = await loadGame(ctx, body)
+  const marshal = await requireMarshal(ctx, loaded, body)
+  // Bring the game up to date first: a hold that ran out with nobody polling has ended the game, so the Kejar win is final.
+  await advance(ctx, loaded)
   const game = await loadGame(ctx, body)
-  const marshal = await requireMarshal(ctx, game, body)
   const eventId = str(body.eventId)
   const events = await ctx.store.events(game.id)
   const catching = events.find((e) => e.id === eventId && e.type === 'caught')

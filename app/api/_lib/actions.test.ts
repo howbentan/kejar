@@ -4391,6 +4391,30 @@ describe('Undo kejar and the final whistle (fair-play §1.4)', () => {
     expect(row.final_whistle_at).toBeNull()
   })
 
+  it('an Undo kejar after the 60 s hold, with no poll in between, is refused and the Kejar win stands', async () => {
+    const g = await safetyGame()
+    await catchAt(g, 'aina', T0 + 7 * MIN)
+    await catchAt(g, 'hafiz', T0 + 8 * MIN)
+    now = T0 + 8 * MIN + 61 * S
+    expect(await undo(g, await catchId(g, g.hafiz.playerId))).toEqual({ ok: false, reason: 'not-undoable' })
+    expect((await runnerRow(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect((await gameRow(g)).winner).toBe('chasers')
+    expect(store.safetyRows.filter((r) => r.type === 'kejar-undone')).toHaveLength(0)
+  })
+
+  it('undoing a last-runner auto-jail after the 60 s hold, with no poll in between, is refused and the Kejar win stands', async () => {
+    const g = await safetyGame({ checkinMode: 'schedule' })
+    await catchAt(g, 'aina', T0 + 7 * MIN)
+    await poll(g, T0 + 10 * MIN)
+    const v = await poll(g, T0 + 15 * MIN)
+    const autoJail = v.alerts.find((a) => a.kind === 'auto-jail')!
+    now = T0 + 15 * MIN + 61 * S
+    expect(await run('undoAutoJail', { code: g.code, token: g.siti.token, eventId: autoJail.id })).toEqual({ ok: false, reason: 'not-undoable' })
+    expect((await runnerRow(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect((await gameRow(g)).winner).toBe('chasers')
+    expect(store.safetyRows.filter((r) => r.type === 'auto-jail-undone')).toHaveLength(0)
+  })
+
   it('(g) is for marshals and the organiser only', async () => {
     const g = await safetyGame()
     await catchAt(g, 'aina', T0 + 7 * MIN)
