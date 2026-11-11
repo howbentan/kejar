@@ -31,7 +31,7 @@ self.addEventListener('push', (event) => {
     const lead = at ? Math.min(fixed, Math.max(5, Math.round((at.getTime() - Date.now()) / 5000) * 5)) : fixed
     const when = at ? ` Kejar see you at ${at.getHours() % 12 || 12}:${String(at.getMinutes()).padStart(2, '0')}.` : ''
     event.waitUntil(
-      self.registration.showNotification(`Ping in ${lead}s — check in!`, {
+      self.registration.showNotification(`Ping in ${lead}s. Check in!`, {
         body: `Tap to check in.${when}`,
         tag: 'kejar-ping',
         renotify: true,

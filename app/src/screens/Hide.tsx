@@ -36,7 +36,7 @@ export default function Hide({ code, view }: { code: string; view: View }) {
       </p>
       <GameMap arena={view.arena} dots={view.dots} stations={view.stations} height={260} />
       <AlertsCard code={code} view={view} />
-      <p className="muted">Put your phone on silent — a buzz can give you away. Pocket it once you&apos;re hidden.</p>
+      <p className="muted">Put your phone on silent. A buzz can give you away. Pocket it once you&apos;re hidden.</p>
     </Screen>
   )
 }

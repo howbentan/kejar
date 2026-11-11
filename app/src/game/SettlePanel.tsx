@@ -100,7 +100,7 @@ export default function SettlePanel({
       <p className="muted">
         {settle.canFreeSelf
           ? 'Free yourself and up to 2 others in Penjara. Pick who, then scan the Penjara code.'
-          : "You've already escaped once — Settle can still free others"}
+          : "You've already escaped once. Settle can still free others."}
       </p>
       {settle.options.length > 0 ? (
         <ul className="settle-list">

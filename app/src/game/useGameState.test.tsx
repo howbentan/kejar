@@ -99,7 +99,7 @@ describe('useGameState', () => {
   })
 
   it('retries quietly on the next poll when a poll is limited (429)', async () => {
-    const limited = Object.assign(new Error('Too many requests — wait a moment and try again'), { status: 429 })
+    const limited = Object.assign(new Error('Too many requests. Wait a moment and try again.'), { status: 429 })
     call.mockRejectedValueOnce(limited)
     const { result } = renderHook(() => useGameState('ABC234', { sendLocation: 'never' }))
     await act(async () => {})

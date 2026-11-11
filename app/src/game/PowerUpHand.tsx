@@ -120,7 +120,7 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
             : r.reason === 'flare-pending'
               ? `Another Mat Rempit is already on its way. Ready again in ${clock(r.readyInMs ?? 0)}.`
             : r.reason === 'nothing-to-steal'
-              ? `Nothing to steal — you keep your ${INFO[u.kind].name}.`
+              ? `Nothing to steal. You keep your ${INFO[u.kind].name}.`
               : (USE_REJECTIONS[r.reason] ?? 'Not used'),
       )
     } catch (e) {

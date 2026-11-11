@@ -39,7 +39,7 @@ export default function AlertsCard({ code, view, onDone }: { code: string; view:
         </p>
       )}
       {support === 'denied' && <p className="muted">Notifications are blocked. Allow them in your phone settings.</p>}
-      {support === 'unsupported' && <p className="muted">This browser can’t get alerts — keep the page open at check-ins.</p>}
+      {support === 'unsupported' && <p className="muted">This browser can’t get alerts. Keep the page open at check-ins.</p>}
       {support === 'ok' && (
         <button className="btn" style={{ marginTop: 10 }} onClick={turnOn}>
           Turn on alerts

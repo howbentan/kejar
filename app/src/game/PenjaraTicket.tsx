@@ -39,7 +39,7 @@ export default function PenjaraTicket({
 }) {
   const number = pick(TICKET_NUMBERS, playerId)
   const status = settled ? 'FREE' : outForGood ? 'HABIS · TIADA KELUARAN' : variant.kind === 'catch' ? 'BELUM BAYAR' : 'SESSION TIMED OUT'
-  const statusEcho = settled ? 'bebas' : outForGood ? 'no further exit this round' : variant.kind === 'catch' ? 'unpaid — walk to the gate' : 'tempoh tamat — jalan ke gerbang'
+  const statusEcho = settled ? 'bebas' : outForGood ? 'no further exit this round' : variant.kind === 'catch' ? 'unpaid, walk to the gate' : 'tempoh tamat, jalan ke gerbang'
 
   return (
     <div className="toll-ticket">
@@ -61,13 +61,13 @@ export default function PenjaraTicket({
       <div className="toll-ticket-fields">
         {variant.kind === 'catch' ? (
           <>
-            <Field label="MASUK" value={variant.caughtAtMs !== null ? wallClock(variant.caughtAtMs) : '—'} />
-            <Field label="JARAK KE GERBANG" value={distanceM !== null ? `${Math.round(distanceM / 10) * 10} M` : '—'} />
+            <Field label="MASUK" value={variant.caughtAtMs !== null ? wallClock(variant.caughtAtMs) : '-'} />
+            <Field label="JARAK KE GERBANG" value={distanceM !== null ? `${Math.round(distanceM / 10) * 10} M` : '-'} />
           </>
         ) : (
           <>
-            <Field label="LAST SEEN" value={variant.lastSeenMs !== null ? wallClock(variant.lastSeenMs) : '—'} />
-            <Field label="DISTANCE TO GATE" value={distanceM !== null ? `${Math.round(distanceM / 10) * 10} M` : '—'} />
+            <Field label="LAST SEEN" value={variant.lastSeenMs !== null ? wallClock(variant.lastSeenMs) : '-'} />
+            <Field label="DISTANCE TO GATE" value={distanceM !== null ? `${Math.round(distanceM / 10) * 10} M` : '-'} />
           </>
         )}
       </div>

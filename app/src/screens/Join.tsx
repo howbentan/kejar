@@ -44,7 +44,7 @@ export default function Join({ code }: { code: string }) {
           <ol className="muted" style={{ marginTop: 8, paddingLeft: 18 }}>
             <li>Tap Share in Safari, then Add to Home Screen.</li>
             <li>Open kejar. from the new icon.</li>
-            <li>{`Join there with code ${code} — that's how you get check-in alerts.`}</li>
+            <li>{`Join there with code ${code} . That's how you get check-in alerts.`}</li>
           </ol>
           <p className="muted" style={{ marginTop: 8 }}>
             Joining here in Safari works, but you won&apos;t get alerts.

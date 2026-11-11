@@ -89,7 +89,7 @@ function AutoJailed({ code, view }: { code: string; view: View }) {
         </>
       ) : view.me.jailed ? (
         <>
-          <p className="muted">A free runner can still break you out — once.</p>
+          <p className="muted">A free runner can still break you out, but only once.</p>
           <WalkThenWatch view={view} onDistance={setDistanceM} />
         </>
       ) : null}
@@ -160,7 +160,7 @@ function Caught({ code, view }: { code: string; view: View }) {
       <p className="muted">
         {view.me.freed_once
           ? 'You’ve already been broken out once, so you stay in Penjara this time.'
-          : 'A free runner can still break you out — once. A marshal will give your tag back.'}
+          : 'A free runner can still break you out, but only once. A marshal will give your tag back.'}
       </p>
       <PenjaraTicket
         playerId={view.me.id}

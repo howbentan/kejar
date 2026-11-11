@@ -11,7 +11,7 @@ import { ErrorText, ModeBadge, Screen, tagText } from '../game/ui'
 
 const ROLE_COPY = {
   runner: 'You’re a Dikejar. Hide when the game starts.',
-  chaser: 'You’re a Kejar. Stay put while dikejar hide.',
+  chaser: 'You’re a Kejar. Stay put while Dikejar hide.',
   marshal: 'You’re a Marshal. Keep everyone safe.',
 }
 

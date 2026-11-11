@@ -1230,7 +1230,7 @@ const createMarshalInvite: Action = async (ctx, body) => {
 
 const redeemMarshalInvite: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
-  if (phaseAt(game, ctx.now).phase !== 'lobby') throw new ActionError(410, 'That invite link is no longer usable — the game already started')
+  if (phaseAt(game, ctx.now).phase !== 'lobby') throw new ActionError(410, 'That invite link is no longer usable. The game already started.')
   const inviteToken = str(body.inviteToken)
   if (!inviteToken) throw new ActionError(400, 'Missing invite token')
   const name = str(body.name).trim()
@@ -1930,7 +1930,7 @@ const searchParks: Action = async (ctx, body) => {
   try {
     return { results: await lookupParks(query, osmDeps(ctx)) }
   } catch {
-    throw new ActionError(502, 'Park search is unavailable right now — try again in a minute')
+    throw new ActionError(502, 'Park search is down right now. Try again in a minute.')
   }
 }
 

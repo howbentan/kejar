@@ -11,7 +11,7 @@ export interface HandleResult {
   json: unknown
 }
 
-const TOO_MANY: HandleResult = { status: 429, json: { error: 'Too many requests — wait a moment and try again' } }
+const TOO_MANY: HandleResult = { status: 429, json: { error: 'Too many requests. Wait a moment and try again.' } }
 
 /** Runs one POST /api/game body (a string or an already-parsed value) and says what to answer. */
 export async function handle(raw: unknown, deps: HandleDeps): Promise<HandleResult> {
@@ -51,6 +51,6 @@ export async function handle(raw: unknown, deps: HandleDeps): Promise<HandleResu
     }
     if (e instanceof SyntaxError && !name) return { status: 400, json: { error: 'Bad request' } }
     console.error('[api/game]', name, e)
-    return { status: 500, json: { error: 'Something went wrong — try again' } }
+    return { status: 500, json: { error: 'Something went wrong. Try again.' } }
   }
 }

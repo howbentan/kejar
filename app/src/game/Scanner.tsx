@@ -31,7 +31,7 @@ export default function Scanner({
       },
       { returnDetailedScanResult: true, highlightScanRegion: true, preferredCamera: 'environment' },
     )
-    scanner.start().catch(() => setProblem('Camera unavailable — allow camera access for this site.'))
+    scanner.start().catch(() => setProblem('Camera unavailable. Allow camera access for this site.'))
     return () => scanner.destroy()
   }, [onResult])
 
