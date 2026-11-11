@@ -4,6 +4,8 @@ export const TOKEN_LIMIT_PER_MIN = 120
 export const IP_LIMIT_PER_MIN = 60
 /** Join and the invite redeems: a whole group can join at once from one mobile-carrier IP (lobbies cap at 40). */
 export const IP_KEYED_LIMIT_PER_MIN = 200
+/** nearbyParks runs a slow shared Overpass query per new spot, so it gets a tighter bucket than other actions. */
+export const NEARBY_LIMIT_PER_MIN = 20
 export const LIMIT_WINDOW_MS = 60_000
 /** Wrong guesses (401, 403, 404) allowed per IP per minute before the answer is a 429. */
 export const FAIL_LIMIT_PER_MIN = 30
@@ -18,6 +20,7 @@ export function limitKey(action: string, body: Record<string, unknown>, ip: stri
   // Their own bucket, so a group joining at once can't use up the IP's 60 for other tokenless requests.
   if (IP_KEYED_ACTIONS.includes(action)) return { key: `join-ip:${ip ?? 'unknown'}`, limit: IP_KEYED_LIMIT_PER_MIN }
   const token = nonEmpty(body.token) ? body.token : nonEmpty(body.organiserToken) ? body.organiserToken : null
+  if (token && action === 'nearbyParks') return { key: `nearby:${hashToken(token)}`, limit: NEARBY_LIMIT_PER_MIN }
   if (token) return { key: `tok:${hashToken(token)}`, limit: TOKEN_LIMIT_PER_MIN }
   return { key: `ip:${ip ?? 'unknown'}`, limit: IP_LIMIT_PER_MIN }
 }

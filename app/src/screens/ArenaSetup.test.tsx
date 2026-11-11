@@ -230,6 +230,38 @@ describe('ArenaSetup', () => {
       expect(screen.queryByRole('alert')).toBeNull()
     })
 
+    it('old rows go as soon as a new search starts', async () => {
+      const slow = deferred<unknown>()
+      render(<ArenaSetup onDone={vi.fn()} />)
+      await search(found([hit], jalil))
+      await screen.findByRole('button', { name: /^KLCC Park/ })
+      call.mockImplementation(async () => slow.promise)
+      fireEvent.change(screen.getByLabelText('Park name'), { target: { value: 'Sri Petaling' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+      await waitFor(() => expect(screen.queryByRole('button', { name: /^KLCC Park/ })).toBeNull())
+      expect(screen.queryByRole('button', { name: 'Circle around Bukit Jalil' })).toBeNull()
+      expect(screen.queryByText(/No parks found/)).toBeNull()
+    })
+
+    it('a superseded search that fails late shows no error and does not re-enable Search early', async () => {
+      const first = deferred<unknown>()
+      const second = deferred<unknown>()
+      render(<ArenaSetup onDone={vi.fn()} />)
+      call.mockImplementationOnce(async () => first.promise).mockImplementationOnce(async () => second.promise)
+      fireEvent.change(screen.getByLabelText('Park name'), { target: { value: 'Bukit Jalil' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+      await waitFor(() => expect(call).toHaveBeenCalledTimes(1))
+      fireEvent.keyDown(screen.getByLabelText('Park name'), { key: 'Enter' })
+      await waitFor(() => expect(call).toHaveBeenCalledTimes(2))
+      first.reject(new Error('Park search is down right now.'))
+      await new Promise((r) => setTimeout(r, 20))
+      expect(screen.queryByText(/down right now/)).toBeNull()
+      expect(screen.getByRole('button', { name: 'Search' })).toBeDisabled()
+      second.resolve(found([hit]))
+      expect(await screen.findByRole('button', { name: /^KLCC Park/ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Search' })).toBeEnabled()
+    })
+
     it('ignores a nearby reply that arrives after the organiser searched again', async () => {
       const first = deferred<{ nearby: unknown[] }>()
       render(<ArenaSetup onDone={vi.fn()} />)

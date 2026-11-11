@@ -190,6 +190,48 @@ describe('searchParks', () => {
       expect((await nearbyParks(centre, new Set(), deps())).map((p) => p.name)).toEqual(['Taman A'])
     })
 
+    it('a degraded reply (a remark, e.g. timeout or out of memory) is a failure and is not cached', async () => {
+      replies.push({ remark: 'runtime error: Query timed out in "query" at line 1', elements: [way(1, 'Half', 0.003)] })
+      expect(await nearbyParks(centre, new Set(), deps())).toEqual([])
+      expect(cacheMap.size).toBe(0)
+      replies.push({ elements: [way(1, 'Taman A', 0.003)] })
+      expect((await nearbyParks(centre, new Set(), deps())).map((p) => p.name)).toEqual(['Taman A'])
+    })
+
+    it('identical lookups in flight share one Overpass request', async () => {
+      let release!: () => void
+      const gate = new Promise<void>((r) => (release = r))
+      let n = 0
+      const slow = {
+        fetchJson: async () => {
+          n++
+          await gate
+          return { elements: [way(1, 'Taman A', 0.003)] }
+        },
+        cache,
+        now: () => 0,
+        sleep: async () => {},
+      }
+      const a = nearbyParks(centre, new Set(), slow)
+      const b = nearbyParks(centre, new Set(['way/99']), slow)
+      await Promise.resolve()
+      release()
+      expect((await a).map((p) => p.name)).toEqual(['Taman A'])
+      expect((await b).map((p) => p.name)).toEqual(['Taman A'])
+      expect(n).toBe(1)
+    })
+
+    it('caches only the 20 biggest, and keeps just the larger of two same-name areas', async () => {
+      const many = Array.from({ length: 25 }, (_, k) => way(100 + k, `Taman ${k}`, 0.003 + k * 0.0002))
+      const twin = { ...way(200, 'Taman 24', 0.002), tags: { landuse: 'recreation_ground', name: 'Taman 24' } }
+      replies.push({ elements: [...many, twin] })
+      const nearby = await nearbyParks(centre, new Set(), deps())
+      expect(nearby.filter((p) => p.name === 'Taman 24')).toHaveLength(1)
+      expect(nearby[0].osmRef).toBe('way/124')
+      const cached = [...cacheMap.values()][0] as unknown[]
+      expect(cached).toHaveLength(20)
+    })
+
     it('the cache key includes the rounded centre and a second call is served from it', async () => {
       replies.push({ elements: [way(1, 'Taman A', 0.003)] })
       await nearbyParks(centre, new Set(), deps())

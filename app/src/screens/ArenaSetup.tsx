@@ -108,17 +108,18 @@ export default function ArenaSetup({
   async function search() {
     setError('')
     setBusy(true)
+    const id = ++searchId.current
+    setResults(null)
+    setNearby({ loading: false, parks: [] })
     try {
-      const id = ++searchId.current
-      setNearby({ loading: false, parks: [] })
       const r = await call<ParkSearch>('searchParks', { organiserToken, query: query.trim() })
       if (id !== searchId.current) return
       setResults(r)
       if (r.around) void loadNearby(id, r.around, r.parks)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      if (id === searchId.current) setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setBusy(false)
+      if (id === searchId.current) setBusy(false)
     }
   }
 
@@ -140,6 +141,8 @@ export default function ArenaSetup({
 
   /** "Circle around {place}": a circle the organiser can drag, centred on the place. */
   function pickAround(place: { name: string; center: LatLng }) {
+    searchId.current++
+    setBusy(false)
     setError('')
     setSource('circle')
     setPark(null)
@@ -155,6 +158,7 @@ export default function ArenaSetup({
   }
 
   async function pick(hit: ParkHit) {
+    searchId.current++
     setError('')
     setBusy(true)
     setPark({ osmRef: hit.osmRef, outline: hit.outline, pieces: hit.pieces })
