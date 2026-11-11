@@ -51,7 +51,7 @@ describe('alertsFrom', () => {
   it('appends a report note after a dash', () => {
     expect(
       texts([event('report', T0, { data: { name: 'Hafiz', targetName: 'Ben', reason: 'dispute', note: 'tag was already off' } })]),
-    ).toEqual(['Hafiz reported Ben: Catch dispute — tag was already off'])
+    ).toEqual(['Hafiz reported Ben: Catch dispute: tag was already off'])
   })
 
   it('keeps the location of SOS and reports', () => {
@@ -156,7 +156,7 @@ describe('auto-jail alert', () => {
   })
   it('reads as missed and sent to Penjara', () => {
     expect(alertsFrom([event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2', data: { who: 'Hafiz #03' } })]).map((a) => a.text)).toEqual([
-      'Hafiz #03 missed 2 check-ins — sent to Penjara',
+      'Hafiz #03 missed 2 check-ins, sent to Penjara',
     ])
   })
 })

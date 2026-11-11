@@ -6,7 +6,7 @@ const SHOW_MS = 8_000
 
 const COPY: Record<Role, { title: string; sub: string }> = {
   runner: { title: "You've been pinged", sub: 'Kejar just saw where you were. Move!' },
-  chaser: { title: 'Ping! Dikejar revealed', sub: 'Check the map — circles show where they were.' },
+  chaser: { title: 'Ping! Dikejar revealed', sub: 'Check the map. Circles show where they were.' },
   marshal: { title: 'Ping sent', sub: 'Kejar can see dikejar’s last positions.' },
 }
 

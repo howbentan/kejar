@@ -14,10 +14,17 @@ vi.mock('../game/Map', () => ({
 }))
 vi.mock('../game/here', () => ({ currentCoords: async () => ({}) }))
 vi.mock('../game/Scanner', () => ({
-  default: ({ onResult }: { onResult: (t: string) => void }) => (
-    <button type="button" onClick={() => onResult(scanned.text)}>
-      fake camera
-    </button>
+  default: ({ onResult, numberFallback }: { onResult: (t: string) => void; numberFallback?: { label: string; onNumber: (n: number) => void } }) => (
+    <>
+      <button type="button" onClick={() => onResult(scanned.text)}>
+        fake camera
+      </button>
+      {numberFallback && (
+        <button type="button" onClick={() => numberFallback.onNumber(7)}>
+          {numberFallback.label}
+        </button>
+      )}
+    </>
   ),
 }))
 vi.mock('../game/useWakeLock', () => ({ useWakeLock }))
@@ -72,11 +79,19 @@ describe('ChaserChase', () => {
     expect(screen.getByText('#07 Aina → Penjara')).toBeInTheDocument()
   })
 
+  it('with no camera, typing the tag number catches the same as a scan', async () => {
+    call.mockResolvedValue({ ok: true, flagged: false, runnerId: 'r1', label: '#07 Aina' })
+    render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Scan tag' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Or type the tag number' })))
+    expect(call).toHaveBeenCalledWith('catch', { code: 'ABC234', token: 't1', tagQr: 'KEJAR:TAG:07' })
+  })
+
   it('a refused catch is a plain message, with no stamp', async () => {
     call.mockResolvedValue({ ok: false, reason: 'too-far' })
     render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
     await scan('KEJAR:TAG:07')
-    expect(screen.getByText('Too far — get within 50 m')).toBeInTheDocument()
+    expect(screen.getByText('Too far. Get within 50 m.')).toBeInTheDocument()
     expect(screen.queryByText('dikejar!')).toBeNull()
   })
 

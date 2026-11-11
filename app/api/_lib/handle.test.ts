@@ -61,7 +61,7 @@ describe('handle', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     expect(await handle({ action: 'state', code: 'ABCDEF' }, makeDeps(store))).toEqual({
       status: 500,
-      json: { error: 'Something went wrong — try again' },
+      json: { error: 'Something went wrong. Try again.' },
     })
     expect(spy).toHaveBeenCalledWith('[api/game]', 'state', boom)
   })
@@ -101,7 +101,7 @@ describe('handle', () => {
       }
       expect(await handle({ action: 'state', code, token }, deps)).toEqual({
         status: 429,
-        json: { error: 'Too many requests — wait a moment and try again' },
+        json: { error: 'Too many requests. Wait a moment and try again.' },
       })
     })
 
@@ -179,7 +179,7 @@ describe('handle', () => {
       }
       expect(await handle({ action: 'state', code: 'ZZZZZZ' }, deps)).toEqual({
         status: 429,
-        json: { error: 'Too many requests — wait a moment and try again' },
+        json: { error: 'Too many requests. Wait a moment and try again.' },
       })
     })
 

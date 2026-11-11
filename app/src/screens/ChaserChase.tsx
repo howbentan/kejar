@@ -11,7 +11,7 @@ import { clock, useServerNow } from '../game/time'
 import { useWakeLock } from '../game/useWakeLock'
 
 const REJECTIONS: Record<string, string> = {
-  'too-far': 'Too far — get within 50 m',
+  'too-far': 'Too far. Get within 50 m.',
   implausible: "Can't confirm that one. Get closer and try again.",
   'already-caught': 'Already caught',
   'unknown-tag': "That's not a Kejar tag",
@@ -29,7 +29,7 @@ const REJECTIONS: Record<string, string> = {
 export function catchMessage(text: string, r: CatchJudgement): string {
   const tag = tagIdFromQr(text)
   const label = tag === null ? 'runner' : `#${String(tag).padStart(2, '0')}`
-  if (r.ok) return r.flagged ? `Caught ${label} — flagged for marshal` : `Caught ${label} ✓`
+  if (r.ok) return r.flagged ? `Caught ${label} . Flagged for a marshal.` : `Caught ${label} ✓`
   return (REJECTIONS[r.reason] ?? 'Catch not recorded').replace('{name}', () => r.name ?? label)
 }
 

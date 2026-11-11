@@ -22,7 +22,7 @@ describe('PenjaraTicket', () => {
 
   it('shows a dash before a GPS fix, not a blank or broken field', () => {
     render(<PenjaraTicket playerId="r1" variant={{ kind: 'catch', caughtBy: 'Ben', caughtAtMs: null }} distanceM={null} outForGood={false} settled={false} />)
-    expect(screen.getAllByText('—')).toHaveLength(2)
+    expect(screen.getAllByText('-')).toHaveLength(2)
   })
 
   it('auto-jail status reads differently from a chaser catch', () => {

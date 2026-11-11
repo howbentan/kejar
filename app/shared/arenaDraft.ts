@@ -52,7 +52,7 @@ export function arenaFromDraft(d: ArenaDraft, id: string): Arena {
   if (d.stations.length > MAX_STATIONS) throw new Error(`At most ${MAX_STATIONS} stations`)
 
   const area = buildPlayArea({ outline: d.source === 'osm' ? d.outline : null, water: d.water, circle: d.circle })
-  if (area.areaHa > MAX_PLAY_AREA_HA) throw new Error('Too big — use part of the park (circle)')
+  if (area.areaHa > MAX_PLAY_AREA_HA) throw new Error('Too big. Use part of the park (circle).')
   const shape = { boundary: area.boundary, holes: area.holes }
   const arena: Arena = {
     id,

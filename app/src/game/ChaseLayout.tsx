@@ -3,6 +3,7 @@ import type { View } from '../../shared/views.js'
 import { call } from './api'
 import { currentCoords } from './here'
 import GameMap from './Map'
+import { stationQr, tagQr } from '../../shared/ids.js'
 import { rippleOrigin } from './ripple'
 import Scanner from './Scanner'
 import { scanTarget, type ScanTarget } from './scan'
@@ -118,6 +119,12 @@ export default function ChaseLayout(props: {
             onResult={onScan}
             onCancel={() => setScanning(false)}
             hint={side === 'runner' ? 'Point at the station or Penjara card' : 'Point at the tag or station card'}
+            // No camera (blocked or broken): type the number printed on the card. The server still checks reach.
+            numberFallback={
+              side === 'runner'
+                ? { label: 'Or type the station number', onNumber: (n) => onScan(stationQr(n)) }
+                : { label: 'Or type the tag number', onNumber: (n) => onScan(tagQr(n)) }
+            }
           />
         </div>
       )}

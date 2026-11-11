@@ -59,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   } catch (e) {
     console.error('[api/game]', 'setup', e)
-    result = { status: 500, json: { error: 'Something went wrong — try again' } }
+    result = { status: 500, json: { error: 'Something went wrong. Try again.' } }
   }
   const { status, json } = result
   return res.status(status).json(json)

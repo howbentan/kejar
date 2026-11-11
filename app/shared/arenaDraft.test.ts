@@ -46,7 +46,7 @@ describe('arenaFromDraft', () => {
 
   it('rejects an over-cap park without a circle', () => {
     expect(() => arenaFromDraft({ ...park, outline: rect(-500, -500, 500, 500), water: [] }, 'a1')).toThrow(
-      'Too big — use part of the park (circle)',
+      'Too big. Use part of the park (circle).',
     )
     // The same park with a circle is fine.
     expect(() =>

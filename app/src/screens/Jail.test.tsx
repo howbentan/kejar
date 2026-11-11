@@ -124,7 +124,7 @@ describe('Settle at Penjara (jail design §4b, §4d)', () => {
 
   it('a holder already freed once is told, and needs to pick someone', () => {
     render(<Jail code="ABC234" view={holder({ canFreeSelf: false })} />)
-    expect(screen.getByText("You've already escaped once — Settle can still free others")).toBeInTheDocument()
+    expect(screen.getByText("You've already escaped once. Settle can still free others.")).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Scan Penjara to settle' })).toBeDisabled()
     fireEvent.click(screen.getByRole('checkbox', { name: 'Hafiz' }))
     expect(screen.getByRole('button', { name: 'Scan Penjara to settle' })).not.toBeDisabled()

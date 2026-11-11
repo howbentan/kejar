@@ -1405,7 +1405,7 @@ describe('SOS and reports', () => {
     await rejects(run('report', { ...base, targetId: g.hafiz.playerId }), 400)
     await rejects(run('report', { ...base, targetId: 'nobody' }), 400)
     expect(await run('report', { ...base, note: '  pushed me  ', ...at(10) })).toEqual({ ok: true, notified: 1 })
-    expect(pushes[0].payload).toEqual({ type: 'alert', code: g.code, text: 'Hafiz #03 reported Ben: Unsafe play — pushed me' })
+    expect(pushes[0].payload).toEqual({ type: 'alert', code: g.code, text: 'Hafiz #03 reported Ben: Unsafe play: pushed me' })
     expect(store.safetyRows[0]).toMatchObject({ type: 'report', player_id: g.hafiz.playerId, target_id: g.ben.playerId })
   })
 
@@ -2150,7 +2150,7 @@ describe('automatic alerts', () => {
     expect(await kinds(g.code, g.organiserToken)).toEqual([])
     now = T0 + 15 * MIN
     const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
-    expect(v.alerts.map((a) => a.text)).toEqual(['Hafiz #03 missed 2 check-ins — sent to Penjara'])
+    expect(v.alerts.map((a) => a.text)).toEqual(['Hafiz #03 missed 2 check-ins, sent to Penjara'])
     const hafiz = (await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!
     expect(hafiz.jailed).toBe(true)
     expect(hafiz.caught_by).toBeNull()
@@ -2203,7 +2203,7 @@ describe('automatic alerts', () => {
     // he has used his one escape.
     now = T0 + 20 * MIN
     await run('location', { code: g.code, token: g.aina.token, ...at(10) })
-    expect(await missedTexts()).toContain('Hafiz #03 missed 2 check-ins — sent to Penjara')
+    expect(await missedTexts()).toContain('Hafiz #03 missed 2 check-ins, sent to Penjara')
     expect((await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!.jailed).toBe(true)
     expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR })).toEqual({
       ok: false,
@@ -2686,7 +2686,7 @@ describe('saved arenas', () => {
     await rejects(
       run('create', { organiserToken, draft: draft({ outline: rect(-500, -500, 500, 500), water: [], jail: null, start: null, stations: [] }) }),
       400,
-      'Too big — use part of the park (circle)',
+      'Too big. Use part of the park (circle).',
     )
     await rejects(run('saveArena', { organiserToken, draft: { name: 'x' } }), 400, 'Invalid play area')
   })

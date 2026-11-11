@@ -84,7 +84,7 @@ describe('MarshalTools', () => {
   })
 
   it('an open auto-jail alert offers Phone problem: undo and It stands', async () => {
-    const a = alert('e5', 'auto-jail', 'Hafiz #03 missed 2 check-ins — sent to Penjara', false, 'r2')
+    const a = alert('e5', 'auto-jail', 'Hafiz #03 missed 2 check-ins, sent to Penjara', false, 'r2')
     render(<MarshalTools code="ABC234" view={testView({ alerts: [a] })} refresh={refresh} />)
     expect(screen.queryByRole('button', { name: 'Handled' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Phone problem: undo' }))
@@ -95,7 +95,7 @@ describe('MarshalTools', () => {
 
   it('says so when an undo loses a race to the end or another marshal', async () => {
     call.mockResolvedValue({ ok: false, reason: 'not-undoable' })
-    const a = alert('e5', 'auto-jail', 'Hafiz #03 missed 2 check-ins — sent to Penjara', false, 'r2')
+    const a = alert('e5', 'auto-jail', 'Hafiz #03 missed 2 check-ins, sent to Penjara', false, 'r2')
     render(<MarshalTools code="ABC234" view={testView({ alerts: [a] })} refresh={refresh} />)
     fireEvent.click(screen.getByRole('button', { name: 'Phone problem: undo' }))
     expect(await screen.findByText("Too late, that one can't be undone now.")).toBeInTheDocument()
@@ -112,7 +112,7 @@ describe('MarshalTools', () => {
   })
 
   it('a handled auto-jail alert has no buttons', () => {
-    const a = alert('e5', 'auto-jail', 'Hafiz #03 missed 2 check-ins — sent to Penjara', true, 'r2')
+    const a = alert('e5', 'auto-jail', 'Hafiz #03 missed 2 check-ins, sent to Penjara', true, 'r2')
     render(<MarshalTools code="ABC234" view={testView({ alerts: [a] })} refresh={refresh} />)
     expect(screen.queryByRole('button', { name: 'Phone problem: undo' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'It stands' })).toBeNull()

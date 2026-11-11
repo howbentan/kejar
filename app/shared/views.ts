@@ -560,7 +560,7 @@ function snapshottedFor(i: ViewInput, phase: Phase): boolean {
   return pingTimes(i.game, i.now).some((t) => t.alertAt <= i.now && i.now < t.revealAt)
 }
 
-export const SNAPSHOT_TAKEN = 'Snapshot taken — Dikejar can see where you were'
+export const SNAPSHOT_TAKEN = 'Snapshot taken. Dikejar can see where you were.'
 
 /**
  * The snapshot line for the latest scheduled alert so far while the switch is on, derived from the schedule (§5.4).
@@ -738,11 +738,11 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
     case 'roles':
       return 'Roles assigned'
     case 'started':
-      return 'Game started — runners, go hide!'
+      return 'Game started. Dikejar, go hide!'
     case 'chase':
       return 'Chasers released'
     case 'ping':
-      return `Ping — ${count(Number(e.data.seen ?? 0), 'runner')} seen`
+      return `Ping: ${count(Number(e.data.seen ?? 0), 'runner')} seen`
     case 'caught':
       return target && actor ? `${tagLabel(target)} caught by ${actor.name}` : 'A runner was caught'
     case 'jailbreak':
@@ -753,7 +753,7 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       return actor ? `${actor.name} picked up a power-up` : null
     case 'used':
       // Runner power-ups stay secret; chasers' ones are announced.
-      if (e.data.kind === 'flare') return 'A Kejar used Mat Rempit — extra ping in 30 s'
+      if (e.data.kind === 'flare') return 'A Kejar used Mat Rempit. Extra ping in 30 s!'
       if (e.data.kind === 'focus') return 'A Kejar used Pak Guard'
       return null
     case 'shielded':
@@ -775,7 +775,7 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
         ? 'No Dikejar left free! Final whistle in 60 s.'
         : 'Last Dikejar caught! Final whistle in 60 s.'
     case 'auto-jailed':
-      return target ? `${tagLabel(target)} missed 2 check-ins — sent to Penjara` : 'A runner missed 2 check-ins — sent to Penjara'
+      return target ? `${tagLabel(target)} missed 2 check-ins, sent to Penjara` : 'A runner missed 2 check-ins, sent to Penjara'
     default:
       return null
   }

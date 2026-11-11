@@ -49,7 +49,7 @@ describe('PowerUpHand', () => {
     render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind }] })} />)
     fireEvent.click(screen.getByRole('button', { name: new RegExp(name, 'i') }))
     fireEvent.click(screen.getByRole('button', { name: `Use ${name}` }))
-    expect(await screen.findByText(`Nothing to steal — you keep your ${name}.`)).toBeInTheDocument()
+    expect(await screen.findByText(`Nothing to steal. You keep your ${name}.`)).toBeInTheDocument()
   })
 
   it.each([

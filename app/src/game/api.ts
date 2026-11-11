@@ -16,7 +16,7 @@ export async function call<T>(action: string, body: object): Promise<T> {
       body: JSON.stringify({ action, ...body }),
     })
   } catch {
-    throw new ApiError(0, 'No connection — check your signal')
+    throw new ApiError(0, 'No connection. Check your signal.')
   }
   const data = (await res.json().catch(() => ({}))) as { error?: string }
   if (!res.ok) throw new ApiError(res.status, data.error ?? `Request failed (${res.status})`)

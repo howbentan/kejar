@@ -83,7 +83,7 @@ describe('service worker game check-in alerts', () => {
     const { self, listeners } = loadWorker([])
     await push(listeners, { type: 'checkin', code: 'ABC234', seq: 2, revealAt: new Date(2026, 10, 1, 14, 5).getTime() })
     expect(self.registration.showNotification).toHaveBeenCalledWith(
-      'Ping in 45s — check in!',
+      'Ping in 45s. Check in!',
       expect.objectContaining({ body: 'Tap to check in. Kejar see you at 2:05.', tag: 'kejar-ping', data: { url: '/g/ABC234?checkin=1' } }),
     )
     vi.useRealTimers()
@@ -93,7 +93,7 @@ describe('service worker game check-in alerts', () => {
     vi.useFakeTimers({ now: new Date(2026, 10, 1, 14, 4, 40) })
     const { self, listeners } = loadWorker([])
     await push(listeners, { type: 'checkin', code: 'ABC234', seq: 2, revealAt: new Date(2026, 10, 1, 14, 5).getTime() })
-    expect(self.registration.showNotification).toHaveBeenCalledWith('Ping in 20s — check in!', expect.anything())
+    expect(self.registration.showNotification).toHaveBeenCalledWith('Ping in 20s. Check in!', expect.anything())
     vi.useRealTimers()
   })
 
@@ -102,7 +102,7 @@ describe('service worker game check-in alerts', () => {
     const { self, listeners } = loadWorker([])
     await push(listeners, { type: 'checkin', code: 'ABC234', seq: 1000, revealAt: new Date(2026, 10, 1, 9, 40).getTime() })
     expect(self.registration.showNotification).toHaveBeenCalledWith(
-      'Ping in 30s — check in!',
+      'Ping in 30s. Check in!',
       expect.objectContaining({ body: 'Tap to check in. Kejar see you at 9:40.', data: { url: '/g/ABC234' } }),
     )
     vi.useRealTimers()

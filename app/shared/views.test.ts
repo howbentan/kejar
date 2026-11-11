@@ -806,7 +806,7 @@ describe('the chaser snapshot at check-in (checkins design §5)', () => {
 describe("the snapshot marker on a chaser's own screen (checkins design §5.4)", () => {
   const on = game({ settings: { ...DEFAULT_SETTINGS, mode: 'full', chaserSnapshot: true } })
   const alertAt = (k: number) => T0 + (5 + 5 * k) * MIN - SCHEDULED_ALERT_LEAD_MS
-  const SNAP = 'Snapshot taken — Dikejar can see where you were'
+  const SNAP = 'Snapshot taken. Dikejar can see where you were.'
 
   it('a chaser is snapshotted from a scheduled alert until that ping reveals', () => {
     expect(view(chaser, { game: on, now: alertAt(3) + 1_000 }).snapshotted).toBe(true)
