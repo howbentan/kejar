@@ -15,9 +15,18 @@ const geo = vi.hoisted(() => {
 
 // The real map is MapLibre; this stand-in turns taps into buttons.
 vi.mock('../game/PlaceMap', () => ({
-  default: (p: { mode: string; onTap: (q: { lat: number; lng: number }) => void }) => (
+  default: (p: {
+    mode: string
+    circle: { center: { lat: number; lng: number }; radiusM: number } | null
+    onTap: (q: { lat: number; lng: number }) => void
+    onCircleMove?: (q: { lat: number; lng: number }) => void
+  }) => (
     <div>
       <span>{`mode:${p.mode}`}</span>
+      <span>{p.circle ? `circle:${p.circle.center.lat},${p.circle.center.lng},${p.circle.radiusM}` : 'circle:none'}</span>
+      <button type="button" onClick={() => p.onCircleMove?.(geo.at(10, 10))}>
+        drag the circle
+      </button>
       <button type="button" onClick={() => p.onTap(geo.at(0, 0))}>
         tap the lake
       </button>
@@ -36,7 +45,19 @@ vi.mock('../game/PlaceMap', () => ({
 
 import ArenaSetup from './ArenaSetup'
 
-const hit = { osmRef: 'way/10590000', name: 'KLCC Park', areaHa: 16, outline: geo.park, pieces: 1 }
+const hit = {
+  osmRef: 'way/10590000',
+  name: 'KLCC Park',
+  areaHa: 16,
+  outline: geo.park,
+  pieces: 1,
+  kind: 'outline' as const,
+  label: 'Park',
+  center: geo.C,
+  unlikely: false,
+}
+const suburb = { osmRef: 'node/1', name: 'Bukit Jalil', areaHa: 0, outline: [], pieces: 1, kind: 'point' as const, label: 'Area', center: { lat: 3.0618, lng: 101.6993 }, unlikely: false }
+const station = { osmRef: 'way/5', name: 'SP17 Bukit Jalil', areaHa: 0.5, outline: geo.lake, pieces: 1, kind: 'outline' as const, label: 'Station', center: geo.C, unlikely: true }
 
 beforeEach(() => {
   call.mockReset()
@@ -56,7 +77,7 @@ afterEach(() => {
 async function pickKlcc() {
   fireEvent.change(screen.getByLabelText('Park name'), { target: { value: 'KLCC Park' } })
   fireEvent.click(screen.getByRole('button', { name: 'Search' }))
-  fireEvent.click(await screen.findByRole('button', { name: 'KLCC Park · 16.0 ha' }))
+  fireEvent.click(await screen.findByRole('button', { name: /^KLCC Park/ }))
   await screen.findByText('15.0 ha')
 }
 
@@ -88,7 +109,7 @@ describe('ArenaSetup', () => {
     render(<ArenaSetup onDone={onDone} />)
     fireEvent.change(screen.getByLabelText('Park name'), { target: { value: 'KLCC Park' } })
     fireEvent.click(screen.getByRole('button', { name: 'Search' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'KLCC Park · 16.0 ha' }))
+    fireEvent.click(await screen.findByRole('button', { name: /^KLCC Park/ }))
     expect(await screen.findByText("Couldn't check for lakes. Look at the map before saving.")).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Save park' }))
     await waitFor(() => expect(onDone).toHaveBeenCalledWith(expect.objectContaining({ arenaId: 'ar1' })))
@@ -155,5 +176,73 @@ describe('ArenaSetup', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Use once' }))
     expect(onDone).toHaveBeenCalledWith({ draft: expect.objectContaining({ source: 'circle', outline: null }) })
     expect(call).not.toHaveBeenCalledWith('saveArena', expect.anything())
+  })
+
+  describe('search results', () => {
+    async function search(results: unknown[]) {
+      call.mockImplementation(async (action: string) => {
+        if (action === 'searchParks') return { results }
+        if (action === 'parkFeatures') return { water: [], toilets: [], waterChecked: true }
+        return {}
+      })
+      fireEvent.change(screen.getByLabelText('Park name'), { target: { value: 'Bukit Jalil' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+      await screen.findByRole('button', { name: /Bukit Jalil/ })
+    }
+
+    it('each row has the name, a size or label sub-line and a chip, plus the tip', async () => {
+      render(<ArenaSetup onDone={vi.fn()} />)
+      await search([hit, suburb])
+      const park = screen.getByRole('button', { name: /^KLCC Park/ })
+      expect(park).toHaveTextContent('16.0 ha')
+      expect(park).toHaveTextContent('Park')
+      const area = screen.getByRole('button', { name: /^Bukit Jalil/ })
+      expect(area).toHaveTextContent('Area')
+      expect(area).not.toHaveTextContent('ha')
+      expect(screen.getByText("Can't find it? Try \"Taman …\", or use a circle.")).toBeInTheDocument()
+    })
+
+    it('picking a point result switches to a circle centred on it', async () => {
+      render(<ArenaSetup onDone={vi.fn()} />)
+      await search([suburb])
+      fireEvent.click(screen.getByRole('button', { name: /^Bukit Jalil/ }))
+      expect(await screen.findByText('circle:3.0618,101.6993,200')).toBeInTheDocument()
+      expect(screen.getByRole('radio', { name: 'Play area: Circle around me', checked: true })).toBeInTheDocument()
+      expect(screen.getByLabelText('Name this park')).toHaveValue('Bukit Jalil')
+      expect(screen.getByText('Drag to move.')).toBeInTheDocument()
+      expect(call).not.toHaveBeenCalledWith('parkFeatures', expect.anything())
+    })
+
+    it('greys unlikely rows but keeps them tappable', async () => {
+      render(<ArenaSetup onDone={vi.fn()} />)
+      await search([hit, station])
+      const row = screen.getByRole('button', { name: /^SP17 Bukit Jalil/ })
+      expect(row).toHaveAttribute('data-unlikely', 'true')
+      expect(row).toBeEnabled()
+      expect(screen.getByRole('button', { name: /^KLCC Park/ })).not.toHaveAttribute('data-unlikely')
+      fireEvent.click(row)
+      await screen.findByText('1.0 ha')
+    })
+
+    it('dragging the handle moves the circle centre and the sizes stay put', async () => {
+      render(<ArenaSetup onDone={vi.fn()} />)
+      await search([suburb])
+      fireEvent.click(screen.getByRole('button', { name: /^Bukit Jalil/ }))
+      await screen.findByText('circle:3.0618,101.6993,200')
+      fireEvent.click(screen.getByRole('button', { name: 'drag the circle' }))
+      const at = geo.at(10, 10)
+      expect(screen.getByText(`circle:${at.lat},${at.lng},200`)).toBeInTheDocument()
+      expect(screen.getAllByRole('radio').map((r) => r.getAttribute('aria-label') ?? r.textContent)).toEqual(
+        expect.arrayContaining(['Circle size: 150 m', 'Circle size: 500 m']),
+      )
+    })
+
+    it('shows the drag hint for "Use part of the park" too', async () => {
+      render(<ArenaSetup onDone={vi.fn()} />)
+      await pickKlcc()
+      expect(screen.queryByText('Drag to move.')).toBeNull()
+      fireEvent.click(screen.getByLabelText('Use part of the park'))
+      expect(screen.getByText('Drag to move.')).toBeInTheDocument()
+    })
   })
 })

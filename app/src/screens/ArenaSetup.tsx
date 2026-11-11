@@ -13,6 +13,7 @@ const SIZES = ['150', '200', '300', '500'] as const
 type Size = (typeof SIZES)[number]
 const NO_LAKE_CHECK = "Couldn't check for lakes. Look at the map before saving."
 const LARGEST_ONLY = 'Only the largest part of the park is used'
+const SEARCH_TIP = "Can't find it? Try \"Taman …\", or use a circle."
 
 export interface SavedArenaForEdit {
   id: string
@@ -103,6 +104,21 @@ export default function ArenaSetup({
 
   async function pick(hit: ParkHit) {
     setError('')
+    // A place with no outline (a suburb, a hill) becomes a circle around it, which the organiser can drag.
+    if (hit.kind === 'point') {
+      setSource('circle')
+      setPark(null)
+      setResults(null)
+      setJail(null)
+      setStart(null)
+      setStations([])
+      setFeatures({ water: [], toilets: [], waterChecked: true })
+      setUsePart(false)
+      setCentre(hit.center)
+      setMode('circle')
+      if (!name) setName(hit.name)
+      return
+    }
     setBusy(true)
     setPark({ osmRef: hit.osmRef, outline: hit.outline, pieces: hit.pieces })
     setResults(null)
@@ -206,10 +222,30 @@ export default function ArenaSetup({
           </div>
           {results && results.length === 0 && <p className="muted">No parks found. Try another name, or use a circle around you.</p>}
           {results?.map((h) => (
-            <button key={h.osmRef} type="button" className="btn btn-ghost" onClick={() => void pick(h)}>
-              {`${h.name} · ${h.areaHa.toFixed(1)} ha`}
+            <button
+              key={h.osmRef}
+              type="button"
+              className="btn btn-ghost"
+              data-unlikely={h.unlikely ? 'true' : undefined}
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, textAlign: 'left', opacity: h.unlikely ? 0.55 : 1 }}
+              onClick={() => void pick(h)}
+            >
+              <span style={{ display: 'flex', flexDirection: 'column' }}>
+                <span>{h.name}</span>
+                <span className="muted" style={{ fontSize: 12 }}>
+                  {h.kind === 'point' ? h.label : `${h.areaHa.toFixed(1)} ha`}
+                </span>
+              </span>
+              <span className="chip" style={{ fontSize: 11, padding: '2px 8px', border: '1px solid var(--hair)', borderRadius: 999 }}>
+                {h.label}
+              </span>
             </button>
           ))}
+          {results && results.length > 0 && (
+            <p className="muted" style={{ fontSize: 12 }}>
+              {SEARCH_TIP}
+            </p>
+          )}
         </div>
       )}
 
@@ -224,7 +260,12 @@ export default function ArenaSetup({
             </label>
           )}
           {circleOn && (
-            <Pills<Size> label="Circle size" value={size} options={SIZES.map((s) => ({ value: s, text: `${s} m` }))} onChange={setSize} />
+            <>
+              <Pills<Size> label="Circle size" value={size} options={SIZES.map((s) => ({ value: s, text: `${s} m` }))} onChange={setSize} />
+              <p className="muted" style={{ fontSize: 12 }}>
+                Drag to move.
+              </p>
+            </>
           )}
           <Pills<PlaceMode> label="Place" value={mode} options={placeOptions} onChange={setMode} />
           <PlaceMap
@@ -238,6 +279,7 @@ export default function ArenaSetup({
             start={start}
             toilets={draft.toilets}
             onTap={tap}
+            onCircleMove={setCentre}
             onStationRemove={(k) => setStations(stations.filter((_, i) => i !== k))}
           />
           <p className="muted" style={{ fontSize: 12 }}>

@@ -39,6 +39,8 @@ interface Props {
   start: LatLng | null
   toilets: LatLng[]
   onTap: (p: LatLng) => void
+  /** The lime handle was dropped: move the circle's centre here. */
+  onCircleMove?: (p: LatLng) => void
   onStationRemove: (index: number) => void
 }
 
@@ -64,6 +66,7 @@ export default function PlaceMap(props: Props) {
   const ready = useRef(false)
   const latest = useRef(props)
   latest.current = props
+  const handle = useRef<maplibregl.Marker | null>(null)
 
   useEffect(() => {
     if (!el.current) return
@@ -154,6 +157,40 @@ export default function PlaceMap(props: Props) {
     if (!m || !ready.current) return
     for (const [id, d] of Object.entries(layersData(props))) (m.getSource(id) as GeoJSONSource | undefined)?.setData(d)
   })
+
+  // A lime handle at the circle's centre: drag it to move the circle. MapLibre marks the pointer event as handled
+  // when it lands on a draggable marker, so the map doesn't pan underneath; a tap on it must not also tap the map.
+  const centreLat = props.circle?.center.lat
+  const centreLng = props.circle?.center.lng
+  const hasCircle = !!props.circle
+  useEffect(() => {
+    const m = map.current
+    if (!m) return
+    if (!hasCircle || centreLat === undefined || centreLng === undefined) {
+      handle.current?.remove()
+      handle.current = null
+      return
+    }
+    if (!handle.current) {
+      const element = document.createElement('div')
+      element.setAttribute('aria-label', 'Drag to move the circle')
+      element.style.cssText = `width:28px;height:28px;border-radius:50%;background:${VOLT};border:3px solid ${BLACK};box-shadow:0 0 0 2px ${VOLT};cursor:grab;touch-action:none`
+      element.addEventListener('click', (e) => e.stopPropagation())
+      const marker = new maplibregl.Marker({ element, draggable: true }).setLngLat([centreLng, centreLat]).addTo(m)
+      marker.on('dragend', () => {
+        const at = marker.getLngLat()
+        latest.current.onCircleMove?.({ lat: at.lat, lng: at.lng })
+      })
+      handle.current = marker
+    } else handle.current.setLngLat([centreLng, centreLat])
+  }, [hasCircle, centreLat, centreLng])
+  useEffect(
+    () => () => {
+      handle.current?.remove()
+      handle.current = null
+    },
+    [],
+  )
 
   // Frame the park (or a saved play area, or the circle) whenever a different one is chosen.
   const frame =

@@ -22,7 +22,15 @@ export interface ParkHit {
   osmRef: string
   name: string
   areaHa: number
+  /** The park's outline; empty for a point hit, which the app turns into a circle. */
   outline: LatLng[]
+  kind: 'outline' | 'point'
+  /** A short plain word for what it is: Park, Stadium, Area, Hill, Station or Place. */
+  label: string
+  /** The point itself, or the middle of the outline. */
+  center: LatLng
+  /** Stations and buildings: shown, but greyed and last. */
+  unlikely: boolean
   /** More than 1: the park is mapped in several pieces and only the largest is used. */
   pieces: number
 }
@@ -58,10 +66,30 @@ interface NominatimResult {
   osm_id: number
   name?: string
   display_name?: string
+  category?: string
+  type?: string
+  lat?: string
+  lon?: string
   geojson?: { type: string; coordinates: unknown }
 }
 
-/** Parks (and other mapped areas) in Malaysia matching the name, largest first. */
+const PARK_TYPES = new Set(['park', 'garden', 'recreation_ground', 'nature_reserve', 'playground', 'common', 'dog_park'])
+const STADIUM_TYPES = new Set(['stadium', 'sports_centre', 'pitch', 'track', 'golf_course'])
+const AREA_TYPES = new Set(['suburb', 'neighbourhood', 'quarter', 'town', 'village', 'city', 'hamlet', 'city_block'])
+const UNLIKELY_CATEGORIES = new Set(['building', 'amenity', 'shop', 'office', 'highway', 'man_made'])
+
+/** A short plain word for what a Nominatim result is, and whether it is an unlikely place to play. */
+function describe(category = '', type = ''): { label: string; unlikely: boolean } {
+  if (category === 'railway' || type === 'station' || type === 'halt' || type === 'stop') return { label: 'Station', unlikely: true }
+  if (category === 'leisure' && PARK_TYPES.has(type)) return { label: 'Park', unlikely: false }
+  if (category === 'landuse' && type === 'recreation_ground') return { label: 'Park', unlikely: false }
+  if (category === 'leisure' && STADIUM_TYPES.has(type)) return { label: 'Stadium', unlikely: false }
+  if (category === 'place' && AREA_TYPES.has(type)) return { label: 'Area', unlikely: false }
+  if (category === 'natural' && (type === 'peak' || type === 'hill')) return { label: 'Hill', unlikely: false }
+  return { label: 'Place', unlikely: UNLIKELY_CATEGORIES.has(category) }
+}
+
+/** Parks, areas and other places in Malaysia matching the name: parks first, stations and buildings last. */
 export async function searchParks(query: string, deps: Deps): Promise<ParkHit[]> {
   const q = query.trim()
   const key = `nominatim:${q.toLowerCase()}`
@@ -84,28 +112,38 @@ export async function searchParks(query: string, deps: Deps): Promise<ParkHit[]>
     countrycodes: 'my',
     format: 'jsonv2',
     polygon_geojson: '1',
-    limit: '5',
+    limit: '10',
     polygon_threshold: '0.00001',
   })
   const results = (await deps.fetchJson(`${NOMINATIM}?${params}`, { headers: { 'User-Agent': OSM_USER_AGENT } })) as NominatimResult[]
   const hits: ParkHit[] = []
   for (const r of results ?? []) {
     const g = r.geojson
+    const name = r.name || (r.display_name ?? '').split(',')[0] || 'Unnamed area'
+    const osmRef = `${r.osm_type}/${r.osm_id}`
+    const { label, unlikely } = describe(r.category, r.type)
     let rings: LatLng[][] = []
     if (g?.type === 'Polygon') rings = [(g.coordinates as number[][][])[0].map(toLatLng)]
     else if (g?.type === 'MultiPolygon') rings = (g.coordinates as number[][][][]).map((poly) => poly[0].map(toLatLng))
-    else continue
+    if (rings.length === 0) {
+      const lat = Number(r.lat)
+      const lng = Number(r.lon)
+      if (r.lat == null || r.lon == null || !Number.isFinite(lat) || !Number.isFinite(lng)) continue
+      hits.push({ osmRef, name, areaHa: 0, outline: [], kind: 'point', label, center: { lat, lng }, unlikely, pieces: 1 })
+      continue
+    }
     rings = rings.map(openRing)
     const outline = rings.reduce((a, b) => (ringAreaHa(b) > ringAreaHa(a) ? b : a))
-    hits.push({
-      osmRef: `${r.osm_type}/${r.osm_id}`,
-      name: r.name || (r.display_name ?? '').split(',')[0] || 'Unnamed area',
-      areaHa: ringAreaHa(outline),
-      outline,
-      pieces: rings.length,
-    })
+    const center = {
+      lat: outline.reduce((t, p) => t + p.lat, 0) / outline.length,
+      lng: outline.reduce((t, p) => t + p.lng, 0) / outline.length,
+    }
+    hits.push({ osmRef, name, areaHa: ringAreaHa(outline), outline, kind: 'outline', label, center, unlikely, pieces: rings.length })
   }
-  hits.sort((a, b) => b.areaHa - a.areaHa)
+  // Likely matches first: park outlines, then areas and hills, then other outlines, then other points; unlikely ones last.
+  const group = (h: ParkHit) =>
+    h.kind === 'outline' ? (h.label === 'Park' ? 0 : 2) : h.label === 'Area' || h.label === 'Hill' ? 1 : 3
+  hits.sort((a, b) => Number(a.unlikely) - Number(b.unlikely) || group(a) - group(b) || b.areaHa - a.areaHa)
   await deps.cache.put(key, hits)
   return hits
 }

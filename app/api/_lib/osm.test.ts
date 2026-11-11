@@ -44,15 +44,14 @@ describe('searchParks', () => {
       countrycodes: 'my',
       format: 'jsonv2',
       polygon_geojson: '1',
-      limit: '5',
+      limit: '10',
       polygon_threshold: '0.00001',
     })
     expect(calls[0].init?.headers?.['User-Agent']).toBe(OSM_USER_AGENT)
   })
 
-  it('drops point results and keeps the largest ring of a MultiPolygon', async () => {
+  it('keeps the largest ring of a MultiPolygon and labels outlines', async () => {
     replies.push([
-      { osm_type: 'node', osm_id: 1, name: 'A sign', geojson: { type: 'Point', coordinates: [101.71, 3.15] } },
       { osm_type: 'way', osm_id: 10590000, name: 'KLCC Park', geojson: { type: 'Polygon', coordinates: [sq(101.71, 3.15, 0.003)] } },
       {
         osm_type: 'relation',
@@ -68,6 +67,48 @@ describe('searchParks', () => {
     ])
     expect(hits[0].outline[0]).toEqual({ lat: 3.1, lng: 101.72 })
     expect(hits[1].areaHa).toBeCloseTo(11.1, 0)
+  })
+
+  describe('places as points', () => {
+    const jalil = () => [
+      { osm_type: 'way', osm_id: 5, name: 'SP17 Bukit Jalil', category: 'railway', type: 'station', geojson: { type: 'Polygon', coordinates: [sq(101.69, 3.06, 0.0007)] } },
+      { osm_type: 'node', osm_id: 1, name: 'Bukit Jalil', category: 'place', type: 'suburb', lat: '3.0618', lon: '101.6993', geojson: { type: 'Point', coordinates: [101.6993, 3.0618] } },
+      { osm_type: 'node', osm_id: 2, name: 'Bukit Jalil LRT', category: 'railway', type: 'stop', lat: '3.0620', lon: '101.6990', geojson: { type: 'Point', coordinates: [101.699, 3.062] } },
+      { osm_type: 'node', osm_id: 3, name: 'Bukit Jalil', category: 'natural', type: 'peak', lat: '3.05', lon: '101.7' },
+      { osm_type: 'way', osm_id: 6, name: 'Taman Rekreasi', category: 'leisure', type: 'park', geojson: { type: 'Polygon', coordinates: [sq(101.7, 3.07, 0.002)] } },
+    ]
+
+    it('keeps the suburb as an Area point, flags the station, and sorts parks, areas, then unlikely', async () => {
+      replies.push(jalil())
+      const hits = await searchParks('Bukit Jalil', deps())
+      expect(hits.map((h) => [h.osmRef, h.kind, h.label, h.unlikely])).toEqual([
+        ['way/6', 'outline', 'Park', false],
+        ['node/1', 'point', 'Area', false],
+        ['node/3', 'point', 'Hill', false],
+        ['way/5', 'outline', 'Station', true],
+        ['node/2', 'point', 'Station', true],
+      ])
+      const area = hits[1]
+      expect(area.outline).toEqual([])
+      expect(area.areaHa).toBe(0)
+      expect(area.center).toEqual({ lat: 3.0618, lng: 101.6993 })
+      expect(hits[0].center.lat).toBeGreaterThan(3.07)
+      expect(hits[0].center.lat).toBeLessThan(3.072)
+    })
+
+    it('names stadiums, buildings and unknowns', async () => {
+      replies.push([
+        { osm_type: 'way', osm_id: 1, name: 'Stadium', category: 'leisure', type: 'stadium', geojson: { type: 'Polygon', coordinates: [sq(101.7, 3.1, 0.001)] } },
+        { osm_type: 'way', osm_id: 2, name: 'Block', category: 'building', type: 'yes', geojson: { type: 'Polygon', coordinates: [sq(101.7, 3.2, 0.001)] } },
+        { osm_type: 'node', osm_id: 3, name: 'Kedai', category: 'shop', type: 'mall', lat: '3.3', lon: '101.7' },
+      ])
+      const hits = await searchParks('x', deps())
+      expect(hits.map((h) => [h.osmRef, h.label, h.unlikely])).toEqual([
+        ['way/1', 'Stadium', false],
+        ['way/2', 'Place', true],
+        ['node/3', 'Place', true],
+      ])
+    })
   })
 
   it('a repeated search is served from the cache', async () => {
