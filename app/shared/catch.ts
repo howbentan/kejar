@@ -4,7 +4,12 @@ import type { LatLng, Phase, Player, Position } from './types.js'
 
 /** Spec §4.6–4.7. */
 export const CATCH_RADIUS_M = 50
-export const STALE_MS = 2 * 60_000
+/** Plausibility of a catch against the runner's last fix (fair play §1.2). */
+export const PLAUSIBLE_BASE_M = 50
+export const RUNNER_SPEED_MPS = 6
+export const PLAUSIBLE_MAX_AGE_MS = 10 * 60_000
+/** A catch beyond this share of the plausible limit is flagged for marshals. */
+export const BORDERLINE_RATIO = 0.8
 export const JAIL_RADIUS_M = 30
 /** A chaser must have a location this recent to catch (blocks catching from photos of tags). */
 export const CHASER_FRESH_MS = 60_000
@@ -19,7 +24,27 @@ const slack = (p: Position) => Math.min(Math.max(p.accuracy_m, 0), MAX_ACCURACY_
 export type CatchJudgement =
   /** `label` names the runner for the chaser's stamp: `#07 Aina` (motion design §4). Added by the catch action. */
   | { ok: true; flagged: boolean; runnerId: string; label?: string }
-  | { ok: false; reason: 'not-chasing' | 'not-a-chaser' | 'unknown-tag' | 'already-caught' | 'too-far' | 'no-location' | 'shielded' | 'disqualified' | 'already-out' }
+  | {
+      ok: false
+      reason:
+        | 'not-chasing'
+        | 'not-a-chaser'
+        | 'unknown-tag'
+        | 'already-caught'
+        | 'too-far'
+        | 'implausible'
+        | 'no-location'
+        | 'shielded'
+        | 'disqualified'
+        | 'already-out'
+        | 'durian-locked'
+        | 'durian-head-start'
+      /** The runner's name, on the Durian refusals (added by the catch action). */
+      name?: string
+    }
+
+/** After a Durian blocks a catch, no other chaser can catch that runner for this long (fair play §1.5). */
+export const DURIAN_HEAD_START_MS = 15_000
 
 export function judgeCatch(i: {
   phase: Phase
@@ -29,6 +54,8 @@ export function judgeCatch(i: {
   chaserPos: Position | null
   runnerPos: Position | null
   now: number
+  /** Every Durian block this game, from the `shielded` events. */
+  shieldings: { chaserId: string; runnerId: string; at: number }[]
 }): CatchJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (i.chaser.role !== 'chaser') return { ok: false, reason: 'not-a-chaser' }
@@ -38,16 +65,31 @@ export function judgeCatch(i: {
   if (!runner) return { ok: false, reason: 'unknown-tag' }
   if (runner.jailed) return { ok: false, reason: 'already-caught' }
   if (runner.disqualified_at) return { ok: false, reason: 'already-out' }
+  // Durian can't be camped: a stung chaser is off this runner for the game, and everyone waits out a head start.
+  const stings = i.shieldings.filter((s) => s.runnerId === runner.id)
+  if (stings.some((s) => s.chaserId === i.chaser.id)) return { ok: false, reason: 'durian-locked' }
+  if (stings.some((s) => i.now - s.at < DURIAN_HEAD_START_MS)) return { ok: false, reason: 'durian-head-start' }
 
   const age = (p: Position) => i.now - Date.parse(p.at)
   if (!i.chaserPos || age(i.chaserPos) > CHASER_FRESH_MS) return { ok: false, reason: 'no-location' }
   const r = i.runnerPos
-  if (!r || age(r) > STALE_MS) return { ok: true, flagged: true, runnerId: runner.id }
+  // Nothing to compare against: the rip counts.
+  if (!r) return { ok: true, flagged: false, runnerId: runner.id }
+  const d = distanceM(i.chaserPos, r)
   // Runners pocket their phones, so an older check-in can't prove they're far away now.
-  if (age(r) <= RUNNER_TRUSTED_MS && distanceM(i.chaserPos, r) > CATCH_RADIUS_M + slack(i.chaserPos) + slack(r)) {
+  if (age(r) <= RUNNER_TRUSTED_MS && d > CATCH_RADIUS_M + slack(i.chaserPos) + slack(r)) {
     return { ok: false, reason: 'too-far' }
   }
-  return { ok: true, flagged: false, runnerId: runner.id }
+  // Even a pocketed phone can't have moved this far since its last fix (a photo of a reused tag from across the park).
+  const limit = plausibleLimitM(i.chaserPos, r, i.now)
+  if (d > limit) return { ok: false, reason: 'implausible' }
+  return { ok: true, flagged: d > BORDERLINE_RATIO * limit, runnerId: runner.id }
+}
+
+/** How far a runner could plausibly be from their last fix: catch radius, both GPS errors, and running since. */
+export function plausibleLimitM(chaserPos: Position, runnerPos: Position, now: number): number {
+  const age = Math.max(0, now - Date.parse(runnerPos.at))
+  return PLAUSIBLE_BASE_M + slack(chaserPos) + slack(runnerPos) + (RUNNER_SPEED_MPS * Math.min(age, PLAUSIBLE_MAX_AGE_MS)) / 1000
 }
 
 export type BreakJudgement =

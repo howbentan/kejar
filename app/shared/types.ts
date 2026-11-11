@@ -80,6 +80,13 @@ export interface Game {
   paused_at: string | null
   /** Finished pauses, oldest first. */
   pauses: { from: string; to: string }[]
+  /**
+   * When the last free Dikejar went out (fair-play §1.4): the end is held for FINAL_WHISTLE_MS so a marshal can
+   * undo a wrong last catch. Null when no whistle is pending (cleared again if someone is free).
+   */
+  final_whistle_at: string | null
+  /** When this game's personal data was wiped (fair-play §1.8), 30 days after it ended. Null until then. */
+  wiped_at: string | null
   /** Deck sets per side, fixed at start, and cards drawn so far (power-ups §5b). Older games have none. */
   runner_sets?: number | null
   chaser_sets?: number | null
@@ -198,6 +205,8 @@ export interface Ping {
   reveal_at: string
   alerted: boolean
   revealed: boolean
+  /** When the alert was claimed (store clock); null until it goes out. Late alerts don't count toward auto-jail. */
+  alert_sent_at: string | null
 }
 
 export type EventType =
@@ -237,6 +246,10 @@ export type EventType =
   | 'settled'
   /** A stash scan by this player that didn't claim. Three lock them out. Never in a feed or an alert. data: {} */
   | 'stash-miss'
+  /** A marshal or the organiser undid a chaser's catch (fair-play §1.4). target: the runner. data: { eventId, who } */
+  | 'kejar-undone'
+  /** The last free Dikejar went out: the end is held for 60 s (fair-play §1.4). data: {} */
+  | 'final-whistle'
 
 export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along' | 'grab' | 'dato'
 

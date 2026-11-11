@@ -1,11 +1,14 @@
 import type { View } from '../../shared/views.js'
+import AlertsCard from '../game/AlertsCard'
 import GameMap from '../game/Map'
 import { clock, useServerNow } from '../game/time'
 import { Screen } from '../game/ui'
+import { useWakeLock } from '../game/useWakeLock'
 
-export default function Hide({ view }: { view: View }) {
+export default function Hide({ code, view }: { code: string; view: View }) {
   const now = useServerNow(view.now)
   const left = clock((view.endsAt ?? now) - now)
+  useWakeLock(view.me.role === 'chaser' && view.phase === 'hiding')
 
   if (view.me.role === 'chaser') {
     return (
@@ -32,6 +35,7 @@ export default function Hide({ view }: { view: View }) {
         {left}
       </p>
       <GameMap arena={view.arena} dots={view.dots} stations={view.stations} height={260} />
+      <AlertsCard code={code} view={view} />
       <p className="muted">Put your phone on silent — a buzz can give you away. Pocket it once you&apos;re hidden.</p>
     </Screen>
   )

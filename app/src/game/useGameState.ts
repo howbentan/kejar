@@ -10,6 +10,8 @@ export type LocationMode = 'always' | 'when-open' | 'never'
 const POLL_MS = 3_000
 const ALWAYS_EVERY_MS = 5_000
 const WHEN_OPEN_EVERY_MS = 15_000
+/** A check-in only re-sends the last fix if it is at most this old; otherwise the phone asks for a fresh one. */
+export const CHECKIN_RESEND_MAX_AGE_MS = 20_000
 
 /** Polls the game every 3 s while the page is visible and sends this phone's location per `sendLocation`. */
 export function useGameState(
@@ -24,6 +26,7 @@ export function useGameState(
   // The latest fix, and the check-in window it was last re-sent for (one send per window, even if the phone is still).
   const lastFix = useRef<GeolocationPosition | null>(null)
   const sentForAlert = useRef<number | null>(null)
+  const fetchingFresh = useRef(false)
   const modeRef = useRef<LocationMode>('never')
   const samples = useRef<ClockSample[]>([])
   const session = loadSession(localStorage, code)
@@ -39,14 +42,35 @@ export function useGameState(
       // Re-express "now" on this phone's clock, corrected for network delay, so every device's timers agree.
       setView({ ...v, now: receivedAt + clockOffset(samples.current) })
       setError(null)
-      // A still phone may give no new fix inside the 45 s window, so re-send the last one once per window.
+      // A still phone may give no new fix inside the 45 s window, so send a position once per window:
+      // the last fix if it is fresh, otherwise a new one from the phone.
       const fix = lastFix.current
-      if (modeRef.current !== 'never' && fix && session.token && v.nextAlertAt != null && v.now >= v.nextAlertAt && sentForAlert.current !== v.nextAlertAt) {
-        sentForAlert.current = v.nextAlertAt
-        lastSent.current = Date.now()
-        void call('location', { code, token: session.token, lat: fix.coords.latitude, lng: fix.coords.longitude, accuracy_m: fix.coords.accuracy }).catch(
-          () => undefined,
-        )
+      const alertAt = v.nextAlertAt
+      if (modeRef.current !== 'never' && session.token && alertAt != null && v.now >= alertAt && sentForAlert.current !== alertAt) {
+        const token = session.token
+        const sendFix = (p: GeolocationPosition) => {
+          sentForAlert.current = alertAt
+          lastSent.current = Date.now()
+          void call('location', { code, token, lat: p.coords.latitude, lng: p.coords.longitude, accuracy_m: p.coords.accuracy }).catch(
+            () => undefined,
+          )
+        }
+        if (fix && Date.now() - fix.timestamp <= CHECKIN_RESEND_MAX_AGE_MS) {
+          sendFix(fix)
+        } else if (!fetchingFresh.current && 'geolocation' in navigator) {
+          fetchingFresh.current = true
+          navigator.geolocation.getCurrentPosition(
+            (p) => {
+              fetchingFresh.current = false
+              lastFix.current = p
+              if (sentForAlert.current !== alertAt) sendFix(p)
+            },
+            () => {
+              fetchingFresh.current = false
+            },
+            { maximumAge: 0, enableHighAccuracy: true, timeout: 15_000 },
+          )
+        }
       }
     } catch (e) {
       // Limited for a moment: say nothing and let the next poll try again.

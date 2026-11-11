@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { alertLeadFor, autoJailDue, checkedIn } from './checkins.js'
+import { alertLeadFor, autoJailDue, checkedIn, fairlyWarned, LATE_PING_MIN_WARNING_MS } from './checkins.js'
 import { MIN, T0 } from './fixtures.js'
 
 const R = T0 + 10 * MIN
@@ -57,5 +57,18 @@ describe('autoJailDue', () => {
   })
   it('treats a location from before the window as a miss', () => {
     expect(autoJailDue([ping(10, T0 + 10 * MIN - 60_000), ping(15, T0 + 15 * MIN - 50_000)], chaseStart)).toBe(true)
+  })
+})
+
+describe('fairlyWarned', () => {
+  it('needs 25 s between the alert going out and the reveal in push mode', () => {
+    expect(LATE_PING_MIN_WARNING_MS).toBe(25_000)
+    expect(fairlyWarned(R - 25_000, R, 'push')).toBe(true)
+    expect(fairlyWarned(R - 24_999, R, 'push')).toBe(false)
+    expect(fairlyWarned(null, R, 'push')).toBe(false)
+  })
+  it('is always true in schedule mode, where the schedule is the warning', () => {
+    expect(fairlyWarned(null, R, 'schedule')).toBe(true)
+    expect(fairlyWarned(R - 1_000, R, 'schedule')).toBe(true)
   })
 })

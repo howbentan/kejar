@@ -8,6 +8,7 @@ import HostNew from './screens/HostNew'
 import Join from './screens/Join'
 import MarshalRedeem from './screens/MarshalRedeem'
 import OrganiserRedeem from './screens/OrganiserRedeem'
+import PhoneMove from './screens/PhoneMove'
 import { parsePrintCardHash } from './game/printLinks'
 import PrintCard from './screens/PrintCard'
 import YourKit from './screens/YourKit'
@@ -48,6 +49,8 @@ function Routed() {
       return <OrganiserRedeem token={token!} />
     case 'marshal-redeem':
       return <MarshalRedeem code={code!} token={token!} />
+    case 'phone-move':
+      return <PhoneMove code={code!} token={token!} />
     default:
       return <Screen eyebrow="Not found">{null}</Screen>
   }

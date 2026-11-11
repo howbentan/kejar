@@ -97,6 +97,8 @@ export default function MarshalTools({
   const [error, setError] = useState('')
   const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null)
   const [tab, setTab] = useState<'live' | 'after'>('live')
+  // New phone links made on this screen, by player id. Each link is made on one tap and shared on the next.
+  const [phoneLinks, setPhoneLinks] = useState<Record<string, string>>({})
 
   // Buzz when a new SOS comes in: marshals may be looking at the park, not the screen.
   const openSos = view.alerts.filter((a) => a.kind === 'sos' && !a.handled).length
@@ -110,7 +112,9 @@ export default function MarshalTools({
     setBusy(true)
     setError('')
     try {
-      await call(action, { code, ...credentials(code), ...extra })
+      const r = await call<{ ok?: boolean; reason?: string } | undefined>(action, { code, ...credentials(code), ...extra })
+      // An undo that lost a race (the game ended, or another marshal got there first) says so instead of vanishing.
+      if (r && r.ok === false && r.reason === 'not-undoable') setError("Too late, that one can't be undone now.")
       refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -119,12 +123,40 @@ export default function MarshalTools({
     }
   }
 
+  async function makePhoneLink(playerId: string) {
+    setBusy(true)
+    setError('')
+    try {
+      const { inviteToken } = await call<{ inviteToken: string }>('createPhoneMove', { code, ...credentials(code), playerId })
+      setPhoneLinks((l) => ({ ...l, [playerId]: `${window.location.origin}/p/${code}/${inviteToken}` }))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Called straight from a tap: nothing is awaited before `navigator.share`, or iPhone drops the share. */
+  function sendPhoneLink(name: string, link: string) {
+    setError('')
+    if (typeof navigator.share !== 'function') {
+      void navigator.clipboard.writeText(link)
+      setError('Link copied. Paste it to their new phone.')
+      return
+    }
+    navigator.share({ text: `Your new phone link for Kejar, ${name}: ${link}` }).catch((e) => {
+      if (!(e instanceof DOMException && e.name === 'AbortError')) setError(e instanceof Error ? e.message : String(e))
+    })
+  }
+
   // Live tab order (motion design): open SOS pinned up top, then everything else open, then closed.
   const openAlerts = view.alerts.filter((a) => !a.handled)
   const openSosAlerts = openAlerts.filter((a) => a.kind === 'sos')
   const needsALook = openAlerts.filter((a) => a.kind !== 'sos')
   const closedAlerts = view.alerts.filter((a) => a.handled)
   const players = view.roster.filter((p) => p.role !== 'marshal' || p.id !== view.me.id)
+  // Catches Undo kejar can still undo (fair-play §1.4), so a flagged-catch alert offers it only while it would work.
+  const undoable = new Set(view.roster.flatMap((p) => (p.undoKejarId ? [p.undoKejarId] : [])))
 
   function AlertRow(a: Alert) {
     return (
@@ -157,6 +189,11 @@ export default function MarshalTools({
               It stands
             </button>
           </span>
+        )}
+        {!a.handled && a.kind === 'flagged-catch' && undoable.has(a.id) && (
+          <button type="button" className="btn alert-btn" disabled={busy} onClick={() => act('undoKejar', { eventId: a.id })}>
+            Undo kejar
+          </button>
         )}
         {!a.handled && a.kind !== 'auto-jail' && a.kind !== 'sos' && (
           <button type="button" className="btn btn-ghost alert-btn" disabled={busy} onClick={() => act('handleAlert', { eventId: a.id })}>
@@ -307,6 +344,24 @@ export default function MarshalTools({
               <td className="mono">{p.role === 'runner' ? tagText(p.tag_id) : ''}</td>
               <td>{p.disqualified_at ? <LuarGarisanStatus /> : p.jailed && <JailStatus p={p} now={view.now} />}</td>
               <td style={{ textAlign: 'right' }}>
+                {p.undoKejarId && (
+                  <button type="button" className="pill" disabled={busy} onClick={() => act('undoKejar', { eventId: p.undoKejarId })}>
+                    Undo kejar
+                  </button>
+                )}
+                {(p.role === 'runner' || p.role === 'chaser') &&
+                  (phoneLinks[p.id] ? (
+                    <>
+                      <span className="muted">{`Link ready. Send it to ${p.name}'s new phone.`}</span>{' '}
+                      <button type="button" className="pill" onClick={() => sendPhoneLink(p.name, phoneLinks[p.id])}>
+                        Send link
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" className="pill" aria-label={`New phone for ${p.name}`} disabled={busy} onClick={() => makePhoneLink(p.id)}>
+                      New phone
+                    </button>
+                  ))}
                 <button
                   type="button"
                   className="pill"

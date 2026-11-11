@@ -93,6 +93,24 @@ describe('MarshalTools', () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith('handleAlert', { code: 'ABC234', organiserToken: 'h1', eventId: 'e5' }))
   })
 
+  it('says so when an undo loses a race to the end or another marshal', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'not-undoable' })
+    const a = alert('e5', 'auto-jail', 'Hafiz #03 missed 2 check-ins — sent to Penjara', false, 'r2')
+    render(<MarshalTools code="ABC234" view={testView({ alerts: [a] })} refresh={refresh} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Phone problem: undo' }))
+    expect(await screen.findByText("Too late, that one can't be undone now.")).toBeInTheDocument()
+  })
+
+  it('says so for Undo kejar too, and the message clears on the next action', async () => {
+    call.mockResolvedValueOnce({ ok: false, reason: 'not-undoable' })
+    const view = testView({ roster: [{ ...roster[0], undoKejarId: 'k1' } as never] })
+    render(<MarshalTools code="ABC234" view={view} refresh={refresh} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Undo kejar' }))
+    expect(await screen.findByText("Too late, that one can't be undone now.")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Undo kejar' }))
+    await waitFor(() => expect(screen.queryByText("Too late, that one can't be undone now.")).toBeNull())
+  })
+
   it('a handled auto-jail alert has no buttons', () => {
     const a = alert('e5', 'auto-jail', 'Hafiz #03 missed 2 check-ins — sent to Penjara', true, 'r2')
     render(<MarshalTools code="ABC234" view={testView({ alerts: [a] })} refresh={refresh} />)

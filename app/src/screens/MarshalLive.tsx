@@ -7,6 +7,7 @@ import MarshalTools from '../game/MarshalTools'
 import PingRipple from '../game/PingRipple'
 import SosTakeover from '../game/SosTakeover'
 import { useServerNow } from '../game/time'
+import { useWakeLock } from '../game/useWakeLock'
 import { Screen } from '../game/ui'
 import { GameClock } from '../game/ChaseLayout'
 import { Feed } from './RunnerChase'
@@ -18,6 +19,7 @@ import { PlayAgain, ResultsSummary } from './Results'
  */
 export default function MarshalLive({ code, view, refresh }: { code: string; view: View; refresh: () => void }) {
   const now = useServerNow(view.now)
+  useWakeLock(view.phase === 'hiding' || view.phase === 'chasing')
   // SOS takeovers this marshal stepped out of with "See the map first"; the pinned SOS row brings one back.
   // Alert ids are event ids, never reused, so a closed SOS's id staying in here is harmless.
   const [dismissed, setDismissed] = useState<string[]>([])

@@ -27,6 +27,8 @@ export function game(over: Partial<Game> = {}): Game {
     winner: null,
     paused_at: null,
     pauses: [],
+    final_whistle_at: null,
+    wiped_at: null,
     ...over,
   }
 }
@@ -64,6 +66,7 @@ export function ping(seq: number, revealMs: number, over: Partial<Ping> = {}): P
     reveal_at: iso(revealMs),
     alerted: true,
     revealed: true,
+    alert_sent_at: iso(revealMs - 30_000),
     ...over,
   }
 }

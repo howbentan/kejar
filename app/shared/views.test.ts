@@ -286,6 +286,17 @@ describe('check-in state', () => {
   it('is missed after a revealed ping with no check-in, until the next window', () => {
     expect(checkin(hafiz, { now: T0 + 16 * MIN })).toEqual({ state: 'missed', alertAt: ALERT, revealAt: REVEAL, missedInRow: 1 })
   })
+  it('a skipped ping (under 25 s of warning) is never missed, and is not the previous ping that counted', () => {
+    // Ping 2 (+15) was alerted only 20 s ahead, so Hafiz's miss of it is ignored; ping 1 he did check in for.
+    const skipped = [ping(1, T0 + 10 * MIN), ping(2, T0 + 15 * MIN, { alert_sent_at: iso(T0 + 15 * MIN - 20_000) })]
+    const hafizIn = { ...positions, r2: [pos(3.003, 101.003, T0 + 9.9 * MIN)] }
+    expect(checkin(hafiz, { now: T0 + 16 * MIN, pings: skipped, positions: hafizIn })).toMatchObject({ state: 'early', missedInRow: 0 })
+  })
+  it('a skipped ping does not paint a runner as missed on the chaser map', () => {
+    const skipped = [ping(1, T0 + 10 * MIN), ping(2, T0 + 15 * MIN, { alert_sent_at: iso(T0 + 15 * MIN - 20_000) })]
+    const dot = view(chaser, { pings: skipped }).dots.find((d) => d.id === 'r2')!
+    expect(dot.missed).toBeUndefined()
+  })
   it("doesn't count a ping whose alert came before the runner was freed", () => {
     const freed = { ...hafiz, freed_at: new Date(T0 + 14.5 * MIN).toISOString() }
     expect(checkin(freed, { now: T0 + 16 * MIN, players: [chaser, aina, freed, wei, siti] })?.state).toBe('early')
@@ -421,6 +432,28 @@ describe('feed wording', () => {
   })
   it('announces an undone auto-jail', () => {
     expect(feedOf([event('auto-jail-undone', T0 + 16 * MIN, { target_id: 'r2' })])).toEqual(['#03 is back in the game (marshal)'])
+  })
+  it('announces the final whistle and an undone kejar (runner name only, never the tag)', () => {
+    expect(feedOf([event('final-whistle', T0 + 16 * MIN)])).toEqual(['Last Dikejar caught! Final whistle in 60 s.'])
+    for (const cause of ['catch', 'auto-jail']) {
+      expect(feedOf([event('final-whistle', T0 + 16 * MIN, { data: { cause } })])).toEqual(['Last Dikejar caught! Final whistle in 60 s.'])
+    }
+    for (const cause of ['removed', 'luar-garisan']) {
+      expect(feedOf([event('final-whistle', T0 + 16 * MIN, { data: { cause } })])).toEqual(['No Dikejar left free! Final whistle in 60 s.'])
+    }
+    expect(feedOf([event('kejar-undone', T0 + 16 * MIN, { target_id: 'r2' })])).toEqual(['A marshal undid a kejar. Hafiz is back in.'])
+  })
+  it("a marshal's roster offers Undo kejar on a runner still held by their latest catch, during the chase only", () => {
+    const caught = { ...hafiz, jailed: true, caught_by: 'c1', caught_at: iso(T0 + 12 * MIN) }
+    const catchEvent = event('caught', T0 + 12 * MIN, { actor_id: 'c1', target_id: 'r2' })
+    const ps = [chaser, aina, caught, wei, siti]
+    const undoId = (me: Player, over: Partial<Parameters<typeof viewFor>[0]> = {}) =>
+      view(me, { players: ps, events: [catchEvent], ...over }).roster.find((p) => p.id === 'r2')!.undoKejarId
+    expect(undoId(siti)).toBe(catchEvent.id)
+    expect(undoId(organiserMe)).toBe(catchEvent.id)
+    expect(undoId(siti, { now: T0 + 2 * MIN })).toBeNull()
+    expect(undoId(siti, { players: [chaser, aina, { ...caught, freed_at: iso(T0 + 13 * MIN) }, wei, siti] })).toBeNull()
+    expect(view(siti, { players: ps, events: [catchEvent] }).roster.find((p) => p.id === 'r1')!.undoKejarId).toBeNull()
   })
   it('announces an auto-jail', () => {
     expect(feedOf([event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2' })])).toEqual(['#03 missed 2 check-ins in a row.'])

@@ -5,6 +5,8 @@ import type { View } from '../../shared/views.js'
 import { testView } from './testView'
 
 const call = vi.hoisted(() => vi.fn())
+const useWakeLock = vi.hoisted(() => vi.fn())
+vi.mock('../game/useWakeLock', () => ({ useWakeLock }))
 vi.mock('../game/api', () => ({ call, ApiError: class extends Error {} }))
 vi.mock('../game/Map', () => ({ default: () => null }))
 // jsdom has no matchMedia, which the marshal alerts card checks.
@@ -53,6 +55,15 @@ afterEach(() => {
 })
 
 const takeover = () => screen.queryByRole('dialog', { name: 'SOS' })
+
+describe('MarshalLive wake lock', () => {
+  it('keeps the screen awake while the game runs, and not once it has ended', () => {
+    const { rerender } = render(<MarshalLive code="ABC234" view={marshal()} refresh={refresh} />)
+    expect(useWakeLock).toHaveBeenLastCalledWith(true)
+    rerender(<MarshalLive code="ABC234" view={organiser({ phase: 'ended' })} refresh={refresh} />)
+    expect(useWakeLock).toHaveBeenLastCalledWith(false)
+  })
+})
 
 describe('MarshalLive SOS takeover', () => {
   it('"See the map first" hands back the normal screen, and it stays that way across polls, without touching the server', () => {
@@ -110,6 +121,79 @@ describe('MarshalLive SOS takeover', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Organiser only')
     expect(call).toHaveBeenCalledWith('respondToSos', { code: 'ABC234', organiserToken: 'h1', eventId: 'e1' })
     expect(refresh).not.toHaveBeenCalled()
+  })
+})
+
+describe('MarshalLive Undo kejar', () => {
+  const roster = [
+    { id: 'r1', name: 'Aina', role: 'runner' as const, tag_id: 7, jailed: true, caught_by: 'Ben', undoKejarId: 'e9' },
+    { id: 'r2', name: 'Hafiz', role: 'runner' as const, tag_id: 3, jailed: true, caught_by: null, undoKejarId: null },
+    { id: 'c1', name: 'Ben', role: 'chaser' as const, tag_id: null, jailed: false },
+  ]
+  const flagged: Alert = { ...sos('e9', 'Check catch: #07 by Ben (far from their last spot)'), kind: 'flagged-catch', targetId: 'r1' }
+
+  it("a caught runner's row offers Undo kejar, and tapping it undoes that catch", async () => {
+    render(<MarshalLive code="ABC234" view={organiser({ roster })} refresh={refresh} />)
+    const buttons = screen.getAllByRole('button', { name: 'Undo kejar' })
+    expect(buttons).toHaveLength(1)
+    fireEvent.click(buttons[0])
+    await waitFor(() => expect(refresh).toHaveBeenCalled())
+    expect(call).toHaveBeenCalledWith('undoKejar', { code: 'ABC234', organiserToken: 'h1', eventId: 'e9' })
+  })
+
+  it("that catch's flagged-catch alert offers it too", async () => {
+    render(<MarshalLive code="ABC234" view={organiser({ roster, alerts: [flagged] })} refresh={refresh} />)
+    expect(screen.getAllByRole('button', { name: 'Undo kejar' })).toHaveLength(2)
+  })
+
+  it("an alert for a catch that can't be undone any more has no Undo kejar", () => {
+    render(<MarshalLive code="ABC234" view={organiser({ roster: roster.map((p) => ({ ...p, undoKejarId: null })), alerts: [flagged] })} refresh={refresh} />)
+    expect(screen.queryByRole('button', { name: 'Undo kejar' })).toBeNull()
+  })
+})
+
+describe('MarshalLive New phone', () => {
+  const roster = [
+    { id: 'r1', name: 'Aina', role: 'runner' as const, tag_id: 7, jailed: false },
+    { id: 'c1', name: 'Ben', role: 'chaser' as const, tag_id: null, jailed: false },
+    { id: 'm2', name: 'Lee', role: 'marshal' as const, tag_id: null, jailed: false },
+  ]
+  const share = vi.fn()
+  beforeEach(() => {
+    share.mockReset()
+    share.mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'share', { configurable: true, value: share })
+  })
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'share')
+  })
+
+  it('is offered on runner and chaser rows only', () => {
+    render(<MarshalLive code="ABC234" view={organiser({ roster })} refresh={refresh} />)
+    expect(screen.getAllByRole('button', { name: /^New phone/ })).toHaveLength(2)
+  })
+
+  it('makes the link on the first tap, then Send link shares it inside that tap', async () => {
+    call.mockResolvedValue({ inviteToken: 'tk9' })
+    render(<MarshalLive code="ABC234" view={organiser({ roster })} refresh={refresh} />)
+    fireEvent.click(screen.getByRole('button', { name: 'New phone for Aina' }))
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith('createPhoneMove', { code: 'ABC234', organiserToken: 'h1', playerId: 'r1' }),
+    )
+    expect(await screen.findByText("Link ready. Send it to Aina's new phone.")).toBeInTheDocument()
+    expect(share).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Send link' }))
+    // No await before this: the share has to happen synchronously inside the click.
+    expect(share).toHaveBeenCalledTimes(1)
+    expect(share.mock.calls[0][0].text).toContain(`${window.location.origin}/p/ABC234/tk9`)
+  })
+
+  it('shows the error when the link cannot be made', async () => {
+    call.mockRejectedValue(new Error('The game has ended'))
+    render(<MarshalLive code="ABC234" view={organiser({ roster })} refresh={refresh} />)
+    fireEvent.click(screen.getByRole('button', { name: 'New phone for Aina' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('The game has ended')
+    expect(screen.queryByRole('button', { name: 'Send link' })).toBeNull()
   })
 })
 

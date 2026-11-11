@@ -14,13 +14,13 @@ import {
   type ReportReason,
   type SosReason,
 } from '../../shared/alerts.js'
-import { autoJailDue, checkinsSince, countedCheckIn } from '../../shared/checkins.js'
+import { autoJailDue, checkinsSince, countedCheckIn, fairlyWarned } from '../../shared/checkins.js'
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
-import { isOut } from '../../shared/players.js'
-import { judgeCatch, judgeJailbreak, judgeSettle, RUNNER_TRUSTED_MS } from '../../shared/catch.js'
-import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, phaseAt, pingTimes } from '../../shared/clock.js'
+import { isOut, undoableCatchId } from '../../shared/players.js'
+import { judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
+import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
 import { bomohCodeFromQr, datoCodeFromQr, isBomohQr, isDatoQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { computeResults } from '../../shared/results.js'
@@ -30,7 +30,7 @@ import { DEFAULT_SETTINGS, type Arena, type BomohStash, type DatoStash, type Gam
 import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
 import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
-import { MARSHAL_INVITE_TTL_MS, ORGANISER_INVITE_TTL_MS } from '../../shared/invites.js'
+import { MARSHAL_INVITE_TTL_MS, ORGANISER_INVITE_TTL_MS, PHONE_MOVE_TTL_MS } from '../../shared/invites.js'
 import { OSM_CACHE_MS, parkFeatures as lookupParkFeatures, searchParks as lookupParks, type FetchJson } from './osm.js'
 import { hashToken, newDatoCode, newToken } from './secrets.js'
 import type { GameRow, GameStore, OrganiserRow, SafetyRecord, SavedArenaRow } from './store.js'
@@ -182,6 +182,32 @@ const NO_STASH = { ok: false, reason: 'no-stash' } as const
 
 /** A lobby holds its card for this long after it was made; then it must re-check it before use (ruling R3). */
 export const LOBBY_HOLD_MS = 24 * 60 * 60_000
+
+/** A game's personal data is wiped this long after it ends (fair-play §1.8). */
+export const WIPE_AFTER_MS = 30 * 24 * 60 * 60_000
+/** How many expired games one request sweeps, so the wipe stays cheap. */
+/**
+ * A game that never recorded an end (ended_at is written lazily from requests) is wiped this long after it was made. A lobby
+ * holds its card for 24 h and a game runs a couple of hours, so any game this old is certainly over.
+ */
+export const WIPE_UNENDED_AFTER_MS = 32 * 24 * 60 * 60_000
+const WIPE_BATCH = 3
+
+/** Wipes a few expired games. Best effort: it runs on requests that already happen, so an error here is swallowed. */
+async function wipeExpired(ctx: Ctx): Promise<void> {
+  try {
+    const ids = await ctx.store.gamesToWipe(iso(ctx.now - WIPE_AFTER_MS), iso(ctx.now - WIPE_UNENDED_AFTER_MS), WIPE_BATCH)
+    for (const id of ids) {
+      try {
+        await ctx.store.wipeGame(id)
+      } catch {
+        // One bad game doesn't stop the rest.
+      }
+    }
+  } catch {
+    // Never fails the request.
+  }
+}
 
 /** An unstarted game made more than LOBBY_HOLD_MS ago. A row with no `created_at` (older test data) never expires. */
 function expiredLobby(g: Game, now: number): boolean {
@@ -491,8 +517,9 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     await store.addEvent({ game_id: game.id, type: 'chase', actor_id: null, target_id: null, data: {} })
   }
 
-  const pingRows = await store.pings(game.id)
+  let pingRows = await store.pings(game.id)
   const work = dueWork(game, pingRows, now)
+  let whistleNow = false
   // Scheduled pings come from the clock; bonus (Flare) pings carry their own times.
   const times = new Map<number, { revealAt: number }>([
     ...pingTimes(game, now).map((t) => [t.seq, t] as const),
@@ -506,6 +533,11 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     const runners = (await store.players(game.id)).filter((p) => p.role === 'runner' && !isOut(p))
     await pushTo(ctx, runners, { type: 'checkin', code: game.code, seq, revealAt: times.get(seq)?.revealAt })
   }
+
+  // The alerts just claimed (here or by a concurrent call) now carry their send times.
+  if (work.alert.length && work.reveal.length) pingRows = await store.pings(game.id)
+  const sentAt = new Map(pingRows.map((r) => [r.seq, r.alert_sent_at ? Date.parse(r.alert_sent_at) : null] as const))
+  const warned = (t: { seq: number; revealAt: number }) => fairlyWarned(sentAt.get(t.seq) ?? null, t.revealAt, game.settings.checkinMode)
 
   for (const seq of work.reveal) {
     if (!(await store.claimPing(game.id, seq, 'revealed'))) continue
@@ -546,8 +578,10 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     if (seq < BONUS_SEQ_BASE) {
       // Flares give only 30 s notice, so only scheduled pings count towards a missed streak.
       // The last three are loaded so a jailed runner's screen can show the check-ins it was judged on.
-      const lastThree = pingTimes(game, now).filter((t) => t.seq <= seq).slice(-3)
-      const lastTwo = lastThree.slice(-2)
+      // A ping whose alert gave under 25 s of warning is skipped: it is neither a miss nor a reset, and a
+      // skipped reveal judges nobody (fair-play §1.1).
+      const lastThree = pingTimes(game, now).filter((t) => t.seq <= seq && warned(t)).slice(-3)
+      const lastTwo = warned({ seq, revealAt }) ? lastThree.slice(-2) : []
       const atReveals = lastTwo.length === 2 ? await store.latestPositions(game.id, lastThree.map((t) => iso(t.revealAt))) : {}
       for (const p of lastTwo.length === 2 ? free : []) {
         // Only a location inside each ping's 45 s window counts as a check-in (§4.2).
@@ -565,13 +599,57 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
           await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: p.id, data: { who: who(p), seq, checkins } })
         }
       }
-      // Auto-jailing the last free runner ends the game, the same as a catch.
-      const runners = (await store.players(game.id)).filter((p) => p.role === 'runner')
-      if (runners.length > 0 && runners.every(isOut)) await finish(ctx, game)
+      // Auto-jailing the last free runner blows the final whistle, the same as a catch.
+      if (await allOutCheck(ctx, game, 'auto-jail')) whistleNow = true
     }
   }
 
-  if (work.end) await finish(ctx, game)
+  // A whistle just blown here (or by a concurrent call) isn't on `game` yet: read it back before judging the end.
+  const g = whistleNow && !game.final_whistle_at ? ((await store.gameByCode(game.code)) ?? game) : game
+  if (g.final_whistle_at && !g.ended_at) await settleWhistle(ctx, g)
+  else if (work.end) await finish(ctx, g)
+}
+
+/** What put the last free Dikejar out: it picks the feed line (views.ts). */
+type WhistleCause = 'catch' | 'auto-jail' | 'removed' | 'luar-garisan'
+
+/**
+ * Everyone is out (fair-play §1.4): instead of ending at once, the final whistle starts, and the end is held for
+ * FINAL_WHISTLE_MS so a marshal can undo a wrong last catch. The first caller posts the feed line. True when every
+ * runner is out (a whistle is pending, here or already).
+ */
+async function allOutCheck(ctx: Ctx, game: Game, cause: WhistleCause = 'catch'): Promise<boolean> {
+  const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
+  if (runners.length === 0 || !runners.every(isOut)) return false
+  if (await ctx.store.claimFinalWhistle(game.id, iso(ctx.now))) {
+    await ctx.store.addEvent({ game_id: game.id, type: 'final-whistle', actor_id: null, target_id: null, data: { cause } })
+  }
+  return true
+}
+
+/**
+ * A pending final whistle: someone free again calls it off (and a chase whose time ran out during the hold then
+ * ends on time, as a Dikejar win); otherwise the game ends once the hold is over. Never while paused.
+ */
+async function settleWhistle(ctx: Ctx, game: Game) {
+  const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
+  if (runners.length > 0 && runners.every(isOut)) {
+    if (!game.paused_at && ctx.now >= Date.parse(game.final_whistle_at!) + FINAL_WHISTLE_MS) await finish(ctx, game)
+    return
+  }
+  if (await callOffWhistle(ctx, game)) return
+  const cleared = { ...game, final_whistle_at: null }
+  if (phaseAt(cleared, ctx.now).phase === 'ended') await finish(ctx, cleared)
+}
+
+/**
+ * Clears the final whistle because someone is free again, then checks once more: a catch racing this call may
+ * have found the old whistle still set (so started none) just before it was cleared. True if a whistle is
+ * pending again.
+ */
+async function callOffWhistle(ctx: Ctx, game: Game): Promise<boolean> {
+  await ctx.store.clearFinalWhistle(game.id)
+  return allOutCheck(ctx, game)
 }
 
 async function finish(ctx: Ctx, game: Game) {
@@ -645,10 +723,13 @@ const create: Action = async (ctx, body) => {
     winner: null,
     paused_at: null,
     pauses: [],
+    final_whistle_at: null,
+    wiped_at: null,
     organiser_id: organiser.id,
     ...(stash ? { dato_stash: stash } : {}),
     ...(bomohStash ? { bomoh_stash: bomohStash } : {}),
   })
+  await wipeExpired(ctx)
   const notices = [noFreeCard ? NO_FREE_CARD_NOTICE : null, noFreeBomohCard ? NO_FREE_BOMOH_CARD_NOTICE : null].filter(
     (n): n is string => n !== null,
   )
@@ -750,7 +831,7 @@ const start: Action = async (ctx, body) => {
   })
   const chaseAt = iso(chaseStartOf(started)!)
   await ctx.store.addPings([
-    { game_id: game.id, seq: 0, alert_at: chaseAt, reveal_at: chaseAt, alerted: true, revealed: false },
+    { game_id: game.id, seq: 0, alert_at: chaseAt, reveal_at: chaseAt, alerted: true, revealed: false, alert_sent_at: null },
     ...pingTimes(started).map((t) => ({
       game_id: game.id,
       seq: t.seq,
@@ -758,6 +839,7 @@ const start: Action = async (ctx, body) => {
       reveal_at: iso(t.revealAt),
       alerted: false,
       revealed: false,
+      alert_sent_at: null,
     })),
   ])
   await ctx.store.addEvent({ game_id: game.id, type: 'started', actor_id: null, target_id: null, data: {} })
@@ -898,11 +980,8 @@ async function luarGaris(ctx: Ctx, game: Game, me: Player) {
     target_id: null,
     data: { who: who(me) },
   })
-  // Disqualifying the last free runner ends the game, the same as catching them (spec §7a).
-  if (!warned && me.role === 'runner') {
-    const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
-    if (runners.length > 0 && runners.every(isOut)) await finish(ctx, game)
-  }
+  // Disqualifying the last free runner blows the final whistle, the same as catching them (spec §7a, fair-play §1.4).
+  if (!warned && me.role === 'runner') await allOutCheck(ctx, game, 'luar-garisan')
   try {
     await pushTo(ctx, [me], { type: 'notice', code: game.code, title: warned ? 'Outside the play area' : 'Luar Garisan', body: warned ? copy.warn : copy.out })
   } catch {
@@ -949,6 +1028,9 @@ const catchAction: Action = async (ctx, body) => {
   const tagId = tagIdFromQr(str(body.tagQr))
   const runner = players.find((p) => p.role === 'runner' && p.tag_id === tagId)
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
+  const shieldings = (await ctx.store.events(game.id))
+    .filter((e) => e.type === 'shielded' && e.actor_id && e.target_id)
+    .map((e) => ({ chaserId: e.actor_id as string, runnerId: e.target_id as string, at: Date.parse(e.at) }))
   const verdict = judgeCatch({
     phase: phaseAt(fresh, ctx.now).phase,
     chaser: players.find((p) => p.id === me.id) ?? me,
@@ -957,17 +1039,18 @@ const catchAction: Action = async (ctx, body) => {
     chaserPos: latest(positions[me.id]),
     runnerPos: runner ? latest(positions[runner.id]) : null,
     now: ctx.now,
+    shieldings,
   })
-  if (!verdict.ok) return verdict
-  // judgeCatch stays as it is; "old" here is the runner's own fix being past what can reject a catch (or missing).
-  const runnerFix = runner ? latest(positions[runner.id]) : null
-  const oldRunnerFix = !runnerFix || ctx.now - Date.parse(runnerFix.at) > RUNNER_TRUSTED_MS
+  if (!verdict.ok) {
+    // The Durian refusals name the runner so the chaser knows who is off limits.
+    return runner && (verdict.reason === 'durian-locked' || verdict.reason === 'durian-head-start') ? { ...verdict, name: runner.name } : verdict
+  }
   // A switched-on Shield absorbs one otherwise-valid catch.
   const shield = activeShield(await ctx.store.powerUps(game.id), verdict.runnerId, ctx.now)
   // consumeShield is atomic, so two chasers scanning at once can't both be blocked by one shield.
   if (shield && (await ctx.store.consumeShield(shield.id))) {
     await ctx.store.addEvent({ game_id: game.id, type: 'shielded', actor_id: me.id, target_id: verdict.runnerId, data: {} })
-    return { ok: false, reason: 'shielded' }
+    return { ok: false, reason: 'shielded', name: runner?.name }
   }
   if (!(await ctx.store.catchRunner(verdict.runnerId, me.id))) return { ok: false, reason: 'already-caught' }
   await ctx.store.addEvent({
@@ -975,15 +1058,15 @@ const catchAction: Action = async (ctx, body) => {
     type: 'caught',
     actor_id: me.id,
     target_id: verdict.runnerId,
-    data: { flagged: verdict.flagged, who: tagLabelOf(players, verdict.runnerId), chaser: me.name, ...(oldRunnerFix ? { oldRunnerFix: true } : {}) },
+    data: { flagged: verdict.flagged, who: tagLabelOf(players, verdict.runnerId), chaser: me.name, ...(verdict.flagged ? { farFromLast: true } : {}) },
   })
-  const after = await ctx.store.players(game.id)
-  if (after.filter((p) => p.role === 'runner').every(isOut)) await finish(ctx, fresh)
+  // The last free runner caught: the final whistle, not the end (fair-play §1.4).
+  await allOutCheck(ctx, fresh)
   const caught = players.find((p) => p.id === verdict.runnerId)
   // Wrong-catch backstop: armbands are reused, so a scan of a photo can "catch" a runner whose pocketed phone is
-  // far away. The rip is the proof, so tell the runner straight away and let them dispute it. The push goes after
-  // the catch is recorded and can never undo it (same as Luar Garisan).
-  if (oldRunnerFix && caught) {
+  // far away. Only a borderline catch (far from their last spot, but not implausibly so) tells the runner straight
+  // away and lets them dispute it. The push goes after the catch is recorded and can never undo it (same as Luar Garisan).
+  if (verdict.flagged && caught) {
     try {
       await pushTo(ctx, [caught], {
         type: 'notice',
@@ -1178,6 +1261,53 @@ const redeemMarshalInvite: Action = async (ctx, body) => {
   })
   await ctx.store.addEvent({ game_id: game.id, type: 'joined', actor_id: p.id, target_id: null, data: {} })
   return { token, playerId: p.id }
+}
+
+/**
+ * New phone (fair-play §1.7): a marshal or the organiser makes a one-time link that moves a runner or chaser onto
+ * another phone. Any phase but ended. Redeeming it swaps the player's session token, so the old phone stops working.
+ */
+const createPhoneMove: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const marshal = await requireMarshal(ctx, game, body)
+  if (phaseAt(game, ctx.now).phase === 'ended') throw new ActionError(409, 'The game has ended')
+  const target = (await ctx.store.players(game.id)).find((p) => p.id === str(body.playerId))
+  if (!target || target.removed_at || (target.role !== 'runner' && target.role !== 'chaser')) {
+    throw new ActionError(400, 'Pick a runner or a chaser who is still in the game')
+  }
+  const inviteToken = newToken()
+  await ctx.store.createPhoneMove({
+    game_id: game.id,
+    player_id: target.id,
+    token_hash: hashToken(inviteToken),
+    created_at: iso(ctx.now),
+    expires_at: iso(ctx.now + PHONE_MOVE_TTL_MS),
+    redeemed_at: null,
+  })
+  await ctx.store.addSafetyRecord({
+    game_id: game.id,
+    type: 'phone-move',
+    player_id: marshal?.id ?? null,
+    target_id: target.id,
+    lat: null,
+    lng: null,
+    data: { game_code: game.code, by: await marshalName(ctx, game, body, marshal), target_name: target.name },
+  })
+  return { inviteToken }
+}
+
+const redeemPhoneMove: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const inviteToken = str(body.inviteToken)
+  if (!inviteToken) throw new ActionError(400, 'Missing invite token')
+  const token = newToken()
+  const result = await ctx.store.redeemPhoneMove(hashToken(inviteToken), ctx.now, game.id, hashToken(token))
+  if (!result.ok) {
+    if (result.reason === 'invalid') throw new ActionError(404, 'That invite link is not valid')
+    if (result.reason === 'redeemed') throw new ActionError(410, 'That invite link has already been used')
+    throw new ActionError(410, 'That invite link has expired')
+  }
+  return { token, playerId: result.playerId }
 }
 
 const sideOf = (p: Player): 'runner' | 'chaser' => (p.role === 'chaser' ? 'chaser' : 'runner')
@@ -1646,8 +1776,13 @@ const handleAlert: Action = async (ctx, body) => {
 
 /** A marshal frees an auto-jailed runner after a phone fault, without using their one escape (motion design §5b). */
 const undoAutoJail: Action = async (ctx, body) => {
+  const loaded = await loadGame(ctx, body)
+  const marshal = await requireMarshal(ctx, loaded, body)
+  // Bring the game up to date first: a final whistle that ran out with nobody polling has ended the game.
+  await advance(ctx, loaded)
   const game = await loadGame(ctx, body)
-  const marshal = await requireMarshal(ctx, game, body)
+  // Once the game has ended its result is final (fair-play §1.4: after 60 s the Kejar win is final).
+  if (phaseAt(game, ctx.now).phase === 'ended') return { ok: false, reason: 'not-undoable' }
   const eventId = str(body.eventId)
   const jailing = (await ctx.store.events(game.id)).find((e) => e.id === eventId && e.type === 'auto-jailed')
   const target = jailing && (await ctx.store.players(game.id)).find((p) => p.id === jailing.target_id)
@@ -1668,6 +1803,44 @@ const undoAutoJail: Action = async (ctx, body) => {
     lng: null,
     data: { game_code: game.code, by: marshal?.name ?? 'Organiser', target_name: target.name },
   })
+  // Someone is free again: no final whistle (advance would call it off too, on the next poll).
+  if (game.final_whistle_at) await callOffWhistle(ctx, game)
+  return { ok: true }
+}
+
+/**
+ * Undo kejar (fair-play §1.4): a marshal or the organiser undoes a wrong catch. Only the runner's latest catch,
+ * only while it still holds them, and only during the chase (a pending final whistle keeps the chase open). The
+ * runner goes back to free without using their one escape, and the catch drops out of awards and stats.
+ */
+const undoKejar: Action = async (ctx, body) => {
+  const loaded = await loadGame(ctx, body)
+  const marshal = await requireMarshal(ctx, loaded, body)
+  // Bring the game up to date first: a hold that ran out with nobody polling has ended the game, so the Kejar win is final.
+  await advance(ctx, loaded)
+  const game = await loadGame(ctx, body)
+  const eventId = str(body.eventId)
+  const events = await ctx.store.events(game.id)
+  const catching = events.find((e) => e.id === eventId && e.type === 'caught')
+  const target = catching && (await ctx.store.players(game.id)).find((p) => p.id === catching.target_id)
+  const undoable = !!target && phaseAt(game, ctx.now).phase === 'chasing' && undoableCatchId(target, events) === eventId
+  // Atomic, so two marshals tapping at once (or a racing release) free the runner only once.
+  if (!undoable || !(await ctx.store.releaseCaught(target.id, catching.actor_id!, iso(ctx.now)))) {
+    return { ok: false, reason: 'not-undoable' }
+  }
+  await ctx.store.addEvent({ game_id: game.id, type: 'kejar-undone', actor_id: marshal?.id ?? null, target_id: target.id, data: { eventId, who: who(target) } })
+  const name = await marshalName(ctx, game, body, marshal)
+  await ctx.store.addEvent({ game_id: game.id, type: 'handled', actor_id: marshal?.id ?? null, target_id: null, data: { eventId, name } })
+  await ctx.store.addSafetyRecord({
+    game_id: game.id,
+    type: 'kejar-undone',
+    player_id: marshal?.id ?? null,
+    target_id: target.id,
+    lat: null,
+    lng: null,
+    data: { game_code: game.code, by: marshal?.name ?? 'Organiser', target_name: target.name },
+  })
+  await callOffWhistle(ctx, game)
   return { ok: true }
 }
 
@@ -1692,12 +1865,9 @@ const removePlayer: Action = async (ctx, body) => {
     lng: null,
     data: { game_code: game.code, by: marshal?.name ?? 'Organiser', target_name: target.name },
   })
-  // The removed runner may have been the last one still free.
+  // The removed runner may have been the last one still free: the final whistle (fair-play §1.4).
   const phase = phaseAt(game, ctx.now).phase
-  if (phase === 'hiding' || phase === 'chasing') {
-    const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
-    if (runners.every(isOut)) await finish(ctx, game)
-  }
+  if (phase === 'hiding' || phase === 'chasing') await allOutCheck(ctx, game, 'removed')
   return { ok: true }
 }
 
@@ -1787,6 +1957,7 @@ const saveArena: Action = async (ctx, body) => {
 const listArenas: Action = async (ctx, body) => {
   const organiser = await requireAnyOrganiser(ctx, body)
   const rows = await ctx.store.arenasFor(organiser.organisation_id)
+  await wipeExpired(ctx)
   return {
     arenas: rows.map((r) => ({
       id: r.id,
@@ -1936,6 +2107,7 @@ export const actions = {
   handleAlert,
   respondToSos,
   undoAutoJail,
+  undoKejar,
   removePlayer,
   searchParks,
   parkFeatures,
@@ -1947,6 +2119,8 @@ export const actions = {
   redeemOrganiserInvite,
   createMarshalInvite,
   redeemMarshalInvite,
+  createPhoneMove,
+  redeemPhoneMove,
 } satisfies Record<string, Action>
 
 export type ActionName = keyof typeof actions

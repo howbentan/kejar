@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const call = vi.hoisted(() => vi.fn())
 const scanned = vi.hoisted(() => ({ text: '' }))
+const useWakeLock = vi.hoisted(() => vi.fn())
 vi.mock('../game/api', () => ({ call, ApiError: class extends Error {} }))
 const mapProps = vi.hoisted(() => ({ last: null as null | { legendaryZone?: unknown } }))
 vi.mock('../game/Map', () => ({
@@ -19,6 +20,7 @@ vi.mock('../game/Scanner', () => ({
     </button>
   ),
 }))
+vi.mock('../game/useWakeLock', () => ({ useWakeLock }))
 import ChaserChase, { catchMessage } from './ChaserChase'
 import { testView } from './testView'
 
@@ -47,6 +49,11 @@ async function scan(text: string) {
 }
 
 describe('ChaserChase', () => {
+  it('keeps the screen awake during the chase', () => {
+    render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    expect(useWakeLock).toHaveBeenCalledWith(true)
+  })
+
   it('is one screen: who, the ping chip, the map, Scan tag and the ticker', () => {
     render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
     expect(screen.getByText('KEJAR · BEN')).toBeInTheDocument()
@@ -141,8 +148,20 @@ describe('catchMessage', () => {
   it('names the tag on success', () => {
     expect(catchMessage('KEJAR:TAG:07', { ok: true, flagged: false, runnerId: 'r1' })).toBe('Caught #07 ✓')
   })
-  it('explains a shielded catch', () => {
-    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'shielded' })).toBe("Durian! That catch doesn't count. Hand the tag back.")
+  it('refuses an implausible catch with the exact copy', () => {
+    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'implausible' })).toBe("Can't confirm that one. Get closer and try again.")
+  })
+  it('explains a shielded catch, naming the runner', () => {
+    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'shielded', name: 'Aina' })).toBe("Durian! You can't catch Aina again this game. Hand the tag back.")
+  })
+  it('puts a name in the message as typed, even one with replacement patterns like $& in it', () => {
+    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'durian-locked', name: 'A$&B$1' })).toBe("Durian! You can't catch A$&B$1 again this game.")
+  })
+  it('explains a Durian lock on a later scan', () => {
+    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'durian-locked', name: 'Aina' })).toBe("Durian! You can't catch Aina again this game.")
+  })
+  it('explains the 15 s head start', () => {
+    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'durian-head-start', name: 'Aina' })).toBe('Durian! Aina gets a 15 s head start.')
   })
 })
 

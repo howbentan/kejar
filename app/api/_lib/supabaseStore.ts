@@ -2,10 +2,10 @@ import { LUAR_GARISAN_GRACE_MS } from '../../shared/alerts.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard } from '../../shared/types.js'
 import { newDatoCode } from './secrets.js'
-import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
+import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PhoneMoveRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, RedeemPhoneMoveResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
 const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at'
-const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit'
+const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, final_whistle_at, wiped_at, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -96,16 +96,16 @@ export class SupabaseStore implements GameStore {
     return check(await this.db.rpc('draw_card', { p_game: gameId, p_side: side })) as number
   }
   async releaseAutoJailed(id: string, atIso: string) {
-    const rows = check(
-      await this.db
-        .from('players')
-        .update({ jailed: false, caught_at: null, freed_at: atIso, out_warned_at: null })
-        .eq('id', id)
-        .eq('jailed', true)
-        .is('caught_by', null)
-        .select('id'),
-    )
-    return (rows ?? []).length > 0
+    return check(await this.db.rpc('release_auto_jailed', { p_player: id, p_at: atIso })) === true
+  }
+  async releaseCaught(id: string, by: string, atIso: string) {
+    return check(await this.db.rpc('release_caught', { p_player: id, p_by: by, p_at: atIso })) === true
+  }
+  async claimFinalWhistle(gameId: string, atIso: string) {
+    return check(await this.db.rpc('claim_final_whistle', { p_game: gameId, p_at: atIso })) === true
+  }
+  async clearFinalWhistle(gameId: string) {
+    check(await this.db.from('games').update({ final_whistle_at: null }).eq('id', gameId))
   }
   async catchRunner(id: string, by: string | null) {
     const rows = check(
@@ -165,7 +165,7 @@ export class SupabaseStore implements GameStore {
     const rows = check(
       await this.db
         .from('pings')
-        .update({ [field]: true })
+        .update(field === 'alerted' ? { alerted: true, alert_sent_at: this.nowIso() } : { [field]: true })
         .eq('game_id', gameId)
         .eq('seq', seq)
         .eq(field, false)
@@ -188,7 +188,17 @@ export class SupabaseStore implements GameStore {
     return check(await this.db.from('events').insert({ ...e, at: this.nowIso() }).select('*').single()) as GameEvent
   }
   async events(gameId: string): Promise<GameEvent[]> {
-    return check(await this.db.from('events').select('*').eq('game_id', gameId).order('at')) as GameEvent[]
+    // PostgREST caps a response (1000 rows by default) and would silently drop the newest events, so read in pages.
+    // `id` breaks ties between events stamped the same millisecond, keeping the page boundaries stable.
+    const PAGE = 1000
+    const out: GameEvent[] = []
+    for (let from = 0; ; from += PAGE) {
+      const rows = check(
+        await this.db.from('events').select('*').eq('game_id', gameId).order('at').order('id').range(from, from + PAGE - 1),
+      ) as GameEvent[]
+      out.push(...rows)
+      if (rows.length < PAGE) return out
+    }
   }
   async addPowerUp(p: NewPowerUp): Promise<PowerUp> {
     return check(await this.db.from('powerups').insert({ ...p, claimed_at: this.nowIso() }).select('*').single()) as PowerUp
@@ -271,7 +281,7 @@ export class SupabaseStore implements GameStore {
     // Two Mat Rempits at once pick the same number; the primary key lets only one in (one at a time, §5a).
     const { error } = await this.db
       .from('pings')
-      .insert({ game_id: gameId, seq, alert_at: alertAt, reveal_at: revealAt, alerted: false, revealed: false })
+      .insert({ game_id: gameId, seq, alert_at: alertAt, reveal_at: revealAt, alerted: false, revealed: false, alert_sent_at: null })
     if (!error) return true
     if (error.code === '23505') return false
     throw new Error(error.message)
@@ -314,6 +324,22 @@ export class SupabaseStore implements GameStore {
   }
   async addSafetyRecord(r: SafetyRecord) {
     check(await this.db.from('safety_records').insert({ ...r, at: this.nowIso() }))
+  }
+  async wipeGame(id: string) {
+    return check(await this.db.rpc('wipe_game', { p_game: id })) === true
+  }
+  async gamesToWipe(endedBeforeIso: string, createdBeforeIso: string, limit: number) {
+    // Quoted: the timestamps' ':' and '.' are reserved in PostgREST's or-filter syntax.
+    const rows = check(
+      await this.db
+        .from('games')
+        .select('id')
+        .is('wiped_at', null)
+        .or(`ended_at.lt."${endedBeforeIso}",and(ended_at.is.null,created_at.lt."${createdBeforeIso}")`)
+        .order('created_at')
+        .limit(limit),
+    ) as { id: string }[] | null
+    return (rows ?? []).map((r) => r.id)
   }
   async createOrganisation(o: Omit<Organisation, 'id'>): Promise<Organisation> {
     return check(await this.db.from('organisations').insert(o).select('*').single()) as Organisation
@@ -395,6 +421,22 @@ export class SupabaseStore implements GameStore {
     ) as { redeemed_at: string | null; expires_at: string } | null
     if (!exists) return { ok: false, reason: 'invalid' }
     return { ok: false, reason: exists.redeemed_at ? 'redeemed' : 'expired' }
+  }
+  async createPhoneMove(row: Omit<PhoneMoveRow, 'id'>): Promise<void> {
+    check(await this.db.from('phone_moves').insert(row))
+  }
+  async redeemPhoneMove(tokenHash: string, nowMs: number, gameId: string, newTokenHash: string): Promise<RedeemPhoneMoveResult> {
+    const rows = check(
+      await this.db.rpc('redeem_phone_move', {
+        p_token_hash: tokenHash,
+        p_now: new Date(nowMs).toISOString(),
+        p_game: gameId,
+        p_new_token_hash: newTokenHash,
+      }),
+    ) as { out_player: string | null; out_reason: 'invalid' | 'redeemed' | 'expired' | null }[]
+    const r = rows[0]
+    if (r?.out_player) return { ok: true, playerId: r.out_player }
+    return { ok: false, reason: r?.out_reason ?? 'invalid' }
   }
   async addArena(r: NewSavedArena): Promise<SavedArenaRow> {
     const at = this.nowIso()

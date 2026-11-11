@@ -8,15 +8,19 @@ import ChaseLayout from '../game/ChaseLayout'
 import { dipFor } from '../game/LuckyDip'
 import PowerUpHand, { claimMessage, stashMessage, type ClaimResult } from '../game/PowerUpHand'
 import { clock, useServerNow } from '../game/time'
+import { useWakeLock } from '../game/useWakeLock'
 
 const REJECTIONS: Record<string, string> = {
   'too-far': 'Too far — get within 50 m',
+  implausible: "Can't confirm that one. Get closer and try again.",
   'already-caught': 'Already caught',
   'unknown-tag': "That's not a Kejar tag",
   'not-chasing': 'You can only catch during the chase',
   'not-a-chaser': 'Only chasers can catch',
   'no-location': 'Turn on location to catch',
-  shielded: "Durian! That catch doesn't count. Hand the tag back.",
+  shielded: "Durian! You can't catch {name} again this game. Hand the tag back.",
+  'durian-locked': "Durian! You can't catch {name} again this game.",
+  'durian-head-start': 'Durian! {name} gets a 15 s head start.',
   paused: 'Game is paused',
   disqualified: "You're Luar Garisan lah, so that catch doesn't count.",
   'already-out': 'Aiyo, that runner is already out of this round.',
@@ -26,7 +30,7 @@ export function catchMessage(text: string, r: CatchJudgement): string {
   const tag = tagIdFromQr(text)
   const label = tag === null ? 'runner' : `#${String(tag).padStart(2, '0')}`
   if (r.ok) return r.flagged ? `Caught ${label} — flagged for marshal` : `Caught ${label} ✓`
-  return REJECTIONS[r.reason] ?? 'Catch not recorded'
+  return (REJECTIONS[r.reason] ?? 'Catch not recorded').replace('{name}', () => r.name ?? label)
 }
 
 /** "Next ping 1:42 · last 3:18 ago", or whichever half is known. */
@@ -40,6 +44,7 @@ function pingChip(view: View, now: number): string | null {
 
 export default function ChaserChase({ code, view, refresh }: { code: string; view: View; refresh: () => void }) {
   const now = useServerNow(view.now)
+  useWakeLock(view.phase === 'hiding' || view.phase === 'chasing')
   const chip = pingChip(view, now)
 
   const describe = useCallback(

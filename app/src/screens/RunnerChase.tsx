@@ -3,6 +3,7 @@ import type { BreakJudgement } from '../../shared/catch.js'
 import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
 import { isBomohQr, isDatoQr, stationFromQr } from '../../shared/ids.js'
+import AlertsCard from '../game/AlertsCard'
 import ChaseLayout from '../game/ChaseLayout'
 import CheckinBanner from '../game/CheckinBanner'
 import { dipFor } from '../game/LuckyDip'
@@ -107,6 +108,7 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
               <p className="muted">Turn on location for this site in your browser settings.</p>
             </div>
           )}
+          {view.me.role === 'runner' && <AlertsCard code={code} view={view} />}
           {banner && <CheckinBanner checkin={checkin} now={now} openedByPush={openedByPush} />}
         </>
       }

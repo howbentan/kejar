@@ -38,6 +38,16 @@ describe('alertsFrom', () => {
     ).toEqual(['Check catch: #07 by Ben (runner location old)'])
   })
 
+  it('a new flagged catch says the runner was far from their last spot', () => {
+    expect(
+      texts([event('caught', T0, { data: { flagged: true, farFromLast: true, who: '#07', chaser: 'Ben' } })]),
+    ).toEqual(['Check catch: #07 by Ben (far from their last spot)'])
+  })
+
+  it('an unflagged new catch raises no alert', () => {
+    expect(texts([event('caught', T0, { data: { flagged: false, who: '#07', chaser: 'Ben' } })])).toEqual([])
+  })
+
   it('appends a report note after a dash', () => {
     expect(
       texts([event('report', T0, { data: { name: 'Hafiz', targetName: 'Ben', reason: 'dispute', note: 'tag was already off' } })]),

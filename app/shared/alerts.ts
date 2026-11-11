@@ -110,9 +110,11 @@ function toAlert(e: GameEvent, details: Map<string, GameEvent>, responding: Map<
     case 'left-start':
       return { ...base, kind: 'left-start', text: `${s(d.name)} left the start early` }
     case 'caught':
-      if (d.flagged !== true && d.oldRunnerFix !== true) return null
-      // oldRunnerFix covers the over-2-minutes case too; an event from before it existed only has `flagged`.
-      return { ...base, kind: 'flagged-catch', text: `Check catch: ${s(d.who)} by ${s(d.chaser)} (${d.oldRunnerFix === true ? 'runner location old' : 'position unknown'})` }
+      if (d.flagged !== true && d.oldRunnerFix !== true) return null // (oldRunnerFix: old events only)
+      // Events from before the plausibility check carry `oldRunnerFix` (old fix) or only `flagged` (no fix); new
+      // flagged events carry `farFromLast` so they can be told apart from those flagged-only ones.
+      const why = d.oldRunnerFix === true ? 'runner location old' : d.farFromLast === true ? 'far from their last spot' : 'position unknown'
+      return { ...base, kind: 'flagged-catch', text: `Check catch: ${s(d.who)} by ${s(d.chaser)} (${why})` }
     default:
       return null
   }

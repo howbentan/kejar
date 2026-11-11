@@ -9,7 +9,7 @@ export const LIMIT_WINDOW_MS = 60_000
 export const FAIL_LIMIT_PER_MIN = 30
 
 /** Actions that make a new player or session from nothing: a made-up token must not buy a fresh bucket. */
-export const IP_KEYED_ACTIONS: readonly string[] = ['join', 'redeemOrganiserInvite', 'redeemMarshalInvite']
+export const IP_KEYED_ACTIONS: readonly string[] = ['join', 'redeemOrganiserInvite', 'redeemMarshalInvite', 'redeemPhoneMove']
 
 const nonEmpty = (v: unknown): v is string => typeof v === 'string' && v.length > 0
 

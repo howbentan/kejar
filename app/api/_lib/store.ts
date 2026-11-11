@@ -6,6 +6,15 @@ import { newDatoCode } from './secrets.js'
 export type GameRow = Game & { organiser_id: string; host_push?: PushSubscriptionJSON | null }
 export type PlayerRow = Player & { token_hash: string }
 
+/**
+ * Event `data` keys that can hold a player's name, free text or a position (fair-play §1.8). A game's wipe
+ * removes them from every event; the SQL `wipe_game` lists the same keys, and a test checks the two agree.
+ */
+export const WIPE_EVENT_KEYS = ['who', 'chaser', 'name', 'by', 'target_name', 'targetName', 'withName', 'with_name', 'text', 'note', 'lat', 'lng'] as const
+
+/** The placeholder a wiped player is renamed to, numbered by join order within their role. */
+export const WIPE_PLACEHOLDER: Record<string, string> = { runner: 'Dikejar', chaser: 'Kejar', marshal: 'Marshal' }
+
 export interface Organisation {
   id: string
   name: string
@@ -42,6 +51,18 @@ export interface MarshalInviteRow {
   redeemed_at: string | null
 }
 
+export interface PhoneMoveRow {
+  id: string
+  game_id: string
+  player_id: string
+  token_hash: string
+  created_at: string
+  expires_at: string
+  redeemed_at: string | null
+}
+
+export type RedeemPhoneMoveResult = { ok: true; playerId: string } | { ok: false; reason: 'invalid' | 'redeemed' | 'expired' }
+
 export type RedeemInviteResult = { ok: true; organiserId: string } | { ok: false; reason: 'invalid' | 'expired' | 'redeemed' }
 export type RedeemMarshalInviteResult = { ok: true; gameId: string } | { ok: false; reason: 'invalid' | 'expired' | 'redeemed' }
 
@@ -75,6 +96,15 @@ export interface GameStore {
   drawCard(gameId: string, side: 'runner' | 'chaser'): Promise<number>
   /** Frees an auto-jailed runner (jailed, no chaser) only if still in that state; true for the first caller. */
   releaseAutoJailed(id: string, atIso: string): Promise<boolean>
+  /**
+   * Undo kejar (fair-play §1.4): frees a runner only while still jailed by chaser `by`, setting `freed_at` (which
+   * restarts their check-in count) and leaving `freed_once` alone. True for the first caller.
+   */
+  releaseCaught(id: string, by: string, atIso: string): Promise<boolean>
+  /** Starts the final whistle only if none is pending and the game hasn't ended; true for the first caller. */
+  claimFinalWhistle(gameId: string, atIso: string): Promise<boolean>
+  /** Calls off a pending final whistle (someone is free again). */
+  clearFinalWhistle(gameId: string): Promise<void>
   /**
    * With `minGapMs`, writes nothing and returns false when the player already has a fix newer than that.
    * With `since` (ms) too, only fixes at or after `since` count against the gap, so the first fix inside an
@@ -162,6 +192,18 @@ export interface GameStore {
   removePlayer(id: string): Promise<boolean>
   /** Kept apart from game data (spec §6); at = store clock. The app never reads these back. */
   addSafetyRecord(r: SafetyRecord): Promise<void>
+  /**
+   * Fair-play §1.8: deletes the game's locations, safety records, phone moves and marshal invites; renames players to
+   * role placeholders, clears their push and gives them fresh tokens; strips names and free text from events; sets
+   * wiped_at. Atomic, and false (a no-op) if the game is already wiped.
+   */
+  wipeGame(id: string): Promise<boolean>
+  /**
+   * Ids of up to `limit` unwiped games, oldest first: those that ended before `endedBeforeIso`, plus those with no
+   * ended_at made before `createdBeforeIso` (the end is recorded lazily, so abandoned games never get one).
+   * A game with no created_at (older test data) is never swept by the second rule.
+   */
+  gamesToWipe(endedBeforeIso: string, createdBeforeIso: string, limit: number): Promise<string[]>
   createOrganisation(o: Omit<Organisation, 'id'>): Promise<Organisation>
   createOrganiser(o: Omit<OrganiserRow, 'id'>): Promise<OrganiserRow>
   organiserBySessionTokenHash(hash: string): Promise<OrganiserRow | null>
@@ -172,6 +214,9 @@ export interface GameStore {
   createMarshalInvite(inv: Omit<MarshalInviteRow, 'id'>): Promise<MarshalInviteRow>
   /** Atomically claims the invite (unredeemed, unexpired at `now`, for this specific game). */
   redeemMarshalInvite(tokenHash: string, now: number, gameId: string): Promise<RedeemMarshalInviteResult>
+  createPhoneMove(row: Omit<PhoneMoveRow, 'id'>): Promise<void>
+  /** Atomically claims the move (unredeemed, unexpired at `now`, this game), swaps that player's token to `newTokenHash` and clears their push. */
+  redeemPhoneMove(tokenHash: string, nowMs: number, gameId: string, newTokenHash: string): Promise<RedeemPhoneMoveResult>
   /** created_at = updated_at = store clock. */
   addArena(r: NewSavedArena): Promise<SavedArenaRow>
   /** updated_at = store clock. */
@@ -205,7 +250,7 @@ export type NewSavedArena = Omit<SavedArenaRow, 'id' | 'created_at' | 'updated_a
 
 export interface SafetyRecord {
   game_id: string
-  type: 'sos' | 'report' | 'removed' | 'auto-jail-undone'
+  type: 'sos' | 'report' | 'removed' | 'auto-jail-undone' | 'kejar-undone' | 'phone-move'
   player_id: string | null
   target_id: string | null
   lat: number | null
@@ -246,6 +291,7 @@ export class MemoryStore implements GameStore {
   private organiserRows: OrganiserRow[] = []
   private organiserInviteRows: OrganiserInviteRow[] = []
   private marshalInviteRows: MarshalInviteRow[] = []
+  private phoneMoveRows: PhoneMoveRow[] = []
   private arenaRows: SavedArenaRow[] = []
   private osmCacheRows = new Map<string, { body: unknown; fetched_at: number }>()
   private secretCardRows: SecretCard[] = []
@@ -261,12 +307,58 @@ export class MemoryStore implements GameStore {
   private nowIso() {
     return new Date(this.clock()).toISOString()
   }
+  /** An undo can't land after the game's end is recorded. */
+  private gameEnded(gameId: string) {
+    return !!this.games.find((g) => g.id === gameId)?.ended_at
+  }
   private strip<T extends object>(row: T, key: string): T {
     const copy = { ...row } as Record<string, unknown>
     delete copy[key]
     return copy as T
   }
 
+  async wipeGame(id: string) {
+    // No await below, so the wipe is atomic here.
+    const g = this.games.find((x) => x.id === id)
+    if (!g || g.wiped_at) return false
+    g.wiped_at = this.nowIso()
+    g.host_push = null
+    this.locs = this.locs.filter((l) => l.game_id !== id)
+    // Safety records stay as anonymous counts: their text, names and position go.
+    for (const r of this.safetyRows) if (r.game_id === id) Object.assign(r, { data: {}, lat: null, lng: null })
+    this.phoneMoveRows = this.phoneMoveRows.filter((r) => r.game_id !== id)
+    this.marshalInviteRows = this.marshalInviteRows.filter((r) => r.game_id !== id)
+    const mine = this.playerRows
+      .filter((p) => p.game_id === id)
+      .sort((a, b) => Date.parse(a.accepted_at) - Date.parse(b.accepted_at) || this.playerRows.indexOf(a) - this.playerRows.indexOf(b))
+    const seen: Record<string, number> = {}
+    for (const p of mine) {
+      const label = WIPE_PLACEHOLDER[p.role ?? ''] ?? 'Player'
+      seen[label] = (seen[label] ?? 0) + 1
+      p.name = `${label} ${seen[label]}`
+      p.push = null
+      p.token_hash = `wiped-${this.id('t')}`
+    }
+    for (const e of this.eventRows) {
+      if (e.game_id !== id) continue
+      const data = { ...e.data }
+      for (const k of WIPE_EVENT_KEYS) delete data[k]
+      e.data = data
+    }
+    return true
+  }
+  async gamesToWipe(endedBeforeIso: string, createdBeforeIso: string, limit: number) {
+    const endedCut = Date.parse(endedBeforeIso)
+    const createdCut = Date.parse(createdBeforeIso)
+    const since = (g: GameRow) => Date.parse(g.ended_at ?? g.created_at!)
+    return this.games
+      .filter((g) =>
+        g.wiped_at ? false : g.ended_at ? Date.parse(g.ended_at) < endedCut : !!g.created_at && Date.parse(g.created_at) < createdCut,
+      )
+      .sort((a, b) => since(a) - since(b))
+      .slice(0, limit)
+      .map((g) => g.id)
+  }
   async createGame(g: Omit<GameRow, 'id'>) {
     // created_at = the store clock, like the column's default.
     const row = { created_at: this.nowIso(), ...g, id: this.id('g') }
@@ -349,9 +441,25 @@ export class MemoryStore implements GameStore {
   }
   async releaseAutoJailed(id: string, atIso: string) {
     const p = this.playerRows.find((x) => x.id === id)
-    if (!p || !p.jailed || p.caught_by !== null) return false
+    if (!p || !p.jailed || p.caught_by !== null || this.gameEnded(p.game_id)) return false
     Object.assign(p, { jailed: false, caught_at: null, freed_at: atIso, out_warned_at: null })
     return true
+  }
+  async releaseCaught(id: string, by: string, atIso: string) {
+    const p = this.playerRows.find((x) => x.id === id)
+    if (!p || !p.jailed || p.caught_by !== by || this.gameEnded(p.game_id)) return false
+    Object.assign(p, { jailed: false, caught_by: null, caught_at: null, freed_at: atIso })
+    return true
+  }
+  async claimFinalWhistle(gameId: string, atIso: string) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g || g.ended_at || g.final_whistle_at) return false
+    g.final_whistle_at = atIso
+    return true
+  }
+  async clearFinalWhistle(gameId: string) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (g) g.final_whistle_at = null
   }
   async catchRunner(id: string, by: string | null) {
     const p = this.playerRows.find((x) => x.id === id)
@@ -411,6 +519,7 @@ export class MemoryStore implements GameStore {
     const p = this.pingRows.find((x) => x.game_id === gameId && x.seq === seq)
     if (!p || p[field]) return false
     p[field] = true
+    if (field === 'alerted') p.alert_sent_at = this.nowIso()
     return true
   }
   async claimEnd(gameId: string, winner: 'runners' | 'chasers') {
@@ -545,7 +654,7 @@ export class MemoryStore implements GameStore {
   }
   async addBonusPing(gameId: string, seq: number, alertAt: string, revealAt: string) {
     if (this.pingRows.some((p) => p.game_id === gameId && p.seq === seq)) return false
-    this.pingRows.push({ game_id: gameId, seq, alert_at: alertAt, reveal_at: revealAt, alerted: false, revealed: false })
+    this.pingRows.push({ game_id: gameId, seq, alert_at: alertAt, reveal_at: revealAt, alerted: false, revealed: false, alert_sent_at: null })
     return true
   }
   async pauseGame(gameId: string) {
@@ -557,13 +666,19 @@ export class MemoryStore implements GameStore {
   async resumeGame(gameId: string) {
     const g = this.games.find((x) => x.id === gameId)
     if (!g?.paused_at) return null
-    const d = this.clock() - Date.parse(g.paused_at)
+    const pausedAt = Date.parse(g.paused_at)
+    const d = this.clock() - pausedAt
     g.pauses = [...g.pauses, { from: g.paused_at, to: this.nowIso() }]
     g.paused_at = null
     const shift = (t: string) => new Date(Date.parse(t) + d).toISOString()
+    // The 60 s hold freezes with the pause like every other timer (one that blew during the pause counts from now).
+    if (g.final_whistle_at) {
+      g.final_whistle_at = new Date(Date.parse(g.final_whistle_at) + this.clock() - Math.max(Date.parse(g.final_whistle_at), pausedAt)).toISOString()
+    }
     for (const p of this.pingRows) {
       if (p.game_id !== gameId || p.revealed) continue
-      p.alert_at = shift(p.alert_at)
+      // An alert that already went out stays where it was, so its stored time matches the clock.
+      if (!p.alerted) p.alert_at = shift(p.alert_at)
       p.reveal_at = shift(p.reveal_at)
     }
     return d
@@ -654,6 +769,20 @@ export class MemoryStore implements GameStore {
     if (now >= Date.parse(inv.expires_at)) return { ok: false, reason: 'expired' }
     inv.redeemed_at = new Date(now).toISOString()
     return { ok: true, gameId: inv.game_id }
+  }
+  async createPhoneMove(row: Omit<PhoneMoveRow, 'id'>) {
+    this.phoneMoveRows.push({ ...row, id: this.id('pm') })
+  }
+  async redeemPhoneMove(tokenHash: string, nowMs: number, gameId: string, newTokenHash: string): Promise<RedeemPhoneMoveResult> {
+    // No await between the checks and the writes, so two calls can't both claim the move.
+    const mv = this.phoneMoveRows.find((x) => x.token_hash === tokenHash && x.game_id === gameId)
+    if (!mv) return { ok: false, reason: 'invalid' }
+    if (mv.redeemed_at) return { ok: false, reason: 'redeemed' }
+    if (nowMs >= Date.parse(mv.expires_at)) return { ok: false, reason: 'expired' }
+    mv.redeemed_at = new Date(nowMs).toISOString()
+    const p = this.playerRows.find((x) => x.id === mv.player_id)
+    if (p) Object.assign(p, { token_hash: newTokenHash, push: null })
+    return { ok: true, playerId: mv.player_id }
   }
   async addArena(r: NewSavedArena) {
     const row: SavedArenaRow = { ...r, id: this.id('ar'), created_at: this.nowIso(), updated_at: this.nowIso() }
