@@ -14,8 +14,8 @@ export const SET: Record<Mode, Record<Side, PowerUpKind[]>> = {
     chaser: ['flare', 'flare', 'focus', 'focus'],
   },
   full: {
-    runner: ['decoy', 'decoy', 'shield', 'shield', 'cloak', 'cloak', 'toyol', 'grab'],
-    chaser: ['flare', 'flare', 'focus', 'focus', 'along', 'grab'],
+    runner: ['decoy', 'decoy', 'shield', 'shield', 'cloak', 'cloak', 'toyol', 'grab', 'cheese', 'combo'],
+    chaser: ['flare', 'flare', 'focus', 'focus', 'along', 'grab', 'toll', 'toll', 'combo'],
   },
 }
 
