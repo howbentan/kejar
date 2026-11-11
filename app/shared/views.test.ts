@@ -435,6 +435,12 @@ describe('feed wording', () => {
   })
   it('announces the final whistle and an undone kejar (runner name only, never the tag)', () => {
     expect(feedOf([event('final-whistle', T0 + 16 * MIN)])).toEqual(['Last Dikejar caught! Final whistle in 60 s.'])
+    for (const cause of ['catch', 'auto-jail']) {
+      expect(feedOf([event('final-whistle', T0 + 16 * MIN, { data: { cause } })])).toEqual(['Last Dikejar caught! Final whistle in 60 s.'])
+    }
+    for (const cause of ['removed', 'luar-garisan']) {
+      expect(feedOf([event('final-whistle', T0 + 16 * MIN, { data: { cause } })])).toEqual(['No Dikejar left free! Final whistle in 60 s.'])
+    }
     expect(feedOf([event('kejar-undone', T0 + 16 * MIN, { target_id: 'r2' })])).toEqual(['A marshal undid a kejar. Hafiz is back in.'])
   })
   it("a marshal's roster offers Undo kejar on a runner still held by their latest catch, during the chase only", () => {

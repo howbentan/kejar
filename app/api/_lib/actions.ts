@@ -600,7 +600,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
         }
       }
       // Auto-jailing the last free runner blows the final whistle, the same as a catch.
-      if (await allOutCheck(ctx, game)) whistleNow = true
+      if (await allOutCheck(ctx, game, 'auto-jail')) whistleNow = true
     }
   }
 
@@ -610,16 +610,19 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
   else if (work.end) await finish(ctx, g)
 }
 
+/** What put the last free Dikejar out: it picks the feed line (views.ts). */
+type WhistleCause = 'catch' | 'auto-jail' | 'removed' | 'luar-garisan'
+
 /**
  * Everyone is out (fair-play §1.4): instead of ending at once, the final whistle starts, and the end is held for
  * FINAL_WHISTLE_MS so a marshal can undo a wrong last catch. The first caller posts the feed line. True when every
  * runner is out (a whistle is pending, here or already).
  */
-async function allOutCheck(ctx: Ctx, game: Game): Promise<boolean> {
+async function allOutCheck(ctx: Ctx, game: Game, cause: WhistleCause = 'catch'): Promise<boolean> {
   const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
   if (runners.length === 0 || !runners.every(isOut)) return false
   if (await ctx.store.claimFinalWhistle(game.id, iso(ctx.now))) {
-    await ctx.store.addEvent({ game_id: game.id, type: 'final-whistle', actor_id: null, target_id: null, data: {} })
+    await ctx.store.addEvent({ game_id: game.id, type: 'final-whistle', actor_id: null, target_id: null, data: { cause } })
   }
   return true
 }
@@ -978,7 +981,7 @@ async function luarGaris(ctx: Ctx, game: Game, me: Player) {
     data: { who: who(me) },
   })
   // Disqualifying the last free runner blows the final whistle, the same as catching them (spec §7a, fair-play §1.4).
-  if (!warned && me.role === 'runner') await allOutCheck(ctx, game)
+  if (!warned && me.role === 'runner') await allOutCheck(ctx, game, 'luar-garisan')
   try {
     await pushTo(ctx, [me], { type: 'notice', code: game.code, title: warned ? 'Outside the play area' : 'Luar Garisan', body: warned ? copy.warn : copy.out })
   } catch {
@@ -1864,7 +1867,7 @@ const removePlayer: Action = async (ctx, body) => {
   })
   // The removed runner may have been the last one still free: the final whistle (fair-play §1.4).
   const phase = phaseAt(game, ctx.now).phase
-  if (phase === 'hiding' || phase === 'chasing') await allOutCheck(ctx, game)
+  if (phase === 'hiding' || phase === 'chasing') await allOutCheck(ctx, game, 'removed')
   return { ok: true }
 }
 

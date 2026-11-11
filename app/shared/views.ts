@@ -770,7 +770,10 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       // The runner's name only, never the tag number (fair-play §1.4).
       return `A marshal undid a kejar. ${target?.name ?? 'A Dikejar'} is back in.`
     case 'final-whistle':
-      return 'Last Dikejar caught! Final whistle in 60 s.'
+      // A removal or Luar Garisan put the last runner out without a catch; older events carry no cause (a catch).
+      return e.data.cause === 'removed' || e.data.cause === 'luar-garisan'
+        ? 'No Dikejar left free! Final whistle in 60 s.'
+        : 'Last Dikejar caught! Final whistle in 60 s.'
     case 'auto-jailed':
       return target ? `${tagLabel(target)} missed 2 check-ins — sent to Penjara` : 'A runner missed 2 check-ins — sent to Penjara'
     default:

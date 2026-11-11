@@ -112,7 +112,9 @@ export default function MarshalTools({
     setBusy(true)
     setError('')
     try {
-      await call(action, { code, ...credentials(code), ...extra })
+      const r = await call<{ ok?: boolean; reason?: string } | undefined>(action, { code, ...credentials(code), ...extra })
+      // An undo that lost a race (the game ended, or another marshal got there first) says so instead of vanishing.
+      if (r && r.ok === false && r.reason === 'not-undoable') setError("Too late, that one can't be undone now.")
       refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))

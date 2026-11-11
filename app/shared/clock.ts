@@ -32,19 +32,28 @@ function bounds(game: Game, now?: number) {
 
 /**
  * When the last free Dikejar goes out, the end is held this long so a wrong last catch can be undone (fair-play §1.4).
- * Wall time: a pause during the hold doesn't stretch it, but the game can't end while paused.
+ * The hold freezes during a pause like every other timer (resume shifts `final_whistle_at`), and the game can't end
+ * while paused.
  */
 export const FINAL_WHISTLE_MS = 60_000
+
+/** When a pending final whistle ends the game; an open pause holds it back, counted from when the whistle blew. */
+function whistleEnd(game: Game, now: number): number {
+  const fw = Date.parse(game.final_whistle_at!)
+  const open = game.paused_at ? Math.max(0, now - Math.max(Date.parse(game.paused_at), fw)) : 0
+  return fw + FINAL_WHISTLE_MS + open
+}
 
 export function phaseAt(game: Game, now: number): { phase: Phase; endsAt: number | null } {
   if (!game.started_at) return { phase: 'lobby', endsAt: null }
   const { hideEnd, end } = bounds(game, now)
   if (game.ended_at) return { phase: 'ended', endsAt: Math.min(end, Date.parse(game.ended_at)) }
   if (now < hideEnd) return { phase: 'hiding', endsAt: hideEnd }
-  if (now < end) return { phase: 'chasing', endsAt: end }
+  // A pending final whistle brings the end forward: the game is over when the hold is, if that comes before the clock.
+  if (now < end) return { phase: 'chasing', endsAt: game.final_whistle_at ? Math.min(end, whistleEnd(game, now)) : end }
   // A pending final whistle holds the chase open past the clock time, until the server really ends the game:
   // an undo during the hold must still be possible, and nobody should see results that might change.
-  if (game.final_whistle_at) return { phase: 'chasing', endsAt: Date.parse(game.final_whistle_at) + FINAL_WHISTLE_MS }
+  if (game.final_whistle_at) return { phase: 'chasing', endsAt: whistleEnd(game, now) }
   return { phase: 'ended', endsAt: end }
 }
 

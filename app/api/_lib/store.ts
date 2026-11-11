@@ -666,12 +666,15 @@ export class MemoryStore implements GameStore {
   async resumeGame(gameId: string) {
     const g = this.games.find((x) => x.id === gameId)
     if (!g?.paused_at) return null
-    const d = this.clock() - Date.parse(g.paused_at)
+    const pausedAt = Date.parse(g.paused_at)
+    const d = this.clock() - pausedAt
     g.pauses = [...g.pauses, { from: g.paused_at, to: this.nowIso() }]
     g.paused_at = null
     const shift = (t: string) => new Date(Date.parse(t) + d).toISOString()
-    // The 60 s hold freezes with the pause like every other timer.
-    if (g.final_whistle_at) g.final_whistle_at = shift(g.final_whistle_at)
+    // The 60 s hold freezes with the pause like every other timer (one that blew during the pause counts from now).
+    if (g.final_whistle_at) {
+      g.final_whistle_at = new Date(Date.parse(g.final_whistle_at) + this.clock() - Math.max(Date.parse(g.final_whistle_at), pausedAt)).toISOString()
+    }
     for (const p of this.pingRows) {
       if (p.game_id !== gameId || p.revealed) continue
       // An alert that already went out stays where it was, so its stored time matches the clock.

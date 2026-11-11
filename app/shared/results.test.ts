@@ -14,6 +14,12 @@ describe('computeResults', () => {
     expect(r.survivors).toEqual(['r1'])
   })
 
+  it('a game with no runners left at time-up is a Kejar win', () => {
+    const r = computeResults(g, [ben], [])
+    expect(r.winner).toBe('chasers')
+    expect(r.survivors).toEqual([])
+  })
+
   it('chasers win when all are caught', () => {
     const r = computeResults(g, [ben, player('r1', 'runner', { jailed: true })], [])
     expect(r.winner).toBe('chasers')

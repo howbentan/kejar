@@ -21,13 +21,14 @@ begin
     return null;
   end if;
   d := p_at - started;
-  -- A pending final whistle's 60 s hold freezes with the pause too, so an undo still has its full time.
+  -- A pending final whistle's 60 s hold freezes with the pause too, so an undo still has its full time. A whistle that
+  -- blew during the pause (a removal) counts from the resume.
   update games
     set pauses = pauses || jsonb_build_array(jsonb_build_object(
           'from', to_char(started at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
           'to', to_char(p_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))),
         paused_at = null,
-        final_whistle_at = final_whistle_at + d
+        final_whistle_at = final_whistle_at + (p_at - greatest(started, final_whistle_at))
     where id = p_game;
   update pings
     set alert_at = case when alerted then alert_at else alert_at + d end,

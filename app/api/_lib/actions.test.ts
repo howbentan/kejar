@@ -1740,7 +1740,9 @@ describe('removing a player', () => {
     await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.hafiz.playerId })
     const events = await store.events(g.gameId)
     expect(events.filter((e) => e.type === 'final-whistle')).toHaveLength(1)
+    expect(events.find((e) => e.type === 'final-whistle')!.data).toEqual({ cause: 'removed' })
     const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(v.feed.map((f) => f.text)).toContain('No Dikejar left free! Final whistle in 60 s.')
     expect(v.phase).toBe('chasing')
     expect(v.results).toBeFalsy()
   })
@@ -1994,6 +1996,7 @@ describe('Luar Garisan', () => {
     expect(await evs(g.gameId, 'luar-garisan')).toHaveLength(1)
     // The final whistle holds the end for 60 s (fair-play §1.4).
     expect(await evs(g.gameId, 'final-whistle')).toHaveLength(1)
+    expect((await evs(g.gameId, 'final-whistle'))[0].data).toEqual({ cause: 'luar-garisan' })
     expect(await evs(g.gameId, 'ended')).toHaveLength(0)
     now += 61_000
     await run('state', { code: g.code, organiserToken: g.organiserToken })
@@ -2164,6 +2167,7 @@ describe('automatic alerts', () => {
       { revealAt: T0 + 15 * MIN, ok: false },
     ])
     // The final whistle holds the end for 60 s (fair-play §1.4).
+    expect((await store.events(g.gameId)).find((e) => e.type === 'final-whistle')!.data).toEqual({ cause: 'auto-jail' })
     expect((await store.gameByCode(g.code))!.winner).toBeNull()
     now = T0 + 21 * MIN + 1_000
     await run('state', { code: g.code, organiserToken: g.organiserToken })
@@ -4348,6 +4352,7 @@ describe('Undo kejar and the final whistle (fair-play §1.4)', () => {
     await catchAt(g, 'aina', T0 + 7 * MIN)
     await catchAt(g, 'hafiz', T0 + 8 * MIN)
     expect(await countOf(g, 'final-whistle')).toBe(1)
+    expect((await store.events(g.gameId)).find((e) => e.type === 'final-whistle')!.data).toEqual({ cause: 'catch' })
     const held = await poll(g, T0 + 8 * MIN + 59 * S)
     expect(held.phase).toBe('chasing')
     expect(held.feed.map((f) => f.text)).toContain('Last Dikejar caught! Final whistle in 60 s.')

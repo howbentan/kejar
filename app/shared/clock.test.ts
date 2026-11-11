@@ -25,6 +25,19 @@ describe('phaseAt', () => {
     expect(phaseAt({ ...held, ended_at: iso(T0 + 50 * MIN + 40_000) }, T0 + 60 * MIN).phase).toBe('ended')
     expect(FINAL_WHISTLE_MS).toBe(60_000)
   })
+  it('before the clock end, a pending whistle brings the countdown forward to the whistle end', () => {
+    const early = game({ final_whistle_at: iso(T0 + 30 * MIN) })
+    expect(phaseAt(early, T0 + 30 * MIN + 10_000)).toEqual({ phase: 'chasing', endsAt: T0 + 31 * MIN })
+    expect(phaseAt(early, T0 + 31 * MIN).phase).toBe('chasing')
+    // A whistle that would end later than the clock changes nothing.
+    expect(phaseAt(game({ final_whistle_at: iso(T0 + 49.5 * MIN) }), T0 + 49.6 * MIN).endsAt).toBe(T0 + 50 * MIN)
+  })
+  it('an open pause holds the whistle countdown too, and a whistle started inside a pause counts from the resume', () => {
+    const open = game({ final_whistle_at: iso(T0 + 30 * MIN), paused_at: iso(T0 + 30 * MIN + 20_000) })
+    expect(phaseAt(open, T0 + 32 * MIN).endsAt).toBe(T0 + 31 * MIN + 100_000)
+    const during = game({ final_whistle_at: iso(T0 + 31 * MIN), paused_at: iso(T0 + 30 * MIN) })
+    expect(phaseAt(during, T0 + 32 * MIN).endsAt).toBe(T0 + 33 * MIN)
+  })
 })
 
 describe('pingTimes', () => {
