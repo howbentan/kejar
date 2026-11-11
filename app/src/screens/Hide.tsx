@@ -1,6 +1,7 @@
 import type { View } from '../../shared/views.js'
 import AlertsCard from '../game/AlertsCard'
 import GameMap from '../game/Map'
+import HowToPlayLink from '../game/HowToPlayLink'
 import { clock, useServerNow } from '../game/time'
 import { Screen } from '../game/ui'
 import { useWakeLock } from '../game/useWakeLock'
@@ -21,6 +22,7 @@ export default function Hide({ code, view }: { code: string; view: View }) {
           <p className="mono" style={{ fontSize: 72, fontWeight: 500, letterSpacing: '-0.06em', color: 'var(--volt)' }}>
             {left}
           </p>
+          <HowToPlayLink code={code} view={view} />
         </div>
       </Screen>
     )
@@ -37,6 +39,7 @@ export default function Hide({ code, view }: { code: string; view: View }) {
       <GameMap arena={view.arena} dots={view.dots} stations={view.stations} height={260} />
       <AlertsCard code={code} view={view} />
       <p className="muted">Put your phone on silent. A buzz can give you away. Pocket it once you&apos;re hidden.</p>
+      <HowToPlayLink code={code} view={view} />
     </Screen>
   )
 }
