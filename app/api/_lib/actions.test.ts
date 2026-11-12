@@ -1589,6 +1589,17 @@ describe('Nasi Lemak KFC', () => {
     expect((await view(g, g.hafiz.token)).comboReady).toBe(false)
   })
 
+  it('a second Nasi Lemak KFC is refused while the combo is ready, and kept', async () => {
+    const g = await chasing()
+    await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })
+    const second = await give(g.gameId, g.aina.playerId, 'combo')
+    expect(await use(g, g.aina.token, second.id)).toEqual({ ok: false, reason: 'combo-ready' })
+    const rows = await store.powerUps(g.gameId)
+    expect(rows.find((u) => u.id === second.id)!.used_at).toBeNull()
+    expect(rows.filter((u) => u.kind === 'combo' && u.used_at)).toHaveLength(1)
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'used')).toHaveLength(0)
+  })
+
   it('Abang Grab delivers the doubled card', async () => {
     const g = await chasing()
     await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })

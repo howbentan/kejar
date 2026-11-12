@@ -22,7 +22,7 @@ import { isOut, undoableCatchId } from '../../shared/players.js'
 import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
 import { bomohCodeFromQr, datoCodeFromQr, isBomohQr, isDatoQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
-import { activeShield, COMBO_EXCLUDED, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS } from '../../shared/powerups.js'
+import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
@@ -1676,6 +1676,8 @@ const usePowerup: Action = async (ctx, body) => {
   if (runningEffect(all, me.id, pings, ctx.now) !== null) return { ok: false, reason: 'effect-running' }
   // Dato Seri is only ever used through Settle, at Penjara (jail design §4b).
   if (u.kind === 'dato') return { ok: false, reason: 'settle-at-penjara' }
+  // Nasi Lemak KFC can't double itself (new power-ups §5.2): two combo marks never stack. The card is kept.
+  if (u.kind === 'combo' && comboReady(all, me.id)) return { ok: false, reason: 'combo-ready' }
   // A Flare's reveal must land before the whistle.
   if (u.kind === 'flare' && (endsAt ?? 0) - ctx.now < ALERT_LEAD_MS) return { ok: false, reason: 'too-late' }
 
