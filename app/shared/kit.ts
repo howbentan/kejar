@@ -1,34 +1,39 @@
-import { DEFAULT_SETTINGS, type Game, type Settings } from './types.js'
+import { LEGENDARY_COLOUR, LEGENDARY_KINDS } from './legendaries.js'
+import { DEFAULT_SETTINGS, type Game, type LegendaryKind, type Settings, type DatoStash } from './types.js'
+
+/** A secret card's colour: Dato Seri's yellow, Super Ring's orange, Bomoh's purple or Mak Kau Hijau's green. */
+export type SecretTone = 'yellow' | 'orange' | 'purple' | 'green'
 
 /** One line on the organiser's packing list or event-day list. */
 export interface KitItem {
   id: string
   group: 'pack' | 'day'
   label: string
-  tone?: 'yellow' | 'purple'
+  tone?: SecretTone
   note?: string
 }
 
-/** A spot to walk to and tape a card at. `dato` is the organiser's own secret one. */
+/** A spot to walk to and tape a card at. `dato`, `ring`, `bomoh` and `hijau` are the organiser's own secret ones. */
 export interface PlaceItem {
   id: string
   label: string
   lat: number
   lng: number
-  tone?: 'yellow' | 'purple'
+  tone?: SecretTone
 }
 
 /** The card letters of the secret sets the app assigned to this game. Passed only into the organiser's views. */
-export interface SecretLetters {
-  dato?: string
-  bomoh?: string
-}
+export type SecretLetters = Partial<Record<LegendaryKind, string>>
 
 export type PlayersBand = 20 | 30 | 40
 
 /** Ids only the organiser may tick or place (spec: Dato Seri secrecy). */
-export const SECRET_PACK_IDS = ['dato-card', 'bomoh-card']
-export const SECRET_PLACE_IDS = ['dato', 'bomoh']
+export const SECRET_PACK_IDS = LEGENDARY_KINDS.map((k) => `${k}-card`)
+export const SECRET_PLACE_IDS: string[] = [...LEGENDARY_KINDS]
+
+const capital = (s: string) => s[0].toUpperCase() + s.slice(1)
+const stashOf = (game: Game, kind: LegendaryKind): DatoStash | null | undefined =>
+  ({ dato: game.dato_stash, ring: game.ring_stash, bomoh: game.bomoh_stash, hijau: game.hijau_stash })[kind]
 
 /** Older games stored before the setup settings existed have no band or legendaries: read them with the defaults. */
 const bandOf = (game: Game): PlayersBand => game.settings.playersBand ?? DEFAULT_SETTINGS.playersBand
@@ -55,11 +60,11 @@ export function packItems(game: Game, secretLetters: SecretLetters): KitItem[] {
   ]
   if (stations > 0) items.push({ id: 'stations', group: 'pack', label: stations === 1 ? 'Station card 1' : `Station cards 1–${stations}` })
   items.push({ id: 'penjara', group: 'pack', label: 'Penjara card' })
-  if (game.settings.mode === 'full' && legendariesOf(game).dato === 'stash' && secretLetters.dato) {
-    items.push({ id: 'dato-card', group: 'pack', label: `Yellow card ${secretLetters.dato}`, tone: 'yellow', note: '(secret)' })
-  }
-  if (game.settings.mode === 'full' && legendariesOf(game).bomoh === 'stash' && secretLetters.bomoh) {
-    items.push({ id: 'bomoh-card', group: 'pack', label: `Purple card ${secretLetters.bomoh}`, tone: 'purple', note: '(secret)' })
+  for (const kind of LEGENDARY_KINDS) {
+    const letter = secretLetters[kind]
+    if (game.settings.mode !== 'full' || legendariesOf(game)[kind] !== 'stash' || !letter) continue
+    const tone = LEGENDARY_COLOUR[kind]
+    items.push({ id: `${kind}-card`, group: 'pack', label: `${capital(tone)} card ${letter}`, tone, note: '(secret)' })
   }
   items.push(
     { id: 'tape', group: 'pack', label: 'Tape, zip bags, power bank' },
@@ -70,7 +75,10 @@ export function packItems(game: Game, secretLetters: SecretLetters): KitItem[] {
   return items
 }
 
-/** Where the cards go: stations 1..N, Penjara, then (organiser only) Dato Seri's and Bomoh's stashes. */
+/**
+ * Where the cards go: stations 1..N, Penjara, then (organiser only) the secret stashes this game has, in
+ * LEGENDARY_KINDS order. A marshal's list never has a secret step, so it never counts one in its OF N.
+ */
 export function placeItems(game: Game, forOrganiser: boolean, secretLetters: SecretLetters): PlaceItem[] {
   const places: PlaceItem[] = (game.arena.stations ?? []).map((s, i) => ({
     id: `station-${i + 1}`,
@@ -79,27 +87,13 @@ export function placeItems(game: Game, forOrganiser: boolean, secretLetters: Sec
     lng: s.lng,
   }))
   places.push({ id: 'penjara', label: 'Penjara', lat: game.arena.jail.lat, lng: game.arena.jail.lng })
-  const stash = game.dato_stash
-  if (
-    forOrganiser &&
-    game.settings.mode === 'full' &&
-    legendariesOf(game).dato === 'stash' &&
-    secretLetters.dato &&
-    !stash?.claimedBy
-  ) {
+  if (!forOrganiser || game.settings.mode !== 'full') return places
+  for (const kind of LEGENDARY_KINDS) {
+    const stash = stashOf(game, kind)
+    if (legendariesOf(game)[kind] !== 'stash' || !secretLetters[kind] || stash?.claimedBy) continue
     const at = typeof stash?.lat === 'number' && typeof stash?.lng === 'number' ? { lat: stash.lat, lng: stash.lng } : game.arena.start
-    places.push({ id: 'dato', label: 'Yellow card', lat: at.lat, lng: at.lng, tone: 'yellow' })
-  }
-  const bomoh = game.bomoh_stash
-  if (
-    forOrganiser &&
-    game.settings.mode === 'full' &&
-    legendariesOf(game).bomoh === 'stash' &&
-    secretLetters.bomoh &&
-    !bomoh?.claimedBy
-  ) {
-    const at = typeof bomoh?.lat === 'number' && typeof bomoh?.lng === 'number' ? { lat: bomoh.lat, lng: bomoh.lng } : game.arena.start
-    places.push({ id: 'bomoh', label: 'Purple card', lat: at.lat, lng: at.lng, tone: 'purple' })
+    const tone = LEGENDARY_COLOUR[kind]
+    places.push({ id: kind, label: `${capital(tone)} card`, lat: at.lat, lng: at.lng, tone })
   }
   return places
 }

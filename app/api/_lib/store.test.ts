@@ -597,18 +597,20 @@ describe('MemoryStore.addPosition gap', () => {
 })
 
 describe('MemoryStore secret card sets', () => {
-  it('the first read of a secret card set makes six ready cards: A-C yellow and A-C purple', async () => {
+  it('the first read of a secret card set makes twelve ready cards: A-C yellow, orange, purple and green', async () => {
     const cards = await store.secretCards('org1')
-    expect(cards.map((c) => `${c.legendary}:${c.letter}`).sort()).toEqual(['bomoh:A', 'bomoh:B', 'bomoh:C', 'dato:A', 'dato:B', 'dato:C'])
+    expect(cards.map((c) => `${c.legendary}:${c.letter}`).sort()).toEqual([
+      'bomoh:A', 'bomoh:B', 'bomoh:C', 'dato:A', 'dato:B', 'dato:C', 'hijau:A', 'hijau:B', 'hijau:C', 'ring:A', 'ring:B', 'ring:C',
+    ])
     for (const c of cards) {
       expect(c).toMatchObject({ organisation_id: 'org1', state: 'ready', found_at: null })
       expect(c.code).toMatch(/^[A-Za-z0-9_-]{22}$/)
     }
-    expect(new Set(cards.map((c) => c.code)).size).toBe(6)
-    // A second read finds the same six, and another organisation has its own.
+    expect(new Set(cards.map((c) => c.code)).size).toBe(12)
+    // A second read finds the same twelve, and another organisation has its own.
     expect(await store.secretCards('org1')).toEqual(cards)
     const other = await store.secretCards('org2')
-    expect(other).toHaveLength(6)
+    expect(other).toHaveLength(12)
     expect(other.some((c) => cards.some((x) => x.id === c.id || x.code === c.code))).toBe(false)
   })
 
@@ -641,6 +643,14 @@ describe('MemoryStore secret card sets', () => {
     expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id].sort())
     await store.updateGame(oldLobby2.id, { bomoh_stash: { code: 'd', lat: 3, lng: 4, claimedBy: null, claimedAt: null } })
     expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id, oldLobby2.id].sort())
+    // And for Super Ring's and Mak Kau Hijau's.
+    const oldLobby3 = await store.createGame({ ...(rest as never), code: 'FFF222', organiser_id: b.id, started_at: null })
+    const oldLobby4 = await store.createGame({ ...(rest as never), code: 'GGG222', organiser_id: b.id, started_at: null })
+    await store.updateGame(oldLobby3.id, { ring_stash: { code: 'e', lat: 5, lng: 6, claimedBy: null, claimedAt: null } })
+    await store.updateGame(oldLobby4.id, { hijau_stash: { code: 'f', lat: 7, lng: 8, claimedBy: null, claimedAt: null } })
+    expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual(
+      [g1.id, g2.id, oldLobby.id, oldLobby2.id, oldLobby3.id, oldLobby4.id].sort(),
+    )
   })
 })
 

@@ -5,7 +5,8 @@ import BeforeYouStart from '../game/BeforeYouStart'
 import CrewStep from '../game/CrewStep'
 import { AlertsOnPhone } from '../game/MarshalTools'
 import PackList from '../game/PackList'
-import { waitingForCard as waitingFor } from '../game/cardNotice'
+import { stashIn, waitingForCard as waitingFor } from '../game/cardNotice'
+import { LEGENDARY_KINDS } from '../../shared/legendaries.js'
 import SetupMap, { OrganiserTools } from '../game/SetupMap'
 import { saveLastGame } from '../game/lastGame'
 import { loadOrganiserSession } from '../game/organiserSession'
@@ -91,7 +92,7 @@ export default function HostLobby({ code }: { code: string }) {
       })
       if (res?.notice) setNotice(NO_CARD_LINE)
       // Either card already dropped in the park: the organiser has to go and fetch it.
-      else if (view.settings.mode === 'full' && (view.datoStash || view.bomohStash)) setNotice(PICK_UP_LINE)
+      else if (view.settings.mode === 'full' && LEGENDARY_KINDS.some((l) => stashIn(view, l))) setNotice(PICK_UP_LINE)
       refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -126,7 +127,7 @@ export default function HostLobby({ code }: { code: string }) {
   // Full and wanting either hidden card, but none was free yet: the lobby keeps trying (ruling R9), so this stays
   // until every wanted card is assigned. `legendaries` and the cards are in the organiser's own view only. setMode's
   // own no-card line goes once the refreshed Full view has every card it wants.
-  const waitingForCard = !!view && (waitingFor(view, 'dato') || waitingFor(view, 'bomoh'))
+  const waitingForCard = !!view && LEGENDARY_KINDS.some((l) => waitingFor(view, l))
   const cardsSettled = !!view && view.settings.mode === 'full' && !waitingForCard
   const shownNotice = notice === NO_CARD_LINE && cardsSettled ? '' : notice || (waitingForCard ? NO_CARD_LINE : '')
 

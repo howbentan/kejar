@@ -57,13 +57,13 @@ export class SupabaseStore implements GameStore {
         .is('ended_at', null)
         // Quoted: the timestamp's ':' and '.' are reserved in PostgREST's or-filter syntax. A dropped stash
         // (lat set), either legendary's, holds its card at any age, so those lobbies come back too.
-        .or(`started_at.not.is.null,created_at.gt."${createdAfter}",dato_stash->>lat.not.is.null,bomoh_stash->>lat.not.is.null`),
+        .or(`started_at.not.is.null,created_at.gt."${createdAfter}",dato_stash->>lat.not.is.null,bomoh_stash->>lat.not.is.null,ring_stash->>lat.not.is.null,hijau_stash->>lat.not.is.null`),
     ) ?? []) as GameRow[]
   }
   async secretCards(organisationId: string): Promise<SecretCard[]> {
     const read = async () => (check(await this.db.from('secret_cards').select('*').eq('organisation_id', organisationId)) ?? []) as SecretCard[]
     const have = await read()
-    const missing = (['dato', 'bomoh'] as const).flatMap((legendary) =>
+    const missing = (['dato', 'ring', 'bomoh', 'hijau'] as const).flatMap((legendary) =>
       (['A', 'B', 'C'] as const)
         .filter((letter) => !have.some((c) => c.legendary === legendary && c.letter === letter))
         .map((letter) => ({ organisation_id: organisationId, legendary, letter, code: newDatoCode(), state: 'ready', found_at: null })),

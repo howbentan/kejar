@@ -154,6 +154,33 @@ describe('HiddenCard: dropping Bomoh', () => {
     expect(screen.getByText('Reprint a purple card to use Bomoh.')).toBeInTheDocument()
   })
 
+  it.each([
+    ['ring', 'orange', 'dropRing', 'Reprint an orange card to use Super Ring.'],
+    ['hijau', 'green', 'dropHijau', 'Reprint a green card to use Mak Kau Hijau.'],
+  ] as const)('%s: its own colour, drop action, print link and reprint line, never its name', async (legendary, colour, action, reprint) => {
+    const settings = { ...DEFAULT_SETTINGS, mode: 'full' as const, legendaries: { dato: 'off' as const, bomoh: 'off' as const, ring: 'off' as const, hijau: 'off' as const, [legendary]: 'stash' as const } }
+    const view = lobby({ datoStash: null, bomohStash: null, ringStash: null, hijauStash: null, [`${legendary}Card`]: { letter: 'B', code: 'Rr1' }, settings })
+    call.mockResolvedValue({ ok: true })
+    const { unmount } = render(<HiddenCard legendary={legendary} view={view} {...creds} />)
+    open()
+    expect(screen.getByText(`★ ${colour[0].toUpperCase()}${colour.slice(1)} card`)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: `Print the ${colour} card` })).toHaveAttribute('href', `/print/card#${legendary}/Rr1`)
+    expect((mapProps.last as { stashTone?: string }).stashTone).toBe(colour)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: `Drop the ${colour} card here` })))
+    expect(call).toHaveBeenCalledWith(action, { code: 'ABC234', organiserToken: 'h1', lat: 3.01, lng: 101.01, accuracy_m: 4 })
+    expect(document.body.textContent).not.toMatch(/—|super ring|hijau/i)
+    unmount()
+    render(<HiddenCard legendary={legendary} view={{ ...view, [`${legendary}Card`]: null }} {...creds} />)
+    open()
+    expect(screen.getByText(reprint)).toBeInTheDocument()
+  })
+
+  it('a Dato Seri card is not shown when the app picked Super Ring instead', () => {
+    const settings = { ...DEFAULT_SETTINGS, mode: 'full' as const, legendaries: { dato: 'off' as const, bomoh: 'off' as const, ring: 'stash' as const, hijau: 'off' as const } }
+    render(<HiddenCard view={lobby({ datoStash: null, ringStash: null, settings })} {...creds} />)
+    expect(screen.queryByRole('button', { name: 'Organiser tools' })).toBeNull()
+  })
+
   it('renders nothing when Bomoh is not in the view, and Dato still works beside it', () => {
     render(<HiddenCard legendary="bomoh" view={bomohLobby({ bomohStash: undefined })} {...creds} />)
     expect(screen.queryByRole('button', { name: 'Organiser tools' })).toBeNull()

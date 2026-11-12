@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { ArenaDraft } from '../../shared/arenaDraft.js'
 import { MAX_STATIONS } from '../../shared/ids.js'
+import { sidesOf, type SideSwitch } from '../../shared/legendaries.js'
 import { DEFAULT_SETTINGS, type Arena, type LatLng, type PowerUpKind, type Settings } from '../../shared/types.js'
 import { call } from '../game/api'
 import { loadOrganiserSession } from '../game/organiserSession'
@@ -108,14 +109,14 @@ const label = (text: string) => (
   </p>
 )
 
-/** One legendary card's setting: a coloured block with its title, an Off / On choice and a line on what it does. */
+/** One side's legendary setting: a coloured block with its title, the two it may be, and an Off / On choice. */
 function Legendary(props: {
   tone: 'yellow' | 'purple'
   art: ReactNode
   title: ReactNode
   who: string
   seg: ReactNode
-  say: string
+  say?: string
 }) {
   const yellow = props.tone === 'yellow'
   return (
@@ -140,9 +141,11 @@ function Legendary(props: {
         </div>
       </div>
       {props.seg}
-      <p className="muted" style={{ fontSize: 12 }}>
-        {props.say}
-      </p>
+      {props.say && (
+        <p className="muted" style={{ fontSize: 12 }}>
+          {props.say}
+        </p>
+      )}
     </div>
   )
 }
@@ -163,6 +166,8 @@ export default function HostNew() {
   // Laptops guess their location from Wi-Fi; phones have GPS.
   const onLaptop = platformOf(navigator.userAgent) === 'other'
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS)
+  // One legendary per side: the organiser only switches each side; the server picks which one (spec §6.1).
+  const [sides, setSides] = useState<SideSwitch>(() => sidesOf(DEFAULT_SETTINGS.legendaries))
   const [showFields, setShowFields] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -258,8 +263,9 @@ export default function HostNew() {
         if (!same(start, chosen.arena.start)) overrides.start = start
         if (!same(stations, chosen.arena.stations ?? [])) overrides.stations = stations
       }
+      const { legendaries: _picked, ...rest } = settings
       const { code, notice } = await call<{ code: string; notice?: string }>('create', {
-        settings,
+        settings: { ...rest, legendarySides: sides },
         organiserToken,
         ...(chosen ? { savedArenaId: chosen.id, overrides } : { draft: oneOff }),
       })
@@ -594,41 +600,42 @@ export default function HostNew() {
               <Legendary
                 tone="yellow"
                 art={<Sticker kind="dato" size={40} />}
-                title="Dato Seri"
-                who="FOR DIKEJAR · YELLOW"
+                title="Dikejar legendary"
+                who="DATO SERI OR SUPER RING"
                 seg={
-                  <Seg<'off' | 'stash'>
-                    label="Dato Seri"
-                    value={settings.legendaries.dato}
+                  <Seg<'off' | 'on'>
+                    label="Dikejar legendary"
+                    value={sides.runner}
                     options={[
                       { value: 'off', text: 'Off' },
-                      { value: 'stash', text: 'On' },
+                      { value: 'on', text: 'On' },
                     ]}
-                    onChange={(v) => set({ legendaries: { ...settings.legendaries, dato: v } })}
+                    onChange={(v) => setSides((s) => ({ ...s, runner: v }))}
                     on={{ background: 'var(--legendary-2)', color: 'var(--legendary-ink)' }}
                   />
                 }
-                say="A hidden QR card. The runner who finds it can free themselves and 2 more from Penjara. You'll hide it during the walk."
               />
               <Legendary
                 tone="purple"
                 art={<Sticker kind="bomoh" size={40} />}
-                title="Bomoh"
-                who="FOR KEJAR · PURPLE"
+                title="Kejar legendary"
+                who="BOMOH OR MAK KAU HIJAU"
                 seg={
-                  <Seg<'off' | 'stash'>
-                    label="Bomoh"
-                    value={settings.legendaries.bomoh}
+                  <Seg<'off' | 'on'>
+                    label="Kejar legendary"
+                    value={sides.chaser}
                     options={[
                       { value: 'off', text: 'Off' },
-                      { value: 'stash', text: 'On' },
+                      { value: 'on', text: 'On' },
                     ]}
-                    onChange={(v) => set({ legendaries: { ...settings.legendaries, bomoh: v } })}
+                    onChange={(v) => setSides((s) => ({ ...s, chaser: v }))}
                     on={{ background: 'var(--bomoh-2)', color: 'var(--bomoh-ink)' }}
                   />
                 }
-                say="A hidden QR card. The chaser who finds it shows every runner to Kejar for 2 pings. You'll hide it during the walk."
               />
+              <p className="muted" style={{ fontSize: 12 }}>
+                The app secretly picks which one. You&apos;ll see which card to hide.
+              </p>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                 <span>Dikejar can see Kejar at check-in</span>
                 <Pills<'off' | 'on'>

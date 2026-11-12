@@ -3,13 +3,13 @@ import { alertsFrom, type Alert, type ReportReason } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
 import { distanceM, fuzz, hash, offset } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
-import { isTicked, kitOf, packItems, placeItems, type KitItem, type PlaceItem, type SecretLetters } from './kit.js'
+import { isTicked, kitOf, packItems, placeItems, SECRET_PLACE_IDS, type KitItem, type PlaceItem, type SecretLetters } from './kit.js'
 import { MOMENT_WINDOW_MS } from './moments.js'
 import { reelPulledThisStay, RESCUE_HOLD_MS } from './penjara.js'
 import { isOut, undoableCatchId } from './players.js'
 import { POWER_NAME } from './powerNames.js'
 import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, shieldArmedAt, slotBusy, TOLL_RADIUS_M } from './powerups.js'
-import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
+import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type LegendaryKind, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
 
 /** Spec §4.5–4.6 constants. */
 export const FUZZ_RADIUS_M = 15
@@ -205,6 +205,14 @@ export interface View {
    */
   bomohStash?: PlacedStash | null
   bomohCard?: { letter: string; code: string } | null
+  /**
+   * The organiser only: Super Ring's and Mak Kau Hijau's stashes and cards, the same shape and secrecy as Bomoh's.
+   * Left out of players' and marshals' views entirely.
+   */
+  ringStash?: PlacedStash | null
+  ringCard?: { letter: string; code: string } | null
+  hijauStash?: PlacedStash | null
+  hijauCard?: { letter: string; code: string } | null
   /**
    * The organiser's and marshals' packing list. The yellow card and its place are in the organiser's own view
    * only (rules doc §9b); players never get this field.
@@ -915,7 +923,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, ringStash: undefined, ringCard: undefined, hijauStash: undefined, hijauCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
   }
   return v
 }
@@ -1053,7 +1061,16 @@ function fullView(i: ViewInput): View {
     // The stash and the card go only to the organiser, who prints and hides it (ruling R15). Marshals are the
     // helper, and never see either (rules doc §9b).
     ...(organiser
-      ? { datoStash: placedStash(i.game.dato_stash), datoCard: datoCardOf(i), bomohStash: placedStash(i.game.bomoh_stash), bomohCard: bomohCardOf(i) }
+      ? {
+          datoStash: placedStash(i.game.dato_stash),
+          datoCard: datoCardOf(i),
+          bomohStash: placedStash(i.game.bomoh_stash),
+          bomohCard: bomohCardOf(i),
+          ringStash: placedStash(i.game.ring_stash),
+          ringCard: cardOf(i.game.ring_stash),
+          hijauStash: placedStash(i.game.hijau_stash),
+          hijauCard: cardOf(i.game.hijau_stash),
+        }
       : {}),
     // The packing list: marshals get the shared items, and only the organiser's own view adds the secret ones.
     ...(role === 'marshal' ? { kit: kitFor(i) } : {}),
@@ -1089,6 +1106,11 @@ function bomohCardOf(i: ViewInput): { letter: string; code: string } | null {
   return s?.card && s.code ? { letter: s.card.letter, code: s.code } : null
 }
 
+/** The organiser's card for any legendary's stash: its letter and the code it claims with. */
+function cardOf(s: Game['bomoh_stash']): { letter: string; code: string } | null {
+  return s?.card && s.code ? { letter: s.card.letter, code: s.code } : null
+}
+
 function withoutLegendaries(s: Settings): Omit<Settings, 'legendaries'> {
   const { legendaries: _hidden, ...rest } = s
   return rest
@@ -1100,9 +1122,10 @@ function kitFor(i: ViewInput): KitView {
   const kit = kitOf(i.game)
   const places = placeItems(i.game, organiser, letters)
   // The secret step is placed only when the stash is really dropped, never from the saved flag alone (ruling R8).
-  const placed = Object.fromEntries(Object.entries(kit.placed).filter(([id]) => id !== 'dato' && id !== 'bomoh' && places.some((p) => p.id === id)))
-  if (places.some((p) => p.id === 'dato') && placedStash(i.game.dato_stash)) placed.dato = true
-  if (places.some((p) => p.id === 'bomoh') && placedStash(i.game.bomoh_stash)) placed.bomoh = true
+  const secret = (id: string): id is LegendaryKind => (SECRET_PLACE_IDS as string[]).includes(id)
+  const placed = Object.fromEntries(Object.entries(kit.placed).filter(([id]) => !secret(id) && places.some((p) => p.id === id)))
+  const stashes: Record<LegendaryKind, Game['dato_stash']> = { dato: i.game.dato_stash, ring: i.game.ring_stash, bomoh: i.game.bomoh_stash, hijau: i.game.hijau_stash }
+  for (const p of places) if (secret(p.id) && placedStash(stashes[p.id])) placed[p.id] = true
   return {
     items: packItems(i.game, letters).map((item) => ({ ...item, ticked: isTicked(i.game, item) })),
     placed,

@@ -14,6 +14,16 @@
   --bomoh-2: #C9A4FF;
   --bomoh-3: #9B5DE5;
   --bomoh-ink: #2B0B45;
+  /* Super Ring's cheese orange: clearly apart from Dato Seri's yellow, never on any other card. */
+  --ring-1: #FFE0B8;
+  --ring-2: #FFA94D;
+  --ring-3: #E8590C;
+  --ring-ink: #3A1A00;
+  /* Mak Kau Hijau's deep green: clearly apart from the Volt lime, never on any other card. */
+  --hijau-1: #CDEFD8;
+  --hijau-2: #3FA86B;
+  --hijau-3: #1B6B3F;
+  --hijau-ink: #06240F;
   --black: #0A0A0B;
   --white: #F5F5F3;
   --dim: rgba(245, 245, 243, 0.55);
@@ -539,6 +549,8 @@ select.input option { background: #141614; color: var(--white); }
 @media (prefers-reduced-motion: reduce) { .reel-machine.shake, .reel-flash { animation: none; } .reel-flash { opacity: 0; } .reel-handle { transition: none; } }
 .btn.btn-legendary { background: var(--legendary-2); color: var(--legendary-ink); border-color: var(--legendary-3); }
 .btn.btn-bomoh { background: var(--bomoh-2); color: var(--bomoh-ink); border-color: var(--bomoh-3); }
+.btn.btn-ring { background: var(--ring-2); color: var(--ring-ink); border-color: var(--ring-3); }
+.btn.btn-hijau { background: var(--hijau-2); color: var(--hijau-ink); border-color: var(--hijau-3); }
 
 /* How to play doodle scenes (motion design 8.8): marker strokes that draw themselves, then stay still. */
 .kd-doodle path, .kd-doodle circle, .kd-doodle rect { fill: none; stroke: var(--volt); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }

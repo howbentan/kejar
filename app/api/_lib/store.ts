@@ -81,7 +81,7 @@ export interface GameStore {
    * after `createdAfter` (ISO), so abandoned lobbies drop out and the list stays small.
    */
   unfinishedGames(organisationId: string, createdAfter: string): Promise<GameRow[]>
-  /** The organisation's six secret cards, A-C yellow and A-C purple; missing ones are made `ready`, with fresh codes, on first read. */
+  /** The organisation's twelve secret cards, A-C each of yellow, orange, purple and green; missing ones are made `ready`, with fresh codes, on first read. */
   secretCards(organisationId: string): Promise<SecretCard[]>
   setSecretCard(id: string, patch: Partial<Pick<SecretCard, 'code' | 'state' | 'found_at'>>): Promise<void>
   addPlayer(p: Omit<PlayerRow, 'id'>): Promise<Player>
@@ -451,12 +451,14 @@ export class MemoryStore implements GameStore {
             !g.created_at ||
             g.created_at > createdAfter ||
             typeof g.dato_stash?.lat === 'number' ||
-            typeof g.bomoh_stash?.lat === 'number'),
+            typeof g.bomoh_stash?.lat === 'number' ||
+            typeof g.ring_stash?.lat === 'number' ||
+            typeof g.hijau_stash?.lat === 'number'),
       )
       .map((g) => ({ ...g }))
   }
   async secretCards(organisationId: string) {
-    for (const legendary of ['dato', 'bomoh'] as const) {
+    for (const legendary of ['dato', 'ring', 'bomoh', 'hijau'] as const) {
       for (const letter of ['A', 'B', 'C'] as const) {
         const has = this.secretCardRows.some((c) => c.organisation_id === organisationId && c.legendary === legendary && c.letter === letter)
         if (!has) {

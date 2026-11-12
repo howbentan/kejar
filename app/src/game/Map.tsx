@@ -1,10 +1,11 @@
 import type { Feature as GeoFeature, FeatureCollection, Geometry } from 'geojson'
-import maplibregl, { type GeoJSONSource } from 'maplibre-gl'
+import maplibregl, { type ExpressionSpecification, type GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useEffect, useRef, useState } from 'react'
 import * as m from 'motion/react-m'
 import { useReducedMotion } from 'motion/react'
 import { circlePolygon, distanceM } from '../../shared/geo.js'
+import type { SecretTone } from '../../shared/kit.js'
 import type { Arena, LatLng } from '../../shared/types.js'
 import { CHASER_SNAPSHOT_FUZZ_M, FUZZ_RADIUS_M, type ChaserSnapshot, type MapDot } from '../../shared/views.js'
 import { kejarMapStyle } from './mapStyle'
@@ -33,6 +34,24 @@ function legendaryPurple() {
   const token = (name: string, fallback: string) => css?.getPropertyValue(name).trim() || fallback
   return { fill: token('--bomoh-1', '#F0E0FF'), main: token('--bomoh-2', '#C9A4FF'), deep: token('--bomoh-3', '#9B5DE5'), ink: token('--bomoh-ink', '#2B0B45') }
 }
+
+/** Super Ring's cheese orange, read from tokens.css --ring-1/2/3 and --ring-ink; the fallbacks (#FFE0B8, #FFA94D, #E8590C, #3A1A00) must change with them. */
+function legendaryOrange() {
+  const css = typeof document === 'undefined' ? null : getComputedStyle(document.documentElement)
+  const token = (name: string, fallback: string) => css?.getPropertyValue(name).trim() || fallback
+  return { fill: token('--ring-1', '#FFE0B8'), main: token('--ring-2', '#FFA94D'), deep: token('--ring-3', '#E8590C'), ink: token('--ring-ink', '#3A1A00') }
+}
+
+/** Mak Kau Hijau's deep green, read from tokens.css --hijau-1/2/3 and --hijau-ink; the fallbacks (#CDEFD8, #3FA86B, #1B6B3F, #06240F) must change with them. */
+function legendaryGreen() {
+  const css = typeof document === 'undefined' ? null : getComputedStyle(document.documentElement)
+  const token = (name: string, fallback: string) => css?.getPropertyValue(name).trim() || fallback
+  return { fill: token('--hijau-1', '#CDEFD8'), main: token('--hijau-2', '#3FA86B'), deep: token('--hijau-3', '#1B6B3F'), ink: token('--hijau-ink', '#06240F') }
+}
+
+export type { SecretTone }
+const toneColours = (tone: SecretTone) =>
+  tone === 'purple' ? legendaryPurple() : tone === 'orange' ? legendaryOrange() : tone === 'green' ? legendaryGreen() : legendaryYellow()
 
 type Feature = GeoFeature<Geometry, Record<string, unknown>>
 const collection = (features: Feature[]): FeatureCollection => ({ type: 'FeatureCollection', features })
@@ -79,15 +98,23 @@ function stationFeatures(stations: StationMark[]): FeatureCollection {
 
 /**
  * A pin. The walk-the-park guide sets a `label` (drawn on the pin), a `state` (todo is outlined, next pulses, placed is
- * filled) and, for Dato Seri's step, `tone: 'yellow'`. Plain pins (safety alerts) leave them out and draw as filled lime.
+ * filled) and, for a secret card's step, its colour as `tone`. Plain pins (safety alerts) leave them out and draw as filled lime.
  */
-type Pin = { id: string; lat: number; lng: number; label?: string; state?: 'todo' | 'next' | 'placed'; tone?: 'yellow' | 'purple' }
+type Pin = { id: string; lat: number; lng: number; label?: string; state?: 'todo' | 'next' | 'placed'; tone?: SecretTone }
 
 function pinFeatures(pins: Pin[]): FeatureCollection {
   return collection(
     pins.map((p) => ({
       type: 'Feature',
-      properties: { id: p.id, label: p.label ?? '', state: p.state ?? 'placed', yellow: p.tone === 'yellow', purple: p.tone === 'purple' },
+      properties: {
+        id: p.id,
+        label: p.label ?? '',
+        state: p.state ?? 'placed',
+        yellow: p.tone === 'yellow',
+        orange: p.tone === 'orange',
+        purple: p.tone === 'purple',
+        green: p.tone === 'green',
+      },
       geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
     })),
   )
@@ -189,8 +216,8 @@ export default function GameMap({
   snapshot?: ChaserSnapshot | null
   /** Organiser and marshals before the start: the exact spot a legendary's card was dropped, as a pin. */
   stash?: LatLng | null
-  /** The stash pin's colour: Dato Seri's yellow, or Bomoh's purple. Read once, when the map loads. */
-  stashTone?: 'yellow' | 'purple'
+  /** The stash pin's colour: the secret card's (yellow, orange, purple or green). Read once, when the map loads. */
+  stashTone?: SecretTone
   /** Chasers: where Tuch and Ga's hidden toll gates stand. */
   tollGates?: LatLng[]
 }) {
@@ -301,6 +328,12 @@ export default function GameMap({
       m.addSource('bomoh-legendary', { type: 'geojson', data: zoneFeatures(latestBomohZone.current).zone })
       m.addLayer({ id: 'bomoh-legendary-fill', type: 'fill', source: 'bomoh-legendary', paint: { 'fill-color': p.main, 'fill-opacity': 0.12 } })
       m.addLayer({ id: 'bomoh-legendary-line', type: 'line', source: 'bomoh-legendary', paint: { 'line-color': p.main, 'line-width': 2, 'line-dasharray': [2, 2] } })
+      // A walk pin's colour by its tone, as `case` pairs: yellow, orange, purple, then green.
+      const o = legendaryOrange()
+      const gr = legendaryGreen()
+      const toned = (shade: 'main' | 'deep' | 'ink'): [ExpressionSpecification, string, ExpressionSpecification, string, ExpressionSpecification, string, ExpressionSpecification, string] => [
+        ['get', 'yellow'], y[shade], ['get', 'orange'], o[shade], ['get', 'purple'], p[shade], ['get', 'green'], gr[shade],
+      ]
       // The ? badge and its ripple are an HTML marker animated by CSS (the compositor), so the map idles.
       m.addSource('toilets', {
         type: 'geojson',
@@ -359,7 +392,7 @@ export default function GameMap({
         paint: { 'text-color': VOLT, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
       })
       m.addSource('stash', { type: 'geojson', data: stashFeatures(latestStash.current) })
-      const pin = latestStashTone.current === 'purple' ? legendaryPurple() : y
+      const pin = toneColours(latestStashTone.current)
       m.addLayer({
         id: 'stash',
         type: 'circle',
@@ -474,7 +507,7 @@ export default function GameMap({
         type: 'circle',
         source: 'pins',
         filter: ['==', ['get', 'state'], 'next'],
-        paint: { 'circle-radius': 14, 'circle-color': ['case', ['get', 'yellow'], y.main, ['get', 'purple'], p.main, VOLT], 'circle-opacity': 0.3 },
+        paint: { 'circle-radius': 14, 'circle-color': ['case', ...toned('main'), VOLT], 'circle-opacity': 0.3 },
       })
       m.addLayer({
         id: 'pins',
@@ -482,8 +515,8 @@ export default function GameMap({
         source: 'pins',
         paint: {
           'circle-radius': ['case', ['!=', ['get', 'label'], ''], 11, 10],
-          'circle-color': ['case', ['get', 'yellow'], y.main, ['get', 'purple'], p.main, ['==', ['get', 'state'], 'todo'], BLACK, VOLT],
-          'circle-stroke-color': ['case', ['get', 'yellow'], y.deep, ['get', 'purple'], p.deep, WHITE],
+          'circle-color': ['case', ...toned('main'), ['==', ['get', 'state'], 'todo'], BLACK, VOLT],
+          'circle-stroke-color': ['case', ...toned('deep'), WHITE],
           'circle-stroke-width': ['case', ['==', ['get', 'state'], 'todo'], 2, 3],
         },
       })
@@ -492,7 +525,7 @@ export default function GameMap({
         type: 'symbol',
         source: 'pins',
         layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
-        paint: { 'text-color': ['case', ['get', 'yellow'], y.ink, ['get', 'purple'], p.ink, ['==', ['get', 'state'], 'todo'], WHITE, BLACK] },
+        paint: { 'text-color': ['case', ...toned('ink'), ['==', ['get', 'state'], 'todo'], WHITE, BLACK] },
       })
       fitTo(m, latestFit.current)
       ready.current = true

@@ -169,4 +169,56 @@ describe('placeItems', () => {
     const g = full({ dato_stash: { lat: 3.002, lng: 101.003, claimedBy: null, claimedAt: null } })
     expect(placeItems(g, true, { dato: 'B' }).at(-1)).toMatchObject({ lat: 3.002, lng: 101.003 })
   })
+
+  const picked = (ring: 'off' | 'stash', hijau: 'off' | 'stash', over: Partial<Game> = {}) =>
+    full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'off', ring, hijau } }, ...over })
+
+  it("placeItems for the organiser lists the orange step when ring is stash; a marshal's never does", () => {
+    const g = picked('stash', 'off')
+    expect(placeItems(g, true, { ring: 'A' }).at(-1)).toMatchObject({ id: 'ring', tone: 'orange', label: 'Orange card' })
+    expect(placeItems(g, false, { ring: 'A' }).map((p) => p.id)).not.toContain('ring')
+    // Never counted in a marshal's OF N: the shared list is the same whether ring is on or off.
+    expect(placeItems(g, false, { ring: 'A' })).toEqual(placeItems(full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'off', ring: 'off', hijau: 'off' } } }), false, {}))
+  })
+
+  it('the green step works the same, after the orange one, and both sit where they were dropped', () => {
+    const g = picked('stash', 'stash', {
+      ring_stash: { lat: 3.002, lng: 101.004, claimedBy: null, claimedAt: null },
+      hijau_stash: { lat: 3.003, lng: 101.005, claimedBy: null, claimedAt: null },
+    })
+    const places = placeItems(g, true, { ring: 'A', hijau: 'B' })
+    expect(places.slice(-2).map((p) => [p.id, p.tone, p.label, p.lat, p.lng])).toEqual([
+      ['ring', 'orange', 'Orange card', 3.002, 101.004],
+      ['hijau', 'green', 'Green card', 3.003, 101.005],
+    ])
+    expect(placeItems(g, false, { ring: 'A', hijau: 'B' }).map((p) => p.id)).not.toContain('hijau')
+  })
+
+  it('no orange or green step when off, in Core, with no letter, or once claimed', () => {
+    expect(placeItems(picked('off', 'off'), true, { ring: 'A', hijau: 'B' }).map((p) => p.id)).not.toContain('ring')
+    expect(placeItems(picked('stash', 'stash'), true, {}).map((p) => p.id)).not.toEqual(expect.arrayContaining(['ring']))
+    const core = withArena({ settings: { ...DEFAULT_SETTINGS, legendaries: { dato: 'off', bomoh: 'off', ring: 'stash', hijau: 'stash' } } })
+    expect(placeItems(core, true, { ring: 'A', hijau: 'B' }).map((p) => p.id)).toEqual(placeItems(core, false, {}).map((p) => p.id))
+    const claimed = picked('stash', 'stash', {
+      ring_stash: { lat: 3.002, lng: 101.002, claimedBy: 'p1', claimedAt: 'x' },
+      hijau_stash: { lat: 3.002, lng: 101.002, claimedBy: 'p2', claimedAt: 'x' },
+    })
+    const ids = placeItems(claimed, true, { ring: 'A', hijau: 'B' }).map((p) => p.id)
+    expect(ids).not.toContain('ring')
+    expect(ids).not.toContain('hijau')
+  })
+
+  it('packs Orange card A and Green card B, coloured and secret, only when on with a letter', () => {
+    const g = picked('stash', 'stash')
+    const items = packItems(g, { ring: 'A', hijau: 'B' })
+    expect(items.find((i) => i.id === 'ring-card')).toMatchObject({ label: 'Orange card A', tone: 'orange', note: '(secret)', group: 'pack' })
+    expect(items.find((i) => i.id === 'hijau-card')).toMatchObject({ label: 'Green card B', tone: 'green', note: '(secret)', group: 'pack' })
+    expect(packItems(g, {}).map((i) => i.id)).not.toContain('ring-card')
+    expect(packItems(picked('off', 'off'), { ring: 'A', hijau: 'B' }).map((i) => i.id)).not.toContain('hijau-card')
+  })
+
+  it('the orange and green ids are organiser-only too', () => {
+    expect(SECRET_PLACE_IDS).toEqual(expect.arrayContaining(['dato', 'ring', 'bomoh', 'hijau']))
+    expect(SECRET_PACK_IDS).toEqual(expect.arrayContaining(['dato-card', 'ring-card', 'bomoh-card', 'hijau-card']))
+  })
 })

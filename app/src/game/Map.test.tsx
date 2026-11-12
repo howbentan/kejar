@@ -330,6 +330,34 @@ describe('GameMap', () => {
       expect(layer('stash').paint['circle-color']).toBe('#C9A4FF')
       expect(layer('stash').paint['circle-stroke-color']).toBe('#9B5DE5')
     })
+
+    it.each([
+      ['orange', '#FFA94D', '#E8590C'],
+      ['green', '#3FA86B', '#1B6B3F'],
+    ] as const)("Super Ring's and Mak Kau Hijau's stash pins are %s", (tone, main, deep) => {
+      created.layers = []
+      created.data = {}
+      render(<GameMap arena={arena} dots={[]} stash={{ lat: 3.03, lng: 101.03 }} stashTone={tone} />)
+      act(() => created.load!())
+      expect(layer('stash').paint['circle-color']).toBe(main)
+      expect(layer('stash').paint['circle-stroke-color']).toBe(deep)
+    })
+
+    it('walk pins carry their tone, and the pin colours have a case for each of the four', () => {
+      created.layers = []
+      created.data = {}
+      const pins = [
+        { id: 'ring', lat: 3.1, lng: 101.1, label: '?', tone: 'orange' as const },
+        { id: 'hijau', lat: 3.2, lng: 101.2, label: '?', tone: 'green' as const },
+      ]
+      render(<GameMap arena={arena} dots={[]} pins={pins} />)
+      act(() => created.load!())
+      expect(created.data.pins).toMatchObject({
+        features: [{ properties: { orange: true, green: false, yellow: false, purple: false } }, { properties: { green: true, orange: false } }],
+      })
+      const colours = JSON.stringify(layer('pins').paint['circle-color'])
+      for (const hex of ['#FFD60A', '#FFA94D', '#C9A4FF', '#3FA86B']) expect(colours).toContain(hex)
+    })
   })
 
   describe("Dato Seri's hint zone", () => {

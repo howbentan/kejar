@@ -153,6 +153,45 @@ describe('WalkPark', () => {
     expect(document.body.textContent).not.toMatch(/yellow/i)
   })
 
+  const RING = { id: 'ring', label: 'Orange card', lat: 3.002, lng: 101.0, tone: 'orange' as const }
+  const HIJAU = { id: 'hijau', label: 'Green card', lat: 3.003, lng: 101.0, tone: 'green' as const }
+
+  it('the organiser walk takes the orange step with its own drop, then the green one away from the orange card', async () => {
+    open(view([S1, RING, HIJAU], { 'station-1': true }, { ringCard: { letter: 'A', code: 'x' }, hijauCard: { letter: 'B', code: 'y' } }))
+    expect(mapCalls.at(-1)!.pins!.slice(-2)).toMatchObject([
+      { id: 'ring', label: '?', tone: 'orange' },
+      { id: 'hijau', label: '?', tone: 'green' },
+    ])
+    act(() => onFix!(at(RING, 0, 100)))
+    expect(screen.getByText('SECRET · 2 OF 3')).toBeInTheDocument()
+    expect(screen.getByText('Hide orange card A.')).toBeInTheDocument()
+    expect(screen.getByText('Hide it somewhere sneaky. Under a bench, behind a sign.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Drop Super Ring here' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('setKit', { code: 'ABC234', organiserToken: 'h1', placed: { id: 'ring', on: true } }))
+    expect(call.mock.calls.map((c) => c[0])).toEqual(['dropRing', 'setKit'])
+    cleanup()
+    call.mockClear()
+    open(view([S1, RING, HIJAU], { 'station-1': true, ring: true }, { ringCard: { letter: 'A', code: 'x' }, hijauCard: { letter: 'B', code: 'y' } }))
+    act(() => onFix!(at(HIJAU, 0, 100)))
+    expect(screen.getByText('SECRET · 3 OF 3')).toBeInTheDocument()
+    expect(screen.getByText('Hide green card B.')).toBeInTheDocument()
+    expect(screen.getByText('Somewhere quiet, away from the orange one. Behind a tree, under a bin.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Drop Mak Kau Hijau here' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('setKit', { code: 'ABC234', organiserToken: 'h1', placed: { id: 'hijau', on: true } }))
+    expect(call.mock.calls.map((c) => c[0])).toEqual(['dropHijau', 'setKit'])
+  })
+
+  it('a green step with Dato Seri picked mentions the yellow card; without location the list names the colours', () => {
+    open(view([S1, DATO, HIJAU], { 'station-1': true, dato: true }, { datoCard: { letter: 'C', code: 'x' }, hijauCard: { letter: 'B', code: 'y' } }))
+    act(() => onFix!(at(HIJAU, 0, 100)))
+    expect(screen.getByText('Somewhere quiet, away from the yellow one. Behind a tree, under a bin.')).toBeInTheDocument()
+    cleanup()
+    open(view([S1, RING, HIJAU], {}, { ringCard: { letter: 'A', code: 'x' }, hijauCard: { letter: 'B', code: 'y' } }))
+    act(() => onErr!({}))
+    expect(screen.getByText('Hide orange card A')).toBeInTheDocument()
+    expect(screen.getByText('Hide green card B')).toBeInTheDocument()
+  })
+
   it("the helper's walk has no secret pin, step, letter or count", () => {
     // The server leaves the secret place and card out of a marshal's view; the screen adds nothing of its own.
     const { container } = open(view([S1, S2, PEN], { 'station-1': true, 'station-2': true, penjara: true }), { token: 'p1' })

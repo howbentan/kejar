@@ -50,4 +50,25 @@ describe('PrintCard: one game’s hidden ★ card (ruling R15)', () => {
     expect(parsePrintCardHash('#Zx9%2D4')).toEqual({ legendary: 'dato', code: 'Zx9-4' })
     expect(parsePrintCardHash('')).toEqual({ legendary: 'dato', code: '' })
   })
+
+  it.each([
+    ['ring', 'KEJAR:RING:Rr1'],
+    ['hijau', 'KEJAR:HIJAU:Rr1'],
+  ] as const)('an orange or green card (%s) prints its own QR, with the same plain star face, and nothing names it', async (legendary, qr) => {
+    render(<PrintCard cardCode="Rr1" legendary={legendary} />)
+    await waitFor(() => expect(screen.getByAltText('★')).toHaveAttribute('src', `data:${qr}`))
+    expect(screen.getByTestId('stash-card').textContent).toBe('★')
+    expect(document.body.textContent).not.toMatch(/ring|hijau|mak kau|bomoh|dato|seri/i)
+    expect(encoded).toEqual([qr])
+  })
+
+  it('reads ring and hijau from the # part, and printCardUrl round-trips every legendary', async () => {
+    const { printCardUrl } = await import('../game/printLinks')
+    expect(parsePrintCardHash('#ring/Pq7-abc')).toEqual({ legendary: 'ring', code: 'Pq7-abc' })
+    expect(parsePrintCardHash('#hijau/Pq7-abc')).toEqual({ legendary: 'hijau', code: 'Pq7-abc' })
+    for (const legendary of ['dato', 'ring', 'bomoh', 'hijau'] as const) {
+      expect(parsePrintCardHash(printCardUrl(legendary, 'a_B-9').split('#')[1])).toEqual({ legendary, code: 'a_B-9' })
+    }
+    expect(printCardUrl('dato', 'x')).toBe('/print/card#x')
+  })
 })

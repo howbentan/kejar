@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { distanceM } from '../../shared/geo.js'
+import type { SecretTone } from '../../shared/kit.js'
 import type { LatLng } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
 import { call } from '../game/api'
@@ -60,20 +61,30 @@ function useHere(): { here: LatLng | null; lost: boolean } {
   return { here, lost }
 }
 
-type Kind = 'away' | 'here' | 'secret' | 'secret-here' | 'purple' | 'purple-here'
+/**
+ * Each secret card's step: its CSS token prefix, its button, its drop action and button words (the walk is the
+ * organiser's own screen, so it names the legendary), and whether it's Dikejar's card (hidden somewhere sneaky) or
+ * Kejar's (somewhere quiet, away from Dikejar's).
+ */
+const SECRET: Record<SecretTone, { token: string; button: string; drop: string; dropText: string; runner: boolean; letter: (v: View) => string | undefined }> = {
+  yellow: { token: 'legendary', button: 'btn-legendary', drop: 'dropDatoSeri', dropText: 'Drop Dato Seri here', runner: true, letter: (v) => v.datoCard?.letter },
+  orange: { token: 'ring', button: 'btn-ring', drop: 'dropRing', dropText: 'Drop Super Ring here', runner: true, letter: (v) => v.ringCard?.letter },
+  purple: { token: 'bomoh', button: 'btn-bomoh', drop: 'dropBomoh', dropText: 'Drop Bomoh here', runner: false, letter: (v) => v.bomohCard?.letter },
+  green: { token: 'hijau', button: 'btn-hijau', drop: 'dropHijau', dropText: 'Drop Mak Kau Hijau here', runner: false, letter: (v) => v.hijauCard?.letter },
+}
 
-const cardStyle = (kind: Kind) => ({
+const cardStyle = (here: boolean, tone: SecretTone | null) => ({
   border: '1px solid var(--hair)',
   borderRadius: 18,
   padding: '14px 16px',
-  ...(kind === 'here' ? { background: 'var(--volt)', color: 'var(--black)', borderColor: 'var(--volt)' } : {}),
-  ...(kind === 'secret' ? { borderColor: 'var(--legendary-2)' } : {}),
-  ...(kind === 'secret-here'
-    ? { background: 'linear-gradient(135deg, var(--legendary-1), var(--legendary-2) 50%, var(--legendary-3))', color: 'var(--legendary-ink)', borderColor: 'var(--legendary-2)' }
-    : {}),
-  ...(kind === 'purple' ? { borderColor: 'var(--bomoh-2)' } : {}),
-  ...(kind === 'purple-here'
-    ? { background: 'linear-gradient(135deg, var(--bomoh-1), var(--bomoh-2) 50%, var(--bomoh-3))', color: 'var(--bomoh-ink)', borderColor: 'var(--bomoh-2)' }
+  ...(tone === null && here ? { background: 'var(--volt)', color: 'var(--black)', borderColor: 'var(--volt)' } : {}),
+  ...(tone !== null && !here ? { borderColor: `var(--${SECRET[tone].token}-2)` } : {}),
+  ...(tone !== null && here
+    ? {
+        background: `linear-gradient(135deg, var(--${SECRET[tone].token}-1), var(--${SECRET[tone].token}-2) 50%, var(--${SECRET[tone].token}-3))`,
+        color: `var(--${SECRET[tone].token}-ink)`,
+        borderColor: `var(--${SECRET[tone].token}-2)`,
+      }
     : {}),
 })
 
@@ -104,18 +115,18 @@ export default function WalkPark({
   const done = (id: string) => local[id] === true || view.kit?.placed[id] === true
   const nextIndex = places.findIndex((p) => !done(p.id))
   const next = nextIndex === -1 ? null : places[nextIndex]
-  const secret = next?.tone === 'yellow' || next?.tone === 'purple'
-  const purple = next?.tone === 'purple'
-  // The purple step only mentions the yellow card when this game has one to keep away from.
-  const hasYellow = places.some((p) => p.tone === 'yellow')
+  const tone: SecretTone | null = next?.tone ?? null
+  const secret = tone !== null
+  const look = tone ? SECRET[tone] : null
+  // Kejar's step only mentions Dikejar's card when this game has one to keep away from.
+  const runnerTone = places.find((p) => p.tone && SECRET[p.tone].runner)?.tone
   const metres = here && next ? distanceM(here, next) : null
   // The secret step has no spot to reach: any place nearby will do, so only stations and Penjara use the 15 m rule.
   const isHere = !secret && metres !== null && metres <= WALK_HERE_M
   // The server only sends a secret place to the organiser, so a step shows up here only when it's theirs to see.
-  const hideLineFor = (tone: 'yellow' | 'purple') => {
-    const colour = tone === 'purple' ? 'purple' : 'yellow'
-    const letter = tone === 'purple' ? view.bomohCard?.letter : view.datoCard?.letter
-    return letter ? `Hide ${colour} card ${letter}.` : `Hide the ${colour} card.`
+  const hideLineFor = (t: SecretTone) => {
+    const letter = SECRET[t].letter(view)
+    return letter ? `Hide ${t} card ${letter}.` : `Hide the ${t} card.`
   }
 
   async function mark(id: string, beforeSave?: () => Promise<unknown>) {
@@ -172,7 +183,7 @@ export default function WalkPark({
           <div className="card">
             {places.map((p) => (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '6px 0' }}>
-                <span style={p.tone ? { color: p.tone === 'purple' ? 'var(--bomoh-2)' : 'var(--legendary-2)', fontWeight: 700 } : undefined}>
+                <span style={p.tone ? { color: `var(--${SECRET[p.tone].token}-2)`, fontWeight: 700 } : undefined}>
                   {p.tone ? hideLineFor(p.tone).slice(0, -1) : p.label}
                 </span>
                 {done(p.id) ? (
@@ -192,18 +203,18 @@ export default function WalkPark({
 
       {next && !(lost && !here) && (
         <>
-          <div style={cardStyle(purple ? (here ? 'purple-here' : 'purple') : secret ? (here ? 'secret-here' : 'secret') : isHere ? 'here' : 'away')}>
-            {secret ? (
+          <div style={cardStyle(secret ? !!here : isHere, tone)}>
+            {tone && look ? (
               <>
-                <p className="eyebrow" style={here ? { color: 'inherit', opacity: 0.6 } : { color: purple ? 'var(--bomoh-2)' : 'var(--legendary-2)' }}>{`SECRET · ${count}`}</p>
-                <p style={{ fontWeight: 800, fontSize: 21, letterSpacing: '-0.04em' }}>{hideLineFor(purple ? 'purple' : 'yellow')}</p>
+                <p className="eyebrow" style={here ? { color: 'inherit', opacity: 0.6 } : { color: `var(--${look.token}-2)` }}>{`SECRET · ${count}`}</p>
+                <p style={{ fontWeight: 800, fontSize: 21, letterSpacing: '-0.04em' }}>{hideLineFor(tone)}</p>
                 <p>Secret. Only you see this. Pick any spot nearby.</p>
                 <p>
-                  {purple
-                    ? hasYellow
-                      ? 'Somewhere quiet, away from the yellow one. Behind a tree, under a bin.'
-                      : 'Somewhere quiet. Behind a tree, under a bin.'
-                    : 'Hide it somewhere sneaky. Under a bench, behind a sign.'}
+                  {look.runner
+                    ? 'Hide it somewhere sneaky. Under a bench, behind a sign.'
+                    : runnerTone
+                      ? `Somewhere quiet, away from the ${runnerTone} one. Behind a tree, under a bin.`
+                      : 'Somewhere quiet. Behind a tree, under a bin.'}
                 </p>
               </>
             ) : isHere ? (
@@ -225,18 +236,14 @@ export default function WalkPark({
               {upText(next.id, next.label)}
             </button>
           )}
-          {secret && here && !lost && (
+          {look && here && !lost && (
             <button
               type="button"
-              className={purple ? 'btn btn-bomoh' : 'btn btn-legendary'}
+              className={`btn ${look.button}`}
               disabled={busy}
-              onClick={() =>
-                void mark(next!.id, () =>
-                  call(purple ? 'dropBomoh' : 'dropDatoSeri', { code, ...credentials, lat: here!.lat, lng: here!.lng }),
-                )
-              }
+              onClick={() => void mark(next!.id, () => call(look.drop, { code, ...credentials, lat: here!.lat, lng: here!.lng }))}
             >
-              {purple ? 'Drop Bomoh here' : 'Drop Dato Seri here'}
+              {look.dropText}
             </button>
           )}
         </>
