@@ -1733,6 +1733,174 @@ describe('Nasi Lemak KFC', () => {
   })
 })
 
+describe('Tuch and Ga', () => {
+  /** Ben, Kim and Lee chase; Aina, Hafiz and Wei run. Full mode, the chase has begun. */
+  async function chasing() {
+    const g = await readyGame({ mode: 'full' })
+    const kim = await run('join', { code: g.code, name: 'Kim', accepted: true })
+    const lee = await run('join', { code: g.code, name: 'Lee', accepted: true })
+    const wei = await run('join', { code: g.code, name: 'Wei', accepted: true })
+    await run('setRoles', {
+      code: g.code,
+      organiserToken: g.organiserToken,
+      roles: {
+        [g.ben.playerId]: 'chaser',
+        [kim.playerId]: 'chaser',
+        [lee.playerId]: 'chaser',
+        [g.aina.playerId]: 'runner',
+        [g.hafiz.playerId]: 'runner',
+        [wei.playerId]: 'runner',
+      },
+    })
+    await run('linkTag', { code: g.code, token: wei.token, tagId: 9 })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    return { ...g, kim, lee, wei, gameId: (await store.gameByCode(g.code))!.id }
+  }
+  const give = async (gameId: string, playerId: string, kind: PowerUpKind) =>
+    store.addPowerUp({ game_id: gameId, player_id: playerId, kind, station: null })
+  const use = (g: { code: string }, token: string, powerupId: string, extra: object = {}) =>
+    run('usePowerup', { code: g.code, token, powerupId, ...extra })
+  const view = (g: { code: string }, token: string) => run<View>('state', { code: g.code, token })
+  const loc = (g: { code: string }, token: string, dLatM: number) => run('location', { code: g.code, token, ...at(dLatM) })
+  const dotOf = (v: View, id: string) => v.dots.find((d) => d.kind === 'runner' && d.id === id)
+  const GATE_TEXT = 'A Kejar set a toll gate.'
+
+  /** Ben stands at `at(0)` and sets the gate, then walks off; Aina checks in at `ainaAt`, Hafiz at 80 m. */
+  async function gateThenReveal(g: Awaited<ReturnType<typeof chasing>>) {
+    const toll = await give(g.gameId, g.ben.playerId, 'toll')
+    await loc(g, g.ben.token, 0)
+    expect(await use(g, g.ben.token, toll.id)).toEqual({ ok: true, kind: 'toll' })
+    return toll
+  }
+  async function checkInAndReveal(g: Awaited<ReturnType<typeof chasing>>, ainaAt = 30) {
+    now = T0 + 8 * MIN
+    await loc(g, g.ben.token, 300)
+    now = T0 + 9.5 * MIN
+    await loc(g, g.aina.token, ainaAt)
+    await loc(g, g.hafiz.token, 80)
+    now = T0 + 10 * MIN
+  }
+
+  it('a runner who checks in within 40 m of the gate shows exactly at the next reveal', async () => {
+    const g = await chasing()
+    const toll = await gateThenReveal(g)
+    await checkInAndReveal(g)
+    const v = await view(g, g.ben.token)
+    expect(dotOf(v, g.aina.playerId)).toMatchObject({ exact: true, revealedBy: 'toll' })
+    const hafiz = dotOf(v, g.hafiz.playerId)!
+    expect(hafiz.fuzzy).toBe(true)
+    expect(hafiz.revealedBy).toBeNull()
+    // The gate stayed where Ben used it, not where he walked to.
+    const row = (await store.powerUps(g.gameId)).find((u) => u.id === toll.id)!
+    expect(row.spot!.lat).toBeCloseTo(at(0).lat, 6)
+    expect(row.spot!.lng).toBeCloseTo(at(0).lng, 6)
+    const ev = (await store.events(g.gameId)).find((e) => e.type === 'used')!
+    expect(ev).toMatchObject({ actor_id: g.ben.playerId, data: { kind: 'toll' } })
+  })
+
+  it("is refused with no-location when the chaser's last fix is over 60 s old, and the card is kept", async () => {
+    const g = await chasing()
+    const toll = await give(g.gameId, g.ben.playerId, 'toll')
+    await loc(g, g.ben.token, 0)
+    now += 61_000
+    expect(await use(g, g.ben.token, toll.id)).toEqual({ ok: false, reason: 'no-location' })
+    const row = (await store.powerUps(g.gameId)).find((u) => u.id === toll.id)!
+    expect(row.used_at).toBeNull()
+    expect(row.spot).toBeNull()
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'used')).toHaveLength(0)
+    // A fresh fix makes it work, with the same card.
+    await loc(g, g.ben.token, 0)
+    expect(await use(g, g.ben.token, toll.id)).toEqual({ ok: true, kind: 'toll' })
+  })
+
+  it('Ponteng beats the gate', async () => {
+    const g = await chasing()
+    await gateThenReveal(g)
+    const cloak = await give(g.gameId, g.aina.playerId, 'cloak')
+    expect(await use(g, g.aina.token, cloak.id)).toEqual({ ok: true, kind: 'cloak' })
+    await checkInAndReveal(g)
+    const v = await view(g, g.ben.token)
+    expect(dotOf(v, g.aina.playerId)).toBeUndefined()
+    expect(v.feed.map((f) => f.text)).toContain('#07 never checked in')
+  })
+
+  it('Gostan beats the gate', async () => {
+    const g = await chasing()
+    await gateThenReveal(g)
+    const decoy = await give(g.gameId, g.aina.playerId, 'decoy')
+    expect(await use(g, g.aina.token, decoy.id)).toEqual({ ok: true, kind: 'decoy' })
+    await checkInAndReveal(g)
+    const dot = dotOf(await view(g, g.ben.token), g.aina.playerId)!
+    // Drawn at the decoy spot, well away from where Aina really is.
+    expect(distanceM(dot, at(30))).toBeGreaterThanOrEqual(100)
+  })
+
+  it('runners never see the gate', async () => {
+    const g = await chasing()
+    await gateThenReveal(g)
+    const vAina = await view(g, g.aina.token)
+    expect(vAina.tollGates).toEqual([])
+    expect(vAina.feed.map((f) => f.text).join('|')).not.toMatch(/toll|Tuch/i)
+    const vBen = await view(g, g.ben.token)
+    expect(vBen.tollGates).toHaveLength(1)
+    expect(vBen.tollGates[0].lat).toBeCloseTo(at(0).lat, 6)
+    expect(vBen.feed[0]).toMatchObject({
+      text: GATE_TEXT,
+      label: 'Tuch and Ga',
+      means: 'Dikejar checking in near it show exactly at the next ping.',
+    })
+    // The whole chasing team sees it.
+    expect((await view(g, g.kim.token)).tollGates).toHaveLength(1)
+  })
+
+  it('the gate leaves the chasers view once the reveal lands', async () => {
+    const g = await chasing()
+    await gateThenReveal(g)
+    await checkInAndReveal(g)
+    expect((await view(g, g.ben.token)).tollGates).toEqual([])
+  })
+
+  it('marshals and the organiser get no gates, and a plain feed line', async () => {
+    const g = await chasing()
+    await gateThenReveal(g)
+    const vOrg = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(vOrg.tollGates).toEqual([])
+    expect(vOrg.feed[0].text).toBe('A Kejar used Tuch and Ga')
+  })
+
+  it("a frozen chaser's toll gate still lands", async () => {
+    const g = await chasing()
+    await gateThenReveal(g)
+    const cheese = await give(g.gameId, g.aina.playerId, 'cheese')
+    expect(await use(g, g.aina.token, cheese.id, { targetId: g.ben.playerId })).toMatchObject({ ok: true, kind: 'cheese' })
+    await checkInAndReveal(g)
+    const v = await view(g, g.ben.token)
+    expect(dotOf(v, g.aina.playerId)).toMatchObject({ exact: true, revealedBy: 'toll' })
+  })
+
+  it('a doubled Tuch and Ga sets its second gate only after the first one lands', async () => {
+    const g = await chasing()
+    await give(g.gameId, g.ben.playerId, 'combo').then((c) => store.updatePowerUp(c.id, { used_at: new Date(now).toISOString() }))
+    const first = await give(g.gameId, g.ben.playerId, 'toll')
+    const twin = (await store.applyCombo(g.ben.playerId, first.id))!
+    await loc(g, g.ben.token, 0)
+    expect(await use(g, g.ben.token, first.id)).toEqual({ ok: true, kind: 'toll' })
+    // The twin waits for the first gate's reveal (a doubled card's second use never lands on the same ping).
+    expect(await use(g, g.ben.token, twin.id)).toEqual({ ok: false, reason: 'effect-running' })
+    expect((await view(g, g.ben.token)).tollGates).toHaveLength(1)
+    await checkInAndReveal(g)
+    await view(g, g.ben.token)
+    now += 30_000
+    await loc(g, g.ben.token, 100)
+    expect(await use(g, g.ben.token, twin.id)).toEqual({ ok: true, kind: 'toll' })
+    const gates = (await view(g, g.ben.token)).tollGates
+    expect(gates).toHaveLength(1)
+    expect(gates[0].lat).toBeCloseTo(at(100).lat, 6)
+  })
+})
+
 describe('cloak secrecy at the ping', () => {
   it('the ping count leaves out a cloaked runner', async () => {
     const g = await readyGame()

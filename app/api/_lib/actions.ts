@@ -22,7 +22,7 @@ import { isOut, undoableCatchId } from '../../shared/players.js'
 import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
 import { bomohCodeFromQr, datoCodeFromQr, isBomohQr, isDatoQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
-import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS } from '../../shared/powerups.js'
+import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS, TOLL_FRESH_MS } from '../../shared/powerups.js'
 import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
@@ -1709,8 +1709,17 @@ const usePowerup: Action = async (ctx, body) => {
     const t = cheeseTarget
     if (!t || t.role !== 'chaser' || t.removed_at || t.disqualified_at || frozenForMs(t, ctx.now) > 0) return { ok: false, reason: 'no-target' }
   }
+  // Tuch and Ga (new power-ups §5.3): the gate goes where the chaser stands now. No fresh fix, no gate, and the
+  // card is kept (checked before the card is spent).
+  let gateSpot: { lat: number; lng: number } | null = null
+  if (u.kind === 'toll') {
+    const fix = latest((await ctx.store.latestPositions(game.id, [iso(ctx.now)]))[me.id])
+    if (!fix || ctx.now - Date.parse(fix.at) > TOLL_FRESH_MS) return { ok: false, reason: 'no-location' }
+    gateSpot = { lat: fix.lat, lng: fix.lng }
+  }
   // markUsed is atomic: a double-tap uses the power-up once.
   if (!(await ctx.store.markUsed(u.id))) return { ok: false, reason: 'already-used' }
+  if (u.kind === 'toll' && gateSpot) await ctx.store.updatePowerUp(u.id, { spot: gateSpot })
   if (u.kind === 'shield') {
     // A doubled Durian is one tap (new power-ups §5.2): its other half is switched on too, whichever row was
     // tapped, and arms itself through shieldArmedAt when this one blocks a catch or runs out. A stolen half is skipped.

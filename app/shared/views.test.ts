@@ -638,6 +638,35 @@ describe("Bomoh's team-wide reveal (jail design §2e)", () => {
     expect(dot.revealedBy).toBe('bomoh')
   })
 
+  it('bomoh wins over focus wins over toll for revealedBy', () => {
+    const near = { lat: A.lat + 0.0005, lng: A.lng } // ~56 m from Aina: inside focus, outside the toll radius
+    const ps = { ...positions, c1: [pos(near.lat, near.lng, T0 + 14.8 * MIN)] }
+    const card = (id: string, kind: PowerUp['kind'], spot: PowerUp['spot']): PowerUp => ({
+      id,
+      game_id: 'g1',
+      player_id: 'c1',
+      kind,
+      station: 1,
+      claimed_at: iso(T0 + 13 * MIN),
+      used_at: iso(T0 + 14 * MIN),
+      consumed_at: null,
+      sealed: false,
+      taken_at: null,
+      offer: null,
+      twin_of: null,
+      spot,
+    })
+    const toll = card('ut', 'toll', { lat: A.lat + 0.0001, lng: A.lng }) // ~11 m from Aina
+    const focus = card('uf', 'focus', null)
+    const by = (powerUps: PowerUp[], game = g) =>
+      view(chaser, { game, positions: ps, powerUps }).dots.find((d) => d.id === 'r1')!.revealedBy
+    expect(by([toll])).toBe('toll')
+    expect(by([toll, focus])).toBe('focus')
+    expect(by([toll, focus], { ...g, bomoh_stash: bomohStash(T0 + 12 * MIN) })).toBe('bomoh')
+    // Outside 40 m of the gate, the toll does nothing.
+    expect(by([{ ...toll, spot: { lat: A.lat + 0.0005, lng: A.lng } }])).toBeNull()
+  })
+
   it('an unclaimed bomoh_stash has no effect on any dot', () => {
     const v = view(chaser, { game: { ...g, bomoh_stash: bomohStash(null) } })
     const dot = v.dots.find((d) => d.id === 'r1')!
