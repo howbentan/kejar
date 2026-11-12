@@ -6,7 +6,7 @@ import { ErrorText } from '../game/ui'
  * until the game arrives, then sprinting off the right edge (`leaving`) before the game shows. The hidden block
  * below holds the same space as home's buttons (with reconnect showing), which keeps the logo where it was.
  */
-export default function GameLoading({ code, error, leaving = false, onLeft }: { code: string; error?: string; leaving?: boolean; onLeft?: () => void }) {
+export default function GameLoading({ code, error, leaving = false, onLeft }: { code: string; error?: string | null; leaving?: boolean; onLeft?: () => void }) {
   return (
     <main className="home">
       <div className="home-play">
