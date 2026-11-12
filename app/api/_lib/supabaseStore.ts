@@ -308,7 +308,7 @@ export class SupabaseStore implements GameStore {
       | null
     return rows?.[0] ?? null
   }
-  async claimHijau(gameId: string, playerId: string, run: Omit<HijauRun, 'claimedBy' | 'claimedAt' | 'sentAt' | 'settledAt' | 'tapped'>): Promise<boolean> {
+  async claimHijau(gameId: string, playerId: string, run: Omit<HijauRun, 'claimedBy' | 'claimedAt' | 'sentAt' | 'settledAt' | 'tapped' | 'targets'>): Promise<boolean> {
     // One function: locks the game row, re-checks the stash, marks it claimed and writes the run together. True for the winner.
     return (
       check(
@@ -322,12 +322,12 @@ export class SupabaseStore implements GameStore {
       ) === true
     )
   }
-  async claimHijauPush(gameId: string, atIso: string): Promise<boolean> {
-    // One conditional update in the database: only a run with no sentAt takes it. True for the winner.
-    return check(await this.db.rpc('claim_hijau_push', { p_game: gameId, p_at: atIso })) === true
+  async claimHijauPush(gameId: string, atIso: string, targets: string[]): Promise<boolean> {
+    // One conditional update in the database: only a run with no sentAt takes it, with its targets. True for the winner.
+    return check(await this.db.rpc('claim_hijau_push', { p_game: gameId, p_at: atIso, p_targets: targets })) === true
   }
   async tapHijau(gameId: string, playerId: string, atIso: string): Promise<boolean> {
-    // One conditional update: before the deadline, and only if this player isn't in the list yet.
+    // One conditional update: not settled, before the deadline, and only if this player isn't in the list yet.
     return check(await this.db.rpc('tap_hijau', { p_game: gameId, p_player: playerId, p_at: atIso })) === true
   }
   async claimHijauSettle(gameId: string, atIso: string): Promise<HijauRun | null> {

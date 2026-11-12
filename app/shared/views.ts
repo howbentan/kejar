@@ -785,10 +785,15 @@ function arrestFor(i: ViewInput): View['arrest'] {
   }
 }
 
+/** I must tap green: the push went to me, and I'm still free, not Luar Garisan and not under house arrest. */
+function hijauTargetMe(i: Pick<ViewInput, 'game' | 'me'>): boolean {
+  return !!i.game.hijau?.targets?.includes(i.me.id) && hijauTargets([i.me]).length > 0
+}
+
 /** My Mak Kau Hijau takeover (see `View.hijau`). */
 function hijauFor(i: ViewInput, phase: Phase): View['hijau'] {
   const run = i.game.hijau
-  if (!run || run.settledAt || phase !== 'chasing' || !hijauTargets([i.me]).length) return null
+  if (!run || run.settledAt || phase !== 'chasing' || !hijauTargetMe(i)) return null
   const startsAt = Date.parse(run.startsAt)
   if (i.now < startsAt) return null
   const frozen = i.game.paused_at ? Math.max(0, i.now - Math.max(Date.parse(i.game.paused_at), startsAt)) : 0
@@ -802,6 +807,8 @@ interface FeedContext {
   jailedNow: number
   /** I tapped green in this game's Mak Kau Hijau. */
   tappedGreen: boolean
+  /** I must tap green right now (see `hijauTargetMe`). */
+  hijauTarget: boolean
 }
 
 type Line = Omit<FeedItem, 'at'>
@@ -919,14 +926,15 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
         `One less to find. ${tag} is in Penjara.`,
       )
     case 'hijau':
-      // Runners (and marshals) need not act: only a runner's line buzzes.
-      if (ctx.side === 'runner') return { ...plain('Mak kau hijau! Tap the green.'), act: true }
+      // Only a runner who must tap gets the buzz; jailed, arrested or Luar Garisan runners just read it.
+      if (ctx.side === 'runner') return { ...plain('Mak kau hijau! Tap the green.'), act: ctx.hijauTarget }
       return plain('Mak kau hijau! Dikejar have 45 s.')
     case 'hijau-done': {
-      const safe = ctx.side === 'runner' && ctx.tappedGreen ? [plain('Safe! You touched green.')] : []
       // Too close to the end to run: nothing happened, so nothing to explain beyond the found card.
       if (e.data.ended === true) return null
-      if (e.data.void === true) return ctx.side === 'runner' ? safe : [plain('Mak kau hijau fizzled. The alert went out too late.')]
+      // Void: it never counted, so nobody is told "Safe!" either.
+      if (e.data.void === true) return ctx.side === 'runner' ? null : plain('Mak kau hijau fizzled. The alert went out too late.')
+      const safe = ctx.side === 'runner' && ctx.tappedGreen ? [plain('Safe! You touched green.')] : []
       return [plain(`Mak kau hijau: ${Number(e.data.jailed ?? 0)} Dikejar to Penjara.`), ...safe]
     }
     case 'luar-garisan':
@@ -1047,6 +1055,7 @@ function fullView(i: ViewInput): View {
     freeNow: runnersNow.filter((p) => !isOut(p)).length,
     jailedNow: runnersNow.filter((p) => p.jailed).length,
     tappedGreen: !!i.game.hijau?.tapped.includes(i.me.id),
+    hijauTarget: hijauTargetMe(i),
   }
   // Newest first; events recorded in the same millisecond keep their recorded order (later first).
   const feed = [

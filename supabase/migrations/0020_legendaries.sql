@@ -17,7 +17,7 @@ alter table secret_cards
   check (legendary in ('dato', 'bomoh', 'ring', 'hijau'));
 
 -- 3. Columns. ring_stash and hijau_stash have the shape of bomoh_stash: { code, card, lat, lng, claimedBy, claimedAt }.
--- hijau is the run: { claimedBy, claimedAt, startsAt, deadline, sentAt, settledAt, tapped[] }.
+-- hijau is the run: { claimedBy, claimedAt, startsAt, deadline, sentAt, settledAt, tapped[], targets[] }.
 -- players.arrest is a runner's house arrest: { firedAt, route, by, center, startedAt, ringId, catchEventId }, or null.
 alter table games add column if not exists ring_stash jsonb;
 alter table games add column if not exists hijau_stash jsonb;
@@ -76,7 +76,8 @@ begin
            'deadline', to_char(p_deadline at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
            'sentAt', null,
            'settledAt', null,
-           'tapped', '[]'::jsonb)
+           'tapped', '[]'::jsonb,
+           'targets', '[]'::jsonb)
    where id = p_game;
   return true;
 end;
@@ -85,13 +86,19 @@ $$;
 revoke execute on function claim_hijau(uuid, uuid, timestamptz, timestamptz, timestamptz) from public, anon, authenticated;
 grant execute on function claim_hijau(uuid, uuid, timestamptz, timestamptz, timestamptz) to service_role;
 
--- 6. Sets hijau.sentAt once. True iff this call set it. One UPDATE, so two callers never both win.
-create or replace function claim_hijau_push(p_game uuid, p_at timestamptz) returns boolean
+-- 6. Sets hijau.sentAt and hijau.targets (the player ids the push goes to, a jsonb array) together, once. True iff
+-- this call set them. One UPDATE, so two callers never both win.
+create or replace function claim_hijau_push(p_game uuid, p_at timestamptz, p_targets jsonb) returns boolean
 language plpgsql
 as $$
 begin
+  if p_targets is null or jsonb_typeof(p_targets) <> 'array' then
+    raise exception 'claim_hijau_push: p_targets must be a jsonb array';
+  end if;
   update games
-     set hijau = jsonb_set(hijau, '{sentAt}', to_jsonb(to_char(p_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))
+     set hijau = jsonb_set(
+           jsonb_set(hijau, '{sentAt}', to_jsonb(to_char(p_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))),
+           '{targets}', p_targets)
    where id = p_game
      and hijau is not null and jsonb_typeof(hijau) = 'object'
      and (hijau ->> 'sentAt') is null;
@@ -99,10 +106,11 @@ begin
 end;
 $$;
 
-revoke execute on function claim_hijau_push(uuid, timestamptz) from public, anon, authenticated;
-grant execute on function claim_hijau_push(uuid, timestamptz) to service_role;
+revoke execute on function claim_hijau_push(uuid, timestamptz, jsonb) from public, anon, authenticated;
+grant execute on function claim_hijau_push(uuid, timestamptz, jsonb) to service_role;
 
--- 7. Adds a chaser to hijau.tapped only before the deadline and only once. True iff this call added them.
+-- 7. Adds a runner to hijau.tapped only while the run is unsettled, before the deadline, and only once. True iff
+-- this call added them.
 create or replace function tap_hijau(p_game uuid, p_player uuid, p_at timestamptz) returns boolean
 language plpgsql
 as $$
@@ -111,6 +119,7 @@ begin
      set hijau = jsonb_set(hijau, '{tapped}', (hijau -> 'tapped') || to_jsonb(p_player::text))
    where id = p_game
      and hijau is not null and jsonb_typeof(hijau) = 'object'
+     and (hijau ->> 'settledAt') is null
      and p_at < (hijau ->> 'deadline')::timestamptz
      and not ((hijau -> 'tapped') @> to_jsonb(p_player::text));
   return found;

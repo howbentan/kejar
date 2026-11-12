@@ -288,11 +288,11 @@ describe('SupabaseStore legendaries: Super Ring and Mak Kau Hijau', () => {
 
   it('sets the push once through claim_hijau_push, and taps through tap_hijau', async () => {
     const { rpcs, store } = rpcStore([true, false, true, false])
-    expect(await store.claimHijauPush('g1', NOW)).toBe(true)
-    expect(await store.claimHijauPush('g1', NOW)).toBe(false)
+    expect(await store.claimHijauPush('g1', NOW, ['r1', 'r2'])).toBe(true)
+    expect(await store.claimHijauPush('g1', NOW, [])).toBe(false)
     expect(await store.tapHijau('g1', 'c1', NOW)).toBe(true)
     expect(await store.tapHijau('g1', 'c1', NOW)).toBe(false)
-    expect(rpcs[0]).toEqual({ fn: 'claim_hijau_push', args: { p_game: 'g1', p_at: NOW } })
+    expect(rpcs[0]).toEqual({ fn: 'claim_hijau_push', args: { p_game: 'g1', p_at: NOW, p_targets: ['r1', 'r2'] } })
     expect(rpcs[2]).toEqual({ fn: 'tap_hijau', args: { p_game: 'g1', p_player: 'c1', p_at: NOW } })
   })
 

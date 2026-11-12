@@ -182,6 +182,8 @@ export interface HijauRun {
   sentAt: string | null
   settledAt: string | null
   tapped: string[]
+  /** Who the push went to (set with `sentAt`, empty before): only they can tap, see the takeover or be jailed. */
+  targets: string[]
 }
 
 /**

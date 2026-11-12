@@ -196,10 +196,10 @@ export interface GameStore {
    * Mak Kau Hijau: atomically, if the green stash is dropped and unclaimed, marks it claimed by this player and
    * writes `games.hijau` (nothing sent or settled yet, nobody tapped). True only for the one caller who wins.
    */
-  claimHijau(gameId: string, playerId: string, run: Omit<HijauRun, 'claimedBy' | 'claimedAt' | 'sentAt' | 'settledAt' | 'tapped'>): Promise<boolean>
-  /** Sets `hijau.sentAt` once; true for the first caller. */
-  claimHijauPush(gameId: string, atIso: string): Promise<boolean>
-  /** Adds the player to `hijau.tapped` only if `atIso` is before the deadline and they aren't in it yet. */
+  claimHijau(gameId: string, playerId: string, run: Omit<HijauRun, 'claimedBy' | 'claimedAt' | 'sentAt' | 'settledAt' | 'tapped' | 'targets'>): Promise<boolean>
+  /** Sets `hijau.sentAt` and `hijau.targets` (who the push goes to) together, once; true for the first caller. */
+  claimHijauPush(gameId: string, atIso: string, targets: string[]): Promise<boolean>
+  /** Adds the player to `hijau.tapped` only if the run hasn't settled, `atIso` is before the deadline and they aren't in it yet. */
   tapHijau(gameId: string, playerId: string, atIso: string): Promise<boolean>
   /** Sets `hijau.settledAt` once and returns the run; null if there's no run or it already settled. */
   claimHijauSettle(gameId: string, atIso: string): Promise<HijauRun | null>
@@ -785,7 +785,7 @@ export class MemoryStore implements GameStore {
     this.powerUpRows.push(row)
     return { ...row }
   }
-  async claimHijau(gameId: string, playerId: string, run: Omit<HijauRun, 'claimedBy' | 'claimedAt' | 'sentAt' | 'settledAt' | 'tapped'>) {
+  async claimHijau(gameId: string, playerId: string, run: Omit<HijauRun, 'claimedBy' | 'claimedAt' | 'sentAt' | 'settledAt' | 'tapped' | 'targets'>) {
     const g = this.games.find((x) => x.id === gameId)
     if (!g?.hijau_stash || typeof g.hijau_stash.lat !== 'number' || g.hijau_stash.claimedBy !== null) return false
     g.hijau_stash = { ...g.hijau_stash, claimedBy: playerId, claimedAt: this.nowIso() }
@@ -797,18 +797,19 @@ export class MemoryStore implements GameStore {
       sentAt: null,
       settledAt: null,
       tapped: [],
+      targets: [],
     }
     return true
   }
-  async claimHijauPush(gameId: string, atIso: string) {
+  async claimHijauPush(gameId: string, atIso: string, targets: string[]) {
     const g = this.games.find((x) => x.id === gameId)
     if (!g?.hijau || g.hijau.sentAt) return false
-    g.hijau = { ...g.hijau, sentAt: atIso }
+    g.hijau = { ...g.hijau, sentAt: atIso, targets: [...targets] }
     return true
   }
   async tapHijau(gameId: string, playerId: string, atIso: string) {
     const g = this.games.find((x) => x.id === gameId)
-    if (!g?.hijau || g.hijau.tapped.includes(playerId) || !(Date.parse(atIso) < Date.parse(g.hijau.deadline))) return false
+    if (!g?.hijau || g.hijau.settledAt || g.hijau.tapped.includes(playerId) || !(Date.parse(atIso) < Date.parse(g.hijau.deadline))) return false
     g.hijau = { ...g.hijau, tapped: [...g.hijau.tapped, playerId] }
     return true
   }
@@ -816,7 +817,7 @@ export class MemoryStore implements GameStore {
     const g = this.games.find((x) => x.id === gameId)
     if (!g?.hijau || g.hijau.settledAt) return null
     g.hijau = { ...g.hijau, settledAt: atIso }
-    return { ...g.hijau, tapped: [...g.hijau.tapped] }
+    return { ...g.hijau, tapped: [...g.hijau.tapped], targets: [...(g.hijau.targets ?? [])] }
   }
   async startArrest(playerId: string, arrest: Arrest) {
     const p = this.playerRows.find((x) => x.id === playerId)

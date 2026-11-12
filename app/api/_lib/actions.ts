@@ -955,8 +955,10 @@ async function stepHijau(ctx: Ctx, game: Game): Promise<boolean> {
   const deadline = Date.parse(run.deadline)
   if (now < Date.parse(run.startsAt)) return false
   if (now < deadline) {
-    if (run.sentAt || game.ended_at || !(await store.claimHijauPush(game.id, iso(now)))) return false
+    if (run.sentAt || game.ended_at) return false
+    // Who gets the push is recorded with its time: only they can tap, see the takeover or be jailed by this run.
     const targets = hijauTargets(await store.players(game.id))
+    if (!(await store.claimHijauPush(game.id, iso(now), targets.map((p) => p.id)))) return false
     await store.addEvent({ game_id: game.id, type: 'hijau', actor_id: null, target_id: null, data: { deadline } })
     try {
       await pushTo(ctx, targets, { type: 'hijau', code: game.code, deadline, title: 'Mak kau hijau!', body: HIJAU_PUSH })
@@ -978,7 +980,9 @@ async function stepHijau(ctx: Ctx, game: Game): Promise<boolean> {
     return false
   }
   let jailed = 0
-  for (const p of hijauTargets(await store.players(game.id)).filter((r) => !settled.tapped.includes(r.id))) {
+  // Only runners the push went to who are still eligible: one freed (or released) since never got this run's warning.
+  const pushedTo = new Set(settled.targets ?? [])
+  for (const p of hijauTargets(await store.players(game.id)).filter((r) => pushedTo.has(r.id) && !settled.tapped.includes(r.id))) {
     if ((await jailOrArrest(ctx, game, p, null, 'hijau')) !== 'jailed') continue
     jailed++
     await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: p.id, data: { who: who(p), cause: 'hijau' } })
@@ -1994,7 +1998,7 @@ const touchGreen: Action = async (ctx, body) => {
   if (run.tapped.includes(me.id)) return { ok: true }
   const at = game.paused_at ? Math.min(ctx.now, Date.parse(game.paused_at)) : ctx.now
   if (run.settledAt || at >= Date.parse(run.deadline)) return { ok: false, reason: 'too-late' }
-  if (!hijauTargets([me]).length) return { ok: false, reason: 'not-a-target' }
+  if (!(run.targets ?? []).includes(me.id) || !hijauTargets([me]).length) return { ok: false, reason: 'not-a-target' }
   if (await ctx.store.tapHijau(game.id, me.id, iso(at))) return { ok: true }
   // Lost to the deadline, or a racing tap of their own already landed.
   const after = (await loadGame(ctx, body)).hijau

@@ -44,6 +44,7 @@ describe('Mak Kau Hijau late-push rule', () => {
     sentAt: sentAt === null ? null : iso(sentAt),
     settledAt: null,
     tapped: [],
+    targets: [],
   })
 
   it('counts with 25 s or more left when the push went out', () => {

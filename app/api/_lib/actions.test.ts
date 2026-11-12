@@ -6941,12 +6941,14 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
     // Ping 1 reveals at 10:00 with nobody polling; the first poll is 30 s into the 45 s.
     await poll(g, start + 30 * S)
     expect((await game(g)).hijau!.sentAt).toBe(stamp(start + 30 * S))
+    expect(await tap(g, g.aina.token, start + 35 * S)).toEqual({ ok: true })
     await poll(g, start + 45 * S)
     expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
     expect((await row(g, g.aina.playerId)).jailed).toBe(false)
     expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: true, jailed: 0 }])
     expect(texts(await poll(g, start + 46 * S, g.ben.token))).toContain('Mak kau hijau fizzled. The alert went out too late.')
-    expect(texts(await poll(g, start + 46 * S, g.aina.token)).join(' ')).not.toMatch(/fizzled|to Penjara/)
+    // Not even the runner who tapped is told "Safe!": the run never counted.
+    expect(texts(await poll(g, start + 46 * S, g.aina.token)).join(' ')).not.toMatch(/fizzled|to Penjara|Safe/)
   })
 
   it('nobody polls inside the 45 s at all: no push went out, so it is void', async () => {
@@ -6998,6 +7000,10 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
     const t = T0 + 7 * MIN
     await claimAt(g, t)
     expect(hijauPushes().map((p) => p.endpoint)).toEqual(['https://push/Eve'])
+    // Only a real target's feed line buzzes.
+    const startLine = async (token: string) => (await poll(g, t + S, token)).feed.find((f) => f.text === 'Mak kau hijau! Tap the green.')
+    expect(await startLine(eve.token)).toMatchObject({ act: true })
+    for (const token of [g.aina.token, g.hafiz.token, dan.token]) expect(await startLine(token)).toMatchObject({ act: false })
     expect(await tap(g, g.hafiz.token, t + S)).toEqual({ ok: false, reason: 'not-a-target' })
     expect((await poll(g, t + S, g.aina.token)).hijau).toBeNull()
     await poll(g, t + 45 * S)
@@ -7068,5 +7074,50 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
     expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: true, jailed: 0, ended: true }])
     expect(await evs(g, 'hijau')).toHaveLength(0)
     expect((await poll(g, endsAt - 29 * S, g.aina.token)).hijau).toBeNull()
+  })
+
+  it('freed by a jailbreak during the 45 s: never pushed, so no takeover and not jailed', async () => {
+    const g = await chasing()
+    await store.updatePlayers([{ id: g.hafiz.playerId, patch: { jailed: true, caught_at: stamp(now), caught_by: g.ben.playerId } }])
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    expect((await game(g)).hijau!.targets).toEqual([g.aina.playerId])
+    await tap(g, g.aina.token, t + 5 * S)
+    now = t + 30 * S
+    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true })
+    await poll(g, t + 40 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
+    expect((await poll(g, t + 41 * S, g.hafiz.token)).hijau).toBeNull()
+    expect(await tap(g, g.hafiz.token, t + 42 * S)).toEqual({ ok: false, reason: 'not-a-target' })
+    await poll(g, t + 45 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
+    expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: false, jailed: 0 }])
+  })
+
+  it('Durian and Ponteng do not save a runner who misses', async () => {
+    const g = await chasing()
+    const shield = await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'shield', station: 1 })
+    const cloak = await store.addPowerUp({ game_id: g.gameId, player_id: g.hafiz.playerId, kind: 'cloak', station: 1 })
+    expect(await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: shield.id })).toEqual({ ok: true, kind: 'shield' })
+    expect(await run('usePowerup', { code: g.code, token: g.hafiz.token, powerupId: cloak.id })).toEqual({ ok: true, kind: 'cloak' })
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    await poll(g, t + 45 * S)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(true)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect((await evs(g, 'shielded'))).toHaveLength(0)
+  })
+
+  it('a runner jailed by Mak Kau Hijau has not used their one freed, and a jailbreak frees them', async () => {
+    const g = await chasing()
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    await tap(g, g.aina.token, t + 5 * S)
+    await poll(g, t + 45 * S)
+    expect(await row(g, g.hafiz.playerId)).toMatchObject({ jailed: true, freed_once: false, caught_by: null })
+    now = t + 60 * S
+    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true })
+    await poll(g, t + 70 * S)
+    expect(await row(g, g.hafiz.playerId)).toMatchObject({ jailed: false, freed_once: true })
   })
 })

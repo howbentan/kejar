@@ -934,18 +934,27 @@ describe('MemoryStore legendaries: Super Ring and Mak Kau Hijau', () => {
     const row = (await store.gameByCode('ABC234'))!
     expect(row.hijau_stash).toMatchObject({ claimedBy: 'p1', claimedAt: iso(T0) })
     expect(row.hijau).toEqual({
-      claimedBy: 'p1', claimedAt: iso(T0), startsAt: iso(T0 + 10_000), deadline: iso(T0 + 55_000), sentAt: null, settledAt: null, tapped: [],
+      claimedBy: 'p1', claimedAt: iso(T0), startsAt: iso(T0 + 10_000), deadline: iso(T0 + 55_000), sentAt: null, settledAt: null, tapped: [], targets: [],
     })
   })
 
-  it('claimHijauPush sets sentAt once', async () => {
+  it('claimHijauPush sets sentAt and the targets once', async () => {
     const g = await startedGame()
-    expect(await store.claimHijauPush(g.id, iso(T0))).toBe(false) // no run yet
+    expect(await store.claimHijauPush(g.id, iso(T0), ['r1'])).toBe(false) // no run yet
     await store.updateGame(g.id, { hijau_stash: stash() })
     await store.claimHijau(g.id, 'p1', runOf())
-    expect(await store.claimHijauPush(g.id, iso(T0 + 11_000))).toBe(true)
-    expect(await store.claimHijauPush(g.id, iso(T0 + 12_000))).toBe(false)
-    expect((await store.gameByCode('ABC234'))!.hijau!.sentAt).toBe(iso(T0 + 11_000))
+    expect(await store.claimHijauPush(g.id, iso(T0 + 11_000), ['r1', 'r2'])).toBe(true)
+    expect(await store.claimHijauPush(g.id, iso(T0 + 12_000), ['r3'])).toBe(false)
+    expect((await store.gameByCode('ABC234'))!.hijau).toMatchObject({ sentAt: iso(T0 + 11_000), targets: ['r1', 'r2'] })
+  })
+
+  it('tapHijau is false once the run has settled, even before the deadline', async () => {
+    const g = await startedGame()
+    await store.updateGame(g.id, { hijau_stash: stash() })
+    await store.claimHijau(g.id, 'p1', runOf())
+    await store.claimHijauSettle(g.id, iso(T0 + 30_000))
+    expect(await store.tapHijau(g.id, 'c1', iso(T0 + 30_000))).toBe(false)
+    expect((await store.gameByCode('ABC234'))!.hijau!.tapped).toEqual([])
   })
 
   it('tapHijau counts a player once and only before the deadline', async () => {
