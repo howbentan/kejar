@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home upgrades</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root { --volt: #C6FF3D; --ink: #0A0A0B; --paper: #F5F5F3; --dim: rgba(245,245,243,.55); }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #050505; color: var(--paper); font-family: 'Geist', system-ui, sans-serif; }
+  header, section { max-width: 1240px; margin: 0 auto; padding: 24px 20px 4px; }
+  header h1 { font-size: 34px; letter-spacing: -0.04em; margin: 0 0 6px; }
+  header h1 span, h2 span { color: var(--volt); }
+  header p, section > p { opacity: .65; font-size: 14px; margin: 0 0 12px; max-width: 820px; line-height: 1.45; }
+  section > h2 { font-size: 20px; letter-spacing: -0.03em; margin: 16px 0 4px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 28px 20px; padding-bottom: 24px; }
+  .cell h3 { font-size: 15px; margin: 12px 4px 0; letter-spacing: -0.02em; text-align: center; }
+  .cell .note { font-size: 12.5px; opacity: .6; text-align: center; margin: 4px 10px 0; line-height: 1.4; }
+  .num { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--volt); color: var(--ink); font: 800 11px 'Geist'; margin-right: 6px; vertical-align: 2px; }
+
+  .phone { width: 290px; height: 600px; border-radius: 34px; background: var(--ink); border: 2px solid #2a2a2a; position: relative; overflow: hidden; margin: 0 auto; user-select: none; -webkit-user-select: none; }
+  .pad { position: absolute; inset: 0; padding: 22px 18px 18px; display: flex; flex-direction: column; }
+  .btn { width: 100%; border-radius: 999px; padding: 15px; font: 800 16px 'Geist', sans-serif; border: 0; background: var(--volt); color: var(--ink); cursor: pointer; }
+  .btn.ghost { background: var(--ink); color: var(--paper); border: 1px solid #444; font-weight: 700; }
+  .btn.paper { background: var(--paper); color: var(--ink); }
+  .stack { display: flex; flex-direction: column; gap: 10px; margin-top: auto; position: relative; z-index: 3; }
+  .row { display: flex; gap: 10px; }
+  .row .btn { flex: 1; }
+  .scanbtn { flex: 0 0 52px; width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--volt); display: grid; place-items: center; cursor: pointer; padding: 0; }
+  .scanbtn svg { width: 24px; height: 24px; }
+  .link { font-size: 13px; color: var(--dim); text-decoration: underline; text-align: center; margin-top: 12px; cursor: pointer; position: relative; z-index: 3; }
+  .eb { font: 500 9.5px 'Geist Mono', monospace; letter-spacing: .2em; color: var(--dim); }
+
+  /* the logo with its running j (same art and stride as the app) */
+  .logo { position: absolute; width: 190px; aspect-ratio: 900 / 543; left: 50px; top: 150px; pointer-events: none; }
+  .logo img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .lj { position: absolute; left: calc(190 / 900 * 100%); top: calc(12 / 543 * 100%); width: calc(326 / 900 * 100%); height: calc(519 / 543 * 100%); overflow: visible; }
+  .lj .s { fill: none; stroke: var(--volt); stroke-width: 36; stroke-linecap: round; stroke-linejoin: round; }
+  .lj .leg { transform-box: view-box; transform-origin: 168px 338px; }
+  .lj .run, .lj .flip { transform-box: view-box; transform-origin: 168px 300px; }
+  .lj .run { animation: bob var(--bob, .19s) ease-in-out infinite alternate; }
+  .lj .leg.l { animation: legL var(--stride, .38s) ease-in-out infinite; }
+  .lj .leg.r { animation: legR var(--stride, .38s) ease-in-out infinite; }
+  @keyframes bob { from { transform: translateY(0) rotate(5deg); } to { transform: translateY(-20px) rotate(5deg); } }
+  @keyframes legL { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-58deg); } }
+  @keyframes legR { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(50deg); } }
+
+  /* 3. reconnect that says what you're going back to */
+  .rc { display: block; width: 100%; border: 0; border-radius: 22px; background: var(--paper); color: var(--ink); padding: 12px 16px 11px; text-align: left; cursor: pointer; font-family: 'Geist'; }
+  .rc b { display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: 800; }
+  .rc b i { font-style: normal; font-size: 18px; }
+  .rc small { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 3px; font: 500 11px 'Geist Mono', monospace; letter-spacing: .04em; color: rgba(10,10,11,.6); }
+  .rc .live { display: inline-flex; align-items: center; gap: 5px; color: #0A0A0B; }
+  .rc .live::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #1F9D4A; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+
+  /* 4. iPhone install line */
+  .install { position: absolute; left: 12px; right: 12px; top: 12px; z-index: 4; display: flex; align-items: center; gap: 8px; padding: 9px 10px 9px 12px; border-radius: 14px; background: #1b1b1d; border: 1px solid #2c2c2e; font-size: 12px; line-height: 1.3; }
+  .install span { flex: 1; }
+  .install a { color: var(--volt); font-weight: 700; text-decoration: none; cursor: pointer; }
+  .install button { background: none; border: 0; color: var(--dim); font-size: 16px; cursor: pointer; padding: 0 2px; }
+
+  /* 5. tip line */
+  .tip { position: absolute; left: 22px; right: 22px; top: 272px; text-align: center; font-size: 12.5px; line-height: 1.4; color: var(--dim); min-height: 36px; }
+  .tip b { color: var(--paper); font-weight: 600; }
+  .tip .eb { display: block; margin-bottom: 4px; color: var(--volt); }
+
+  /* 7. countdown */
+  .count { position: absolute; left: 0; right: 0; top: 270px; text-align: center; }
+  .count .eb { color: var(--volt); }
+  .count .t { font: 500 40px 'Geist Mono', monospace; letter-spacing: -.02em; margin-top: 2px; }
+  .count small { display: block; font-size: 12px; color: var(--dim); margin-top: 2px; }
+
+  /* 1. scan sheet */
+  .sheet { position: absolute; inset: 0; background: rgba(0,0,0,.6); z-index: 8; display: flex; align-items: flex-end; opacity: 0; pointer-events: none; transition: opacity .25s; }
+  .sheet.on { opacity: 1; pointer-events: auto; }
+  .sheet .card { width: 100%; background: #111; border-radius: 26px 26px 0 0; padding: 16px 16px 18px; transform: translateY(40px); transition: transform .3s cubic-bezier(.2,.8,.3,1); }
+  .sheet.on .card { transform: none; }
+  .cam { height: 240px; border-radius: 18px; background: repeating-linear-gradient(135deg, #1d1d1f 0 12px, #18181a 12px 24px); position: relative; overflow: hidden; display: grid; place-items: center; }
+  .cam .box { width: 150px; height: 150px; border-radius: 16px; border: 3px solid var(--volt); box-shadow: 0 0 0 999px rgba(0,0,0,.35); }
+  .cam .scanline { position: absolute; left: 70px; right: 70px; height: 2px; background: var(--volt); top: 50%; animation: scan 1.6s ease-in-out infinite alternate; }
+  @keyframes scan { from { transform: translateY(-70px); } to { transform: translateY(70px); } }
+  .sheet .hint { text-align: center; font-size: 13px; margin: 12px 0 10px; color: var(--dim); }
+
+  /* 2. join form */
+  .h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.04em; line-height: 1; margin: 10px 0 16px; }
+  .field { border: 1px solid #333; border-radius: 14px; padding: 13px 14px; font-size: 16px; display: flex; justify-content: space-between; align-items: center; }
+  .field small { color: var(--dim); font-size: 12px; text-decoration: underline; cursor: pointer; }
+  .label { font: 500 9.5px 'Geist Mono', monospace; letter-spacing: .2em; color: var(--dim); margin: 0 0 6px; }
+  .check { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--dim); margin-top: 12px; line-height: 1.35; }
+  .check i { flex: 0 0 18px; height: 18px; border-radius: 5px; background: var(--volt); display: grid; place-items: center; color: var(--ink); font-style: normal; font-weight: 800; font-size: 12px; }
+  .remember { margin-top: 8px; font-size: 12px; color: var(--volt); }
+
+  /* 6. tricks */
+  .tricks .lj .flip.go { animation: backflip .7s cubic-bezier(.4,0,.2,1); }
+  @keyframes backflip { 0% { transform: translateY(0) rotate(0); } 35% { transform: translateY(-160px) rotate(-180deg); } 70% { transform: translateY(-120px) rotate(-340deg); } 100% { transform: translateY(0) rotate(-360deg); } }
+  .tricks.sprint .lj { --stride: .2s; --bob: .1s; }
+  .tricks .speed { position: absolute; left: 30px; top: 190px; width: 60px; height: 70px; opacity: 0; transition: opacity .2s; }
+  .tricks.sprint .speed { opacity: 1; }
+  .speed i { position: absolute; left: 0; height: 3px; border-radius: 3px; background: var(--volt); opacity: .6; animation: dash .35s linear infinite; }
+  .speed i:nth-child(1) { top: 10px; width: 40px; } .speed i:nth-child(2) { top: 32px; width: 54px; animation-delay: .12s; } .speed i:nth-child(3) { top: 54px; width: 34px; animation-delay: .22s; }
+  @keyframes dash { from { transform: translateX(20px); opacity: .7; } to { transform: translateX(-30px); opacity: 0; } }
+  .cameo { position: absolute; width: 54px; height: 54px; left: 118px; top: 104px; opacity: 0; transform: scale(.3) rotate(-20deg); transition: opacity .25s, transform .35s cubic-bezier(.3,1.6,.5,1); pointer-events: none; z-index: 2; }
+  .cameo.on { opacity: 1; transform: none; }
+  .cameo svg { width: 100%; height: 100%; overflow: visible; }
+  .trickhelp { position: absolute; left: 16px; right: 16px; top: 300px; text-align: center; font-size: 12px; color: var(--dim); line-height: 1.5; }
+  .trickhelp b { color: var(--paper); }
+  .tap { position: absolute; left: 0; right: 0; top: 0; bottom: 170px; z-index: 2; cursor: pointer; }
+  .dvd-s { position: absolute; left: 0; top: 0; width: 66px; height: 66px; z-index: 0; pointer-events: none; will-change: transform; }
+  .dvd-s svg { width: 100%; height: 100%; overflow: visible; display: block; }
+  .dvd-s svg.pop { animation: dvdpop .3s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes dvdpop { from { transform: scale(.55) rotate(-12deg); } to { transform: none; } }
+  .phone .logo, .phone .pad, .phone .tip, .phone .count { z-index: 1; }
+  .phone .tap { z-index: 2; }
+  .cornerflash { position: absolute; inset: 0; background: var(--volt); opacity: 0; pointer-events: none; z-index: 5; }
+  .cornerflash.on { animation: cflash .5s ease-out; }
+  @keyframes cflash { 0% { opacity: .35; } 100% { opacity: 0; } }
+  .waiting .logo { top: 118px; }
+  .waiting .count { top: 232px; }
+  .drawn { display: flex; justify-content: center; align-items: flex-end; gap: 2px; height: 46px; margin: 6px 0 2px; }
+  .drawn svg.dg { height: 40px; width: auto; display: block; overflow: visible; }
+  .drawn svg.dg .pen { fill: none; stroke: #fff; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 0; }
+  .drawn svg.dg.draw .pen { stroke-dashoffset: 1; animation: pen .55s cubic-bezier(.45,.05,.4,1) forwards; }
+  @keyframes pen { to { stroke-dashoffset: 0; } }
+  .drawn .colon { width: 12px; height: 40px; }
+  @keyframes reveal { to { clip-path: inset(0 0 0 0); } }
+  .check i { background: none !important; border: 1.5px solid #555; }
+  .tip, .install, .count { z-index: 3; }
+  .count { pointer-events: none; }
+  @media (prefers-reduced-motion: reduce) { .lj .run, .lj .leg, .cam .scanline, .speed i { animation: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Home upgrades<span>.</span></h1>
+  <p>For the moment that matters: a group standing in the park, about to play. Each phone shows one or more of the seven ideas, numbered as proposed. The first phone has them together, so you can see if it gets crowded.</p>
+</header>
+
+<section>
+  <h2>Everything in one go</h2>
+  <p>All seven together. Left: you're not in a game yet. Middle: you're in a game that hasn't started, so the countdown (in your own drawn digits, each one drawing itself in as it changes) takes the tip's place. Right: the join form, after a scan. The j's tricks work on both home phones: tap, tap 3x fast, or hold. A power-up bounces around behind everything like the DVD logo, and turns into a different one each time it touches an edge; a true corner hit flashes lime.</p>
+  <div class="grid">
+    <div class="cell">
+      <div class="phone tricks dvd" id="all"><div class="dvd-s"></div>
+        <div class="install" id="install"><span>on iphone? add kejar to your home screen so game alerts work</span><a>how</a><button id="installX" aria-label="dismiss">×</button></div>
+        <div class="speed"><i></i><i></i><i></i></div><div class="logo"><img src="letter-k-volt.png" alt=""><img src="letter-e-volt.png" alt=""><img src="letter-a-volt.png" alt=""><img src="letter-r-volt.png" alt=""><svg class="lj" viewBox="0 0 326 519" aria-hidden="true"><g class="flip"><g class="run"><ellipse class="s" cx="190" cy="61" rx="59" ry="40"/><path class="s" d="M157 156 Q169 200 167 260 L168 338"/><path class="s leg l" d="M168 338 Q164 400 144 428 Q122 458 88 460 L22 460"/><path class="s leg r" d="M168 338 Q236 326 272 380 Q300 424 302 498"/></g></g></svg></div>
+        <div class="tip" data-tips><span class="eb">TIP</span><span class="tiptext"></span></div>
+        <div class="tap"></div>
+        <div class="pad">
+          <div class="stack">
+            <div class="row"><button class="btn">join game</button><button class="scanbtn" data-scan aria-label="scan qr"><svg viewBox="0 0 24 24" fill="none" stroke="#0A0A0B" stroke-width="2.2" stroke-linecap="round"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3"/><rect x="8" y="8" width="8" height="8" rx="1.5"/></svg></button></div>
+            <button class="btn ghost">organise game</button>
+          </div>
+          <div class="link">if dk how to play click here :)</div>
+        </div>
+        <div class="sheet" data-sheet><div class="card"><div class="cam"><div class="box"></div><div class="scanline"></div></div><div class="hint">point at the game's qr code</div><button class="btn ghost" data-close>cancel</button></div></div>
+      </div>
+      <h3>Not in a game yet</h3>
+      <p class="note">1 scan · 4 iPhone line · 5 tip · 6 tricks</p>
+    </div>
+
+    <div class="cell">
+      <div class="phone tricks waiting">
+        <div class="speed"><i></i><i></i><i></i></div><div class="logo"><img src="letter-k-volt.png" alt=""><img src="letter-e-volt.png" alt=""><img src="letter-a-volt.png" alt=""><img src="letter-r-volt.png" alt=""><svg class="lj" viewBox="0 0 326 519" aria-hidden="true"><g class="flip"><g class="run"><ellipse class="s" cx="190" cy="61" rx="59" ry="40"/><path class="s" d="M157 156 Q169 200 167 260 L168 338"/><path class="s leg l" d="M168 338 Q164 400 144 428 Q122 458 88 460 L22 460"/><path class="s leg r" d="M168 338 Q236 326 272 380 Q300 424 302 498"/></g></g></svg></div>
+        <div class="count"><div class="eb">GAME ABC234 STARTS IN</div><div class="drawn" data-countdown="270"></div></div>
+        <div class="tap"></div>
+        <div class="pad">
+          <div class="stack">
+            <button class="rc"><b>back to the lobby <i>→</i></b><small>ABC234 · Taman Tasik <span class="live">lobby · 9 players</span></small></button>
+            <div class="row"><button class="btn">join game</button><button class="scanbtn" data-scan aria-label="scan qr"><svg viewBox="0 0 24 24" fill="none" stroke="#0A0A0B" stroke-width="2.2" stroke-linecap="round"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3"/><rect x="8" y="8" width="8" height="8" rx="1.5"/></svg></button></div>
+            <button class="btn ghost">organise game</button>
+          </div>
+          <div class="link">if dk how to play click here :)</div>
+        </div>
+        <div class="sheet" data-sheet><div class="card"><div class="cam"><div class="box"></div><div class="scanline"></div></div><div class="hint">point at the game's qr code</div><button class="btn ghost" data-close>cancel</button></div></div>
+      </div>
+      <h3>In a game that hasn't started</h3>
+      <p class="note">7 countdown in your digits · 3 reconnect that says where · 1 scan · 6 tricks</p>
+    </div>
+
+    <div class="cell">
+      <div class="phone"><div class="pad">
+        <div class="eb">KEJAR. · JOIN GAME ABC234</div>
+        <div class="h1">Ready to<br>run?</div>
+        <div class="label">YOUR NAME</div>
+        <div class="field"><span>Aina</span><small>not you?</small></div>
+        <div class="remember">✓ remembered from your last game</div>
+        <div class="check"><i></i><span>I'll play fair and stay inside the play area</span></div>
+        <div class="check"><i></i><span>I play at my own risk</span></div>
+        <div class="stack"><button class="btn">join</button></div>
+      </div></div>
+      <h3>After a scan: the join form</h3>
+      <p class="note">2 name remembered; the two agreements are unticked, a fresh tap each game</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>One at a time</h2>
+  <div class="grid">
+    <div class="cell">
+      <div class="phone">
+        <div class="logo"><img src="letter-k-volt.png" alt=""><img src="letter-e-volt.png" alt=""><img src="letter-a-volt.png" alt=""><img src="letter-r-volt.png" alt=""><svg class="lj" viewBox="0 0 326 519" aria-hidden="true"><g class="run"><ellipse class="s" cx="190" cy="61" rx="59" ry="40"/><path class="s" d="M157 156 Q169 200 167 260 L168 338"/><path class="s leg l" d="M168 338 Q164 400 144 428 Q122 458 88 460 L22 460"/><path class="s leg r" d="M168 338 Q236 326 272 380 Q300 424 302 498"/></g></svg></div>
+        <div class="pad">
+          <div class="stack">
+            <div class="row"><button class="btn">join game</button><button class="scanbtn" data-scan aria-label="scan qr"><svg viewBox="0 0 24 24" fill="none" stroke="#0A0A0B" stroke-width="2.2" stroke-linecap="round"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3"/><rect x="8" y="8" width="8" height="8" rx="1.5"/></svg></button></div>
+            <button class="btn ghost">organise game</button>
+          </div>
+          <div class="link">if dk how to play click here :)</div>
+        </div>
+        <div class="sheet" data-sheet><div class="card"><div class="cam"><div class="box"></div><div class="scanline"></div></div><div class="hint">point at the game's qr code</div><button class="btn ghost" data-close>cancel</button></div></div>
+      </div>
+      <h3><span class="num">1</span>Scan straight from home</h3>
+      <p class="note">One tap on the camera, point at the QR, you're on the join form. Join game still works for typing a code.</p>
+    </div>
+
+    <div class="cell">
+      <div class="phone"><div class="pad">
+        <div class="eb">KEJAR. · JOIN GAME ABC234</div>
+        <div class="h1">Ready to<br>run?</div>
+        <div class="label">YOUR NAME</div>
+        <div class="field"><span>Aina</span><small>not you?</small></div>
+        <div class="remember">✓ remembered from your last game</div>
+        <div class="check"><i></i><span>I'll play fair and stay inside the play area</span></div>
+        <div class="check"><i></i><span>I play at my own risk</span></div>
+        <div class="stack"><button class="btn">join</button></div>
+      </div></div>
+      <h3><span class="num">2</span>Remember my name</h3>
+      <p class="note">The join form fills in the name from your last game; "not you?" clears it. The agreement ticks still need a fresh tap each game (shown ticked here for the picture).</p>
+    </div>
+
+    <div class="cell">
+      <div class="phone">
+        <div class="logo"><img src="letter-k-volt.png" alt=""><img src="letter-e-volt.png" alt=""><img src="letter-a-volt.png" alt=""><img src="letter-r-volt.png" alt=""><svg class="lj" viewBox="0 0 326 519" aria-hidden="true"><g class="run"><ellipse class="s" cx="190" cy="61" rx="59" ry="40"/><path class="s" d="M157 156 Q169 200 167 260 L168 338"/><path class="s leg l" d="M168 338 Q164 400 144 428 Q122 458 88 460 L22 460"/><path class="s leg r" d="M168 338 Q236 326 272 380 Q300 424 302 498"/></g></svg></div>
+        <div class="pad">
+          <div class="stack">
+            <button class="rc"><b>reconnect <i>→</i></b><small>ABC234 · Taman Tasik <span class="live">chasing · 12 min left</span></small></button>
+            <button class="btn">join game</button>
+            <button class="btn ghost">organise game</button>
+          </div>
+          <div class="link">if dk how to play click here :)</div>
+        </div>
+      </div>
+      <h3><span class="num">3</span>Reconnect that says what you're going back to</h3>
+      <p class="note">Code, park and where the game's at (lobby, hiding, chasing with time left, or ended), with a live dot. If the game has ended it reads "see results" instead.</p>
+    </div>
+
+    <div class="cell">
+      <div class="phone">
+        <div class="install"><span>on iphone? add kejar to your home screen so game alerts work</span><a>how</a><button aria-label="dismiss">×</button></div>
+        <div class="logo"><img src="letter-k-volt.png" alt=""><img src="letter-e-volt.png" alt=""><img src="letter-a-volt.png" alt=""><img src="letter-r-volt.png" alt=""><svg class="lj" viewBox="0 0 326 519" aria-hidden="true"><g class="run"><ellipse class="s" cx="190" cy="61" rx="59" ry="40"/><path class="s" d="M157 156 Q169 200 167 260 L168 338"/><path class="s leg l" d="M168 338 Q164 400 144 428 Q122 458 88 460 L22 460"/><path class="s leg r" d="M168 338 Q236 326 272 380 Q300 424 302 498"/></g></svg></div>
+        <div class="pad">
+          <div class="stack">
+            <button class="btn">join game</button>
+            <button class="btn ghost">organise game</button>
+          </div>
+          <div class="link">if dk how to play click here :)</div>
+        </div>
+      </div>
+      <h3><span class="num">4</span>iPhone: add to home screen</h3>
+      <p class="note">Only on iPhone in Safari, only until it's installed or dismissed. "how" shows the two steps (Share, Add to Home Screen).</p>
+    </div>
+
+    <div class="cell">
+      <div class="phone">
+        <div class="logo"><img src="letter-k-volt.png" alt=""><img src="letter-e-volt.png" alt=""><img src="letter-a-volt.png" alt=""><img src="letter-r-volt.png" alt=""><svg class="lj" viewBox="0 0 326 519" aria-hidden="true"><g class="run"><ellipse class="s" cx="190" cy="61" rx="59" ry="40"/><path class="s" d="M157 156 Q169 200 167 260 L168 338"/><path class="s leg l" d="M168 338 Q164 400 144 428 Q122 458 88 460 L22 460"/><path class="s leg r" d="M168 338 Q236 326 272 380 Q300 424 302 498"/></g></svg></div>
+        <div class="tip" data-tips><span class="eb">TIP</span><span class="tiptext"></span></div>
+        <div class="pad">
+          <div class="stack">
+            <button class="btn">join game</button>
+            <button class="btn ghost">organise game</button>
+          </div>
+          <div class="link">if dk how to play click here :)</div>
+        </div>
+      </div>
+      <h3><span class="num">5</span>A tip under the logo</h3>
+      <p class="note">One short line from the real rules and power-ups, a new one every few seconds here (in the app: one per visit, or changing slowly). Tap the tip for the next.</p>
+    </div>
+
+    <div class="cell">
+      <div class="phone tricks dvd"><div class="dvd-s"></div>
+        <div class="speed"><i></i><i></i><i></i></div>
+        <div class="logo"><img src="letter-k-volt.png" alt=""><img src="letter-e-volt.png" alt=""><img src="letter-a-volt.png" alt=""><img src="letter-r-volt.png" alt=""><svg class="lj" viewBox="0 0 326 519" aria-hidden="true"><g class="flip"><g class="run"><ellipse class="s" cx="190" cy="61" rx="59" ry="40"/><path class="s" d="M157 156 Q169 200 167 260 L168 338"/><path class="s leg l" d="M168 338 Q164 400 144 428 Q122 458 88 460 L22 460"/><path class="s leg r" d="M168 338 Q236 326 272 380 Q300 424 302 498"/></g></g></svg></div>
+        <div class="trickhelp"><b>tap</b> jump · <b>tap 3× fast</b> backflip<br><b>hold</b> sprint</div>
+        <div class="tap"></div>
+        <div class="pad">
+          <div class="stack">
+            <button class="btn">join game</button>
+            <button class="btn ghost">organise game</button>
+          </div>
+          <div class="link">if dk how to play click here :)</div>
+        </div>
+      </div>
+      <h3><span class="num">6</span>Hidden tricks for the j</h3>
+      <p class="note">Try it: tap three times quickly for a backflip, hold for a sprint, In the app there'd be no help line; people find them.</p>
+    </div>
+
+    <div class="cell">
+      <div class="phone waiting">
+        <div class="logo"><img src="letter-k-volt.png" alt=""><img src="letter-e-volt.png" alt=""><img src="letter-a-volt.png" alt=""><img src="letter-r-volt.png" alt=""><svg class="lj" viewBox="0 0 326 519" aria-hidden="true"><g class="run"><ellipse class="s" cx="190" cy="61" rx="59" ry="40"/><path class="s" d="M157 156 Q169 200 167 260 L168 338"/><path class="s leg l" d="M168 338 Q164 400 144 428 Q122 458 88 460 L22 460"/><path class="s leg r" d="M168 338 Q236 326 272 380 Q300 424 302 498"/></g></svg></div>
+        <div class="count"><div class="eb">GAME ABC234 STARTS IN</div><div class="drawn" data-countdown="270"></div></div>
+        <div class="pad">
+          <div class="stack">
+            <button class="rc"><b>back to the lobby <i>→</i></b><small>ABC234 · Taman Tasik <span class="live">lobby · 9 players</span></small></button>
+            <button class="btn">join game</button>
+            <button class="btn ghost">organise game</button>
+          </div>
+          <div class="link">if dk how to play click here :)</div>
+        </div>
+      </div>
+      <h3><span class="num">7</span>Countdown to the start</h3>
+      <p class="note">If you're in a game that hasn't started and the organiser has set a start time, home shows the countdown in place of the tip. Without a start time it shows how many are in.</p>
+    </div>
+  </div>
+</section>
+
+<script src="stickers.js"></script>
+<script>
+  // Tips, from the game's real power-up and rule copy.
+  const TIPS = [
+    '<b>Ponteng</b> skips your next ping.',
+    '<b>Durian</b> blocks the next catch, for up to 10 min.',
+    '<b>Gostan</b> makes your next ping show you somewhere else.',
+    '<b>Pak Guard</b> shows Dikejar within 75 m exactly.',
+    'Kejar wear the <b>lime vest</b>, Dikejar the <b>white armband</b>.',
+    '<b>Mat Rempit</b> forces an extra ping in 30 s.',
+  ]
+  document.querySelectorAll('[data-tips]').forEach((el, k) => {
+    let i = k * 2
+    const show = () => { el.querySelector('.tiptext').innerHTML = TIPS[i % TIPS.length]; i++ }
+    show()
+    el.style.cursor = 'pointer'
+    el.addEventListener('click', show)
+    setInterval(show, 4500)
+  })
+
+  // Scan sheets.
+  document.querySelectorAll('.phone').forEach((ph) => {
+    const sheet = ph.querySelector('[data-sheet]')
+    if (!sheet) return
+    ph.querySelector('[data-scan]').addEventListener('click', () => sheet.classList.add('on'))
+    sheet.querySelector('[data-close]').addEventListener('click', () => sheet.classList.remove('on'))
+  })
+  document.getElementById('installX').addEventListener('click', () => document.getElementById('install').remove())
+
+  // Countdown in the owner's own drawn digits: a changed digit draws itself in, left to right.
+  const COLON = '<svg class="colon" viewBox="0 0 12 40"><path d="M6 12.5c1.6 0 2.4 1.2 2.2 2.4-.2 1.3-1.6 2-2.8 1.6C4 16 3.6 14.6 4.2 13.6c.4-.7 1-1.1 1.6-1.1zM5.8 27c1.7.1 2.5 1.4 2.2 2.6-.3 1.2-1.7 1.8-2.9 1.4-1.3-.5-1.6-1.9-.9-2.9.4-.7.9-1.1 1.6-1.1z" fill="#F5F5F3"/></svg>'
+  // Each digit is your drawing, revealed along its own traced stroke, like a marker writing it.
+  const DIGITS = {"0": {"w": 129, "h": 121, "d": "M62 18 L80 18 L94 24 L104 33 L111 43 L112 50 L116 52 L119 58 L122 71 L120 88 L113 101 L100 112 L83 114 L64 109 L49 96 L43 81 L42 62 L47 42 L61 19 M111 50 L74 62 L44 75", "sw": 20.5}, "1": {"w": 61, "h": 112, "d": "M18 23 L26 15 L33 13 L36 14 L36 38 L27 85 L27 96 L38 100 L48 101 M12 95 L26 96", "sw": 31.5}, "2": {"w": 77, "h": 120, "d": "M21 15 L30 10 L50 12 L55 18 L58 44 L55 58 L43 79 L28 94 L24 102 L16 103 M41 82 L32 91 M25 102 L28 105 L36 107 L64 109", "sw": 32.8}, "3": {"w": 86, "h": 108, "d": "M10 16 L24 10 L51 9 L64 13 L70 17 L73 22 L72 31 L55 46 L59 53 L66 55 L74 64 L75 74 L72 83 L62 94 L58 96 L31 97 L20 95 M54 46 L25 48", "sw": 32.2}, "4": {"w": 98, "h": 116, "d": "M32 9 L15 38 L13 46 L13 50 L15 51 L49 53 L53 14 M85 56 L48 55 L42 103", "sw": 30.9}, "5": {"w": 96, "h": 112, "d": "M76 9 L32 10 L30 13 L28 26 L25 58 L26 60 L44 58 L75 60 L83 68 L83 84 L77 90 L65 95 L39 100 L14 100", "sw": 31.8}, "6": {"w": 86, "h": 128, "d": "M48 9 L37 15 L26 25 L14 46 L9 69 L9 88 L11 100 L18 110 L24 115 L45 116 L52 114 L69 97 L74 88 L75 82 L72 73 L53 67 L11 66", "sw": 29.5}, "7": {"w": 90, "h": 141, "d": "M13 30 L11 20 L12 13 L69 9 L76 9 L80 12 L79 21 L73 33 L61 77 L39 129", "sw": 30.0}, "8": {"w": 103, "h": 121, "d": "M54 6 L71 6 L90 19 L95 24 L96 28 L93 37 L81 46 L60 54 L56 59 L41 59 L39 55 L31 48 L26 39 L25 23 L33 14 L43 9 L53 7 M40 60 L37 64 L29 68 L12 73 L6 80 L7 87 L15 97 L28 104 L62 114 L72 114 L81 111 L89 103 L92 91 L89 80 L84 74 L59 64 L57 60", "sw": 21.4}, "9": {"w": 85, "h": 150, "d": "M72 47 L62 50 L44 60 L19 62 L15 53 L10 26 L11 11 L38 8 L58 8 L65 10 L71 18 L72 46 L75 49 L75 69 L72 87 L65 110 L56 129 L48 139 L44 140 L36 140 L25 136", "sw": 29.7}}
+  let maskN = 0
+  function digitSvg(ch, draw) {
+    const g = DIGITS[ch], id = 'dm' + maskN++
+    const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    s.setAttribute('class', 'dg' + (draw ? ' draw' : ''))
+    s.setAttribute('viewBox', `0 0 ${g.w} ${g.h}`)
+    s.style.aspectRatio = `${g.w} / ${g.h}`
+    s.innerHTML = `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="0" y="0" width="${g.w}" height="${g.h}"><path class="pen" d="${g.d}" pathLength="1" stroke-width="${g.sw}"/></mask></defs><image href="digit-${ch}.png" width="${g.w}" height="${g.h}" mask="url(#${id})"/>`
+    return s
+  }
+  document.querySelectorAll('[data-countdown]').forEach((el) => {
+    let left = Number(el.dataset.countdown)
+    let shown = ''
+    const render = () => {
+      const txt = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`
+      if (txt.length !== shown.length) el.innerHTML = ''
+      ;[...txt].forEach((ch, i) => {
+        if (shown[i] === ch && el.children[i]) return
+        let node
+        if (ch === ':') { const w = document.createElement('span'); w.innerHTML = COLON; node = w.firstChild }
+        else { node = digitSvg(ch, !!shown) }
+        if (el.children[i]) el.replaceChild(node, el.children[i]); else el.appendChild(node)
+      })
+      shown = txt
+    }
+    render()
+    setInterval(() => { left = left > 0 ? left - 1 : 270; render() }, 1000)
+  })
+
+  // A power-up bounces around behind everything like the old DVD logo. Each edge it touches turns it into
+  // a different power-up; a true corner hit flashes lime.
+  document.querySelectorAll('.phone.dvd').forEach((phone, n) => {
+    const el = phone.querySelector('.dvd-s')
+    const flash = document.createElement('div'); flash.className = 'cornerflash'; phone.appendChild(flash)
+    const kinds = Object.keys(window.ART)
+    let kind = ''
+    const W = phone.clientWidth, H = phone.clientHeight, S = 66
+    let x = 30 + n * 90, y = 60 + n * 140, vx = 0.9 * (n % 2 ? -1 : 1), vy = 0.75
+    const pick = () => {
+      let k; do { k = kinds[Math.floor(Math.random() * kinds.length)] } while (k === kind)
+      kind = k
+      el.innerHTML = `<svg class="pop" viewBox="-8 -6 116 116"><defs><filter id="dv${n}" x="-25%" y="-25%" width="150%" height="150%"><feMorphology in="SourceAlpha" operator="dilate" radius="4.5" result="d"/><feFlood flood-color="#F5F5F3"/><feComposite in2="d" operator="in" result="w"/><feMerge><feMergeNode in="w"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><g filter="url(#dv${n})">${window.ART[k]}</g></svg>`
+    }
+    pick()
+    let last = 0
+    const step = (now) => {
+      requestAnimationFrame(step)
+      const dt = last ? Math.min(40, now - last) / 16 : 1; last = now
+      x += vx * dt; y += vy * dt
+      let hitX = false, hitY = false
+      if (x <= 0) { x = 0; vx = Math.abs(vx); hitX = true } else if (x >= W - S) { x = W - S; vx = -Math.abs(vx); hitX = true }
+      if (y <= 0) { y = 0; vy = Math.abs(vy); hitY = true } else if (y >= H - S) { y = H - S; vy = -Math.abs(vy); hitY = true }
+      if (hitX || hitY) pick()
+      if (hitX && hitY) { flash.classList.remove('on'); void flash.offsetWidth; flash.classList.add('on') }
+      el.style.transform = `translate(${x}px, ${y}px)`
+    }
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) requestAnimationFrame(step)
+  })
+
+  // Tricks on every .tricks phone: tap = jump, 3 quick taps = backflip, hold = sprint, wait = a power-up cameo.
+  document.querySelectorAll('.phone.tricks').forEach((phone, n) => {
+    const flip = phone.querySelector('.flip')
+    const tap = phone.querySelector('.tap')
+    let taps = [], holdT = 0, holding = false, idleT = 0
+    const replay = (cls, ms) => { flip.classList.remove('go', 'hop'); void flip.getBoundingClientRect(); flip.classList.add(cls); setTimeout(() => flip.classList.remove(cls), ms) }
+    const idle = () => {}
+    tap.addEventListener('pointerdown', () => { holdT = setTimeout(() => { holding = true; phone.classList.add('sprint') }, 280) })
+    const release = () => {
+      clearTimeout(holdT)
+      if (holding) { holding = false; phone.classList.remove('sprint'); idle(); return }
+      const now = performance.now()
+      taps = taps.filter((x) => now - x < 600).concat(now)
+      if (taps.length >= 3) { taps = []; replay('go', 700) } else replay('hop', 460)
+      idle()
+    }
+    tap.addEventListener('pointerup', release)
+    tap.addEventListener('pointerleave', () => { if (holding) release() })
+    idle()
+  })
+</script>
+<style>
+  .tricks .lj .flip.hop { animation: hop .46s cubic-bezier(.3,.7,.4,1); }
+  @keyframes hop { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-150px) rotate(-10deg); } }
+</style>
+</body>
+</html>
