@@ -1647,9 +1647,9 @@ describe('Nasi Lemak KFC', () => {
     const kind = await forceDraw(g, 'runner', (k) => !EXCLUDED.includes(k))
     expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(2), ...atS2 })).toEqual({ ok: true, kind, double: true })
     for (const u of (await view(g, g.aina.token)).hand) {
-      // Long since used and spent, so no effect is still running.
-      const long = new Date(now - 60 * MIN).toISOString()
-      await store.updatePowerUp(u.id, { used_at: long, consumed_at: long })
+      // Clear the slot whatever the (random) card is: a used cloak, decoy or flare stays "running" until a reveal,
+      // so mark the pair taken, which frees the slot for any kind.
+      await store.updatePowerUp(u.id, { taken_at: new Date(now).toISOString() })
     }
     const next = await forceDraw(g, 'runner', (k) => !EXCLUDED.includes(k))
     expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(3), ...atS3 })).toEqual({ ok: true, kind: next })
