@@ -118,9 +118,10 @@ export interface View {
   outWarned: boolean
   /**
    * Why I'm in Penjara: caught by a chaser, auto-jailed for missing two check-ins, or sent from Super Ring's house
-   * arrest (`bail-revoked`: a fix outside the circle, or no fresh fix inside it at the end).
+   * arrest (`bail-revoked`: a fix outside the circle, or no fresh fix inside it at the end), or by Mak Kau Hijau
+   * (`hijau`: didn't tap green in time).
    */
-  jailReason: 'caught' | 'missed-checkins' | 'bail-revoked' | null
+  jailReason: 'caught' | 'missed-checkins' | 'bail-revoked' | 'hijau' | null
   /**
    * My Super Ring house arrest, while it lasts (null otherwise): when it ends (held still while paused), the
    * circle's centre, and while it waits for me to open Kejar, the deadline to start it (both others null then).
@@ -767,7 +768,8 @@ function jailReasonFor(i: ViewInput): View['jailReason'] {
     .filter((e) => (e.type === 'caught' || e.type === 'auto-jailed') && e.target_id === i.me.id)
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0]
   if (latest?.type !== 'auto-jailed') return 'caught'
-  return latest.data.cause === 'revoked' ? 'bail-revoked' : 'missed-checkins'
+  if (latest.data.cause === 'revoked') return 'bail-revoked'
+  return latest.data.cause === 'hijau' ? 'hijau' : 'missed-checkins'
 }
 
 /** My house arrest for my own screen (see `View.arrest`). While paused, both deadlines move with the clock. */

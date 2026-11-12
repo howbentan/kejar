@@ -218,6 +218,26 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
               </m.div>
             )
           }
+          // Super Ring switches on at claim and waits for the next time they'd go to Penjara: nothing to use.
+          if (u.kind === 'ring') {
+            return (
+              <m.div
+                key={u.id}
+                className="slot legendary ring"
+                initial={{ y: -16, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 18 }}
+              >
+                <Foil />
+                <Sticker kind="ring" size={40} tilt={-4} />
+                <span>
+                  <b>{INFO.ring.name}</b>
+                  <span>{INFO.ring.used}</span>
+                </span>
+                <small className="slot-deck">ON · WAITING</small>
+              </m.div>
+            )
+          }
           return (
             <m.button
               key={u.id}

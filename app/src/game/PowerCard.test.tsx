@@ -49,6 +49,22 @@ describe('PowerCard', () => {
     expect(screen.queryByTestId('foil')).toBeNull()
   })
 
+  it('Super Ring and Mak Kau Hijau get the legendary face too, in their own colours', () => {
+    const ring = render(<PowerCard kind="ring" big />)
+    expect(ring.container.querySelector('.power-card')).toHaveClass('legendary', 'ring')
+    expect(screen.getByTestId('foil')).toBeInTheDocument()
+    expect(screen.getByText('★ LEGENDARY · ONE PER GAME')).toBeInTheDocument()
+    expect(screen.getByText('Super Ring')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Super Ring' })).toBeInTheDocument()
+    cleanup()
+    const hijau = render(<PowerCard kind="hijau" big />)
+    expect(hijau.container.querySelector('.power-card')).toHaveClass('legendary', 'hijau')
+    expect(screen.getByTestId('foil')).toBeInTheDocument()
+    expect(screen.getByText('Mak Kau Hijau')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Mak Kau Hijau' })).toBeInTheDocument()
+    expect(hijau.container.querySelector('.power-card')).not.toHaveClass('ring')
+  })
+
   it('the foil highlight follows device tilt, and stays still under reduced motion', async () => {
     render(<PowerCard kind="dato" />)
     const foil = screen.getByTestId('foil')

@@ -196,3 +196,44 @@ describe('marshal header counts with Luar Garisan', () => {
     expect(screen.getByText(/2 free · 1 in Penjara · 1 Kejar/)).toBeInTheDocument()
   })
 })
+
+describe('Super Ring house arrest routing (new power-ups §6.2)', () => {
+  const arrest = { endsAt: 231_000, center: { lat: 3, lng: 101 }, openBy: null }
+
+  it('a runner under house arrest gets the house-arrest screen, not the chase', () => {
+    state.view = testView({ arrest })
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByText('House arrest: stay within 26 m for 2:36.')).toBeInTheDocument()
+    expect(screen.queryByText(/DIKEJAR #07/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Help and SOS' })).toBeInTheDocument()
+  })
+
+  it('released: says Free! Super Ring is spent, then goes back to the chase', () => {
+    vi.useFakeTimers()
+    state.view = testView({ arrest })
+    const { rerender } = render(<GameScreen code="ABC234" />)
+    state.view = testView({ arrest: null })
+    rerender(<GameScreen code="ABC234" />)
+    expect(screen.getByRole('heading', { name: 'Free! Super Ring is spent.' })).toBeInTheDocument()
+    act(() => vi.advanceTimersByTime(3_000))
+    expect(screen.queryByRole('heading', { name: 'Free! Super Ring is spent.' })).toBeNull()
+  })
+
+  it('an undone arrest gives Super Ring back, so no "spent" line', () => {
+    state.view = testView({ arrest })
+    const { rerender } = render(<GameScreen code="ABC234" />)
+    const ring = { id: 'u1', game_id: 'g1', player_id: 'r1', kind: 'ring' as const, station: null, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null, twin_of: null, spot: null }
+    state.view = testView({ arrest: null, hand: [ring] })
+    rerender(<GameScreen code="ABC234" />)
+    expect(screen.queryByRole('heading', { name: 'Free! Super Ring is spent.' })).toBeNull()
+  })
+
+  it('bail revoked goes to the normal Penjara screen', () => {
+    state.view = testView({ arrest })
+    const { rerender } = render(<GameScreen code="ABC234" />)
+    const base = testView()
+    state.view = testView({ arrest: null, jailReason: 'bail-revoked', me: { ...base.me, jailed: true } })
+    rerender(<GameScreen code="ABC234" />)
+    expect(screen.getByRole('heading', { name: 'Bail revoked. To Penjara.' })).toBeInTheDocument()
+  })
+})

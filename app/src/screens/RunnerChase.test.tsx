@@ -47,6 +47,24 @@ async function scan(text: string) {
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'fake camera' })))
 }
 
+describe('RunnerChase: Mak Kau Hijau and the new hint zones (Plan E2)', () => {
+  it('takes over the screen and a tap sends touchGreen with my token', async () => {
+    call.mockResolvedValue({ ok: true })
+    render(<RunnerChase code="ABC234" view={testView({ hijau: { startsAt: 90_000, deadline: 135_000, tapped: false } })} />)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Tap the green' })))
+    expect(call).toHaveBeenCalledTimes(1)
+    expect(call).toHaveBeenCalledWith('touchGreen', { code: 'ABC234', token: 't1' })
+    expect(screen.getByText('Safe! You touched green.')).toBeInTheDocument()
+  })
+
+  it('passes the orange and green hint zones to the map', () => {
+    const ringZone = { lat: 3.1, lng: 101.1, radiusM: 150 }
+    const hijauZone = { lat: 3.2, lng: 101.2, radiusM: 120 }
+    render(<RunnerChase code="ABC234" view={testView({ ringZone, hijauZone })} />)
+    expect(mapProps.last).toMatchObject({ ringZone, hijauZone })
+  })
+})
+
 describe('RunnerChase', () => {
   it('never asks for a wake lock', () => {
     render(<RunnerChase code="ABC234" view={testView()} locationOff={false} />)

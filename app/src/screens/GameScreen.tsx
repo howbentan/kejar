@@ -7,6 +7,7 @@ import { useGameState, type LocationMode } from '../game/useGameState'
 import ChaserChase from './ChaserChase'
 import GameLoading from './GameLoading'
 import Hide from './Hide'
+import HouseArrest from './HouseArrest'
 import { useReelHold } from '../game/PenjaraReel'
 import Jail from './Jail'
 import Lobby from './Lobby'
@@ -69,6 +70,23 @@ export default function GameScreen({ code }: { code: string }) {
     return () => window.clearTimeout(t)
   }, [showingFreed])
 
+  // Super Ring's house arrest ended free: say so for a moment before the chase screen comes back. Not when it was
+  // undone (the card is back in the hand) or revoked (Penjara shows instead). Same render-time pattern as above.
+  const [released, setReleased] = useState(false)
+  const [hadArrest, setHadArrest] = useState(false)
+  const arrested = !!current?.arrest
+  if (current && hadArrest !== arrested) {
+    setHadArrest(arrested)
+    const ringBack = current.hand.some((u) => u.kind === 'ring')
+    if (!arrested && !current.me.jailed && current.phase === 'chasing' && !ringBack) setReleased(true)
+    if (arrested) setReleased(false)
+  }
+  useEffect(() => {
+    if (!released) return
+    const t = window.setTimeout(() => setReleased(false), FREED_MOMENT_MS)
+    return () => window.clearTimeout(t)
+  }, [released])
+
   if (!current || entering) return <GameLoading code={code} error={error} leaving={!!current} onLeft={() => setEntering(false)} />
   if (current.me.removed_at) return <Removed />
   if (current.phase === 'lobby') return <Lobby code={code} view={current} refresh={refresh} />
@@ -82,6 +100,7 @@ export default function GameScreen({ code }: { code: string }) {
   else if (current.phase === 'hiding') screen = <Hide code={code} view={current} />
   else if (current.me.role === 'runner' && (current.me.jailed || showingFreed || reelHold)) screen = <Jail code={code} view={current} />
   else if (current.me.role === 'chaser') screen = <ChaserChase code={code} view={current} refresh={refresh} />
+  else if (current.arrest || released) screen = <HouseArrest code={code} view={current} released={!current.arrest} />
   else screen = <RunnerChase code={code} view={current} locationOff={locationOff} />
   return (
     <>

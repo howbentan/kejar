@@ -109,34 +109,51 @@ const label = (text: string) => (
   </p>
 )
 
-/** One side's legendary setting: a coloured block with its title, the two it may be, and an Off / On choice. */
-function Legendary(props: {
-  tone: 'yellow' | 'purple'
-  art: ReactNode
-  title: ReactNode
-  who: string
-  seg: ReactNode
-  say?: string
-}) {
-  const yellow = props.tone === 'yellow'
+/** Each side's two legendaries, either of which the app may pick: their stickers, names and colours. */
+const SIDE_LEGENDARIES = {
+  runner: [
+    { kind: 'dato', name: 'DATO SERI', colour: 'var(--legendary-2)', tint: 'rgba(255,214,10,.07)' },
+    { kind: 'ring', name: 'SUPER RING', colour: 'var(--ring-2)', tint: 'rgba(255,169,77,.08)' },
+  ],
+  chaser: [
+    { kind: 'bomoh', name: 'BOMOH', colour: 'var(--bomoh-2)', tint: 'rgba(155,93,229,.09)' },
+    { kind: 'hijau', name: 'MAK KAU HIJAU', colour: 'var(--hijau-2)', tint: 'rgba(63,168,107,.1)' },
+  ],
+} as const
+
+/** The Off / On choice's On colour for a side: both its legendaries' colours, since either may be picked. */
+const sideOn = (side: 'runner' | 'chaser') => {
+  const [a, b] = SIDE_LEGENDARIES[side]
+  return { background: `linear-gradient(90deg, ${a.colour}, ${b.colour})`, color: 'var(--black)' }
+}
+
+/** One side's legendary setting: a block with both legendaries it may be (stickers and names), and an Off / On choice. */
+function Legendary(props: { side: 'runner' | 'chaser'; title: ReactNode; seg: ReactNode; say?: string }) {
+  const [a, b] = SIDE_LEGENDARIES[props.side]
   return (
     <div
+      data-side={props.side}
       style={{
         borderRadius: 14,
         padding: '10px 11px 8px',
-        border: `1.5px solid ${yellow ? 'var(--legendary-2)' : 'var(--bomoh-3)'}`,
-        background: yellow ? 'rgba(255,214,10,.06)' : 'rgba(155,93,229,.09)',
+        border: '1.5px solid rgba(245,245,243,.18)',
+        background: `linear-gradient(90deg, ${a.tint}, ${b.tint})`,
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {props.art}
+        <span style={{ display: 'flex', flex: 'none' }}>
+          <Sticker kind={a.kind} size={36} tilt={-4} />
+          <Sticker kind={b.kind} size={36} tilt={4} />
+        </span>
         <div>
           <b style={{ fontSize: 15 }}>{props.title}</b>
-          <small style={{ display: 'block', font: '500 9px var(--mono)', letterSpacing: '0.12em', color: yellow ? 'var(--legendary-2)' : 'var(--bomoh-2)' }}>
-            {props.who}
+          <small style={{ display: 'block', font: '500 9px var(--mono)', letterSpacing: '0.12em' }}>
+            <span style={{ color: a.colour }}>{a.name}</span>
+            <span style={{ color: 'var(--dim)' }}> OR </span>
+            <span style={{ color: b.colour }}>{b.name}</span>
           </small>
         </div>
       </div>
@@ -598,10 +615,8 @@ export default function HostNew() {
             <>
               {label('LEGENDARY CARDS · SECRET FROM PLAYERS')}
               <Legendary
-                tone="yellow"
-                art={<Sticker kind="dato" size={40} />}
+                side="runner"
                 title="Dikejar legendary"
-                who="DATO SERI OR SUPER RING"
                 seg={
                   <Seg<'off' | 'on'>
                     label="Dikejar legendary"
@@ -611,15 +626,13 @@ export default function HostNew() {
                       { value: 'on', text: 'On' },
                     ]}
                     onChange={(v) => setSides((s) => ({ ...s, runner: v }))}
-                    on={{ background: 'var(--legendary-2)', color: 'var(--legendary-ink)' }}
+                    on={sideOn('runner')}
                   />
                 }
               />
               <Legendary
-                tone="purple"
-                art={<Sticker kind="bomoh" size={40} />}
+                side="chaser"
                 title="Kejar legendary"
-                who="BOMOH OR MAK KAU HIJAU"
                 seg={
                   <Seg<'off' | 'on'>
                     label="Kejar legendary"
@@ -629,7 +642,7 @@ export default function HostNew() {
                       { value: 'on', text: 'On' },
                     ]}
                     onChange={(v) => setSides((s) => ({ ...s, chaser: v }))}
-                    on={{ background: 'var(--bomoh-2)', color: 'var(--bomoh-ink)' }}
+                    on={sideOn('chaser')}
                   />
                 }
               />

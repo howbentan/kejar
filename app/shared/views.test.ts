@@ -400,6 +400,11 @@ describe('jail reason', () => {
     const v = view(jailedHafiz, { players: [chaser, aina, jailedHafiz, wei, siti], events: [event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2' })] })
     expect(v.jailReason).toBe('missed-checkins')
   })
+  it("says hijau when Mak Kau Hijau sent me, with no check-ins list", () => {
+    const v = view(jailedHafiz, { players: [chaser, aina, jailedHafiz, wei, siti], events: [event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2', data: { cause: 'hijau' } })] })
+    expect(v.jailReason).toBe('hijau')
+    expect(v.jailCheckins).toBeNull()
+  })
   it('says caught when a chaser caught me', () => {
     const caught = { ...hafiz, jailed: true, caught_by: 'c1' }
     const v = view(caught, { players: [chaser, aina, caught, wei, siti], events: [event('caught', T0 + 12 * MIN, { actor_id: 'c1', target_id: 'r2' })] })

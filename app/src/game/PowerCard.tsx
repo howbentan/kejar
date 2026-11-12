@@ -6,6 +6,9 @@ import Sticker from './Sticker'
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
 
+/** Mak Kau Hijau's card face words: the chasers' legendary that works on claim. */
+const HIJAU_INFO = { name: 'Mak Kau Hijau', effect: 'Dikejar must tap green in 45 s' }
+
 /**
  * The iridescent foil of Dato Seri's card (motion design §8.9): the highlight slides with the phone's tilt.
  * No permission prompt: iOS only sends orientation after a user-gesture grant, so there it quietly stays a slowly
@@ -44,10 +47,11 @@ export function Foil() {
 /**
  * A deck card, 96×150 (motion design §7). Face up: the same lime-framed layout for every power-up, no rarity
  * colours. Face down: the ornate brand back, identical for every card, so it gives nothing away.
- * Dato Seri alone gets the legendary face (jail design §4a): yellow, foil, glow.
+ * The legendaries get the legendary face (jail design §4a): gradient, foil, glow. Dato Seri in yellow, Super Ring in
+ * cheese orange and Mak Kau Hijau in deep green (Plan E2). Mak Kau Hijau never sits in a hand, so INFO doesn't name it.
  * `big` (150×234) is the revealed card in the lucky dip: laid out bigger, never scaled, so the marker finds its edges.
  */
-export default function PowerCard({ kind, faceDown = false, wiggle = false, big = false }: { kind?: PowerUpKind; faceDown?: boolean; wiggle?: boolean; big?: boolean }) {
+export default function PowerCard({ kind, faceDown = false, wiggle = false, big = false }: { kind?: PowerUpKind | 'hijau'; faceDown?: boolean; wiggle?: boolean; big?: boolean }) {
   if (faceDown || !kind) {
     return (
       <div className="power-card back" aria-label="Face-down card" role="img">
@@ -59,16 +63,18 @@ export default function PowerCard({ kind, faceDown = false, wiggle = false, big 
       </div>
     )
   }
-  const legendary = kind === 'dato'
+  const legendary = kind === 'dato' || kind === 'ring' || kind === 'hijau'
+  const info = kind === 'hijau' ? HIJAU_INFO : INFO[kind]
+  const tone = kind === 'ring' || kind === 'hijau' ? ` ${kind}` : ''
   return (
-    <div className={`power-card front${big ? ' big' : ''}${legendary ? ' legendary' : ''}`}>
+    <div className={`power-card front${big ? ' big' : ''}${legendary ? ' legendary' : ''}${tone}`}>
       {legendary && <Foil />}
       <span className="pc-eyebrow">{legendary ? '★ LEGENDARY · ONE PER GAME' : 'POWER-UP'}</span>
       <span className="pc-art">
         <Sticker kind={kind} size={big ? 104 : 64} tilt={-4} wiggle={wiggle} />
       </span>
-      <b className="pc-name">{INFO[kind].name}</b>
-      <span className="pc-effect">{INFO[kind].effect}</span>
+      <b className="pc-name">{info.name}</b>
+      <span className="pc-effect">{info.effect}</span>
     </div>
   )
 }

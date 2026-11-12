@@ -182,6 +182,29 @@ describe('Jail', () => {
     expect(screen.getByRole('button', { name: 'Phone died or no buzz? Tell a marshal →' })).toBeInTheDocument()
   })
 
+  it('Mak Kau Hijau: says it got you, with no check-ins list', () => {
+    const view = testView({ caughtBy: null, jailReason: 'hijau', jailCheckins: null })
+    const { container } = render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true } }} />)
+    expect(screen.getByText('PENJARA · AUTO')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Mak kau hijau got you.' })).toBeInTheDocument()
+    expect(screen.queryByText(/Missed two/)).toBeNull()
+    expect(container.querySelector('.checkin-row')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Phone died or no buzz? Tell a marshal →' })).toBeInTheDocument()
+  })
+
+  it('a fresh Mak Kau Hijau jailing drops the bars with its own plate', () => {
+    const view = testView({ caughtBy: null, jailReason: 'hijau' })
+    render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true, caught_at: new Date(97_000).toISOString() } }} />)
+    expect(screen.getByText('MAK KAU HIJAU')).toBeInTheDocument()
+  })
+
+  it("Super Ring's bail revoked: its own line, not Caught", () => {
+    const view = testView({ caughtBy: null, jailReason: 'bail-revoked' })
+    render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true } }} />)
+    expect(screen.getByRole('heading', { name: 'Bail revoked. To Penjara.' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Caught/ })).toBeNull()
+  })
+
   it('a fresh auto-jail drops the bars with 2× MISSED', () => {
     vi.useFakeTimers()
     const view = testView({ caughtBy: null, jailReason: 'missed-checkins' })

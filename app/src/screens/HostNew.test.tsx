@@ -285,6 +285,14 @@ describe('HostNew step 3, how long', () => {
     expect(document.body.textContent).not.toMatch(/—/)
   })
 
+  it('each side row shows both legendaries it could be', async () => {
+    render(<HostNew />)
+    await toStep3('Full')
+    const row = (title: string) => screen.getByText(title).closest('[data-side]') as HTMLElement
+    expect(within(row('Dikejar legendary')).getAllByRole('img').map((i) => i.getAttribute('aria-label'))).toEqual(['Dato Seri', 'Super Ring'])
+    expect(within(row('Kejar legendary')).getAllByRole('img').map((i) => i.getAttribute('aria-label'))).toEqual(['Bomoh', 'Mak Kau Hijau'])
+  })
+
   it('sends legendarySides', async () => {
     render(<HostNew />)
     await toStep3('Full')

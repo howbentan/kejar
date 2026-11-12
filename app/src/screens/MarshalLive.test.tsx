@@ -141,6 +141,14 @@ describe('MarshalLive Undo kejar', () => {
     expect(call).toHaveBeenCalledWith('undoKejar', { code: 'ABC234', organiserToken: 'h1', eventId: 'e9' })
   })
 
+  it('a live catch arrest (Super Ring house arrest) is offered Undo kejar too, undoing the arrested event', async () => {
+    const arrested = [{ id: 'r1', name: 'Aina', role: 'runner' as const, tag_id: 7, jailed: false, caught_by: null, undoKejarId: 'a5' }]
+    render(<MarshalLive code="ABC234" view={organiser({ roster: arrested })} refresh={refresh} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Undo kejar' }))
+    await waitFor(() => expect(refresh).toHaveBeenCalled())
+    expect(call).toHaveBeenCalledWith('undoKejar', { code: 'ABC234', organiserToken: 'h1', eventId: 'a5' })
+  })
+
   it("that catch's flagged-catch alert offers it too", async () => {
     render(<MarshalLive code="ABC234" view={organiser({ roster, alerts: [flagged] })} refresh={refresh} />)
     expect(screen.getAllByRole('button', { name: 'Undo kejar' })).toHaveLength(2)
