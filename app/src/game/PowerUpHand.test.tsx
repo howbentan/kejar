@@ -81,6 +81,102 @@ describe('PowerUpHand', () => {
     expect(call).not.toHaveBeenCalled()
   })
 
+  describe('new deck cards', () => {
+    const cheese: PowerUp = { ...decoy, id: 'ch1', kind: 'cheese' }
+    const chasers = [{ id: 'c1', name: 'Ben' }, { id: 'c2', name: 'Aini' }]
+
+    it('using Cheese Ais opens the picker and sends the chosen chaser', async () => {
+      call.mockResolvedValue({ ok: true, kind: 'cheese', name: 'Aini' })
+      render(<PowerUpHand code="ABC234" view={testView({ hand: [cheese], freezeTargets: chasers })} />)
+      fireEvent.click(screen.getByRole('button', { name: /cheese ais/i }))
+      expect(call).not.toHaveBeenCalled()
+      fireEvent.click(screen.getByRole('button', { name: 'Aini' }))
+      await waitFor(() => expect(call).toHaveBeenCalledWith('usePowerup', { code: 'ABC234', token: 't1', powerupId: 'ch1', targetId: 'c2' }))
+      expect(await screen.findByText('Cheese Ais! Aini is frozen for 3 minutes.')).toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+
+    it('no targets: the picker says so and sends nothing', () => {
+      render(<PowerUpHand code="ABC234" view={testView({ hand: [cheese], freezeTargets: [] })} />)
+      fireEvent.click(screen.getByRole('button', { name: /cheese ais/i }))
+      expect(screen.getByText('No Kejar to freeze right now.')).toBeInTheDocument()
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(call).not.toHaveBeenCalled()
+    })
+
+    it('cancelling the picker sends nothing', () => {
+      render(<PowerUpHand code="ABC234" view={testView({ hand: [cheese], freezeTargets: chasers })} />)
+      fireEvent.click(screen.getByRole('button', { name: /cheese ais/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(call).not.toHaveBeenCalled()
+    })
+
+    it('a doubled card shows one card with a x2 badge', () => {
+      const a: PowerUp = { ...decoy, id: 'a', kind: 'shield' }
+      const b: PowerUp = { ...decoy, id: 'b', kind: 'shield', twin_of: 'a' }
+      render(<PowerUpHand code="ABC234" view={testView({ hand: [a, b] })} />)
+      expect(screen.getAllByRole('button', { name: /durian/i })).toHaveLength(1)
+      expect(screen.getByText('×2')).toBeInTheDocument()
+    })
+
+    it('two separate cards of one kind are not doubled', () => {
+      render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, id: 'a' }, { ...decoy, id: 'b' }] })} />)
+      expect(screen.queryByText('×2')).toBeNull()
+    })
+
+    it('COMBO READY shows when comboReady', () => {
+      render(<PowerUpHand code="ABC234" view={testView({ hand: [decoy], comboReady: true })} />)
+      expect(screen.getByText('COMBO READY')).toBeInTheDocument()
+    })
+
+    it('COMBO READY shows in an empty slot too, and not otherwise', () => {
+      const { rerender } = render(<PowerUpHand code="ABC234" view={testView({ comboReady: true })} />)
+      expect(screen.getByText('COMBO READY')).toBeInTheDocument()
+      rerender(<PowerUpHand code="ABC234" view={testView()} />)
+      expect(screen.queryByText('COMBO READY')).toBeNull()
+    })
+
+    it('FROZEN · 2:14 shows while frozen, and the card cannot be used', () => {
+      const v = testView({ hand: [decoy], frozenUntil: 100_000 + 134_000 })
+      render(<PowerUpHand code="ABC234" view={v} />)
+      expect(screen.getByText('FROZEN · 2:14')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /gostan/i })).toBeDisabled()
+    })
+
+    it('FROZEN shows in an empty slot', () => {
+      render(<PowerUpHand code="ABC234" view={testView({ frozenUntil: 100_000 + 134_000 })} />)
+      expect(screen.getByText('FROZEN · 2:14')).toBeInTheDocument()
+    })
+
+    it.each([
+      [{ ok: false, reason: 'frozen', frozenForMs: 134_000 }, 'Brain freeze! Wait 2:14.'],
+      [{ ok: false, reason: 'no-target' }, "That Kejar can't be frozen right now."],
+      [{ ok: false, reason: 'effect-running' }, 'Wait for your last one to finish first.'],
+      [{ ok: false, reason: 'combo-ready' }, 'You already have a combo ready.'],
+      [{ ok: false, reason: 'no-location' }, "Can't find you yet. Try again in a moment."],
+    ])('a refused use (%j) is plain words', async (reply, text) => {
+      call.mockResolvedValue(reply)
+      render(<PowerUpHand code="ABC234" view={testView({ hand: [decoy] })} />)
+      fireEvent.click(screen.getByRole('button', { name: /gostan/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'Use Gostan' }))
+      expect(await screen.findByText(text)).toBeInTheDocument()
+    })
+
+    it('Tuch and Ga shows its used line', async () => {
+      call.mockResolvedValue({ ok: true, kind: 'toll' })
+      render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'toll' }] })} />)
+      fireEvent.click(screen.getByRole('button', { name: /tuch and ga/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'Use Tuch and Ga' }))
+      expect(await screen.findByText('Tuch and Ga! Toll gate up. Runners checking in near it get charged.')).toBeInTheDocument()
+    })
+
+    it('claim messages: a doubled claim, and a frozen chaser at a station', () => {
+      expect(claimMessage({ ok: true, kind: 'shield', double: true })).toBe('Combo! Durian x2.')
+      expect(claimMessage({ ok: false, reason: 'frozen', frozenForMs: 65_000 })).toBe('Brain freeze! Wait 1:05.')
+    })
+  })
+
   describe('Abang Grab', () => {
     const grab: PowerUp = { ...decoy, id: 'g1', kind: 'grab' }
     const openGrab = async () => {
@@ -105,6 +201,16 @@ describe('PowerUpHand', () => {
       expect(await screen.findByText('Abang Grab brought Ponteng!')).toBeInTheDocument()
       expect(screen.getByText('The other two went to the bottom of the deck.')).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Keep Durian' })).toBeNull()
+    })
+
+    it('a pick that arrives doubled says so', async () => {
+      call.mockImplementation(async (action: string) =>
+        action === 'usePowerup' ? { ok: true, kind: 'grab', offer: ['shield', 'cloak', 'decoy'] } : { ok: true, kind: 'cloak', powerupId: 'u5', double: true },
+      )
+      render(<PowerUpHand code="ABC234" view={testView({ hand: [grab] })} />)
+      await openGrab()
+      fireEvent.click(screen.getByRole('button', { name: 'Keep Ponteng' }))
+      expect(await screen.findByText('Abang Grab brought Ponteng! Combo x2.')).toBeInTheDocument()
     })
 
     it('reopens by itself when the app comes back with an open offer', () => {

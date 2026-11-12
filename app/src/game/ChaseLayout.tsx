@@ -91,6 +91,7 @@ export default function ChaseLayout(props: {
           legendaryZone={view.legendaryZone}
           bomohZone={view.bomohZone}
           snapshot={view.chaserSnapshot}
+          tollGates={view.tollGates}
           ripple={view.lastRevealAt ? { at: view.lastRevealAt, origin: rippleOrigin(view.dots, view.arena) } : null}
         />
         <div className="chase-over">

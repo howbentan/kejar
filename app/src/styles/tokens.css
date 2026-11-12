@@ -239,6 +239,8 @@ select.input option { background: #141614; color: var(--white); }
 .slot.legendary > span > span { color: rgba(26, 20, 0, 0.75); }
 @media (prefers-reduced-motion: reduce) { .slot.legendary { animation: none; } }
 .slot-deck { flex: none; font: 500 8px var(--mono); letter-spacing: 0.1em; color: var(--volt); }
+/* A doubled card (Nasi Lemak KFC): one card, a small x2 badge. */
+.slot-x2 { flex: none; font: 700 11px var(--mono); color: var(--black); background: var(--volt); border-radius: 6px; padding: 2px 5px; }
 .scan {
   appearance: none; border: 0; border-radius: 14px; cursor: pointer; font: 800 14px var(--font); letter-spacing: -0.02em;
   display: grid; place-items: center;
