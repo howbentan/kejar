@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { call } from '../game/api'
 import { currentPushEnv, pushSupport } from '../game/push'
+import { forgetName, loadName, saveName } from '../game/nameMemory'
 import { loadSession, saveSession } from '../game/session'
 import { ErrorText, Screen } from '../game/ui'
 
 export default function Join({ code }: { code: string }) {
-  const [name, setName] = useState('')
+  const [remembered, setRemembered] = useState(() => loadName(localStorage))
+  const [name, setName] = useState(remembered)
   const [conduct, setConduct] = useState(false)
   const [waiver, setWaiver] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -24,6 +26,7 @@ export default function Join({ code }: { code: string }) {
     try {
       const { token } = await call<{ token: string }>('join', { code, name: name.trim(), accepted: true })
       saveSession(localStorage, code, { token })
+      saveName(localStorage, name)
       window.location.assign(`/g/${code}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -54,7 +57,23 @@ export default function Join({ code }: { code: string }) {
       <label className="eyebrow" htmlFor="name">
         Your name
       </label>
-      <input id="name" className="input" maxLength={24} value={name} onChange={(e) => setName(e.target.value)} />
+      <div style={{ position: 'relative' }}>
+        <input id="name" className="input" maxLength={24} value={name} onChange={(e) => setName(e.target.value)} style={remembered && name === remembered ? { paddingRight: 84 } : undefined} />
+        {remembered && name === remembered && (
+          <button
+            type="button"
+            className="name-forget"
+            onClick={() => {
+              forgetName(localStorage)
+              setRemembered('')
+              setName('')
+            }}
+          >
+            not you?
+          </button>
+        )}
+      </div>
+      {remembered && name === remembered && <p className="name-remembered">✓ remembered from your last game</p>}
       <label className="card" style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
         <input type="checkbox" checked={conduct} onChange={(e) => setConduct(e.target.checked)} />
         <span>No grabbing, no tackling. One hand, arm only. “Stop” means stop.</span>

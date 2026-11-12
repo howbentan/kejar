@@ -53,7 +53,7 @@ export default function HomeLogo({
   const flash = useRef<HTMLDivElement>(null)
   // undefined: not measured yet; null: no size to work with (the j just stands in place).
   const [geo, setGeo] = useState<Geometry | null | undefined>(undefined)
-  const body = useRef({ x: 0, phase: 0, lean: 0, rate: 0, jumpAt: -Infinity, now: 0, last: 0 })
+  const body = useRef({ x: 0, phase: 0, lean: 0, rate: 0, jumpAt: -Infinity, flipAt: -Infinity, flipFrom: 0, taps: [] as number[], now: 0, last: 0 })
   const task = useRef<Task | null>(null)
   const live = useRef({ geo, still, mode, onArrived, onLeft })
   live.current = { geo, still, mode, onArrived, onLeft }
@@ -74,9 +74,9 @@ export default function HomeLogo({
 
   function draw() {
     const s = body.current
-    const p = live.current.still ? pose(0, 0, Infinity) : pose(s.phase, s.lean, s.now - s.jumpAt)
+    const p = live.current.still ? pose(0, 0, Infinity) : pose(s.phase, s.lean, s.now - s.jumpAt, s.now - s.flipAt, s.flipFrom)
     if (jEl.current) jEl.current.style.transform = `translateX(${n(s.x)}px)`
-    if (runEl.current) runEl.current.style.transform = `translateY(${n(p.lift)}px) rotate(${n(p.tilt)}deg) scale(${n(p.sx)}, ${n(p.sy)})`
+    if (runEl.current) runEl.current.style.transform = `translateY(${n(p.lift)}px) rotate(${n(p.tilt)}deg) translateY(-220px) rotate(${n(p.spin)}deg) translateY(220px) scale(${n(p.sx)}, ${n(p.sy)})`
     if (legL.current) legL.current.style.transform = `rotate(${n(p.legL)}deg)`
     if (legR.current) legR.current.style.transform = `rotate(${n(p.legR)}deg)`
   }
@@ -209,8 +209,19 @@ export default function HomeLogo({
   const onTap = () => {
     if (live.current.mode !== 'home' || live.current.still) return
     const s = body.current
-    if (s.now - s.jumpAt < STRIDE.JUMP_MS + 100) return
-    s.jumpAt = s.now
+    // Every tap counts toward the triple, even one ignored mid-jump; taps during a flip are ignored outright.
+    if (s.now - s.flipAt < STRIDE.FLIP_MS + 100) return
+    s.taps = s.taps.filter((t) => s.now - t < 600).concat(s.now)
+    if (s.taps.length >= 3) {
+      s.taps = []
+      const j = (s.now - s.jumpAt) / STRIDE.JUMP_MS
+      s.flipFrom = j >= 0 && j < 1 ? Math.sin(Math.PI * j) : 0
+      s.flipAt = s.now
+      s.jumpAt = -Infinity
+    } else {
+      if (s.now - s.jumpAt < STRIDE.JUMP_MS + 100) return
+      s.jumpAt = s.now
+    }
     replay(flash.current, 'on')
     try {
       navigator.vibrate?.(25)

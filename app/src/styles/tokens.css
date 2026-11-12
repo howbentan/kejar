@@ -600,3 +600,44 @@ select.input option { background: #141614; color: var(--white); }
 .home-code-q { margin: 0 0 4px; font-size: 26px; font-weight: 800; letter-spacing: -0.05em; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .home-error { position: absolute; left: 18px; right: 18px; bottom: 8px; text-align: center; }
+
+/* the join form's remembered name (home upgrades design) */
+.name-forget { all: unset; cursor: pointer; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--dim); text-decoration: underline; padding: 6px 2px; }
+.name-remembered { margin: -6px 0 0; font-size: 12px; color: var(--volt); }
+
+/* the owner's hand-drawn digits, drawn in like a marker (home upgrades design) */
+.drawn-number { display: inline-flex; align-items: flex-end; gap: 2px; }
+.drawn-number svg { display: block; overflow: visible; }
+.drawn-number .pen { fill: none; stroke: #fff; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 0; }
+.drawn-number .dg.draw .pen { stroke-dashoffset: 1; animation: dg-pen 0.55s cubic-bezier(0.45, 0.05, 0.4, 1) forwards; }
+@keyframes dg-pen { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .drawn-number .dg.draw .pen { animation: none; stroke-dashoffset: 0; } }
+
+/* home's reconnect card (home upgrades design) */
+.home-actions .btn.rc { display: flex; flex-direction: column; align-items: stretch; gap: 3px; text-align: left; padding: 12px 18px 11px; border-radius: 22px; }
+.rc-title { display: flex; justify-content: space-between; align-items: center; font-weight: 800; font-size: 16px; }
+.rc-detail { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font: 500 11px var(--mono); letter-spacing: 0.04em; color: rgba(10, 10, 11, 0.6); }
+.rc-live { width: 7px; height: 7px; border-radius: 50%; background: #1f9d4a; animation: rc-pulse 1.4s infinite; }
+@keyframes rc-pulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .rc-live { animation: none; } }
+
+/* home upgrades: the scan button, the tip and the countdown under the logo, the scanner sheet */
+.home-join-row { display: flex; gap: 10px; align-items: center; }
+.home-join-row .btn { flex: 1; }
+.home-scan-btn { flex: 0 0 52px; width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--volt); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.home-scan-btn svg { width: 24px; height: 24px; fill: none; stroke: var(--black); stroke-width: 2.2; stroke-linecap: round; }
+/* under the logo: the logo is centred in the play area and its half height is 19.8% of the width (102px at most) */
+.home-under { position: absolute; z-index: 2; left: 50%; transform: translateX(-50%); top: calc(50% + min(19.8vw, 102px) + 10px); width: min(260px, calc(100% - 40px)); text-align: center; }
+.home-tip { all: unset; box-sizing: border-box; position: absolute; z-index: 2; left: 50%; transform: translateX(-50%); top: calc(50% + min(19.8vw, 102px) + 10px); width: min(260px, calc(100% - 40px)); text-align: center; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.home-tip .eyebrow, .home-countdown .eyebrow { color: var(--volt); }
+.home-tip-line { font-size: 13px; line-height: 1.4; color: var(--dim); }
+.home-tip-line b { color: var(--white); font-weight: 600; }
+.home-countdown { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.home-soon { margin: 4px 0 0; font-size: 15px; font-weight: 700; color: var(--white); }
+.home-scanner { position: fixed; inset: 0; z-index: 30; background: rgba(0, 0, 0, 0.7); display: flex; align-items: flex-end; justify-content: center; padding: 16px; }
+.home-scanner > * { width: 100%; max-width: 460px; }
+
+/* the organiser's planned start in the lobby (home upgrades design) */
+.planned-start { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.planned-start .input { width: auto; padding: 8px 12px; }
+.home-scanner .card { background: #111; }

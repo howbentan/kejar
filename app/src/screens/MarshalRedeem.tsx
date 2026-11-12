@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { call } from '../game/api'
+import { loadName, saveName } from '../game/nameMemory'
 import { saveSession } from '../game/session'
 import { ErrorText, Screen } from '../game/ui'
 
 export default function MarshalRedeem({ code, token }: { code: string; token: string }) {
-  const [name, setName] = useState('')
+  const [name, setName] = useState(() => loadName(localStorage))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -18,6 +19,7 @@ export default function MarshalRedeem({ code, token }: { code: string; token: st
         name: name.trim(),
       })
       saveSession(localStorage, code, { token: playerToken })
+      saveName(localStorage, name)
       window.location.assign(`/g/${code}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))

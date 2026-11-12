@@ -75,6 +75,28 @@ describe('HomeLogo', () => {
     expect(lift()).toBeGreaterThan(-40)
   })
 
+  it('three quick taps backflip, and a tap during the flip is ignored', () => {
+    const vibrate = vi.fn()
+    vi.stubGlobal('navigator', { ...navigator, vibrate })
+    render(<HomeLogo mode="home" />)
+    advance(100)
+    const tap = () => fireEvent.pointerDown(screen.getByTestId('hl'))
+    tap()
+    advance(150)
+    tap()
+    advance(150)
+    tap()
+    advance(350)
+    const turns = [...(screen.getByTestId('hl-j').querySelector('.run') as SVGElement).style.transform.matchAll(/rotate\(([-\d.]+)deg\)/g)].map((m) => Math.abs(Number(m[1])))
+    expect(Math.max(...turns)).toBeGreaterThan(90)
+    const calls = vibrate.mock.calls.length
+    tap()
+    expect(vibrate.mock.calls.length).toBe(calls)
+    advance(1000)
+    expect(lift()).toBeGreaterThan(-40)
+    expect(legL()).not.toBe('rotate(-38deg)')
+  })
+
   it('with reduced motion it stands still and a tap does nothing', () => {
     reduce.on = true
     const vibrate = vi.fn()
