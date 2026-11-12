@@ -555,35 +555,42 @@ select.input option { background: #141614; color: var(--white); }
 .kd-stks .kd-pop { animation: kd-pop 500ms ease-out both; }
 @keyframes kd-pop { from { transform: scale(0) rotate(-25deg); } 60% { transform: scale(1.1) rotate(6deg); } to { transform: none; } }
 
-/* catch the j: the home screen toy (design 2026-11-12) */
-.toy { position: absolute; inset: 0; overflow: hidden; cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
-.toy-logo { position: absolute; pointer-events: none; }
-.toy-logo img { position: absolute; inset: 0; width: 100%; height: 100%; }
-.toy-logo.wob { animation: toy-wob 0.5s ease-in-out; }
-.toy-j { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; }
-.toy-j.hide { opacity: 0; }
-.toy-j.jback { animation: toy-jback 0.16s cubic-bezier(0.3, 1.6, 0.5, 1); }
-.toy-slot { position: absolute; border: 1.5px dashed transparent; border-radius: 12px; pointer-events: none; transition: border-color 0.2s; }
-.toy-slot.on { border-color: rgba(198, 255, 61, 0.55); }
-.toy-sticker { position: absolute; display: block; pointer-events: none; animation: toy-morph 0.5s cubic-bezier(0.2, 0.8, 0.3, 1) forwards; }
-.toy-sticker svg { display: block; overflow: visible; }
-.toy-flash { position: absolute; inset: 0; background: var(--volt); opacity: 0; pointer-events: none; }
-.toy-flash.on { animation: toy-flash 0.35s ease-out; }
-@keyframes toy-wob { 0%, 100% { transform: none; } 30% { transform: rotate(-3deg) scale(1.04); } 65% { transform: rotate(2deg); } }
-@keyframes toy-flash { 0% { opacity: 0.35; } 100% { opacity: 0; } }
-@keyframes toy-jback { from { scale: 0.4; } to { scale: 1; } }
-@keyframes toy-morph {
-  0% { transform: scale(0.2) rotate(-200deg); opacity: 0; }
-  22% { transform: scale(1.18) rotate(12deg); opacity: 1; }
-  34%, 80% { transform: scale(1) rotate(0); opacity: 1; }
-  100% { transform: scale(0.2) rotate(200deg); opacity: 0; }
-}
+/* the home logo: the j as a little runner (design 2026-11-12, running-j revision) */
+.hl { position: absolute; inset: 0; overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.hl.tappable { cursor: pointer; }
+.hl { --hl-flip: 0.5s cubic-bezier(0.65, 0, 0.35, 1); }
+.hl-logo { position: absolute; pointer-events: none; }
+.hl-ltr { position: absolute; inset: 0; background-color: var(--volt); -webkit-mask: var(--m) center / 100% 100% no-repeat; mask: var(--m) center / 100% 100% no-repeat; transition: background-color var(--hl-flip); }
+.hl.inverted .hl-ltr { background-color: var(--black); }
+.hl-j { position: absolute; overflow: visible; will-change: transform; }
+.hl-j .s { fill: none; stroke: var(--volt); stroke-width: 36; stroke-linecap: round; stroke-linejoin: round; transition: stroke var(--hl-flip); }
+.hl.inverted .hl-j .s { stroke: var(--black); }
+.hl-j .run { transform-box: view-box; transform-origin: 168px 500px; will-change: transform; }
+.hl-j .leg { transform-box: view-box; transform-origin: 168px 338px; will-change: transform; }
+.hl-flash { position: absolute; inset: 0; background: var(--volt); opacity: 0; pointer-events: none; }
+.hl-flash.on { animation: hl-flash 0.35s ease-out; }
+@keyframes hl-flash { 0% { opacity: 0.3; } 100% { opacity: 0; } }
+.hl-caption { position: absolute; left: 0; right: 0; margin: 0; text-align: center; font: 500 10px var(--mono); letter-spacing: 0.2em; color: var(--dim); pointer-events: none; }
+.hl-caption .dots i { font-style: normal; opacity: 0; animation: hl-dot 1.2s infinite; }
+.hl-caption .dots i:nth-child(2) { animation-delay: 0.2s; }
+.hl-caption .dots i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes hl-dot { 0%, 20% { opacity: 0; } 40%, 100% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .toy-logo.wob, .toy-j.jback, .toy-sticker, .toy-flash.on { animation: none; }
+  .hl-flash.on { animation: none; }
+  .hl-caption .dots i { animation: none; opacity: 1; }
 }
 
 /* the home screen (design 2026-11-12) */
 .home { max-width: 480px; margin: 0 auto; min-height: 100vh; min-height: 100dvh; padding: 16px 18px 22px; display: flex; flex-direction: column; }
+.home { background: var(--black); transition: background-color 0.5s cubic-bezier(0.65, 0, 0.35, 1); }
+/* full bleed: the page behind the centred column takes the same colour */
+.home::before { content: ''; position: fixed; inset: 0; z-index: -1; background: inherit; transition: inherit; }
+.home.opening { background: var(--volt); }
+.home .home-actions > * { transition: opacity 0.4s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.home.arriving .home-actions > * { opacity: 0; transform: translateY(16px); pointer-events: none; }
+.home .home-actions > :nth-child(2) { transition-delay: 0.06s; }
+.home .home-actions > :nth-child(3) { transition-delay: 0.12s; }
+.home .home-actions > :nth-child(4) { transition-delay: 0.18s; }
 .home-play { position: relative; flex: 1; min-height: 300px; margin: 0 -18px; }
 .home-actions { display: flex; flex-direction: column; gap: 10px; padding-top: 8px; }
 .home-actions .btn { width: 100%; padding: 15px; font-size: 16px; font-weight: 800; text-align: center; text-decoration: none; display: block; box-sizing: border-box; }
@@ -592,3 +599,4 @@ select.input option { background: #141614; color: var(--white); }
 .home-link { all: unset; cursor: pointer; align-self: center; min-height: 36px; display: inline-flex; align-items: center; padding: 0 6px; margin-top: 4px; font-size: 13px; color: var(--dim); text-decoration: underline; }
 .home-code-q { margin: 0 0 4px; font-size: 26px; font-weight: 800; letter-spacing: -0.05em; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.home-error { position: absolute; left: 18px; right: 18px; bottom: 8px; text-align: center; }

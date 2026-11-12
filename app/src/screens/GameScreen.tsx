@@ -3,9 +3,9 @@ import { loadOrganiserSession } from '../game/organiserSession'
 import { shouldPlay } from '../game/moments'
 import { loadSession } from '../game/session'
 import SosIcon from '../game/SosIcon'
-import { ErrorText, Screen } from '../game/ui'
 import { useGameState, type LocationMode } from '../game/useGameState'
 import ChaserChase from './ChaserChase'
+import GameLoading from './GameLoading'
 import Hide from './Hide'
 import { useReelHold } from '../game/PenjaraReel'
 import Jail from './Jail'
@@ -40,6 +40,8 @@ export default function GameScreen({ code }: { code: string }) {
   }, [signedIn, code])
 
   const { view: current, error, refresh, locationOff } = useGameState(code, { sendLocation: locationMode })
+  // Opened with no game yet: show the loading screen, and when the game arrives let the j run off first.
+  const [entering, setEntering] = useState(() => !current)
   const hostInLobby = current?.phase === 'lobby' && current.me.id === 'host'
   useEffect(() => {
     if (hostInLobby) window.location.assign(`/host/${code}`)
@@ -67,14 +69,7 @@ export default function GameScreen({ code }: { code: string }) {
     return () => window.clearTimeout(t)
   }, [showingFreed])
 
-  if (!current) {
-    return (
-      <Screen eyebrow={`kejar. · game ${code}`}>
-        <p className="muted">Loading…</p>
-        <ErrorText>{error}</ErrorText>
-      </Screen>
-    )
-  }
+  if (!current || entering) return <GameLoading code={code} error={error} leaving={!!current} onLeft={() => setEntering(false)} />
   if (current.me.removed_at) return <Removed />
   if (current.phase === 'lobby') return <Lobby code={code} view={current} refresh={refresh} />
   if (current.me.role === 'marshal') return <MarshalLive code={code} view={current} refresh={refresh} />
