@@ -20,7 +20,7 @@ import { ErrorText } from './ui'
 export type ClaimedKind = PowerUpKind | 'bomoh'
 export type ClaimResult = ({ ok: true; kind: ClaimedKind; double?: boolean } | Exclude<ClaimJudgement, { ok: true }>)
 type UseResult =
-  | { ok: true; kind: PowerUpKind; offer?: PowerUpKind[]; name?: string }
+  | { ok: true; kind: PowerUpKind; offer?: PowerUpKind[]; name?: string; wasted?: true }
   | { ok: false; reason: string; readyInMs?: number; frozenForMs?: number }
 
 const CLAIM_REJECTIONS: Record<string, string> = {
@@ -45,7 +45,6 @@ const USE_REJECTIONS: Record<string, string> = {
   'bad-choice': 'Pick one of the three cards',
   'no-target': "That Kejar can't be frozen right now.",
   'effect-running': 'Wait for your last one to finish first.',
-  'combo-ready': 'You already have a combo ready.',
   'no-location': "Can't find you yet. Try again in a moment.",
   paused: 'Game is paused',
   disqualified: "You're Luar Garisan, so no power-ups this round.",
@@ -73,6 +72,7 @@ export function stashMessage(r: ClaimResult | { ok: false; reason: 'no-stash' | 
   if (reason === 'too-far') return 'Get closer.'
   if (reason === 'hand-full') return 'Use or lose your power-up first'
   if (reason === 'paused') return CLAIM_REJECTIONS.paused
+  if (reason === 'frozen') return frozenLine((r as { frozenForMs?: number }).frozenForMs)
   return 'Nothing here.'
 }
 
@@ -135,7 +135,9 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
         r.ok
           ? r.kind === 'cheese' && r.name
             ? `Cheese Ais! ${r.name} is frozen for 3 minutes.`
-            : INFO[r.kind].used
+            : r.wasted
+              ? "Combo already ready. This one's spent."
+              : INFO[r.kind].used
           : r.reason === 'frozen'
             ? frozenLine(r.frozenForMs)
             : r.reason === 'taken'

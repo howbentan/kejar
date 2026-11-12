@@ -6,7 +6,8 @@ export type Mode = 'core' | 'full'
 
 /**
  * One set of each side's deck (power-ups design §5b, rules doc §3). Full adds Gostan, plus Toyol
- * (runners), Ah Long (chasers) and Abang Grab (both sides) from Plan D.
+ * (runners), Ah Long (chasers) and Abang Grab (both sides) from Plan D, then Cheese Ais (runners), Tuch and Ga
+ * (chasers) and Nasi Lemak KFC (both sides) from Plan E1.
  */
 export const SET: Record<Mode, Record<Side, PowerUpKind[]>> = {
   core: {

@@ -1676,8 +1676,6 @@ const usePowerup: Action = async (ctx, body) => {
   if (runningEffect(all, me.id, pings, ctx.now) !== null) return { ok: false, reason: 'effect-running' }
   // Dato Seri is only ever used through Settle, at Penjara (jail design §4b).
   if (u.kind === 'dato') return { ok: false, reason: 'settle-at-penjara' }
-  // Nasi Lemak KFC can't double itself (new power-ups §5.2): two combo marks never stack. The card is kept.
-  if (u.kind === 'combo' && comboReady(all, me.id)) return { ok: false, reason: 'combo-ready' }
   // A Flare's reveal must land before the whistle.
   if (u.kind === 'flare' && (endsAt ?? 0) - ctx.now < ALERT_LEAD_MS) return { ok: false, reason: 'too-late' }
 
@@ -1719,6 +1717,13 @@ const usePowerup: Action = async (ctx, body) => {
   }
   // markUsed is atomic: a double-tap uses the power-up once.
   if (!(await ctx.store.markUsed(u.id))) return { ok: false, reason: 'already-used' }
+  if (u.kind === 'combo' && comboReady(all, me.id)) {
+    // Nasi Lemak KFC can't double itself (new power-ups §5.2): marks never stack, so this one is spent at once
+    // (used and consumed) and the slot frees. The first mark stays for the next delivery.
+    await ctx.store.updatePowerUp(u.id, { consumed_at: iso(ctx.now) })
+    await ctx.store.addEvent({ game_id: game.id, type: 'used', actor_id: me.id, target_id: null, data: { kind: 'combo' } })
+    return { ok: true, kind: 'combo', wasted: true }
+  }
   if (u.kind === 'toll' && gateSpot) await ctx.store.updatePowerUp(u.id, { spot: gateSpot })
   if (u.kind === 'shield') {
     // A doubled Durian is one tap (new power-ups §5.2): its other half is switched on too, whichever row was

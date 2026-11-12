@@ -1509,10 +1509,14 @@ describe('Abang Grab', () => {
 describe('Nasi Lemak KFC', () => {
   const S1 = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
   const atS1 = { lat: S1.lat, lng: S1.lng, accuracy_m: 8 }
+  const S2 = { lat: CENTER.lat - 100 / 111_195, lng: CENTER.lng }
+  const S3 = { lat: CENTER.lat, lng: CENTER.lng + 100 / (111_195 * Math.cos((CENTER.lat * Math.PI) / 180)) }
+  const atS2 = { lat: S2.lat, lng: S2.lng, accuracy_m: 8 }
+  const atS3 = { lat: S3.lat, lng: S3.lng, accuracy_m: 8 }
   const EXCLUDED: PowerUpKind[] = ['grab', 'combo', 'dato']
   /** Ben, Kim and Lee chase; Aina, Hafiz and Wei run. Full mode, the chase has begun. */
-  async function chasing() {
-    const g = await readyGame({ mode: 'full' }, { stations: [S1] })
+  async function chasing(stations: { lat: number; lng: number }[] = [S1]) {
+    const g = await readyGame({ mode: 'full' }, { stations })
     const kim = await run('join', { code: g.code, name: 'Kim', accepted: true })
     const lee = await run('join', { code: g.code, name: 'Lee', accepted: true })
     const wei = await run('join', { code: g.code, name: 'Wei', accepted: true })
@@ -1589,15 +1593,69 @@ describe('Nasi Lemak KFC', () => {
     expect((await view(g, g.hafiz.token)).comboReady).toBe(false)
   })
 
-  it('a second Nasi Lemak KFC is refused while the combo is ready, and kept', async () => {
+  it('a Nasi Lemak KFC drawn at a station while combo ready arrives normally and the mark stays', async () => {
     const g = await chasing()
     await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })
-    const second = await give(g.gameId, g.aina.playerId, 'combo')
-    expect(await use(g, g.aina.token, second.id)).toEqual({ ok: false, reason: 'combo-ready' })
-    const rows = await store.powerUps(g.gameId)
-    expect(rows.find((u) => u.id === second.id)!.used_at).toBeNull()
-    expect(rows.filter((u) => u.kind === 'combo' && u.used_at)).toHaveLength(1)
-    expect((await store.events(g.gameId)).filter((e) => e.type === 'used')).toHaveLength(0)
+    expect(await forceDraw(g, 'runner', (k) => k === 'combo')).toBe('combo')
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toEqual({ ok: true, kind: 'combo' })
+    const v = await view(g, g.aina.token)
+    expect(v.comboReady).toBe(true)
+    expect(v.hand.map((u) => u.kind)).toEqual(['combo'])
+  })
+
+  it('a Nasi Lemak KFC picked from an Abang Grab offer while combo ready arrives normally and the mark stays', async () => {
+    const g = await chasing()
+    await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })
+    await forceDraw(g, 'runner', (k) => k === 'combo')
+    const grab = await give(g.gameId, g.aina.playerId, 'grab')
+    const { offer } = await use(g, g.aina.token, grab.id)
+    const choice = (offer as PowerUpKind[]).indexOf('combo')
+    expect(choice).toBeGreaterThanOrEqual(0)
+    const r = await run('grabPick', { code: g.code, token: g.aina.token, powerupId: grab.id, choice })
+    expect(r).toMatchObject({ ok: true, kind: 'combo' })
+    expect(r).not.toHaveProperty('double')
+    const v = await view(g, g.aina.token)
+    expect(v.comboReady).toBe(true)
+    expect(v.hand.map((u) => u.kind)).toEqual(['combo'])
+  })
+
+  it("using a second Nasi Lemak KFC while combo ready is accepted and spent, frees the slot, and doesn't stack", async () => {
+    const g = await chasing([S1, S2])
+    await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })
+    await forceDraw(g, 'runner', (k) => k === 'combo')
+    await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    const second = (await view(g, g.aina.token)).hand[0]
+    expect(await use(g, g.aina.token, second.id)).toEqual({ ok: true, kind: 'combo', wasted: true })
+    const rows = (await store.powerUps(g.gameId)).filter((u) => u.kind === 'combo')
+    expect(rows.find((u) => u.id === second.id)).toMatchObject({ used_at: expect.any(String), consumed_at: expect.any(String) })
+    expect(rows.filter((u) => u.used_at && !u.consumed_at)).toHaveLength(1)
+    const v = await view(g, g.aina.token)
+    expect(v.hand).toEqual([])
+    expect(v.comboReady).toBe(true)
+    // The slot is free again: a later station claim succeeds, and arrives doubled by the one mark.
+    const kind = await forceDraw(g, 'runner', (k) => !EXCLUDED.includes(k))
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(2), ...atS2 })).toEqual({ ok: true, kind, double: true })
+  })
+
+  it('only the next one delivered card is doubled after a wasted second combo', async () => {
+    const g = await chasing([S1, S2, S3])
+    await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })
+    await forceDraw(g, 'runner', (k) => k === 'combo')
+    await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    const second = (await view(g, g.aina.token)).hand[0]
+    expect(await use(g, g.aina.token, second.id)).toMatchObject({ wasted: true })
+    const kind = await forceDraw(g, 'runner', (k) => !EXCLUDED.includes(k))
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(2), ...atS2 })).toEqual({ ok: true, kind, double: true })
+    for (const u of (await view(g, g.aina.token)).hand) {
+      // Long since used and spent, so no effect is still running.
+      const long = new Date(now - 60 * MIN).toISOString()
+      await store.updatePowerUp(u.id, { used_at: long, consumed_at: long })
+    }
+    const next = await forceDraw(g, 'runner', (k) => !EXCLUDED.includes(k))
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(3), ...atS3 })).toEqual({ ok: true, kind: next })
+    const v = await view(g, g.aina.token)
+    expect(v.hand.map((u) => u.kind)).toEqual([next])
+    expect(v.comboReady).toBe(false)
   })
 
   it('Abang Grab delivers the doubled card', async () => {

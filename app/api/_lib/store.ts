@@ -189,7 +189,7 @@ export interface GameStore {
    */
   claimBomoh(gameId: string, playerId: string, at: Date): Promise<boolean>
   /**
-   * Tuch and Ga: freezes a chaser until `untilIso`, only if they aren't frozen now (frozen_until null or not after
+   * Cheese Ais: freezes a chaser until `untilIso`, only if they aren't frozen now (frozen_until null or not after
    * the store clock). True for the one caller that wins.
    */
   freezeChaser(chaserId: string, untilIso: string): Promise<boolean>
@@ -361,6 +361,8 @@ export class MemoryStore implements GameStore {
     for (const r of this.safetyRows) if (r.game_id === id) Object.assign(r, { data: {}, lat: null, lng: null })
     this.phoneMoveRows = this.phoneMoveRows.filter((r) => r.game_id !== id)
     this.marshalInviteRows = this.marshalInviteRows.filter((r) => r.game_id !== id)
+    // A Tuch and Ga gate's position is a chaser's exact position.
+    for (const u of this.powerUpRows) if (u.game_id === id) u.spot = null
     const mine = this.playerRows
       .filter((p) => p.game_id === id)
       .sort((a, b) => Date.parse(a.accepted_at) - Date.parse(b.accepted_at) || this.playerRows.indexOf(a) - this.playerRows.indexOf(b))
@@ -792,7 +794,7 @@ export class MemoryStore implements GameStore {
       const started = Date.parse(g.rescue.startedAt)
       g.rescue = { ...g.rescue, startedAt: new Date(started + this.clock() - Math.max(started, pausedAt)).toISOString() }
     }
-    // A running freeze (Tuch and Ga) waits out the pause too.
+    // A running freeze (Cheese Ais) waits out the pause too.
     for (const p of this.playerRows) {
       if (p.game_id === gameId && p.frozen_until && Date.parse(p.frozen_until) > pausedAt) p.frozen_until = shift(p.frozen_until)
     }

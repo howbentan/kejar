@@ -210,7 +210,7 @@ export interface Player {
   /** How to play: when this player opened the story, and when they tapped I'm ready (ISO). Each is set once. */
   brief_opened_at?: string | null
   brief_ready_at?: string | null
-  /** Tuch and Ga: this chaser is frozen until this time (ISO). Null or past means free. */
+  /** Cheese Ais: this chaser is frozen until this time (ISO). Null or past means free. */
   frozen_until?: string | null
 }
 
@@ -274,7 +274,7 @@ export type EventType =
   | 'reel-free'
   /** The one '5 minutes left!' warning of the game (rules §2.7). data: {} */
   | 'five-left'
-  /** A chaser walked into a Tuch and Ga gate and froze. actor: the runner, target: the chaser. data: { until } */
+  /** A runner froze a chaser with Cheese Ais. actor: the runner, target: the chaser. data: { until } */
   | 'frozen'
 
 export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along' | 'grab' | 'dato' | 'cheese' | 'combo' | 'toll'

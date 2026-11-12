@@ -746,6 +746,15 @@ describe('wiping a game', () => {
     expect(await store.wipeGame(g.id)).toBe(false)
   })
 
+  it("clears a Tuch and Ga gate's position", async () => {
+    const g = await playedGame()
+    const gate = await store.addPowerUp({ game_id: g.id, player_id: 'p1', kind: 'toll', station: null })
+    await store.updatePowerUp(gate.id, { spot: { lat: 3.1, lng: 101.6 } })
+    expect((await store.powerUps(g.id)).find((u) => u.id === gate.id)!.spot).not.toBeNull()
+    await store.wipeGame(g.id)
+    expect((await store.powerUps(g.id)).find((u) => u.id === gate.id)!.spot).toBeNull()
+  })
+
   it('gives every player a fresh token, so an old session link no longer works', async () => {
     const g = await playedGame()
     await store.wipeGame(g.id)

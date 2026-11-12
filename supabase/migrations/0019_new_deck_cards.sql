@@ -10,7 +10,7 @@ alter table powerups
   check (kind in ('decoy', 'shield', 'cloak', 'flare', 'focus', 'toyol', 'along', 'grab', 'dato', 'cheese', 'combo', 'toll'));
 
 -- 2. twin_of: the card a Nasi Lemak KFC twin doubles. spot: where a Tuch and Ga gate stands.
--- frozen_until: a chaser caught in a gate, frozen until then.
+-- frozen_until: a chaser frozen by Cheese Ais, frozen until then.
 alter table powerups add column if not exists twin_of uuid references powerups(id);
 alter table powerups add column if not exists spot jsonb;
 alter table players add column if not exists frozen_until timestamptz;
@@ -96,7 +96,7 @@ begin
     set alert_at = case when alerted then alert_at else alert_at + d end,
         reveal_at = case when revealed then reveal_at else reveal_at + d end
     where game_id = p_game and (not alerted or not revealed);
-  -- A running Tuch and Ga freeze waits out the pause too (one that ended before the pause is left alone).
+  -- A running Cheese Ais freeze waits out the pause too (one that ended before the pause is left alone).
   update players
     set frozen_until = frozen_until + d
     where game_id = p_game and frozen_until > started;
@@ -106,5 +106,43 @@ $$;
 
 revoke execute on function resume_game(uuid, timestamptz) from public, anon, authenticated;
 grant execute on function resume_game(uuid, timestamptz) to service_role;
+
+-- The 30-day wipe also clears a Tuch and Ga gate's position (powerups.spot is a chaser's exact position).
+-- Same as 0016_fair_play.sql, plus the powerups update.
+create or replace function wipe_game(p_game uuid) returns boolean
+language plpgsql
+as $$
+declare
+  claimed int;
+begin
+  update games set wiped_at = now(), host_push = null where id = p_game and wiped_at is null;
+  get diagnostics claimed = row_count;
+  if claimed = 0 then
+    return false;
+  end if;
+  delete from locations where game_id = p_game;
+  -- Safety records stay as anonymous counts: free text, names and positions go.
+  update safety_records set data = '{}'::jsonb, lat = null, lng = null where game_id = p_game;
+  delete from phone_moves where game_id = p_game;
+  delete from marshal_invites where game_id = p_game;
+  update powerups set spot = null where game_id = p_game;
+  update players p
+    set name = case n.role when 'runner' then 'Dikejar ' when 'chaser' then 'Kejar ' when 'marshal' then 'Marshal ' else 'Player ' end || n.num,
+        push = null,
+        token_hash = replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '')
+    from (
+      select id, role, row_number() over (partition by coalesce(role, '') order by accepted_at, id) as num
+      from players where game_id = p_game
+    ) n
+    where p.id = n.id;
+  update events
+    set data = data - array['who', 'chaser', 'name', 'by', 'target_name', 'targetName', 'withName', 'with_name', 'text', 'note', 'lat', 'lng']
+    where game_id = p_game;
+  return true;
+end;
+$$;
+
+revoke execute on function wipe_game(uuid) from public, anon, authenticated;
+grant execute on function wipe_game(uuid) to service_role;
 
 commit;

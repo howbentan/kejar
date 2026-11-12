@@ -153,7 +153,6 @@ describe('PowerUpHand', () => {
       [{ ok: false, reason: 'frozen', frozenForMs: 134_000 }, 'Brain freeze! Wait 2:14.'],
       [{ ok: false, reason: 'no-target' }, "That Kejar can't be frozen right now."],
       [{ ok: false, reason: 'effect-running' }, 'Wait for your last one to finish first.'],
-      [{ ok: false, reason: 'combo-ready' }, 'You already have a combo ready.'],
       [{ ok: false, reason: 'no-location' }, "Can't find you yet. Try again in a moment."],
     ])('a refused use (%j) is plain words', async (reply, text) => {
       call.mockResolvedValue(reply)
@@ -161,6 +160,14 @@ describe('PowerUpHand', () => {
       fireEvent.click(screen.getByRole('button', { name: /gostan/i }))
       fireEvent.click(screen.getByRole('button', { name: 'Use Gostan' }))
       expect(await screen.findByText(text)).toBeInTheDocument()
+    })
+
+    it('a second Nasi Lemak KFC used while combo ready says it is spent', async () => {
+      call.mockResolvedValue({ ok: true, kind: 'combo', wasted: true })
+      render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'combo' }] })} />)
+      fireEvent.click(screen.getByRole('button', { name: /nasi lemak/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'Use Nasi Lemak KFC' }))
+      expect(await screen.findByText("Combo already ready. This one's spent.")).toBeInTheDocument()
     })
 
     it('Tuch and Ga shows its used line', async () => {
