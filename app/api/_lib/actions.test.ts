@@ -5215,3 +5215,53 @@ describe('how to play: briefing', () => {
     }
   })
 })
+
+describe('planned start time (home upgrades)', () => {
+  const view = async (code: string, who: object) => (await run<View>('state', { code, ...who })).settings.startsAt ?? null
+
+  it('setStartTime sets and clears the planned start', async () => {
+    const g = await readyGame()
+    const startsAt = new Date(now + 20 * MIN).toISOString()
+    expect(await run('setStartTime', { code: g.code, organiserToken: g.organiserToken, startsAt })).toEqual({ ok: true })
+    expect(await view(g.code, { organiserToken: g.organiserToken })).toBe(startsAt)
+    expect(await run('setStartTime', { code: g.code, organiserToken: g.organiserToken, startsAt: null })).toEqual({ ok: true })
+    expect(await view(g.code, { organiserToken: g.organiserToken })).toBeNull()
+  })
+
+  it('setStartTime rejects a past time and one more than 24 hours ahead', async () => {
+    const g = await readyGame()
+    await rejects(run('setStartTime', { code: g.code, organiserToken: g.organiserToken, startsAt: new Date(now - MIN).toISOString() }), 400, 'next 24 hours')
+    await rejects(run('setStartTime', { code: g.code, organiserToken: g.organiserToken, startsAt: new Date(now + 24 * 60 * MIN + MIN).toISOString() }), 400, 'next 24 hours')
+    await rejects(run('setStartTime', { code: g.code, organiserToken: g.organiserToken, startsAt: 'banana' }), 400, 'next 24 hours')
+  })
+
+  it('setStartTime is organiser-only and lobby-only', async () => {
+    const g = await readyGame()
+    const startsAt = new Date(now + 20 * MIN).toISOString()
+    await rejects(run('setStartTime', { code: g.code, token: g.aina.token, startsAt }), 403)
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    await rejects(run('setStartTime', { code: g.code, organiserToken: g.organiserToken, startsAt }), 409)
+  })
+
+  it('create never stores a start time, junk is dropped, and setMode keeps a valid one', async () => {
+    const g = await readyGame({ startsAt: 'banana' })
+    expect(await view(g.code, { organiserToken: g.organiserToken })).toBeNull()
+    const startsAt = new Date(now + 30 * MIN).toISOString()
+    await run('setStartTime', { code: g.code, organiserToken: g.organiserToken, startsAt })
+    await run('setMode', { code: g.code, organiserToken: g.organiserToken, mode: 'core' })
+    expect(await view(g.code, { organiserToken: g.organiserToken })).toBe(startsAt)
+  })
+
+  it('a time just after midnight, 20 minutes ahead, is accepted', async () => {
+    const g = await readyGame()
+    const startsAt = new Date(now + 20 * MIN).toISOString()
+    expect(await run('setStartTime', { code: g.code, organiserToken: g.organiserToken, startsAt })).toEqual({ ok: true })
+  })
+
+  it('a player sees the planned start in their view', async () => {
+    const g = await readyGame()
+    const startsAt = new Date(now + 20 * MIN).toISOString()
+    await run('setStartTime', { code: g.code, organiserToken: g.organiserToken, startsAt })
+    expect(await view(g.code, { token: g.aina.token })).toBe(startsAt)
+  })
+})

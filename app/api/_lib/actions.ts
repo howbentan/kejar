@@ -462,6 +462,8 @@ function settingsFrom(input: unknown): Settings {
   // Bomoh is accepted as sent now that he's built end to end: his own purple cards, claim, reveal and lobby toggle.
   // Only the two known keys are stored, so nothing else a client sends ends up in the game's settings.
   s.legendaries = { dato: legendaries.dato, bomoh: legendaries.bomoh }
+  // The planned start only survives as a real time; anything else a client sends is dropped.
+  s.startsAt = typeof s.startsAt === 'string' && Number.isFinite(Date.parse(s.startsAt)) ? s.startsAt : null
   return s
 }
 
@@ -763,7 +765,8 @@ const create: Action = async (ctx, body) => {
   } else {
     throw new ActionError(400, 'Unknown arena')
   }
-  const settings = settingsFrom(body.settings)
+  // A new game has no planned start yet; the organiser sets one in the lobby (setStartTime).
+  const settings = { ...settingsFrom(body.settings), startsAt: null }
   // Full with Dato Seri on: a free yellow card now, so the organiser can print it before hiding it (ruling R15).
   // With none free, the game still gets made (Review Focus 1). It keeps wanting Dato Seri and tries again later (R9).
   let stash: DatoStash | null = null
@@ -2212,10 +2215,29 @@ const setMode: Action = async (ctx, body) => {
   return notices.length ? { ok: true, notice: notices.join(' ') } : { ok: true }
 }
 
+/**
+ * The organiser's planned start (home upgrades design): from now up to 24 hours ahead, or null to clear. It only
+ * informs the players' home countdown; the organiser still taps start.
+ */
+const setStartTime: Action = async (ctx, body) => {
+  const loaded = await loadGame(ctx, body)
+  await requireOrganiser(ctx, loaded, body)
+  requireLobby(loaded, ctx.now)
+  let startsAt: string | null = null
+  if (body.startsAt !== null) {
+    const t = typeof body.startsAt === 'string' ? Date.parse(body.startsAt) : NaN
+    if (!Number.isFinite(t) || t < ctx.now || t > ctx.now + 24 * 60 * 60_000) throw new ActionError(400, 'Pick a start time in the next 24 hours')
+    startsAt = new Date(t).toISOString()
+  }
+  await ctx.store.updateGame(loaded.id, { settings: settingsFrom({ ...loaded.settings, startsAt }) })
+  return { ok: true }
+}
+
 export const actions = {
   create,
   setKit,
   setMode,
+  setStartTime,
   startBriefing,
   briefOpened,
   briefReady,

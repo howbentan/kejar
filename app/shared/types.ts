@@ -37,6 +37,11 @@ export interface Settings {
    * Older games have none: read them as the defaults.
    */
   legendaries: { dato: 'off' | 'stash'; bomoh: 'off' | 'stash' }
+  /**
+   * When the organiser plans to start (home upgrades design): an ISO time, or null. It only informs (the home
+   * countdown); it never starts the game. Older games have none: read them as null.
+   */
+  startsAt?: string | null
 }
 
 /** Spec §4.3 defaults. */
