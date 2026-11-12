@@ -9,6 +9,12 @@ export function nextOccurrence(hhmm: string, now: number): number {
   return d.getTime()
 }
 
+/** A time as the `HH:MM` a time input shows, in local time. */
+export function clockOf(t: number): string {
+  const d = new Date(t)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 /** For example "starts 7:30 pm · in 12 min", or "starting soon" once the time has passed. */
 export function startsLabel(startsAt: number, now: number): string {
   const left = startsAt - now

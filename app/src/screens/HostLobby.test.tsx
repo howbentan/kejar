@@ -76,6 +76,23 @@ describe('HostLobby', () => {
     expect(localStorage.getItem('kejar.lastGame')).toContain('"ABC234"')
   })
 
+  it('typing a time sends nothing until the organiser leaves the field, and the field shows the saved time', async () => {
+    const startsAt = new Date(nextOccurrence('19:30', Date.now())).toISOString()
+    call.mockImplementation(async (action: string) => (action === 'state' ? { ...lobbyView, settings: { ...lobbyView.settings, startsAt } } : { ok: true }))
+    render(<HostLobby code="ABC234" />)
+    const input = (await screen.findByLabelText('planned start')) as HTMLInputElement
+    await waitFor(() => expect(input.value).toBe('19:30'))
+    fireEvent.change(input, { target: { value: '07:03' } })
+    fireEvent.change(input, { target: { value: '07:30' } })
+    expect(call).not.toHaveBeenCalledWith('setStartTime', expect.anything())
+    expect(input).not.toBeDisabled()
+    fireEvent.blur(input)
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith('setStartTime', { code: 'ABC234', organiserToken: 'h1', startsAt: new Date(nextOccurrence('07:30', Date.now())).toISOString() }),
+    )
+    expect(call.mock.calls.filter((c) => c[0] === 'setStartTime')).toHaveLength(1)
+  })
+
   it('the organiser sets a planned start, and clears it', async () => {
     const startsAt = new Date(Date.now() + 20 * 60_000).toISOString()
     call.mockImplementation(async (action: string) => {
@@ -85,6 +102,7 @@ describe('HostLobby', () => {
     render(<HostLobby code="ABC234" />)
     expect(await screen.findByText(/in 20 min/)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('planned start'), { target: { value: '19:30' } })
+    fireEvent.blur(screen.getByLabelText('planned start'))
     await waitFor(() =>
       expect(call).toHaveBeenCalledWith('setStartTime', { code: 'ABC234', organiserToken: 'h1', startsAt: new Date(nextOccurrence('19:30', Date.now())).toISOString() }),
     )

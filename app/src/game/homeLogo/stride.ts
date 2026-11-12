@@ -33,7 +33,7 @@ export interface Pose {
 const z = (v: number) => v + 0 // no -0, so a resting pose reads as plain zeros
 
 /** Where every part sits: `lean` 0..1 is how hard it is running; `sinceJump` is ms since a tap (Infinity: none). */
-export function pose(phase: number, lean: number, sinceJump: number, sinceFlip = Infinity): Pose {
+export function pose(phase: number, lean: number, sinceJump: number, sinceFlip = Infinity, flipFrom = 0): Pose {
   const c = (1 - Math.cos(phase * 2 * Math.PI)) / 2
   const bob = Math.abs(Math.sin(phase * 2 * Math.PI)) * lean
   const j = sinceJump / STRIDE.JUMP_MS
@@ -42,7 +42,9 @@ export function pose(phase: number, lean: number, sinceJump: number, sinceFlip =
   const easeInOut = (k: number) => (k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2)
   if (flipping) {
     const up = Math.sin(Math.PI * f)
-    return { legL: STRIDE.TUCK_L, legR: STRIDE.TUCK_R, lift: -STRIDE.JUMP_LIFT * 1.1 * up, tilt: 0, sx: 1, sy: 1, spin: -360 * easeInOut(f) }
+    // A flip started mid-jump (`flipFrom`, how high the jump was, 0..1) carries on from that height, never dropping first.
+    const lift = -STRIDE.JUMP_LIFT * Math.max(1.1 * up, flipFrom * (1 - f))
+    return { legL: STRIDE.TUCK_L, legR: STRIDE.TUCK_R, lift, tilt: 0, sx: 1, sy: 1, spin: -360 * easeInOut(f) }
   }
   const air = j >= 0 && j < 1 ? Math.sin(Math.PI * j) : 0
   const squash = j >= 1 && j < 1 + STRIDE.SQUASH ? Math.sin((Math.PI * (j - 1)) / STRIDE.SQUASH) : 0

@@ -1,4 +1,4 @@
-import { useId, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
 import { useReducedMotion } from 'motion/react'
 import PATHS from './digitPaths.json'
 
@@ -40,7 +40,10 @@ export default function DrawnNumber({ text, height = 40 }: { text: string; heigh
   const still = !!useReducedMotion()
   const prev = useRef<string | null>(null)
   const before = prev.current
-  prev.current = text
+  // Remembered after commit, so StrictMode's double render (development) sees the same "before" both times.
+  useEffect(() => {
+    prev.current = text
+  }, [text])
   return (
     <div className="drawn-number" role="img" aria-label={text}>
       {[...text].map((ch, i) =>

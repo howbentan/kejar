@@ -9,7 +9,7 @@ import { waitingForCard as waitingFor } from '../game/cardNotice'
 import SetupMap, { OrganiserTools } from '../game/SetupMap'
 import { saveLastGame } from '../game/lastGame'
 import { loadOrganiserSession } from '../game/organiserSession'
-import { nextOccurrence, startsLabel } from '../game/plannedStart'
+import { clockOf, nextOccurrence, startsLabel } from '../game/plannedStart'
 import { qrDataUrl } from '../game/qr'
 import { ErrorText, ModeBadge, Pills, Screen, tagText } from '../game/ui'
 import { useGameState } from '../game/useGameState'
@@ -36,6 +36,13 @@ export default function HostLobby({ code }: { code: string }) {
   const [notice, setNotice] = useState('')
   const [startNotice, setStartNotice] = useState('')
   const joinUrl = `${window.location.origin}/join/${code}`
+  // The planned start's time field: shows the saved time, and only sends once the organiser leaves it (or presses
+  // Enter), never on each keystroke, where a half-typed 07:30 reads as 07:03.
+  const savedStart = view?.settings.startsAt ?? null
+  const [startText, setStartText] = useState('')
+  useEffect(() => {
+    setStartText(savedStart ? clockOf(Date.parse(savedStart)) : '')
+  }, [savedStart])
 
   useEffect(() => {
     void qrDataUrl(joinUrl).then(setQr, () => setQr(''))
@@ -50,6 +57,11 @@ export default function HostLobby({ code }: { code: string }) {
     // A notice from the start waits for the organiser to read it before going to the game.
     if (view && view.phase !== 'lobby' && !startNotice) window.location.assign(`/g/${code}`)
   }, [view, code, startNotice])
+
+  function commitStart() {
+    if (!startText || (savedStart && clockOf(Date.parse(savedStart)) === startText)) return
+    void act('setStartTime', { startsAt: new Date(nextOccurrence(startText, Date.now())).toISOString() })
+  }
 
   async function act(action: string, body: object) {
     setBusy(true)
@@ -175,13 +187,23 @@ export default function HostLobby({ code }: { code: string }) {
             id="planned-start"
             type="time"
             className="input"
-            disabled={busy}
-            onChange={(e) => e.target.value && void act('setStartTime', { startsAt: new Date(nextOccurrence(e.target.value, Date.now())).toISOString() })}
+            value={startText}
+            onChange={(e) => setStartText(e.target.value)}
+            onBlur={commitStart}
+            onKeyDown={(e) => e.key === 'Enter' && commitStart()}
           />
           {view.settings.startsAt && (
             <>
               <span className="muted">{startsLabel(Date.parse(view.settings.startsAt), Date.now())}</span>
-              <button type="button" className="home-link" disabled={busy} onClick={() => void act('setStartTime', { startsAt: null })}>
+              <button
+                type="button"
+                className="home-link"
+                disabled={busy}
+                onClick={() => {
+                  setStartText('')
+                  void act('setStartTime', { startsAt: null })
+                }}
+              >
                 clear
               </button>
             </>

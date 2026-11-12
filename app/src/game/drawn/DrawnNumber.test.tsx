@@ -1,4 +1,5 @@
 import { cleanup, render, screen } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const reduce = vi.hoisted(() => ({ on: false }))
@@ -26,6 +27,13 @@ describe('DrawnNumber', () => {
   it('only the digits that changed draw in', () => {
     const { rerender } = render(<DrawnNumber text="4:30" />)
     rerender(<DrawnNumber text="4:29" />)
+    expect(digits()).toEqual([['4', false], ['2', true], ['9', true]])
+  })
+
+  it('still draws the changed digits in under StrictMode (the app renders twice in development)', () => {
+    const { rerender } = render(<StrictMode><DrawnNumber text="4:30" /></StrictMode>)
+    expect(digits()).toEqual([['4', true], ['3', true], ['0', true]])
+    rerender(<StrictMode><DrawnNumber text="4:29" /></StrictMode>)
     expect(digits()).toEqual([['4', false], ['2', true], ['9', true]])
   })
 

@@ -67,3 +67,10 @@ describe('backflip', () => {
   it('no flip, no spin', () => expect(pose(0.3, 1, Infinity).spin).toBe(0))
 })
 
+describe('backflip from a jump', () => {
+  it('starts at the height the jump had reached, with no drop', () => {
+    expect(pose(0, 0, Infinity, 0, 1).lift).toBeCloseTo(-STRIDE.JUMP_LIFT)
+    expect(pose(0, 0, Infinity, STRIDE.FLIP_MS * 0.05, 1).lift).toBeLessThan(-STRIDE.JUMP_LIFT * 0.9)
+  })
+})
+
