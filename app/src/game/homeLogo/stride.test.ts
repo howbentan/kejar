@@ -3,7 +3,7 @@ import { pose, STRIDE, wholeStride } from './stride'
 
 describe('pose', () => {
   it('stands in the logo pose at rest', () => {
-    expect(pose(0, 0, Infinity)).toEqual({ legL: 0, legR: 0, lift: 0, tilt: 0, sx: 1, sy: 1 })
+    expect(pose(0, 0, Infinity)).toEqual({ legL: 0, legR: 0, lift: 0, tilt: 0, sx: 1, sy: 1, spin: 0 })
     expect(pose(3, 0, Infinity)).toMatchObject({ legL: 0, legR: 0, lift: 0 })
   })
 
@@ -49,3 +49,21 @@ describe('wholeStride', () => {
     expect(wholeStride(0, 100, 50, 3)).toBe(5)
   })
 })
+
+describe('backflip', () => {
+  it('half way through: high up, upside down, legs tucked', () => {
+    const p = pose(0, 0, Infinity, STRIDE.FLIP_MS / 2)
+    expect(p.lift).toBeCloseTo(-STRIDE.JUMP_LIFT * 1.1)
+    expect(p.spin).toBeCloseTo(-180)
+    expect(p.legL).toBeCloseTo(STRIDE.TUCK_L)
+    expect(p.legR).toBeCloseTo(STRIDE.TUCK_R)
+  })
+
+  it('a full turn by the end, then back to normal', () => {
+    expect(pose(0, 0, Infinity, STRIDE.FLIP_MS * 0.999).spin).toBeLessThan(-350)
+    expect(pose(0, 0, Infinity, STRIDE.FLIP_MS * 2)).toMatchObject({ spin: 0, lift: 0 })
+  })
+
+  it('no flip, no spin', () => expect(pose(0.3, 1, Infinity).spin).toBe(0))
+})
+

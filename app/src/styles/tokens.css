@@ -620,3 +620,19 @@ select.input option { background: #141614; color: var(--white); }
 .rc-live { width: 7px; height: 7px; border-radius: 50%; background: #1f9d4a; animation: rc-pulse 1.4s infinite; }
 @keyframes rc-pulse { 50% { opacity: 0.3; } }
 @media (prefers-reduced-motion: reduce) { .rc-live { animation: none; } }
+
+/* home upgrades: the scan button, the tip and the countdown under the logo, the scanner sheet */
+.home-join-row { display: flex; gap: 10px; align-items: center; }
+.home-join-row .btn { flex: 1; }
+.home-scan-btn { flex: 0 0 52px; width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--volt); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.home-scan-btn svg { width: 24px; height: 24px; fill: none; stroke: var(--black); stroke-width: 2.2; stroke-linecap: round; }
+/* under the logo: the logo is centred in the play area and its half height is 19.8% of the width (102px at most) */
+.home-under { position: absolute; z-index: 2; left: 50%; transform: translateX(-50%); top: calc(50% + min(19.8vw, 102px) + 10px); width: min(260px, calc(100% - 40px)); text-align: center; }
+.home-tip { all: unset; box-sizing: border-box; position: absolute; z-index: 2; left: 50%; transform: translateX(-50%); top: calc(50% + min(19.8vw, 102px) + 10px); width: min(260px, calc(100% - 40px)); text-align: center; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
+.home-tip .eyebrow, .home-countdown .eyebrow { color: var(--volt); }
+.home-tip-line { font-size: 13px; line-height: 1.4; color: var(--dim); }
+.home-tip-line b { color: var(--white); font-weight: 600; }
+.home-countdown { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.home-soon { margin: 4px 0 0; font-size: 15px; font-weight: 700; color: var(--white); }
+.home-scanner { position: fixed; inset: 0; z-index: 30; background: rgba(0, 0, 0, 0.7); display: flex; align-items: flex-end; justify-content: center; padding: 16px; }
+.home-scanner > * { width: 100%; max-width: 460px; }

@@ -1,5 +1,28 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { testView } from './testView'
+
+const api = vi.hoisted(() => {
+  class ApiError extends Error {
+    status: number
+    constructor(status: number, message: string) {
+      super(message)
+      this.status = status
+    }
+  }
+  return { call: vi.fn(), ApiError }
+})
+vi.mock('../game/api', () => api)
+// The camera scanner, replaced by a button that "scans" whatever the test sets.
+const scan = vi.hoisted(() => ({ text: '' }))
+vi.mock('../game/Scanner', () => ({
+  default: ({ onResult, onCancel }: { onResult: (t: string) => void; onCancel: () => void }) => (
+    <div>
+      <button onClick={() => onResult(scan.text)}>fake scan</button>
+      <button onClick={onCancel}>cancel</button>
+    </div>
+  ),
+}))
 import { saveLastGame } from '../game/lastGame'
 import { saveOrganiserSession } from '../game/organiserSession'
 import { saveSession } from '../game/session'
@@ -9,6 +32,8 @@ import { joinCodeFrom } from './HomeJoin'
 const assign = vi.fn()
 
 beforeEach(() => {
+  api.call.mockReset()
+  api.call.mockRejectedValue(new api.ApiError(500, 'offline'))
   assign.mockClear()
   localStorage.clear()
   sessionStorage.clear()
@@ -40,7 +65,7 @@ describe('Home', () => {
     try {
       render(<Home />)
       expect(screen.getByRole('button', { name: 'join game' })).toBeInTheDocument()
-      expect(screen.queryByRole('link', { name: 'reconnect' })).toBeNull()
+      expect(screen.queryByRole('link', { name: /reconnect/ })).toBeNull()
     } finally {
       Object.defineProperty(window, 'localStorage', real)
     }
@@ -63,20 +88,20 @@ describe('Home', () => {
 
   it('has no reconnect without a last game', () => {
     render(<Home />)
-    expect(screen.queryByRole('link', { name: 'reconnect' })).toBeNull()
+    expect(screen.queryByRole('link', { name: /reconnect/ })).toBeNull()
   })
 
   it('reconnect goes to the game for a recent player game', () => {
     saveSession(localStorage, 'ABC234', { token: 't' })
     render(<Home />)
-    expect(screen.getByRole('link', { name: 'reconnect' })).toHaveAttribute('href', '/g/ABC234')
+    expect(screen.getByRole('link', { name: /reconnect/ })).toHaveAttribute('href', '/g/ABC234')
   })
 
   it('reconnect goes to the lobby for a recent organiser game', () => {
     saveOrganiserSession(localStorage, { organiserToken: 'o', name: 'Owner' })
     saveLastGame(localStorage, 'ABC234', 'organiser')
     render(<Home />)
-    expect(screen.getByRole('link', { name: 'reconnect' })).toHaveAttribute('href', '/host/ABC234')
+    expect(screen.getByRole('link', { name: /reconnect/ })).toHaveAttribute('href', '/host/ABC234')
   })
 
   it('organise game links to /host/new', () => {
@@ -147,3 +172,64 @@ describe('join step', () => {
     expect(joinCodeFrom('hello')).toBeNull()
   })
 })
+
+describe('home upgrades', () => {
+  const opened = () => sessionStorage.setItem('kejar.opened', '1')
+
+  it('the camera button opens the scanner and a good scan joins', () => {
+    opened()
+    render(<Home />)
+    fireEvent.click(screen.getByRole('button', { name: 'scan qr' }))
+    scan.text = 'https://x.app/join/abc234'
+    fireEvent.click(screen.getByRole('button', { name: 'fake scan' }))
+    expect(assign).toHaveBeenCalledWith('/join/ABC234')
+  })
+
+  it('a bad scan says so and closes the scanner', () => {
+    opened()
+    render(<Home />)
+    fireEvent.click(screen.getByRole('button', { name: 'scan qr' }))
+    scan.text = 'hello'
+    fireEvent.click(screen.getByRole('button', { name: 'fake scan' }))
+    expect(screen.getByText('That QR is not a kejar game.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'fake scan' })).toBeNull()
+  })
+
+  it('a tip shows under the logo and tapping it shows another, without making the j jump', () => {
+    opened()
+    const vibrate = vi.fn()
+    vi.stubGlobal('navigator', { ...navigator, vibrate })
+    vi.spyOn(Math, 'random').mockReturnValue(0)
+    render(<Home />)
+    const tip = screen.getByRole('button', { name: /^TIP/ })
+    const first = tip.textContent
+    fireEvent.pointerDown(tip)
+    fireEvent.click(tip)
+    expect(screen.getByRole('button', { name: /^TIP/ }).textContent).not.toBe(first)
+    expect(vibrate).not.toHaveBeenCalled()
+    vi.restoreAllMocks()
+  })
+
+  it('with a lobby game that has a start time, the countdown shows instead of the tip', async () => {
+    opened()
+    saveSession(localStorage, 'ABC234', { token: 't' })
+    const now = Date.now()
+    api.call.mockResolvedValue(testView({ phase: 'lobby', now, settings: { ...testView().settings, startsAt: new Date(now + 270_000).toISOString() } }))
+    render(<Home />)
+    await act(async () => {})
+    expect(screen.getByText('GAME ABC234 STARTS IN')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: '4:30' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^TIP/ })).toBeNull()
+  })
+
+  it('at the start time it reads starting soon', async () => {
+    opened()
+    saveSession(localStorage, 'ABC234', { token: 't' })
+    const now = Date.now()
+    api.call.mockResolvedValue(testView({ phase: 'lobby', now, settings: { ...testView().settings, startsAt: new Date(now).toISOString() } }))
+    render(<Home />)
+    await act(async () => {})
+    expect(screen.getByText('starting soon')).toBeInTheDocument()
+  })
+})
+
