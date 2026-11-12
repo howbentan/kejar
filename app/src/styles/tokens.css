@@ -636,3 +636,8 @@ select.input option { background: #141614; color: var(--white); }
 .home-soon { margin: 4px 0 0; font-size: 15px; font-weight: 700; color: var(--white); }
 .home-scanner { position: fixed; inset: 0; z-index: 30; background: rgba(0, 0, 0, 0.7); display: flex; align-items: flex-end; justify-content: center; padding: 16px; }
 .home-scanner > * { width: 100%; max-width: 460px; }
+
+/* the organiser's planned start in the lobby (home upgrades design) */
+.planned-start { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.planned-start .input { width: auto; padding: 8px 12px; }
+.home-scanner .card { background: #111; }

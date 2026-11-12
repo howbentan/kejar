@@ -9,6 +9,7 @@ import { waitingForCard as waitingFor } from '../game/cardNotice'
 import SetupMap, { OrganiserTools } from '../game/SetupMap'
 import { saveLastGame } from '../game/lastGame'
 import { loadOrganiserSession } from '../game/organiserSession'
+import { nextOccurrence, startsLabel } from '../game/plannedStart'
 import { qrDataUrl } from '../game/qr'
 import { ErrorText, ModeBadge, Pills, Screen, tagText } from '../game/ui'
 import { useGameState } from '../game/useGameState'
@@ -165,6 +166,28 @@ export default function HostLobby({ code }: { code: string }) {
           </button>
         )}
       </div>
+      {view && (
+        <div className="planned-start">
+          <label className="eyebrow" htmlFor="planned-start">
+            planned start
+          </label>
+          <input
+            id="planned-start"
+            type="time"
+            className="input"
+            disabled={busy}
+            onChange={(e) => e.target.value && void act('setStartTime', { startsAt: new Date(nextOccurrence(e.target.value, Date.now())).toISOString() })}
+          />
+          {view.settings.startsAt && (
+            <>
+              <span className="muted">{startsLabel(Date.parse(view.settings.startsAt), Date.now())}</span>
+              <button type="button" className="home-link" disabled={busy} onClick={() => void act('setStartTime', { startsAt: null })}>
+                clear
+              </button>
+            </>
+          )}
+        </div>
+      )}
       {shownNotice && <p className="muted">{shownNotice}</p>}
       {view && <AlertsOnPhone code={code} view={view} refresh={refresh} />}
       {view && <BeforeYouStart code={code} view={view} refresh={refresh} />}

@@ -26,6 +26,7 @@ vi.mock('../game/push', () => ({
 vi.mock('../game/Map', () => ({ default: () => null }))
 
 import { ApiError } from '../game/api'
+import { nextOccurrence } from '../game/plannedStart'
 import HostLobby from './HostLobby'
 
 const lobbyView = {
@@ -73,6 +74,22 @@ describe('HostLobby', () => {
     await screen.findByText('CORE')
     expect(localStorage.getItem('kejar.lastGame')).toContain('"organiser"')
     expect(localStorage.getItem('kejar.lastGame')).toContain('"ABC234"')
+  })
+
+  it('the organiser sets a planned start, and clears it', async () => {
+    const startsAt = new Date(Date.now() + 20 * 60_000).toISOString()
+    call.mockImplementation(async (action: string) => {
+      if (action === 'state') return { ...lobbyView, settings: { ...lobbyView.settings, startsAt } }
+      return { ok: true }
+    })
+    render(<HostLobby code="ABC234" />)
+    expect(await screen.findByText(/in 20 min/)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('planned start'), { target: { value: '19:30' } })
+    await waitFor(() =>
+      expect(call).toHaveBeenCalledWith('setStartTime', { code: 'ABC234', organiserToken: 'h1', startsAt: new Date(nextOccurrence('19:30', Date.now())).toISOString() }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'clear' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('setStartTime', { code: 'ABC234', organiserToken: 'h1', startsAt: null }))
   })
 
   it('shows the game mode next to the code', async () => {
