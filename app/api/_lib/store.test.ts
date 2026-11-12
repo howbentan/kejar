@@ -746,6 +746,15 @@ describe('wiping a game', () => {
     expect(await store.wipeGame(g.id)).toBe(false)
   })
 
+  it("clears a Tuch and Ga gate's position", async () => {
+    const g = await playedGame()
+    const gate = await store.addPowerUp({ game_id: g.id, player_id: 'p1', kind: 'toll', station: null })
+    await store.updatePowerUp(gate.id, { spot: { lat: 3.1, lng: 101.6 } })
+    expect((await store.powerUps(g.id)).find((u) => u.id === gate.id)!.spot).not.toBeNull()
+    await store.wipeGame(g.id)
+    expect((await store.powerUps(g.id)).find((u) => u.id === gate.id)!.spot).toBeNull()
+  })
+
   it('gives every player a fresh token, so an old session link no longer works', async () => {
     const g = await playedGame()
     await store.wipeGame(g.id)
@@ -829,5 +838,61 @@ describe('MemoryStore briefing', () => {
     const [row] = await store.players(g.id)
     expect(row.brief_opened_at).toBe(iso(T0))
     expect(row.brief_ready_at).toBe(iso(T0 + MIN))
+  })
+})
+
+describe('MemoryStore new deck cards', () => {
+  it('freezeChaser lands once, then refuses until the freeze ends', async () => {
+    const g = await startedGame()
+    const c = await newPlayer(g.id, 'chaser')
+    expect(await store.freezeChaser(c.id, iso(T0 + 3 * MIN))).toBe(true)
+    expect(await store.freezeChaser(c.id, iso(T0 + 4 * MIN))).toBe(false)
+    now = T0 + 3 * MIN
+    expect(await store.freezeChaser(c.id, iso(T0 + 6 * MIN))).toBe(true)
+  })
+
+  it('applyCombo consumes the ready combo and adds a twin, once', async () => {
+    const g = await startedGame()
+    const p = await newPlayer(g.id, 'runner')
+    const combo = await store.addPowerUp({ game_id: g.id, player_id: p.id, kind: 'combo', station: 1 })
+    await store.markUsed(combo.id)
+    const card = await store.addPowerUp({ game_id: g.id, player_id: p.id, kind: 'decoy', station: 2 })
+    const twin = await store.applyCombo(p.id, card.id)
+    expect(twin).toMatchObject({ kind: 'decoy', twin_of: card.id, station: null, used_at: null, game_id: g.id, player_id: p.id })
+    expect((await store.powerUps(g.id)).find((u) => u.id === combo.id)!.consumed_at).toBe(iso(T0))
+    expect(await store.applyCombo(p.id, card.id)).toBeNull()
+  })
+
+  it('applyCombo needs a used combo of the same player', async () => {
+    const g = await startedGame()
+    const p = await newPlayer(g.id, 'runner')
+    const q = await newPlayer(g.id, 'other')
+    const card = await store.addPowerUp({ game_id: g.id, player_id: p.id, kind: 'decoy', station: 2 })
+    await store.addPowerUp({ game_id: g.id, player_id: p.id, kind: 'combo', station: 1 })
+    expect(await store.applyCombo(p.id, card.id)).toBeNull() // combo not used yet
+    const theirs = await store.addPowerUp({ game_id: g.id, player_id: q.id, kind: 'combo', station: 3 })
+    await store.markUsed(theirs.id)
+    expect(await store.applyCombo(p.id, card.id)).toBeNull()
+  })
+
+  it('addPowerUp defaults twin_of and spot to null', async () => {
+    const g = await startedGame()
+    const u = await store.addPowerUp({ game_id: g.id, player_id: 'p1', kind: 'toll', station: 1 })
+    expect(u).toMatchObject({ twin_of: null, spot: null })
+  })
+
+  it('resumeGame moves a running freeze later by the pause, and leaves an ended one alone', async () => {
+    const g = await startedGame()
+    const c = await newPlayer(g.id, 'chaser')
+    const d = await newPlayer(g.id, 'old')
+    await store.freezeChaser(c.id, iso(T0 + 5 * MIN))
+    await store.freezeChaser(d.id, iso(T0 + MIN))
+    now = T0 + 2 * MIN
+    await store.pauseGame(g.id)
+    now = T0 + 4 * MIN
+    await store.resumeGame(g.id)
+    const rows = await store.players(g.id)
+    expect(rows.find((x) => x.id === c.id)!.frozen_until).toBe(iso(T0 + 7 * MIN))
+    expect(rows.find((x) => x.id === d.id)!.frozen_until).toBe(iso(T0 + MIN))
   })
 })

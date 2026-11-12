@@ -21,17 +21,27 @@ describe('deckFor', () => {
   it('Core chasers: Mat Rempit x2 and Pak Guard x2 per set', () => {
     expect(count(deckFor('core', 'chaser', 1))).toEqual({ flare: 2, focus: 2 })
   })
-  it('Full runners: Gostan x2, Durian x2, Ponteng x2, Toyol x1, Abang Grab x1 per set (8 cards)', () => {
-    expect(SET.full.runner).toEqual(['decoy', 'decoy', 'shield', 'shield', 'cloak', 'cloak', 'toyol', 'grab'])
-    expect(count(deckFor('full', 'runner', 1))).toEqual({ decoy: 2, shield: 2, cloak: 2, toyol: 1, grab: 1 })
+  it('Full runners: Gostan x2, Durian x2, Ponteng x2, Toyol x1, Abang Grab x1, Cheese Ais x1, Nasi Lemak KFC x1 per set (10 cards)', () => {
+    expect(SET.full.runner).toEqual(['decoy', 'decoy', 'shield', 'shield', 'cloak', 'cloak', 'toyol', 'grab', 'cheese', 'combo'])
+    expect(count(deckFor('full', 'runner', 1))).toEqual({ decoy: 2, shield: 2, cloak: 2, toyol: 1, grab: 1, cheese: 1, combo: 1 })
   })
-  it('Full chasers: Mat Rempit x2, Pak Guard x2, Ah Long x1, Abang Grab x1 per set (6 cards)', () => {
-    expect(SET.full.chaser).toEqual(['flare', 'flare', 'focus', 'focus', 'along', 'grab'])
-    expect(count(deckFor('full', 'chaser', 1))).toEqual({ flare: 2, focus: 2, along: 1, grab: 1 })
+  it('Full chasers: Mat Rempit x2, Pak Guard x2, Ah Long x1, Abang Grab x1, Tuch and Ga x2, Nasi Lemak KFC x1 per set (9 cards)', () => {
+    expect(SET.full.chaser).toEqual(['flare', 'flare', 'focus', 'focus', 'along', 'grab', 'toll', 'toll', 'combo'])
+    expect(count(deckFor('full', 'chaser', 1))).toEqual({ flare: 2, focus: 2, along: 1, grab: 1, toll: 2, combo: 1 })
   })
   it('Core is unchanged: no Toyol, Ah Long or Abang Grab', () => {
     expect([...SET.core.runner, ...SET.core.chaser]).not.toEqual(expect.arrayContaining(['toyol']))
     expect(count([...SET.core.runner, ...SET.core.chaser])).toEqual({ shield: 3, cloak: 3, flare: 2, focus: 2 })
+  })
+})
+
+describe('new cards', () => {
+  it('Full decks carry the new cards; Core is unchanged', () => {
+    expect(SET.full.runner.filter((k) => k === 'cheese')).toHaveLength(1)
+    expect(SET.full.runner.filter((k) => k === 'combo')).toHaveLength(1)
+    expect(SET.full.chaser.filter((k) => k === 'toll')).toHaveLength(2)
+    expect(SET.full.chaser.filter((k) => k === 'combo')).toHaveLength(1)
+    expect(SET.core.runner).not.toContain('cheese')
   })
 })
 

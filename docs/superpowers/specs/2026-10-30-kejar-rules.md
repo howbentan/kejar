@@ -47,8 +47,8 @@ Rules:
 |---|---|---|
 | Chase, check-ins, auto-jail, Penjara, jailbreak, Penjara reel | ✓ | ✓ |
 | Safety tools, motion, the marker scribble, results | ✓ | ✓ |
-| **Runners' deck** | **Durian, Ponteng** | Gostan, Durian, Ponteng, Toyol, Abang Grab |
-| **Chasers' deck** | **Mat Rempit, Pak Guard** | Mat Rempit, Pak Guard, Ah Long, Abang Grab |
+| **Runners' deck** | **Durian, Ponteng** | Gostan, Durian, Ponteng, Toyol, Abang Grab, Cheese Ais, Nasi Lemak KFC |
+| **Chasers' deck** | **Mat Rempit, Pak Guard** | Mat Rempit, Pak Guard, Ah Long, Abang Grab, Tuch and Ga, Nasi Lemak KFC |
 | Dato Seri (runner legendary) | – | ✓ hidden stash, or the quest-giver if there are volunteers |
 | "Dikejar can see Kejar at check-in" switch | – (always off) | ✓ organiser's choice, default off |
 | **Bomoh** (chaser legendary, updated 2026-10-31) | – | ✓ hidden stash, or the ritual if there are volunteers |
@@ -76,6 +76,8 @@ Rules:
 | Durian | blocks the next catch, up to 10 min. The stung chaser can never catch that runner again this game, and no chaser can catch them for 15 s | power-ups §6.1 |
 | Gostan | next ping shows you 120–180 m away | power-ups §6.1 |
 | Mat Rempit | extra ping in 30 s, one at a time, 3 min team cooldown | power-ups §5a |
+| Cheese Ais freeze | 3 min, one chaser, no stacking | new power-ups design §5.1 |
+| Tuch and Ga | runners within 40 m of the gate exact at the next ping | new power-ups design §5.3 |
 | Station claim | within 30 m, once per player per station, station locks 60 s | base §4.8.1 |
 | Penjara rescue | scan the Penjara QR, then stay within 30 m for 10 s; frees everyone inside | this doc §9a |
 | Freed | once per runner per game, by any route | base §4.7 |

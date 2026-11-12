@@ -29,7 +29,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 const CORE_STICKERS: PowerUpKind[] = ['shield', 'cloak', 'flare', 'focus']
 // Both secret legendaries end Full's row; this row is organiser-only, so naming them here is fine.
-const FULL_STICKERS: StickerKind[] = ['decoy', 'shield', 'cloak', 'toyol', 'grab', 'flare', 'focus', 'along', 'dato', 'bomoh']
+const FULL_STICKERS: StickerKind[] = ['decoy', 'shield', 'cloak', 'toyol', 'grab', 'flare', 'focus', 'along', 'cheese', 'combo', 'toll', 'dato', 'bomoh']
 
 const LENGTHS: { value: Settings['lengthMin']; text: string; sub: string }[] = [
   { value: 30, text: 'Quick', sub: '30 MIN' },
@@ -477,7 +477,7 @@ export default function HostNew() {
             {(
               [
                 { value: 'core', title: 'Core', tag: 'BEST FOR FIRST-TIMERS', text: 'The chase, check-ins and Penjara, plus 4 simple power-ups. Learnable in 5 minutes.', stickers: CORE_STICKERS },
-                { value: 'full', title: 'Full', tag: 'FOR REGULARS', text: 'Everything in Core, plus 4 more power-ups and two secret legendaries.', stickers: FULL_STICKERS },
+                { value: 'full', title: 'Full', tag: 'FOR REGULARS', text: 'Everything in Core, plus 7 more power-ups and two secret legendaries.', stickers: FULL_STICKERS },
               ] as const
             ).map((m) => {
               const picked = settings.mode === m.value

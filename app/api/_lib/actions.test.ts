@@ -995,11 +995,8 @@ describe('review fixes', () => {
     const g = await chasingWithStation()
     const [f1, f2] = [await give(g.gameId, g.ben.playerId, 'flare'), await give(g.gameId, g.ben.playerId, 'flare')]
     expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f1.id })).toEqual({ ok: true, kind: 'flare' })
-    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f2.id })).toEqual({
-      ok: false,
-      reason: 'flare-pending',
-      readyInMs: 30_000 + 3 * MIN,
-    })
+    // Ben's own first Mat Rempit is still running, which is refused before the team-wide check (Nasi Lemak KFC).
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: f2.id })).toEqual({ ok: false, reason: 'effect-running' })
     now += 30_000 // the surprise ping reveals
     await run('state', { code: g.code, organiserToken: g.organiserToken })
     now += 60_000
@@ -1195,8 +1192,167 @@ describe('Toyol and Ah Long', () => {
   })
 })
 
-describe('Abang Grab', () => {
+describe('Cheese Ais', () => {
   const S1 = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const stamp = (ms: number) => new Date(ms).toISOString()
+  /** Ben, Kim and Lee chase; Aina and Hafiz run. The chase has begun. */
+  async function chasing() {
+    const g = await readyGame({ mode: 'full' }, { stations: [S1] })
+    const kim = await run('join', { code: g.code, name: 'Kim', accepted: true })
+    const lee = await run('join', { code: g.code, name: 'Lee', accepted: true })
+    const wei = await run('join', { code: g.code, name: 'Wei', accepted: true })
+    await run('setRoles', {
+      code: g.code,
+      organiserToken: g.organiserToken,
+      roles: {
+        [g.ben.playerId]: 'chaser',
+        [kim.playerId]: 'chaser',
+        [lee.playerId]: 'chaser',
+        [g.aina.playerId]: 'runner',
+        [g.hafiz.playerId]: 'runner',
+        [wei.playerId]: 'runner',
+      },
+    })
+    await run('linkTag', { code: g.code, token: wei.token, tagId: 9 })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    return { ...g, kim, lee, wei, gameId: (await store.gameByCode(g.code))!.id }
+  }
+  let station = 0
+  const give = async (gameId: string, playerId: string, kind: PowerUpKind, patch: object = {}) => {
+    const row = await store.addPowerUp({ game_id: gameId, player_id: playerId, kind, station: (station++ % 8) + 1 })
+    if (Object.keys(patch).length) await store.updatePowerUp(row.id, patch)
+    return row
+  }
+  const freeze = (g: { code: string }, token: string, powerupId: string, targetId: unknown) =>
+    run('usePowerup', { code: g.code, token, powerupId, targetId })
+  const playerRow = async (g: { gameId: string }, id: string) => (await store.players(g.gameId)).find((p) => p.id === id)!
+
+  it('freezes the picked chaser for 3 minutes', async () => {
+    const g = await chasing()
+    const cheese = await give(g.gameId, g.aina.playerId, 'cheese')
+    expect(await freeze(g, g.aina.token, cheese.id, g.ben.playerId)).toEqual({ ok: true, kind: 'cheese', name: 'Ben' })
+    expect((await playerRow(g, g.ben.playerId)).frozen_until).toBe(stamp(now + 3 * MIN))
+    const ev = (await store.events(g.gameId)).find((e) => e.type === 'frozen')!
+    expect(ev).toMatchObject({ actor_id: g.aina.playerId, target_id: g.ben.playerId, data: { until: stamp(now + 3 * MIN) } })
+    const vBen = await run<View>('state', { code: g.code, token: g.ben.token })
+    expect(vBen.frozenUntil).toBe(now + 3 * MIN)
+    expect(vBen.feed[0]).toMatchObject({ text: 'Brain freeze! A runner froze your power-up for 3 minutes.', act: true })
+    const vKim = await run<View>('state', { code: g.code, token: g.kim.token })
+    expect(vKim.frozenUntil).toBeNull()
+    expect(vKim.feed[0]).toMatchObject({ text: 'Brain freeze on a Kejar.', act: false })
+    const vAina = await run<View>('state', { code: g.code, token: g.aina.token })
+    expect(vAina.feed[0].text).toBe('Brain freeze on a Kejar.')
+    const vOrg = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(vOrg.feed[0].text).toBe("A Dikejar froze Ben's power-up")
+  })
+
+  it("a frozen chaser can't use or claim", async () => {
+    const g = await chasing()
+    const cheese = await give(g.gameId, g.aina.playerId, 'cheese')
+    await freeze(g, g.aina.token, cheese.id, g.ben.playerId)
+    const claim = () => run('claim', { code: g.code, token: g.ben.token, qr: stationQr(1), lat: S1.lat, lng: S1.lng, accuracy_m: 8 })
+    expect(await claim()).toMatchObject({ ok: false, reason: 'frozen' })
+    const flare = await give(g.gameId, g.ben.playerId, 'flare')
+    const useFlare = () => run('usePowerup', { code: g.code, token: g.ben.token, powerupId: flare.id })
+    expect(await useFlare()).toEqual({ ok: false, reason: 'frozen', frozenForMs: 3 * MIN })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === flare.id)!.used_at).toBeNull()
+    now += 3 * MIN
+    expect(await useFlare()).toMatchObject({ ok: true, kind: 'flare' })
+    expect(await claim()).not.toMatchObject({ reason: 'frozen' })
+  })
+
+  it('no stacking: freezing a frozen chaser is refused and the card is kept', async () => {
+    const g = await chasing()
+    const first = await give(g.gameId, g.aina.playerId, 'cheese')
+    const second = await give(g.gameId, g.hafiz.playerId, 'cheese')
+    await freeze(g, g.aina.token, first.id, g.ben.playerId)
+    expect(await freeze(g, g.hafiz.token, second.id, g.ben.playerId)).toEqual({ ok: false, reason: 'no-target' })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === second.id)!.used_at).toBeNull()
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'frozen')).toHaveLength(1)
+  })
+
+  it('two runners freezing the same chaser at once: one wins', async () => {
+    const g = await chasing()
+    const a = await give(g.gameId, g.aina.playerId, 'cheese')
+    const b = await give(g.gameId, g.hafiz.playerId, 'cheese')
+    const rs = await Promise.all([freeze(g, g.aina.token, a.id, g.ben.playerId), freeze(g, g.hafiz.token, b.id, g.ben.playerId)])
+    expect(rs.filter((r) => r.ok)).toHaveLength(1)
+    expect(rs.filter((r) => !r.ok)).toEqual([{ ok: false, reason: 'no-target' }])
+    const rows = await store.powerUps(g.gameId)
+    expect(rows.filter((u) => u.kind === 'cheese' && u.used_at)).toHaveLength(1)
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'frozen')).toHaveLength(1)
+  })
+
+  it('refuses a target that is not a live, unfrozen chaser, and keeps the card', async () => {
+    const g = await chasing()
+    const cheese = await give(g.gameId, g.aina.playerId, 'cheese')
+    await store.updatePlayers([
+      { id: g.kim.playerId, patch: { disqualified_at: stamp(now) } },
+      { id: g.lee.playerId, patch: { removed_at: stamp(now) } },
+    ])
+    for (const targetId of [g.hafiz.playerId, g.kim.playerId, g.lee.playerId, 'nobody', undefined]) {
+      expect(await freeze(g, g.aina.token, cheese.id, targetId)).toEqual({ ok: false, reason: 'no-target' })
+    }
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === cheese.id)!.used_at).toBeNull()
+  })
+
+  it('freezeTargets leaves out frozen, Luar Garisan and removed chasers, and is null without a Cheese Ais', async () => {
+    const g = await chasing()
+    const view = (token: string) => run<View>('state', { code: g.code, token })
+    expect((await view(g.aina.token)).freezeTargets).toBeNull()
+    const cheese = await give(g.gameId, g.aina.playerId, 'cheese')
+    const names = async () => (await view(g.aina.token)).freezeTargets
+    expect(await names()).toEqual([
+      { id: g.ben.playerId, name: 'Ben' },
+      { id: g.kim.playerId, name: 'Kim' },
+      { id: g.lee.playerId, name: 'Lee' },
+    ])
+    expect((await view(g.hafiz.token)).freezeTargets).toBeNull()
+    expect((await view(g.ben.token)).freezeTargets).toBeNull()
+    await store.freezeChaser(g.ben.playerId, stamp(now + 3 * MIN))
+    expect((await names())!.map((t) => t.name)).toEqual(['Kim', 'Lee'])
+    await store.updatePlayers([{ id: g.kim.playerId, patch: { disqualified_at: stamp(now) } }])
+    expect((await names())!.map((t) => t.name)).toEqual(['Lee'])
+    await store.updatePlayers([{ id: g.lee.playerId, patch: { removed_at: stamp(now) } }])
+    expect(await names()).toEqual([])
+    // Once the freeze ends Ben is a target again; once the card is used there are no targets at all.
+    now += 3 * MIN
+    expect((await names())!.map((t) => t.name)).toEqual(['Ben'])
+    await freeze(g, g.aina.token, cheese.id, g.ben.playerId)
+    expect(await names()).toBeNull()
+    expect((await view(g.ben.token)).frozenUntil).toBe(now + 3 * MIN)
+  })
+
+  it('an effect switched on before the freeze still lands', async () => {
+    const g = await chasing()
+    const focus = await give(g.gameId, g.ben.playerId, 'focus')
+    const cheese = await give(g.gameId, g.aina.playerId, 'cheese')
+    expect(await run('usePowerup', { code: g.code, token: g.ben.token, powerupId: focus.id })).toMatchObject({ ok: true })
+    expect(await freeze(g, g.aina.token, cheese.id, g.ben.playerId)).toMatchObject({ ok: true })
+    now = T0 + 9.5 * MIN
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(400) })
+    now = T0 + 10 * MIN
+    const v = await run<View>('state', { code: g.code, token: g.ben.token })
+    expect(v.dots.find((d) => d.kind === 'runner' && d.id === g.aina.playerId)).toMatchObject({ exact: true, revealedBy: 'focus' })
+  })
+
+  it("a frozen chaser's card can still be stolen by Toyol", async () => {
+    const g = await chasing()
+    const flare = await give(g.gameId, g.ben.playerId, 'flare')
+    const cheese = await give(g.gameId, g.aina.playerId, 'cheese')
+    const toyol = await give(g.gameId, g.hafiz.playerId, 'toyol')
+    await freeze(g, g.aina.token, cheese.id, g.ben.playerId)
+    expect(await run('usePowerup', { code: g.code, token: g.hafiz.token, powerupId: toyol.id })).toEqual({ ok: true, kind: 'toyol' })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === flare.id)!.taken_at).not.toBeNull()
+  })
+})
+
+describe('Abang Grab', () => {
+  const S1 ={ lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
   const atS1 = { lat: S1.lat, lng: S1.lng, accuracy_m: 8 }
   async function chasing() {
     const g = await readyGame({ mode: 'full' }, { stations: [S1] })
@@ -1347,6 +1503,459 @@ describe('Abang Grab', () => {
     expect(rows.every((u) => u.used_at === null && u.offer === null)).toBe(true)
     expect((await game(g)).runner_draws ?? 0).toBe(0)
     expect((await store.gameByCode(early.code))!.runner_draws ?? 0).toBe(0)
+  })
+})
+
+describe('Nasi Lemak KFC', () => {
+  const S1 = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const atS1 = { lat: S1.lat, lng: S1.lng, accuracy_m: 8 }
+  const S2 = { lat: CENTER.lat - 100 / 111_195, lng: CENTER.lng }
+  const S3 = { lat: CENTER.lat, lng: CENTER.lng + 100 / (111_195 * Math.cos((CENTER.lat * Math.PI) / 180)) }
+  const atS2 = { lat: S2.lat, lng: S2.lng, accuracy_m: 8 }
+  const atS3 = { lat: S3.lat, lng: S3.lng, accuracy_m: 8 }
+  const EXCLUDED: PowerUpKind[] = ['grab', 'combo', 'dato']
+  /** Ben, Kim and Lee chase; Aina, Hafiz and Wei run. Full mode, the chase has begun. */
+  async function chasing(stations: { lat: number; lng: number }[] = [S1]) {
+    const g = await readyGame({ mode: 'full' }, { stations })
+    const kim = await run('join', { code: g.code, name: 'Kim', accepted: true })
+    const lee = await run('join', { code: g.code, name: 'Lee', accepted: true })
+    const wei = await run('join', { code: g.code, name: 'Wei', accepted: true })
+    await run('setRoles', {
+      code: g.code,
+      organiserToken: g.organiserToken,
+      roles: {
+        [g.ben.playerId]: 'chaser',
+        [kim.playerId]: 'chaser',
+        [lee.playerId]: 'chaser',
+        [g.aina.playerId]: 'runner',
+        [g.hafiz.playerId]: 'runner',
+        [wei.playerId]: 'runner',
+      },
+    })
+    await run('linkTag', { code: g.code, token: wei.token, tagId: 9 })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    return { ...g, kim, lee, wei, gameId: (await store.gameByCode(g.code))!.id }
+  }
+  // No station: a given card must not count as a claim at station 1.
+  const give = async (gameId: string, playerId: string, kind: PowerUpKind, patch: object = {}) => {
+    const row = await store.addPowerUp({ game_id: gameId, player_id: playerId, kind, station: null })
+    if (Object.keys(patch).length) await store.updatePowerUp(row.id, patch)
+    return row
+  }
+  const use = (g: { code: string }, token: string, powerupId: string, extra: object = {}) =>
+    run('usePowerup', { code: g.code, token, powerupId, ...extra })
+  const view = (g: { code: string }, token: string) => run<View>('state', { code: g.code, token })
+  /** A doubled card in the player's hand: the card and its twin, made the way a delivery makes them. */
+  async function doubled(gameId: string, playerId: string, kind: PowerUpKind) {
+    await give(gameId, playerId, 'combo', { used_at: new Date(now).toISOString() })
+    const first = await give(gameId, playerId, kind)
+    const twin = (await store.applyCombo(playerId, first.id))!
+    return { first, twin }
+  }
+  /** Moves the side's deck to the next draw whose card passes `want`. */
+  async function forceDraw(g: { code: string }, side: 'runner' | 'chaser', want: (k: PowerUpKind) => boolean) {
+    const row = (await store.gameByCode(g.code))!
+    const deck = deckFor('full', side, (side === 'runner' ? row.runner_sets : row.chaser_sets)!)
+    const from = (side === 'runner' ? row.runner_draws : row.chaser_draws) ?? 0
+    let i = from
+    while (!want(cardAt(`${row.deck_seed}:${side}`, deck, i))) i++
+    await store.updateGame(row.id, side === 'runner' ? { runner_draws: i } : { chaser_draws: i })
+    return cardAt(`${row.deck_seed}:${side}`, deck, i)
+  }
+  const scan = async (g: { code: string }, chaser: { token: string }, tagId: number, runner: { token: string }) => {
+    await run('location', { code: g.code, token: chaser.token, ...at(0) })
+    await run('location', { code: g.code, token: runner.token, ...at(10) })
+    return run('catch', { code: g.code, token: chaser.token, tagQr: tagQr(tagId) })
+  }
+
+  it('using it frees the slot and the next station card arrives doubled', async () => {
+    const g = await chasing()
+    const combo = await give(g.gameId, g.aina.playerId, 'combo')
+    expect(await use(g, g.aina.token, combo.id)).toEqual({ ok: true, kind: 'combo' })
+    const ev = (await store.events(g.gameId)).find((e) => e.type === 'used')!
+    expect(ev).toMatchObject({ actor_id: g.aina.playerId, data: { kind: 'combo' } })
+    let v = await view(g, g.aina.token)
+    expect(v.comboReady).toBe(true)
+    expect(v.hand).toEqual([])
+    expect(v.activePowerUp).toBeNull()
+    expect(v.feed.map((f) => f.text).join('|')).not.toMatch(/Nasi|combo/i)
+    const kind = await forceDraw(g, 'runner', (k) => !EXCLUDED.includes(k))
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toEqual({ ok: true, kind, double: true })
+    const mine = (await store.powerUps(g.gameId)).filter((u) => u.player_id === g.aina.playerId && u.kind === kind)
+    expect(mine).toHaveLength(2)
+    const original = mine.find((u) => u.twin_of === null)!
+    expect(mine.find((u) => u.twin_of !== null)!.twin_of).toBe(original.id)
+    v = await view(g, g.aina.token)
+    expect(v.comboReady).toBe(false)
+    expect(v.hand.map((u) => u.kind)).toEqual([kind, kind])
+    expect((await view(g, g.hafiz.token)).comboReady).toBe(false)
+  })
+
+  it('a Nasi Lemak KFC drawn at a station while combo ready arrives normally and the mark stays', async () => {
+    const g = await chasing()
+    await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })
+    expect(await forceDraw(g, 'runner', (k) => k === 'combo')).toBe('combo')
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toEqual({ ok: true, kind: 'combo' })
+    const v = await view(g, g.aina.token)
+    expect(v.comboReady).toBe(true)
+    expect(v.hand.map((u) => u.kind)).toEqual(['combo'])
+  })
+
+  it('a Nasi Lemak KFC picked from an Abang Grab offer while combo ready arrives normally and the mark stays', async () => {
+    const g = await chasing()
+    await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })
+    await forceDraw(g, 'runner', (k) => k === 'combo')
+    const grab = await give(g.gameId, g.aina.playerId, 'grab')
+    const { offer } = await use(g, g.aina.token, grab.id)
+    const choice = (offer as PowerUpKind[]).indexOf('combo')
+    expect(choice).toBeGreaterThanOrEqual(0)
+    const r = await run('grabPick', { code: g.code, token: g.aina.token, powerupId: grab.id, choice })
+    expect(r).toMatchObject({ ok: true, kind: 'combo' })
+    expect(r).not.toHaveProperty('double')
+    const v = await view(g, g.aina.token)
+    expect(v.comboReady).toBe(true)
+    expect(v.hand.map((u) => u.kind)).toEqual(['combo'])
+  })
+
+  it("using a second Nasi Lemak KFC while combo ready is accepted and spent, frees the slot, and doesn't stack", async () => {
+    const g = await chasing([S1, S2])
+    await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })
+    await forceDraw(g, 'runner', (k) => k === 'combo')
+    await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    const second = (await view(g, g.aina.token)).hand[0]
+    expect(await use(g, g.aina.token, second.id)).toEqual({ ok: true, kind: 'combo', wasted: true })
+    const rows = (await store.powerUps(g.gameId)).filter((u) => u.kind === 'combo')
+    expect(rows.find((u) => u.id === second.id)).toMatchObject({ used_at: expect.any(String), consumed_at: expect.any(String) })
+    expect(rows.filter((u) => u.used_at && !u.consumed_at)).toHaveLength(1)
+    const v = await view(g, g.aina.token)
+    expect(v.hand).toEqual([])
+    expect(v.comboReady).toBe(true)
+    // The slot is free again: a later station claim succeeds, and arrives doubled by the one mark.
+    const kind = await forceDraw(g, 'runner', (k) => !EXCLUDED.includes(k))
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(2), ...atS2 })).toEqual({ ok: true, kind, double: true })
+  })
+
+  it('only the next one delivered card is doubled after a wasted second combo', async () => {
+    const g = await chasing([S1, S2, S3])
+    await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })
+    await forceDraw(g, 'runner', (k) => k === 'combo')
+    await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    const second = (await view(g, g.aina.token)).hand[0]
+    expect(await use(g, g.aina.token, second.id)).toMatchObject({ wasted: true })
+    const kind = await forceDraw(g, 'runner', (k) => !EXCLUDED.includes(k))
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(2), ...atS2 })).toEqual({ ok: true, kind, double: true })
+    for (const u of (await view(g, g.aina.token)).hand) {
+      // Clear the slot whatever the (random) card is: a used cloak, decoy or flare stays "running" until a reveal,
+      // so mark the pair taken, which frees the slot for any kind.
+      await store.updatePowerUp(u.id, { taken_at: new Date(now).toISOString() })
+    }
+    const next = await forceDraw(g, 'runner', (k) => !EXCLUDED.includes(k))
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(3), ...atS3 })).toEqual({ ok: true, kind: next })
+    const v = await view(g, g.aina.token)
+    expect(v.hand.map((u) => u.kind)).toEqual([next])
+    expect(v.comboReady).toBe(false)
+  })
+
+  it('Abang Grab delivers the doubled card', async () => {
+    const g = await chasing()
+    await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })
+    const grab = await give(g.gameId, g.aina.playerId, 'grab')
+    const { offer } = await use(g, g.aina.token, grab.id)
+    const choice = (offer as PowerUpKind[]).findIndex((k) => !EXCLUDED.includes(k))
+    expect(choice).toBeGreaterThanOrEqual(0)
+    const r = await run('grabPick', { code: g.code, token: g.aina.token, powerupId: grab.id, choice })
+    expect(r).toMatchObject({ ok: true, kind: offer[choice], double: true })
+    const v = await view(g, g.aina.token)
+    expect(v.hand.map((u) => u.kind)).toEqual([offer[choice], offer[choice]])
+    expect(v.hand.every((u) => u.sealed)).toBe(true)
+    expect(v.comboReady).toBe(false)
+  })
+
+  it('an excluded card keeps the combo for the card after', async () => {
+    const g = await chasing()
+    await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })
+    expect(await forceDraw(g, 'runner', (k) => k === 'grab')).toBe('grab')
+    const r = await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    expect(r).toEqual({ ok: true, kind: 'grab' })
+    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'grab')).toHaveLength(1)
+    expect((await view(g, g.aina.token)).comboReady).toBe(true)
+  })
+
+  it("a doubled Gostan can't land both uses on one ping", async () => {
+    const g = await chasing()
+    const { first, twin } = await doubled(g.gameId, g.aina.playerId, 'decoy')
+    expect(await use(g, g.aina.token, first.id)).toEqual({ ok: true, kind: 'decoy' })
+    expect(await use(g, g.aina.token, twin.id)).toEqual({ ok: false, reason: 'effect-running' })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === twin.id)!.used_at).toBeNull()
+    now = T0 + 9.5 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    now = T0 + 10 * MIN + 1_000
+    await run('state', { code: g.code, organiserToken: g.organiserToken }) // the scheduled reveal
+    expect(await use(g, g.aina.token, twin.id)).toEqual({ ok: true, kind: 'decoy' })
+  })
+
+  it("a doubled Mat Rempit's second use still waits for the cooldown", async () => {
+    const g = await chasing()
+    const { first, twin } = await doubled(g.gameId, g.ben.playerId, 'flare')
+    expect(await use(g, g.ben.token, first.id)).toEqual({ ok: true, kind: 'flare' })
+    expect(await use(g, g.ben.token, twin.id)).toEqual({ ok: false, reason: 'effect-running' })
+    now += 30_000 // the surprise ping reveals
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(await use(g, g.ben.token, twin.id)).toEqual({ ok: false, reason: 'flare-cooldown', readyInMs: 3 * MIN })
+    now += 3 * MIN
+    expect(await use(g, g.ben.token, twin.id)).toEqual({ ok: true, kind: 'flare' })
+  })
+
+  it('a doubled Durian blocks two catches, one after the other', async () => {
+    const g = await chasing()
+    const { first, twin } = await doubled(g.gameId, g.aina.playerId, 'shield')
+    expect(await use(g, g.aina.token, first.id)).toEqual({ ok: true, kind: 'shield' })
+    const rows = await store.powerUps(g.gameId)
+    expect(rows.find((u) => u.id === twin.id)!.used_at).not.toBeNull() // one tap switches both on
+    expect(await use(g, g.aina.token, twin.id)).toEqual({ ok: false, reason: 'already-used' })
+    const usedAt = now
+    expect((await view(g, g.aina.token)).activeEndsAt).toBe(usedAt + 10 * MIN)
+    now += 2 * MIN
+    expect(await scan(g, g.ben, 7, g.aina)).toEqual({ ok: false, reason: 'shielded', name: 'Aina' })
+    // The first half blocked early: the second runs its own fresh 10 minutes from that block.
+    const blockedAt = now
+    expect((await view(g, g.aina.token)).activeEndsAt).toBe(blockedAt + 10 * MIN)
+    now += 20_000
+    expect(await scan(g, g.kim, 7, g.aina)).toEqual({ ok: false, reason: 'shielded', name: 'Aina' })
+    now += 20_000
+    expect(await scan(g, g.lee, 7, g.aina)).toMatchObject({ ok: true })
+    // The second block stings too: Kim stays locked off Aina for the game, even once she's free again.
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: false } }])
+    now += 20 * MIN
+    expect(await scan(g, g.kim, 7, g.aina)).toEqual({ ok: false, reason: 'durian-locked', name: 'Aina' })
+  })
+
+  it('the unused twin keeps the slot busy until the second use', async () => {
+    const g = await chasing()
+    const { first, twin } = await doubled(g.gameId, g.aina.playerId, 'decoy')
+    const claim = () => run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    expect(await claim()).toMatchObject({ ok: false, reason: 'hand-full', busyKind: 'decoy', busyRunning: false })
+    expect(await use(g, g.aina.token, first.id)).toEqual({ ok: true, kind: 'decoy' })
+    now = T0 + 9.5 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    now = T0 + 10 * MIN + 1_000
+    await run('state', { code: g.code, organiserToken: g.organiserToken }) // the first half's ping lands
+    // The first half is done, but the twin is still held.
+    expect(await claim()).toMatchObject({ ok: false, reason: 'hand-full', busyKind: 'decoy', busyRunning: false })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === twin.id)!.used_at).toBeNull()
+  })
+
+  it("a doubled Durian's second shield arms when the first runs out unused", async () => {
+    const g = await chasing()
+    const { twin } = await doubled(g.gameId, g.aina.playerId, 'shield')
+    // Tapping the twin row first switches the pair on just the same.
+    expect(await use(g, g.aina.token, twin.id)).toEqual({ ok: true, kind: 'shield' })
+    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'shield' && u.used_at)).toHaveLength(2)
+    await keepCheckingIn(g, 8, 17) // ten minutes on, with no catch tried
+    now = T0 + 17 * MIN
+    // The first half ran out unused: the second shows its own fresh 10 minutes, not 0:00.
+    const v = await view(g, g.aina.token)
+    expect(v.shieldActive).toBe(true)
+    expect(v.activeEndsAt).toBe(T0 + 27 * MIN)
+    expect(await scan(g, g.ben, 7, g.aina)).toEqual({ ok: false, reason: 'shielded', name: 'Aina' })
+    now += 20_000
+    expect(await scan(g, g.kim, 7, g.aina)).toMatchObject({ ok: true })
+  })
+
+  it('one stolen half: the other still works and the slot frees after it', async () => {
+    const g = await chasing()
+    await doubled(g.gameId, g.aina.playerId, 'shield')
+    const along = await give(g.gameId, g.ben.playerId, 'along')
+    expect(await use(g, g.ben.token, along.id)).toEqual({ ok: true, kind: 'along' })
+    const left = (await view(g, g.aina.token)).hand
+    expect(left).toHaveLength(1)
+    expect(await use(g, g.aina.token, left[0].id)).toEqual({ ok: true, kind: 'shield' })
+    expect((await view(g, g.aina.token)).shieldActive).toBe(true)
+    expect(await scan(g, g.kim, 7, g.aina)).toEqual({ ok: false, reason: 'shielded', name: 'Aina' })
+    expect((await view(g, g.aina.token)).activePowerUp).toBeNull()
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toMatchObject({ ok: true })
+  })
+
+  it.each(['original', 'twin'] as const)('one stolen half (%s taken): the other arms at once and frees the slot', async (taken) => {
+    const g = await chasing()
+    const pair = await doubled(g.gameId, g.aina.playerId, 'shield')
+    const [gone, kept] = taken === 'original' ? [pair.first, pair.twin] : [pair.twin, pair.first]
+    await store.updatePowerUp(gone.id, { taken_at: new Date(now).toISOString() }) // what Toyol / Ah Long leave behind
+    expect(await use(g, g.aina.token, kept.id)).toEqual({ ok: true, kind: 'shield' })
+    expect((await view(g, g.aina.token)).shieldActive).toBe(true)
+    expect(await scan(g, g.kim, 7, g.aina)).toEqual({ ok: false, reason: 'shielded', name: 'Aina' })
+    expect((await view(g, g.aina.token)).activePowerUp).toBeNull()
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toMatchObject({ ok: true })
+  })
+})
+
+describe('Tuch and Ga', () => {
+  /** Ben, Kim and Lee chase; Aina, Hafiz and Wei run. Full mode, the chase has begun. */
+  async function chasing() {
+    const g = await readyGame({ mode: 'full' })
+    const kim = await run('join', { code: g.code, name: 'Kim', accepted: true })
+    const lee = await run('join', { code: g.code, name: 'Lee', accepted: true })
+    const wei = await run('join', { code: g.code, name: 'Wei', accepted: true })
+    await run('setRoles', {
+      code: g.code,
+      organiserToken: g.organiserToken,
+      roles: {
+        [g.ben.playerId]: 'chaser',
+        [kim.playerId]: 'chaser',
+        [lee.playerId]: 'chaser',
+        [g.aina.playerId]: 'runner',
+        [g.hafiz.playerId]: 'runner',
+        [wei.playerId]: 'runner',
+      },
+    })
+    await run('linkTag', { code: g.code, token: wei.token, tagId: 9 })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    return { ...g, kim, lee, wei, gameId: (await store.gameByCode(g.code))!.id }
+  }
+  const give = async (gameId: string, playerId: string, kind: PowerUpKind) =>
+    store.addPowerUp({ game_id: gameId, player_id: playerId, kind, station: null })
+  const use = (g: { code: string }, token: string, powerupId: string, extra: object = {}) =>
+    run('usePowerup', { code: g.code, token, powerupId, ...extra })
+  const view = (g: { code: string }, token: string) => run<View>('state', { code: g.code, token })
+  const loc = (g: { code: string }, token: string, dLatM: number) => run('location', { code: g.code, token, ...at(dLatM) })
+  const dotOf = (v: View, id: string) => v.dots.find((d) => d.kind === 'runner' && d.id === id)
+  const GATE_TEXT = 'A Kejar set a toll gate.'
+
+  /** Ben stands at `at(0)` and sets the gate, then walks off; Aina checks in at `ainaAt`, Hafiz at 80 m. */
+  async function gateThenReveal(g: Awaited<ReturnType<typeof chasing>>) {
+    const toll = await give(g.gameId, g.ben.playerId, 'toll')
+    await loc(g, g.ben.token, 0)
+    expect(await use(g, g.ben.token, toll.id)).toEqual({ ok: true, kind: 'toll' })
+    return toll
+  }
+  async function checkInAndReveal(g: Awaited<ReturnType<typeof chasing>>, ainaAt = 30) {
+    now = T0 + 8 * MIN
+    await loc(g, g.ben.token, 300)
+    now = T0 + 9.5 * MIN
+    await loc(g, g.aina.token, ainaAt)
+    await loc(g, g.hafiz.token, 80)
+    now = T0 + 10 * MIN
+  }
+
+  it('a runner who checks in within 40 m of the gate shows exactly at the next reveal', async () => {
+    const g = await chasing()
+    const toll = await gateThenReveal(g)
+    await checkInAndReveal(g)
+    const v = await view(g, g.ben.token)
+    expect(dotOf(v, g.aina.playerId)).toMatchObject({ exact: true, revealedBy: 'toll' })
+    const hafiz = dotOf(v, g.hafiz.playerId)!
+    expect(hafiz.fuzzy).toBe(true)
+    expect(hafiz.revealedBy).toBeNull()
+    // The gate stayed where Ben used it, not where he walked to.
+    const row = (await store.powerUps(g.gameId)).find((u) => u.id === toll.id)!
+    expect(row.spot!.lat).toBeCloseTo(at(0).lat, 6)
+    expect(row.spot!.lng).toBeCloseTo(at(0).lng, 6)
+    const ev = (await store.events(g.gameId)).find((e) => e.type === 'used')!
+    expect(ev).toMatchObject({ actor_id: g.ben.playerId, data: { kind: 'toll' } })
+  })
+
+  it("is refused with no-location when the chaser's last fix is over 60 s old, and the card is kept", async () => {
+    const g = await chasing()
+    const toll = await give(g.gameId, g.ben.playerId, 'toll')
+    await loc(g, g.ben.token, 0)
+    now += 61_000
+    expect(await use(g, g.ben.token, toll.id)).toEqual({ ok: false, reason: 'no-location' })
+    const row = (await store.powerUps(g.gameId)).find((u) => u.id === toll.id)!
+    expect(row.used_at).toBeNull()
+    expect(row.spot).toBeNull()
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'used')).toHaveLength(0)
+    // A fresh fix makes it work, with the same card.
+    await loc(g, g.ben.token, 0)
+    expect(await use(g, g.ben.token, toll.id)).toEqual({ ok: true, kind: 'toll' })
+  })
+
+  it('Ponteng beats the gate', async () => {
+    const g = await chasing()
+    await gateThenReveal(g)
+    const cloak = await give(g.gameId, g.aina.playerId, 'cloak')
+    expect(await use(g, g.aina.token, cloak.id)).toEqual({ ok: true, kind: 'cloak' })
+    await checkInAndReveal(g)
+    const v = await view(g, g.ben.token)
+    expect(dotOf(v, g.aina.playerId)).toBeUndefined()
+    expect(v.feed.map((f) => f.text)).toContain('#07 never checked in')
+  })
+
+  it('Gostan beats the gate', async () => {
+    const g = await chasing()
+    await gateThenReveal(g)
+    const decoy = await give(g.gameId, g.aina.playerId, 'decoy')
+    expect(await use(g, g.aina.token, decoy.id)).toEqual({ ok: true, kind: 'decoy' })
+    await checkInAndReveal(g)
+    const dot = dotOf(await view(g, g.ben.token), g.aina.playerId)!
+    // Drawn at the decoy spot, well away from where Aina really is.
+    expect(distanceM(dot, at(30))).toBeGreaterThanOrEqual(100)
+  })
+
+  it('runners never see the gate', async () => {
+    const g = await chasing()
+    await gateThenReveal(g)
+    const vAina = await view(g, g.aina.token)
+    expect(vAina.tollGates).toEqual([])
+    expect(vAina.feed.map((f) => f.text).join('|')).not.toMatch(/toll|Tuch/i)
+    const vBen = await view(g, g.ben.token)
+    expect(vBen.tollGates).toHaveLength(1)
+    expect(vBen.tollGates[0].lat).toBeCloseTo(at(0).lat, 6)
+    expect(vBen.feed[0]).toMatchObject({
+      text: GATE_TEXT,
+      label: 'Tuch and Ga',
+      means: 'Dikejar checking in near it show exactly at the next ping.',
+    })
+    // The whole chasing team sees it.
+    expect((await view(g, g.kim.token)).tollGates).toHaveLength(1)
+  })
+
+  it('the gate leaves the chasers view once the reveal lands', async () => {
+    const g = await chasing()
+    await gateThenReveal(g)
+    await checkInAndReveal(g)
+    expect((await view(g, g.ben.token)).tollGates).toEqual([])
+  })
+
+  it('marshals and the organiser get no gates, and a plain feed line', async () => {
+    const g = await chasing()
+    await gateThenReveal(g)
+    const vOrg = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(vOrg.tollGates).toEqual([])
+    expect(vOrg.feed[0].text).toBe('A Kejar used Tuch and Ga')
+  })
+
+  it("a frozen chaser's toll gate still lands", async () => {
+    const g = await chasing()
+    await gateThenReveal(g)
+    const cheese = await give(g.gameId, g.aina.playerId, 'cheese')
+    expect(await use(g, g.aina.token, cheese.id, { targetId: g.ben.playerId })).toMatchObject({ ok: true, kind: 'cheese' })
+    await checkInAndReveal(g)
+    const v = await view(g, g.ben.token)
+    expect(dotOf(v, g.aina.playerId)).toMatchObject({ exact: true, revealedBy: 'toll' })
+  })
+
+  it('a doubled Tuch and Ga sets its second gate only after the first one lands', async () => {
+    const g = await chasing()
+    await give(g.gameId, g.ben.playerId, 'combo').then((c) => store.updatePowerUp(c.id, { used_at: new Date(now).toISOString() }))
+    const first = await give(g.gameId, g.ben.playerId, 'toll')
+    const twin = (await store.applyCombo(g.ben.playerId, first.id))!
+    await loc(g, g.ben.token, 0)
+    expect(await use(g, g.ben.token, first.id)).toEqual({ ok: true, kind: 'toll' })
+    // The twin waits for the first gate's reveal (a doubled card's second use never lands on the same ping).
+    expect(await use(g, g.ben.token, twin.id)).toEqual({ ok: false, reason: 'effect-running' })
+    expect((await view(g, g.ben.token)).tollGates).toHaveLength(1)
+    await checkInAndReveal(g)
+    await view(g, g.ben.token)
+    now += 30_000
+    await loc(g, g.ben.token, 100)
+    expect(await use(g, g.ben.token, twin.id)).toEqual({ ok: true, kind: 'toll' })
+    const gates = (await view(g, g.ben.token)).tollGates
+    expect(gates).toHaveLength(1)
+    expect(gates[0].lat).toBeCloseTo(at(100).lat, 6)
   })
 })
 

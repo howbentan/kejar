@@ -93,6 +93,11 @@ function pinFeatures(pins: Pin[]): FeatureCollection {
   )
 }
 
+/** Tuch and Ga's gates, on the chaser map only (the view sends them to chasers and no one else). */
+function tollGateFeatures(gates: LatLng[]): FeatureCollection {
+  return collection(gates.map((g) => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [g.lng, g.lat] } })))
+}
+
 /** The chasers frozen at a check-in's alert (checkins design §5): a 30 m circle each, labelled, dashed when stale. */
 function snapshotFeatures(s: ChaserSnapshot | null): FeatureCollection {
   return collection(
@@ -152,6 +157,7 @@ export default function GameMap({
   snapshot = null,
   stash = null,
   stashTone = 'yellow',
+  tollGates = [],
 }: {
   arena: Arena
   dots: MapDot[]
@@ -185,6 +191,8 @@ export default function GameMap({
   stash?: LatLng | null
   /** The stash pin's colour: Dato Seri's yellow, or Bomoh's purple. Read once, when the map loads. */
   stashTone?: 'yellow' | 'purple'
+  /** Chasers: where Tuch and Ga's hidden toll gates stand. */
+  tollGates?: LatLng[]
 }) {
   const reduce = useReducedMotion()
   const [loaded, setLoaded] = useState(false)
@@ -198,6 +206,8 @@ export default function GameMap({
   latestStash.current = stash
   const latestStashTone = useRef(stashTone)
   latestStashTone.current = stashTone
+  const latestTollGates = useRef(tollGates)
+  latestTollGates.current = tollGates
   const el = useRef<HTMLDivElement>(null)
   const map = useRef<maplibregl.Map | null>(null)
   const ready = useRef(false)
@@ -423,6 +433,34 @@ export default function GameMap({
           'circle-stroke-width': 2,
         },
       })
+      // Tuch and Ga's reveal: a soft lime halo (Pak Guard's is a thin ring), so the two never look alike.
+      m.addLayer({
+        id: 'toll-reveal-ring',
+        type: 'circle',
+        source: 'points',
+        filter: ['==', ['get', 'revealedBy'], 'toll'],
+        paint: {
+          'circle-radius': 15,
+          'circle-color': 'rgba(198,255,61,0.22)',
+          'circle-stroke-color': 'rgba(198,255,61,0.55)',
+          'circle-stroke-width': 1,
+        },
+      })
+      // The chasers' own hidden toll gates: a small black pin with a lime edge and the word GATE.
+      m.addSource('toll-gates', { type: 'geojson', data: tollGateFeatures(latestTollGates.current) })
+      m.addLayer({
+        id: 'toll-gates',
+        type: 'circle',
+        source: 'toll-gates',
+        paint: { 'circle-radius': 7, 'circle-color': BLACK, 'circle-stroke-color': VOLT, 'circle-stroke-width': 3 },
+      })
+      m.addLayer({
+        id: 'toll-gate-labels',
+        type: 'symbol',
+        source: 'toll-gates',
+        layout: { 'text-field': 'GATE', 'text-font': ['Noto Sans Regular'], 'text-size': 9, 'text-offset': [0, 1.6], 'text-allow-overlap': true },
+        paint: { 'text-color': VOLT, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
+      })
       m.addLayer({
         id: 'labels',
         type: 'symbol',
@@ -536,6 +574,12 @@ export default function GameMap({
     if (!ready.current || !map.current) return
     fitTo(map.current, latestFit.current)
   }, [fitKey])
+
+  const tollKey = JSON.stringify(tollGates)
+  useEffect(() => {
+    if (!ready.current || !map.current) return
+    ;(map.current.getSource('toll-gates') as GeoJSONSource | undefined)?.setData(tollGateFeatures(latestTollGates.current))
+  }, [tollKey, loaded])
 
   const pinKey = JSON.stringify(pins)
   useEffect(() => {

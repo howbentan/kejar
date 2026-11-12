@@ -15,4 +15,8 @@ export const INFO: Record<PowerUpKind, { name: string; effect: string; used: str
   // Used only through Settle at Penjara, so the slot shows where instead of a Use button; the feed line for
   // everyone is `Something legendary freed N Dikejar!`.
   dato: { name: POWER_NAME.dato, effect: 'Settle: at Penjara, free yourself and up to 2 others', used: 'Use it at Penjara' },
+  // Cheese Ais is used through the picker, so its real "used" line is the reply's own (`Cheese Ais! <name> is frozen for 3 minutes.`).
+  cheese: { name: POWER_NAME.cheese, effect: "Freeze one Kejar's power-up for 3 min", used: 'Brain freeze!' },
+  combo: { name: POWER_NAME.combo, effect: 'Your next power-up works twice', used: 'Nasi Lemak KFC! Your next power-up works twice.' },
+  toll: { name: POWER_NAME.toll, effect: 'Dikejar checking in within 40 m of you show exactly', used: 'Tuch and Ga! Toll gate up. Runners checking in near it get charged.' },
 }

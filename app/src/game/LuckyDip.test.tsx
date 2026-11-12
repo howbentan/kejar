@@ -148,4 +148,8 @@ describe("Dato Seri's reveal (motion design §7)", () => {
       expect(line).not.toMatch(/station|dato|legend/i)
     }
   })
+
+  it('a frozen chaser scanning the stash is told how long to wait', () => {
+    expect(stashMessage({ ok: false, reason: 'frozen', frozenForMs: 134_000 } as never)).toBe('Brain freeze! Wait 2:14.')
+  })
 })

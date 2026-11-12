@@ -3,7 +3,7 @@ import { arenaAroundPoint } from './arenas.js'
 import { iso, MIN, ping, player, pos, T0 } from './fixtures.js'
 import { circlePolygon, distanceM, offset, pointInPolygon } from './geo.js'
 import { buildPlayArea, inPlayArea } from './playArea.js'
-import { activeShield, decoySpot, flareBlocked, judgeBomohClaim, judgeClaim, slotBusy } from './powerups.js'
+import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, judgeBomohClaim, judgeClaim, runningEffect, shieldArmedAt, slotBusy } from './powerups.js'
 import { BONUS_SEQ_BASE } from './clock.js'
 import type { Ping, PowerUp } from './types.js'
 
@@ -26,7 +26,7 @@ function pu(over: Partial<PowerUp> = {}): PowerUp {
     used_at: null,
     consumed_at: null,
     sealed: false,
-    taken_at: null, offer: null,
+    taken_at: null, offer: null, twin_of: null, spot: null,
     ...over,
   }
 }
@@ -197,5 +197,68 @@ describe('flareBlocked', () => {
   it('is clear once 3 minutes have passed, or with no surprise pings', () => {
     expect(flareBlocked([bonus(NOW - 3 * MIN, true)], NOW)).toBeNull()
     expect(flareBlocked([], NOW)).toBeNull()
+  })
+})
+
+describe('new-card rules', () => {
+  const shield = (over: Partial<PowerUp> = {}) => pu({ kind: 'shield', ...over })
+  const used = (kind: PowerUp['kind'], over: Partial<PowerUp> = {}) => pu({ kind, used_at: iso(NOW - 1_000), ...over })
+
+  it('a frozen chaser cannot claim, with the time left', () => {
+    const v = judgeClaim({ ...base, me: { ...ben, frozen_until: iso(NOW + 90_000) } })
+    expect(v).toEqual({ ok: false, reason: 'frozen', frozenForMs: 90_000 })
+  })
+  it('frozenForMs is 0 when not frozen or expired', () => {
+    expect(frozenForMs({}, NOW)).toBe(0)
+    expect(frozenForMs({ frozen_until: null }, NOW)).toBe(0)
+    expect(frozenForMs({ frozen_until: iso(NOW - 1) }, NOW)).toBe(0)
+    expect(frozenForMs({ frozen_until: iso(NOW + 5_000) }, NOW)).toBe(5_000)
+  })
+  it('a frozen chaser cannot scan Bomoh either', () => {
+    const stash = { lat: S1.lat, lng: S1.lng, claimedBy: null, claimedAt: null } as never
+    const v = judgeBomohClaim({ phase: 'chasing', me: { ...ben, frozen_until: iso(NOW + 30_000) }, stash, myPos: atS1, now: NOW })
+    expect(v).toEqual({ ok: false, reason: 'frozen', frozenForMs: 30_000 })
+  })
+  it('a twin shield arms when its partner blocks, and runs its own 10 minutes', () => {
+    const first = shield({ used_at: iso(NOW - 2 * MIN), consumed_at: iso(NOW - MIN) })
+    const twin = shield({ id: 't', twin_of: first.id, used_at: iso(NOW - 2 * MIN) })
+    expect(shieldArmedAt(twin, [first, twin])).toBe(NOW - MIN)
+    expect(activeShield([first, twin], 'r1', NOW + 8 * MIN)?.id).toBe('t')
+    expect(activeShield([first, twin], 'r1', NOW + 10 * MIN)).toBeNull()
+  })
+  it('a twin shield arms when its partner runs out unused', () => {
+    const first = shield({ used_at: iso(NOW - 10 * MIN) })
+    const twin = shield({ id: 't', twin_of: first.id, used_at: iso(NOW - 10 * MIN) })
+    expect(shieldArmedAt(twin, [first, twin])).toBe(NOW)
+  })
+  it('a waiting twin is not active while its partner is, but keeps the slot busy', () => {
+    const first = shield({ used_at: iso(NOW - MIN) })
+    const twin = shield({ id: 't', twin_of: first.id, used_at: iso(NOW - MIN) })
+    expect(activeShield([first, twin], 'r1', NOW)?.id).toBe(first.id)
+    expect(slotBusy([twin], 'r1', [], NOW)).toEqual({ kind: 'shield', running: true })
+  })
+  it('shieldArmedAt is null for an unused shield and used_at for a plain one', () => {
+    expect(shieldArmedAt(shield(), [])).toBeNull()
+    expect(shieldArmedAt(shield({ used_at: iso(NOW - MIN) }), [])).toBe(NOW - MIN)
+  })
+  it('a used combo or cheese frees the slot, an unused one holds it', () => {
+    expect(slotBusy([used('combo')], 'r1', [], NOW)).toBeNull()
+    expect(slotBusy([used('cheese')], 'r1', [], NOW)).toBeNull()
+    expect(slotBusy([pu({ kind: 'combo' })], 'r1', [], NOW)).toEqual({ kind: 'combo', running: false })
+  })
+  it('a used toll keeps the slot until the next reveal', () => {
+    expect(slotBusy([used('toll', { player_id: 'c1' })], 'c1', [], NOW)).toEqual({ kind: 'toll', running: true })
+  })
+  it('comboReady is true for a used, unconsumed, untaken combo only', () => {
+    expect(comboReady([used('combo')], 'r1')).toBe(true)
+    expect(comboReady([pu({ kind: 'combo' })], 'r1')).toBe(false)
+    expect(comboReady([used('combo', { consumed_at: iso(NOW) })], 'r1')).toBe(false)
+    expect(comboReady([used('combo', { taken_at: iso(NOW) })], 'r1')).toBe(false)
+    expect(comboReady([used('combo')], 'r2')).toBe(false)
+  })
+  it('runningEffect names only used cards still running', () => {
+    expect(runningEffect([pu({ kind: 'cloak' })], 'r1', [], NOW)).toBeNull()
+    expect(runningEffect([used('cloak')], 'r1', [], NOW)).toBe('cloak')
+    expect(runningEffect([used('combo')], 'r1', [], NOW)).toBeNull()
   })
 })

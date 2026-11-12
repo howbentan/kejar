@@ -11,4 +11,7 @@ export const POWER_NAME: Record<PowerUpKind, string> = {
   along: 'Ah Long',
   grab: 'Abang Grab',
   dato: 'Dato Seri',
+  cheese: 'Cheese Ais',
+  combo: 'Nasi Lemak KFC',
+  toll: 'Tuch and Ga',
 }

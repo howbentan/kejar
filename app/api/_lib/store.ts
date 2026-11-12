@@ -188,6 +188,17 @@ export interface GameStore {
    * already claimed.
    */
   claimBomoh(gameId: string, playerId: string, at: Date): Promise<boolean>
+  /**
+   * Cheese Ais: freezes a chaser until `untilIso`, only if they aren't frozen now (frozen_until null or not after
+   * the store clock). True for the one caller that wins.
+   */
+  freezeChaser(chaserId: string, untilIso: string): Promise<boolean>
+  /**
+   * Nasi Lemak KFC: atomically finds this player's ready combo (kind combo, used, not consumed, not taken), consumes
+   * it and inserts a twin of `powerUpId` (same game, player, kind and sealed; no station; twin_of = powerUpId).
+   * Returns the twin, or null if no combo was ready.
+   */
+  applyCombo(playerId: string, powerUpId: string): Promise<PowerUp | null>
   /** Consumes a shield only if it wasn't already; true for the first caller. */
   consumeShield(id: string): Promise<boolean>
   /** Adds a bonus (Flare) ping with the next free bonus number; safe when two happen at once. */
@@ -294,7 +305,7 @@ export type GrabPick =
   | { ok: true; powerUp: PowerUp }
   | { ok: false; reason: 'not-yours' | 'already-used' | 'taken' | 'no-offer' | 'bad-choice' }
 
-export type NewPowerUp = Omit<PowerUp, 'id' | 'claimed_at' | 'used_at' | 'consumed_at' | 'sealed' | 'taken_at' | 'offer'>
+export type NewPowerUp = Omit<PowerUp, 'id' | 'claimed_at' | 'used_at' | 'consumed_at' | 'sealed' | 'taken_at' | 'offer' | 'twin_of' | 'spot'> & Partial<Pick<PowerUp, 'twin_of' | 'spot'>>
 
 /** In-memory store for tests. */
 export class MemoryStore implements GameStore {
@@ -350,6 +361,8 @@ export class MemoryStore implements GameStore {
     for (const r of this.safetyRows) if (r.game_id === id) Object.assign(r, { data: {}, lat: null, lng: null })
     this.phoneMoveRows = this.phoneMoveRows.filter((r) => r.game_id !== id)
     this.marshalInviteRows = this.marshalInviteRows.filter((r) => r.game_id !== id)
+    // A Tuch and Ga gate's position is a chaser's exact position.
+    for (const u of this.powerUpRows) if (u.game_id === id) u.spot = null
     const mine = this.playerRows
       .filter((p) => p.game_id === id)
       .sort((a, b) => Date.parse(a.accepted_at) - Date.parse(b.accepted_at) || this.playerRows.indexOf(a) - this.playerRows.indexOf(b))
@@ -605,7 +618,7 @@ export class MemoryStore implements GameStore {
     return this.eventRows.filter((e) => e.game_id === gameId).map((e) => ({ ...e }))
   }
   async addPowerUp(p: NewPowerUp) {
-    const row: PowerUp = { ...p, id: this.id('u'), claimed_at: this.nowIso(), used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null }
+    const row: PowerUp = { twin_of: null, spot: null, ...p, id: this.id('u'), claimed_at: this.nowIso(), used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null }
     this.powerUpRows.push(row)
     return { ...row }
   }
@@ -623,7 +636,7 @@ export class MemoryStore implements GameStore {
     const last = Math.max(...here.map((u) => Date.parse(u.claimed_at)), -Infinity)
     const lockedForMs = last + lockMs - this.clock()
     if (lockedForMs > 0) return { ok: false, reason: 'locked', lockedForMs }
-    const row: PowerUp = { ...p, id: this.id('u'), claimed_at: this.nowIso(), used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null }
+    const row: PowerUp = { twin_of: null, spot: null, ...p, id: this.id('u'), claimed_at: this.nowIso(), used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null }
     this.powerUpRows.push(row)
     return { ok: true, powerUp: { ...row } }
   }
@@ -679,6 +692,8 @@ export class MemoryStore implements GameStore {
       sealed: true,
       taken_at: null,
       offer: null,
+      twin_of: null,
+      spot: null,
     }
     this.powerUpRows.push(row)
     return { ok: true, powerUp: { ...row } }
@@ -701,6 +716,8 @@ export class MemoryStore implements GameStore {
       sealed: false,
       taken_at: null,
       offer: null,
+      twin_of: null,
+      spot: null,
     }
     this.powerUpRows.push(row)
     return { ...row }
@@ -712,6 +729,36 @@ export class MemoryStore implements GameStore {
     // A fresh object: gameByCode hands out shallow copies that share the old one.
     g.bomoh_stash = { ...g.bomoh_stash, claimedBy: playerId, claimedAt: at.toISOString() }
     return true
+  }
+  async freezeChaser(chaserId: string, untilIso: string) {
+    const p = this.playerRows.find((x) => x.id === chaserId)
+    if (!p) return false
+    if (p.frozen_until && Date.parse(p.frozen_until) > this.clock()) return false
+    p.frozen_until = untilIso
+    return true
+  }
+  async applyCombo(playerId: string, powerUpId: string) {
+    const combo = this.powerUpRows.find((u) => u.player_id === playerId && u.kind === 'combo' && u.used_at && !u.consumed_at && !u.taken_at)
+    const src = this.powerUpRows.find((u) => u.id === powerUpId)
+    if (!combo || !src) return null
+    combo.consumed_at = this.nowIso()
+    const twin: PowerUp = {
+      id: this.id('u'),
+      game_id: src.game_id,
+      player_id: playerId,
+      kind: src.kind,
+      station: null,
+      claimed_at: this.nowIso(),
+      used_at: null,
+      consumed_at: null,
+      sealed: src.sealed,
+      taken_at: null,
+      offer: null,
+      twin_of: src.id,
+      spot: null,
+    }
+    this.powerUpRows.push(twin)
+    return { ...twin }
   }
   async consumeShield(id: string) {
     const u = this.powerUpRows.find((x) => x.id === id)
@@ -746,6 +793,10 @@ export class MemoryStore implements GameStore {
     if (g.rescue) {
       const started = Date.parse(g.rescue.startedAt)
       g.rescue = { ...g.rescue, startedAt: new Date(started + this.clock() - Math.max(started, pausedAt)).toISOString() }
+    }
+    // A running freeze (Cheese Ais) waits out the pause too.
+    for (const p of this.playerRows) {
+      if (p.game_id === gameId && p.frozen_until && Date.parse(p.frozen_until) > pausedAt) p.frozen_until = shift(p.frozen_until)
     }
     for (const p of this.pingRows) {
       if (p.game_id !== gameId || p.revealed) continue

@@ -105,6 +105,24 @@ describe('SupabaseStore', () => {
     expect(rpcs).toEqual([{ fn: 'resume_game', args: { p_game: 'g1', p_at: '2026-10-25T09:07:00.000Z' } }])
   })
 
+  it('freezes a chaser through freeze_chaser, stamped with the game clock', async () => {
+    const rpcs: { fn: string; args: Record<string, unknown> }[] = []
+    const db = { rpc: async (fn: string, args: Record<string, unknown>) => (rpcs.push({ fn, args }), { data: true, error: null }) } as unknown as SupabaseClient
+    const now = Date.parse('2026-10-25T09:07:00.000Z')
+    expect(await new SupabaseStore(db, () => now).freezeChaser('c1', '2026-10-25T09:10:00.000Z')).toBe(true)
+    expect(rpcs).toEqual([{ fn: 'freeze_chaser', args: { p_player: 'c1', p_until: '2026-10-25T09:10:00.000Z', p_at: '2026-10-25T09:07:00.000Z' } }])
+  })
+
+  it('applies a combo through apply_combo, returning the twin or null', async () => {
+    const rpcs: { fn: string; args: Record<string, unknown> }[] = []
+    const replies = [[{ id: 'u2', kind: 'decoy', twin_of: 'u1' }], []]
+    const db = { rpc: async (fn: string, args: Record<string, unknown>) => (rpcs.push({ fn, args }), { data: replies.shift(), error: null }) } as unknown as SupabaseClient
+    const store = new SupabaseStore(db, () => Date.parse('2026-10-25T09:07:00.000Z'))
+    expect(await store.applyCombo('p1', 'u1')).toMatchObject({ id: 'u2', twin_of: 'u1' })
+    expect(await store.applyCombo('p1', 'u1')).toBeNull()
+    expect(rpcs[0]).toEqual({ fn: 'apply_combo', args: { p_player: 'p1', p_powerup: 'u1', p_at: '2026-10-25T09:07:00.000Z' } })
+  })
+
   it('undoes a kejar through release_caught and claims the final whistle through claim_final_whistle', async () => {
     const rpcs: { fn: string; args: Record<string, unknown> }[] = []
     const replies = [true, false]

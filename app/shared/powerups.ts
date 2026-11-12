@@ -10,6 +10,13 @@ export const STATION_LOCK_MS = 60_000
 export const SHIELD_MS = 10 * 60_000
 /** Power-ups §5a: after each surprise ping is revealed, the chasers wait this long for the next. */
 export const FLARE_COOLDOWN_MS = 3 * 60_000
+/** Cheese Ais: how long a chaser's power-up slot stays frozen. */
+export const FREEZE_MS = 3 * 60_000
+/** Tuch and Ga: how close a runner must be to the toll point, and how fresh their fix must be. */
+export const TOLL_RADIUS_M = 40
+export const TOLL_FRESH_MS = 60_000
+/** Cards Nasi Lemak KFC can't double. */
+export const COMBO_EXCLUDED: readonly PowerUpKind[] = ['grab', 'combo', 'dato']
 const MAX_ACCURACY_M = 20
 const DECOY_MIN_M = 120
 const DECOY_MAX_M = 180
@@ -18,8 +25,10 @@ export type ClaimJudgement =
   | { ok: true }
   | {
       ok: false
-      reason: 'not-chasing' | 'cannot-claim' | 'unknown-station' | 'too-far' | 'already-claimed' | 'locked' | 'hand-full'
+      reason: 'not-chasing' | 'cannot-claim' | 'unknown-station' | 'too-far' | 'already-claimed' | 'locked' | 'hand-full' | 'frozen'
       lockedForMs?: number
+      /** For frozen: how long the chaser's slot stays frozen. */
+      frozenForMs?: number
       /** For hand-full: what's in the slot, and whether its effect is still running. */
       busyKind?: PowerUpKind
       busyRunning?: boolean
@@ -37,6 +46,8 @@ export function judgeClaim(i: {
 }): ClaimJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (i.me.role === null || i.me.role === 'marshal' || i.me.jailed) return { ok: false, reason: 'cannot-claim' }
+  const frozen = frozenForMs(i.me, i.now)
+  if (frozen > 0) return { ok: false, reason: 'frozen', frozenForMs: frozen }
   const spot = i.station === null ? undefined : i.arena.stations?.[i.station - 1]
   if (!spot) return { ok: false, reason: 'unknown-station' }
 
@@ -89,6 +100,7 @@ export function judgeDatoClaim(i: {
 export type BomohClaimJudgement =
   | { ok: true }
   | { ok: false; reason: 'not-chasing' | 'cannot-claim' | 'no-stash' | 'too-far' }
+  | { ok: false; reason: 'frozen'; frozenForMs: number }
 
 /**
  * Scanning Bomoh's hidden stash: a chaser within reach of the dropped purple card, first come first served.
@@ -104,36 +116,72 @@ export function judgeBomohClaim(i: {
 }): BomohClaimJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (i.me.role !== 'chaser') return { ok: false, reason: 'cannot-claim' }
+  const frozen = frozenForMs(i.me, i.now)
+  if (frozen > 0) return { ok: false, reason: 'frozen', frozenForMs: frozen }
   const stash = placedStash(i.stash) // made with the game, but not dropped yet: nothing to find
   if (!stash || stash.claimedBy !== null) return { ok: false, reason: 'no-stash' }
   if (!withinClaimReach(i.myPos, stash, i.now)) return { ok: false, reason: 'too-far' }
   return { ok: true }
 }
 
+/** Ms left on a chaser's Cheese Ais freeze; 0 when not frozen. */
+export function frozenForMs(p: Pick<Player, 'frozen_until'>, now: number): number {
+  return p.frozen_until ? Math.max(0, Date.parse(p.frozen_until) - now) : 0
+}
+
+/** A used, unconsumed, untaken Nasi Lemak KFC: the player's next card arrives doubled. */
+export function comboReady(powerUps: PowerUp[], playerId: string): boolean {
+  return powerUps.some((u) => u.player_id === playerId && u.kind === 'combo' && u.used_at !== null && !u.consumed_at && !u.taken_at)
+}
+
+/**
+ * When a used Durian actually switches on (ms). A plain one: when it was used. A twin (from Nasi Lemak KFC):
+ * when its partner blocked a catch, or when the partner's 10 minutes ran out unused. A twin whose partner was
+ * stolen before it was switched on is a plain one. Null if not used.
+ */
+export function shieldArmedAt(u: PowerUp, all: PowerUp[]): number | null {
+  if (u.used_at === null) return null
+  const partner = u.twin_of ? all.find((x) => x.id === u.twin_of) : undefined
+  if (!partner || (partner.used_at === null && partner.taken_at)) return Date.parse(u.used_at)
+  if (partner.consumed_at) return Date.parse(partner.consumed_at)
+  return Date.parse(partner.used_at ?? u.used_at) + SHIELD_MS
+}
+
+/** Whether a used card's effect is still running. */
+function usedRunning(u: PowerUp, powerUps: PowerUp[], pings: Ping[], now: number): boolean {
+  // Done the moment they succeed or act (power-ups §5a): nothing keeps running.
+  if (u.kind === 'toyol' || u.kind === 'along' || u.kind === 'grab' || u.kind === 'dato' || u.kind === 'combo' || u.kind === 'cheese') return false
+  const usedAt = Date.parse(u.used_at as string)
+  const revealedAfter = (bonusOnly: boolean) =>
+    pings.some((p) =>
+      p.revealed && p.seq > 0 && (bonusOnly ? p.seq >= BONUS_SEQ_BASE && Date.parse(p.alert_at) >= usedAt : Date.parse(p.reveal_at) > usedAt),
+    )
+  // A twin still waiting to arm has a future armed time, so it counts as running.
+  if (u.kind === 'shield') return u.consumed_at === null && now - (shieldArmedAt(u, powerUps) as number) < SHIELD_MS
+  return u.kind === 'flare' ? !revealedAfter(true) : !revealedAfter(false)
+}
+
+/** Like `slotBusy`, but only a used card whose effect is still running (an unused card in hand doesn't count). */
+export function runningEffect(powerUps: PowerUp[], playerId: string, pings: Ping[], now: number): PowerUpKind | null {
+  for (const u of powerUps.filter((x) => x.player_id === playerId)) {
+    if (u.taken_at || u.used_at === null) continue
+    if (usedRunning(u, powerUps, pings, now)) return u.kind
+  }
+  return null
+}
+
 /**
  * What fills a player's one slot (power-ups §5a): an unused card, or a used one whose effect is still
- * running. Durian runs until it blocks a catch or 10 minutes pass; Gostan, Ponteng and Pak Guard until
- * the next reveal after use; Mat Rempit until its own surprise ping is revealed.
+ * running. Durian runs until it blocks a catch or 10 minutes pass (a twin waits for its partner first);
+ * Gostan, Ponteng, Pak Guard and Tuch and Ga until the next reveal after use; Mat Rempit until its own
+ * surprise ping is revealed. Nasi Lemak KFC and Cheese Ais are done the moment they're used.
  */
 export function slotBusy(powerUps: PowerUp[], playerId: string, pings: Ping[], now: number): { kind: PowerUpKind; running: boolean } | null {
   for (const u of powerUps.filter((x) => x.player_id === playerId)) {
     // Toyol or Ah Long took it: gone from the hand. Truthy, not `!== null`: before migration 0011 it's undefined.
     if (u.taken_at) continue
     if (u.used_at === null) return { kind: u.kind, running: false }
-    // Done the moment they succeed (power-ups §5a): nothing keeps running.
-    if (u.kind === 'toyol' || u.kind === 'along' || u.kind === 'grab' || u.kind === 'dato') continue
-    const usedAt = Date.parse(u.used_at)
-    const revealedAfter = (bonusOnly: boolean) =>
-      pings.some((p) =>
-        p.revealed && p.seq > 0 && (bonusOnly ? p.seq >= BONUS_SEQ_BASE && Date.parse(p.alert_at) >= usedAt : Date.parse(p.reveal_at) > usedAt),
-      )
-    const running =
-      u.kind === 'shield'
-        ? u.consumed_at === null && now - usedAt < SHIELD_MS
-        : u.kind === 'flare'
-          ? !revealedAfter(true)
-          : !revealedAfter(false)
-    if (running) return { kind: u.kind, running: true }
+    if (usedRunning(u, powerUps, pings, now)) return { kind: u.kind, running: true }
   }
   return null
 }
@@ -158,8 +206,9 @@ export function decoySpot(p: LatLng, area: Pick<Arena, 'boundary' | 'holes'>, se
   return options.find((o) => inPlayArea(o, area)) ?? options[0]
 }
 
-/** The runner's shield that is switched on, unused, and less than 10 minutes old. */
+/** The runner's shield that is switched on, unused, armed (a twin waits for its partner), and under 10 minutes since armed. */
 export function activeShield(powerUps: PowerUp[], runnerId: string, now: number): PowerUp | null {
+  let armed: number | null
   return (
     powerUps.find(
       (u) =>
@@ -167,7 +216,9 @@ export function activeShield(powerUps: PowerUp[], runnerId: string, now: number)
         u.kind === 'shield' &&
         u.used_at !== null &&
         u.consumed_at === null &&
-        now - Date.parse(u.used_at) < SHIELD_MS,
+        (armed = shieldArmedAt(u, powerUps)) !== null &&
+        armed <= now &&
+        now - armed < SHIELD_MS,
     ) ?? null
   )
 }

@@ -7,7 +7,7 @@ import { INFO } from './powerInfo'
 import { loadSession } from './session'
 import { ErrorText } from './ui'
 
-type PickResult = { ok: true; kind: PowerUpKind; powerupId: string } | { ok: false; reason: string }
+type PickResult = { ok: true; kind: PowerUpKind; powerupId: string; double?: boolean } | { ok: false; reason: string }
 
 const PICK_REJECTIONS: Record<string, string> = {
   taken: 'Your Abang Grab was taken.',
@@ -39,6 +39,7 @@ export default function GrabChooser({
 }) {
   const [busy, setBusy] = useState(false)
   const [brought, setBrought] = useState<PowerUpKind | null>(null)
+  const [doubled, setDoubled] = useState(false)
   const [refusal, setRefusal] = useState('')
   const [error, setError] = useState('')
 
@@ -50,6 +51,7 @@ export default function GrabChooser({
       const r = await call<PickResult>('grabPick', { code, token: loadSession(localStorage, code).token, powerupId, choice })
       if (r.ok) {
         navigator.vibrate?.([60, 40, 160])
+        setDoubled(!!r.double)
         setBrought(r.kind)
       } else setRefusal(PICK_REJECTIONS[r.reason] ?? 'Nothing brought')
     } catch (e) {
@@ -72,7 +74,7 @@ export default function GrabChooser({
           >
             <PowerCard kind={brought} wiggle />
           </m.div>
-          <h2 className="grab-title" role="status">{`Abang Grab brought ${INFO[brought].name}!`}</h2>
+          <h2 className="grab-title" role="status">{`Abang Grab brought ${INFO[brought].name}!${doubled ? ' Combo x2.' : ''}`}</h2>
           <p className="muted">The other two went to the bottom of the deck.</p>
           <button type="button" className="btn" onClick={onClose}>
             Done

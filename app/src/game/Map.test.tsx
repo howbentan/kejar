@@ -176,6 +176,33 @@ describe('GameMap', () => {
     expect(created.data.points).toMatchObject({ features: [{ properties: { revealedBy: 'focus' } }] })
   })
 
+  it('draws a toll gate pin from tollGates, in its own layer above the players, and follows the prop', () => {
+    created.layers = []
+    created.data = {}
+    const { rerender } = render(<GameMap arena={arena} dots={[]} tollGates={[{ lat: 3.1, lng: 101.1 }]} />)
+    created.load!()
+    const ids = created.layers.map((l) => l.id)
+    expect(ids).toContain('toll-gates')
+    expect(ids.indexOf('toll-gates')).toBeGreaterThan(ids.indexOf('points'))
+    expect(created.data['toll-gates']).toMatchObject({ features: [{ geometry: { coordinates: [101.1, 3.1] } }] })
+    rerender(<GameMap arena={arena} dots={[]} tollGates={[]} />)
+    expect(created.data['toll-gates']).toMatchObject({ features: [] })
+  })
+
+  it("gives a dot revealed by Tuch and Ga's toll gate its own layer, not Pak Guard's or Bomoh's", () => {
+    created.layers = []
+    created.data = {}
+    const dots = [{ id: 'r1', kind: 'runner' as const, lat: 3.1, lng: 101.1, at: '', revealedBy: 'toll' as const }]
+    render(<GameMap arena={arena} dots={dots} />)
+    created.load!()
+    const ids = created.layers.map((l) => l.id)
+    expect(ids.indexOf('toll-reveal-ring')).toBeGreaterThan(ids.indexOf('points'))
+    const ring = created.layers.find((l) => l.id === 'toll-reveal-ring') as unknown as { filter: unknown; paint: Record<string, unknown> }
+    expect(ring.filter).toEqual(['==', ['get', 'revealedBy'], 'toll'])
+    const focus = created.layers.find((l) => l.id === 'reveal-ring') as unknown as { paint: Record<string, unknown> }
+    expect(ring.paint['circle-radius']).not.toBe(focus.paint['circle-radius'])
+  })
+
   it('showJailAndStart={false} skips the jail/start circles and labels entirely (e.g. a scoped-down stub arena)', () => {
     created.layers = []
     created.data = {}
