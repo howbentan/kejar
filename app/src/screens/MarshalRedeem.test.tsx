@@ -25,4 +25,15 @@ describe('MarshalRedeem', () => {
     await waitFor(() => expect(JSON.parse(localStorage.getItem('kejar.game.ABC234')!)).toEqual({ token: 'pt1' }))
     expect(window.location.assign).toHaveBeenCalledWith('/g/ABC234')
   })
+
+  it('remembers the name, and prefills it next time', async () => {
+    call.mockResolvedValue({ token: 'pt1', playerId: 'p1' })
+    render(<MarshalRedeem code="ABC234" token="tok1" />)
+    fireEvent.change(screen.getByLabelText('Your name'), { target: { value: 'Siti' } })
+    fireEvent.click(screen.getByRole('button', { name: /join as marshal/i }))
+    await waitFor(() => expect(localStorage.getItem('kejar.name')).toBe('Siti'))
+    cleanup()
+    render(<MarshalRedeem code="XYZ789" token="tok2" />)
+    expect(screen.getByLabelText('Your name')).toHaveValue('Siti')
+  })
 })
