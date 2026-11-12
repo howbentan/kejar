@@ -50,7 +50,7 @@ async function scan(text: string) {
 describe('RunnerChase: Mak Kau Hijau and the new hint zones (Plan E2)', () => {
   it('takes over the screen and a tap sends touchGreen with my token', async () => {
     call.mockResolvedValue({ ok: true })
-    render(<RunnerChase code="ABC234" view={testView({ hijau: { startsAt: 90_000, deadline: 135_000, tapped: false } })} />)
+    render(<RunnerChase code="ABC234" view={testView({ hijau: { claimedAt: 90_000, startsAt: 90_000, deadline: 135_000, tapped: false } })} />)
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Tap the green' })))
     expect(call).toHaveBeenCalledTimes(1)
     expect(call).toHaveBeenCalledWith('touchGreen', { code: 'ABC234', token: 't1' })

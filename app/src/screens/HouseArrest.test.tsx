@@ -40,6 +40,7 @@ describe('HouseArrest (new power-ups §6.2)', () => {
     render(<HouseArrest code="ABC234" view={running} />)
     expect(screen.getByText('2:11')).toBeInTheDocument()
     expect(screen.getByText('House arrest: stay within 26 m for 2:36.')).toBeInTheDocument()
+    expect(screen.getByText('26 M · STAY INSIDE')).toBeInTheDocument()
     expect(screen.getByText('Keep Kejar open.')).toBeInTheDocument()
   })
 

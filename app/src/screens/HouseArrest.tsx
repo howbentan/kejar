@@ -71,7 +71,7 @@ export default function HouseArrest({ code, view, released = false }: { code: st
         height={260}
         circle={arrest.center ? { ...arrest.center, radiusM: ARREST_RADIUS_M } : null}
       />
-      <span className="arrest-chip">26 M · STAY INSIDE</span>
+      <span className="arrest-chip">{`${ARREST_RADIUS_M} M · STAY INSIDE`}</span>
       <p className="muted">Keep Kejar open.</p>
       <Feed view={view} />
     </Screen>

@@ -15,7 +15,7 @@ afterEach(() => {
 
 // testView's clock is at 100 000 ms.
 const running = (over: Partial<NonNullable<ReturnType<typeof testView>['hijau']>> = {}) =>
-  testView({ hijau: { startsAt: 90_000, deadline: 135_000, tapped: false, ...over } })
+  testView({ hijau: { claimedAt: 90_000, startsAt: 90_000, deadline: 135_000, tapped: false, ...over } })
 
 describe('HijauTakeover (new power-ups §6.3)', () => {
   it('fills the screen with the line, one big green button and the countdown to the deadline', () => {
@@ -94,12 +94,24 @@ describe('HijauTakeover (new power-ups §6.3)', () => {
     expect(onTap).toHaveBeenCalledTimes(1)
   })
 
+  it('stays hidden after a pause and resume shifts startsAt and deadline, while a slow poll says not tapped', async () => {
+    const onTap = vi.fn(async () => ({ ok: true as const }))
+    const { container, rerender } = render(<HijauTakeover view={running()} onTap={onTap} />)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Tap the green' })))
+    act(() => vi.advanceTimersByTime(SAFE_MS))
+    // Paused for 30 s, then resumed: the server moved startsAt and deadline later; claimedAt stays put.
+    const resumed = { ...running({ startsAt: 120_000, deadline: 165_000 }), now: 130_000 }
+    rerender(<HijauTakeover view={resumed} onTap={onTap} />)
+    expect(container).toBeEmptyDOMElement()
+    expect(onTap).toHaveBeenCalledTimes(1)
+  })
+
   it('a later Mak Kau Hijau still shows, with its button ready', async () => {
     const onTap = vi.fn(async () => ({ ok: true as const }))
     const { rerender } = render(<HijauTakeover view={running()} onTap={onTap} />)
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Tap the green' })))
     act(() => vi.advanceTimersByTime(SAFE_MS))
-    const later = testView({ now: 500_000, hijau: { startsAt: 490_000, deadline: 535_000, tapped: false } })
+    const later = testView({ now: 500_000, hijau: { claimedAt: 490_000, startsAt: 490_000, deadline: 535_000, tapped: false } })
     rerender(<HijauTakeover view={later} onTap={onTap} />)
     expect(screen.getByRole('button', { name: 'Tap the green' })).toBeEnabled()
   })

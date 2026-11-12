@@ -130,8 +130,9 @@ export interface View {
   /**
    * Mak Kau Hijau's takeover (new power-ups §6.3): for a runner who must tap green, from its start until it
    * settles; the deadline is held still while paused. Null for everyone else (chasers get a feed line).
+   * `claimedAt` names the run and never moves (a resume shifts `startsAt` and `deadline`).
    */
-  hijau: { startsAt: number; deadline: number; tapped: boolean } | null
+  hijau: { claimedAt: number; startsAt: number; deadline: number; tapped: boolean } | null
   /** My running Durian's end time; null for effects that wait for the next ping (motion design §7b). */
   activeEndsAt: number | null
   /** A chaser holding Mat Rempit while the team waits: when it unlocks (power-ups design §5a). */
@@ -799,7 +800,8 @@ function hijauFor(i: ViewInput, phase: Phase): View['hijau'] {
   const startsAt = Date.parse(run.startsAt)
   if (i.now < startsAt) return null
   const frozen = i.game.paused_at ? Math.max(0, i.now - Math.max(Date.parse(i.game.paused_at), startsAt)) : 0
-  return { startsAt, deadline: Date.parse(run.deadline) + frozen, tapped: run.tapped.includes(i.me.id) }
+  // `claimedAt` never moves (a resume shifts `startsAt` and `deadline`): it names the run for the phone.
+  return { claimedAt: Date.parse(run.claimedAt), startsAt, deadline: Date.parse(run.deadline) + frozen, tapped: run.tapped.includes(i.me.id) }
 }
 
 interface FeedContext {

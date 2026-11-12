@@ -1240,6 +1240,23 @@ describe('how to play: briefing view', () => {
   })
 })
 
+describe("Mak Kau Hijau's takeover view", () => {
+  it('carries claimedAt, which names the run even after a resume shifted startsAt and deadline', () => {
+    const run = {
+      claimedBy: 'c1',
+      claimedAt: iso(NOW - 60_000),
+      // As after a pause and resume: both moved later, claimedAt didn't.
+      startsAt: iso(NOW - 10_000),
+      deadline: iso(NOW + 35_000),
+      sentAt: iso(NOW - 10_000),
+      settledAt: null,
+      tapped: [],
+      targets: [aina.id],
+    }
+    expect(view(aina, { game: game({ hijau: run }) }).hijau).toEqual({ claimedAt: NOW - 60_000, startsAt: NOW - 10_000, deadline: NOW + 35_000, tapped: false })
+  })
+})
+
 describe("Super Ring's and Mak Kau Hijau's hint zones (Plan E2)", () => {
   const stash = { lat: 3.004, lng: 101.004, claimedBy: null, claimedAt: null }
   const claimed = { ...stash, claimedBy: 'r2', claimedAt: iso(NOW) }

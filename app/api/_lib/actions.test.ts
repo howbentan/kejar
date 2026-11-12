@@ -6856,7 +6856,7 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
     expect(hijauPushes()).toHaveLength(2)
 
     const aina = await poll(g, t + 5 * S, g.aina.token)
-    expect(aina.hijau).toEqual({ startsAt: t, deadline: t + 45 * S, tapped: false })
+    expect(aina.hijau).toEqual({ claimedAt: t, startsAt: t, deadline: t + 45 * S, tapped: false })
     expect(aina.feed[0]).toMatchObject({ text: 'Mak kau hijau! Tap the green.', act: true })
     const ben = await poll(g, t + 5 * S, g.ben.token)
     expect(ben.hijau).toBeNull()

@@ -23,8 +23,9 @@ export default function HijauTakeover({ view, onTap }: { view: View; onTap: () =
   const now = view.paused ? view.now : ticking
   const run = view.hijau
   const [sending, setSending] = useState(false)
-  // The run this phone already has an answer for, and the run it tapped successfully. Keyed on `startsAt`, which
-  // names a run and (unlike the deadline) doesn't move while paused, so a later Mak Kau Hijau still shows.
+  // The run this phone already has an answer for, and the run it tapped successfully. Keyed on `claimedAt`, the one
+  // field that never moves: a pause and resume shifts both `startsAt` and `deadline`. A later Mak Kau Hijau has its
+  // own `claimedAt`, so it still shows.
   const [answeredRun, setAnsweredRun] = useState<number | null>(null)
   const [safeRun, setSafeRun] = useState<number | null>(null)
   const [safe, setSafe] = useState(false)
@@ -36,7 +37,7 @@ export default function HijauTakeover({ view, onTap }: { view: View; onTap: () =
   const button = useRef<HTMLButtonElement>(null)
 
   // Hidden once tapped, by the server's word or by this phone's own `ok` (a slow poll may still say not tapped).
-  const showing = !!run && !run.tapped && safeRun !== run.startsAt && now >= run.startsAt
+  const showing = !!run && !run.tapped && safeRun !== run.claimedAt && now >= run.startsAt
   useEffect(() => {
     if (!showing) return
     navigator.vibrate?.([200, 80, 200, 80, 200])
@@ -50,7 +51,7 @@ export default function HijauTakeover({ view, onTap }: { view: View; onTap: () =
   useEffect(() => () => void (retry.current !== null && window.clearTimeout(retry.current)), [])
 
   function send() {
-    const runAt = run?.startsAt ?? null
+    const runAt = run?.claimedAt ?? null
     setSending(true)
     onTap().then(
       (r) => {
@@ -103,7 +104,7 @@ export default function HijauTakeover({ view, onTap }: { view: View; onTap: () =
       <div className="hijau-count" aria-live="off">
         {clock(Math.max(0, run.deadline - now))}
       </div>
-      <button ref={button} type="button" className="green-btn" disabled={sending || answeredRun === run.startsAt || over} onClick={send}>
+      <button ref={button} type="button" className="green-btn" disabled={sending || answeredRun === run.claimedAt || over} onClick={send}>
         Tap the green
       </button>
       <p>Tap the green in 45 s or go to Penjara.</p>
