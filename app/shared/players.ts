@@ -21,3 +21,12 @@ export function undoableCatchId(runner: Player, events: GameEvent[]): string | n
   if (runner.freed_at && Date.parse(latest.at) < Date.parse(runner.freed_at)) return null
   return latest.id
 }
+
+/**
+ * The `arrested` event Undo kejar would undo for this runner, or null: only a live house arrest that a chaser's
+ * catch fired (Super Ring). The caller checks the phase is the chase.
+ */
+export function undoableArrestId(runner: Player): string | null {
+  const a = runner.arrest
+  return a && a.route === 'catch' ? a.catchEventId : null
+}

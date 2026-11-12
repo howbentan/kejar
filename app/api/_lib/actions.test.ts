@@ -6365,3 +6365,330 @@ describe('Super Ring and Mak Kau Hijau: the hidden stashes (Plan E2 task 3)', ()
     expect(v.hijauZone).toBeNull()
   })
 })
+
+describe('Super Ring: house arrest instead of Penjara (Plan E2 task 4)', () => {
+  const S = 1000
+  const ARREST = 156 * S
+  const STASH = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const LOCK_LINE = { ok: false, reason: 'ring', name: 'Aina' }
+  type G = Awaited<ReturnType<typeof holding>>
+
+  /**
+   * A chasing Full game where Aina (#07) holds an unused Super Ring. Runners: Aina, Hafiz (#03). Chasers: Ben, Chong.
+   * Siti is a marshal. `now` is left at +7 min.
+   */
+  async function holding(settings: object = {}) {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' }, ...settings })
+    const chong = await run('join', { code: g.code, name: 'Chong', accepted: true })
+    await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [chong.playerId]: 'chaser' } })
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    await run('dropRing', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    const gameId = (await store.gameByCode(g.code))!.id
+    const code = (await store.gameByCode(g.code))!.ring_stash!.code!
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: ringQr(code), ...STASH, accuracy_m: 8 })).toEqual({ ok: true, kind: 'ring' })
+    pushes = []
+    return { ...g, chong, siti, gameId }
+  }
+  /** `chaser` scans a runner's tag at `ms`, the runner having just reported from `runnerM` and the chaser standing at `chaserM`. */
+  async function catchAt(g: G, chaser: 'ben' | 'chong', who: 'aina' | 'hafiz', ms: number, runnerM = 10, chaserM = 0) {
+    now = ms
+    await run('location', { code: g.code, token: g[who].token, ...at(runnerM) })
+    return run('catch', { code: g.code, token: g[chaser].token, tagQr: tagQr(who === 'aina' ? 7 : 3), ...at(chaserM) })
+  }
+  const row = async (g: G, id: string) => (await store.players(g.gameId)).find((p) => p.id === id)!
+  const ringRow = async (g: G) => (await store.powerUps(g.gameId)).find((u) => u.kind === 'ring')!
+  const evs = async (g: G, type: string) => (await store.events(g.gameId)).filter((e) => e.type === type)
+  const notices = (name: string) => pushes.filter((p) => p.endpoint === `https://push/${name}` && (p.payload as any).type === 'notice').map((p) => (p.payload as any).body)
+  const poll = (g: G, ms: number, token?: string) => {
+    now = ms
+    return run<View>('state', token ? { code: g.code, token } : { code: g.code, organiserToken: g.organiserToken })
+  }
+  /** Aina reports from `m` metres every 10 s from `fromMs` to `toMs` (inclusive). */
+  async function stayAt(g: G, fromMs: number, toMs: number, m = 10) {
+    for (let t = fromMs; t <= toMs; t += 10 * S) {
+      now = t
+      await run('location', { code: g.code, token: g.aina.token, ...at(m) })
+    }
+  }
+
+  it('a catch on a Super Ring holder puts them under house arrest, not Penjara', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    expect(await catchAt(g, 'ben', 'aina', t0)).toEqual(LOCK_LINE)
+    const aina = await row(g, g.aina.playerId)
+    expect(aina.jailed).toBe(false)
+    expect(aina.caught_by).toBeNull()
+    const { lat, lng } = at(10)
+    expect(aina.arrest).toMatchObject({ route: 'catch', by: g.ben.playerId, center: { lat, lng }, startedAt: new Date(t0).toISOString(), firedAt: new Date(t0).toISOString() })
+    expect((await ringRow(g)).used_at).toBe(new Date(t0).toISOString())
+    const arrested = await evs(g, 'arrested')
+    expect(arrested).toHaveLength(1)
+    expect(aina.arrest!.catchEventId).toBe(arrested[0].id)
+    expect(await evs(g, 'caught')).toHaveLength(0)
+    expect(await evs(g, 'ring-locked')).toEqual([expect.objectContaining({ actor_id: g.ben.playerId, target_id: g.aina.playerId, data: { firedAt: new Date(t0).toISOString() } })])
+    expect(notices('Aina')).toEqual(['Super Ring! House arrest: stay within 26 m for 2:36.'])
+    // The feed says only that something legendary saved a Dikejar, never the card or who.
+    const hafiz = await poll(g, t0 + S, g.hafiz.token)
+    expect(hafiz.feed.map((f) => f.text)).toContain('Something legendary saved a Dikejar.')
+    expect(hafiz.feed.filter((f) => Date.parse(f.at) >= t0).map((f) => f.text)).toEqual(['Something legendary saved a Dikejar.'])
+    // Her own view carries the circle and the end.
+    const mine = await poll(g, t0 + S, g.aina.token)
+    expect(mine.arrest).toEqual({ endsAt: t0 + ARREST, center: { lat, lng }, openBy: null })
+    expect((await poll(g, t0 + S, g.hafiz.token)).arrest).toBeNull()
+  })
+
+  it("the circle goes on the chaser's fix when the runner's is older than 20 s", async () => {
+    const g = await holding()
+    now = T0 + 8 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(30) })
+    now += 21 * S
+    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7), ...at(0) })
+    const { lat, lng } = at(0)
+    expect((await row(g, g.aina.playerId)).arrest!.center).toEqual({ lat, lng })
+  })
+
+  it('the catching chaser can never catch them again; another chaser can after release', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    await stayAt(g, t0 + 10 * S, t0 + ARREST)
+    await poll(g, t0 + ARREST + S)
+    expect((await row(g, g.aina.playerId)).arrest).toBeNull()
+    expect(await catchAt(g, 'ben', 'aina', t0 + ARREST + 2 * S)).toEqual({ ok: false, reason: 'ring-locked', name: 'Aina' })
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    expect(await catchAt(g, 'chong', 'aina', t0 + ARREST + 5 * S)).toMatchObject({ ok: true })
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: true, caught_by: g.chong.playerId })
+  })
+
+  it('nobody can catch them during house arrest', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    expect(await catchAt(g, 'chong', 'aina', t0 + 10 * S)).toEqual({ ok: false, reason: 'arrest', name: 'Aina' })
+    expect(await catchAt(g, 'ben', 'aina', t0 + 20 * S)).toEqual({ ok: false, reason: 'ring-locked', name: 'Aina' })
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false })
+    // Neither refusal records anything.
+    expect(await evs(g, 'ring-locked')).toHaveLength(1)
+    expect(await evs(g, 'caught')).toHaveLength(0)
+  })
+
+  it("chasers don't see them on the map", async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    await stayAt(g, t0 + 10 * S, T0 + 10 * MIN)
+    // The +10 ping reveals while she is under house arrest: no dot and no "never checked in" note.
+    const v = await poll(g, T0 + 10 * MIN, g.chong.token)
+    expect(v.lastRevealAt).toBe(T0 + 10 * MIN)
+    expect(v.dots.filter((d) => d.id === g.aina.playerId)).toHaveLength(0)
+    expect(v.dots.filter((d) => d.id === g.hafiz.playerId)).toHaveLength(0)
+    expect(v.feed.map((f) => f.text)).toContain('#03 never checked in')
+    expect(v.feed.map((f) => f.text).join(' ')).not.toMatch(/#07/)
+  })
+
+  it("stays inside with Kejar open for 2:36: free, ring spent, and they don't use their freed-once", async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    await stayAt(g, t0 + 10 * S, t0 + ARREST - 5 * S, 15)
+    await poll(g, t0 + ARREST - S)
+    expect((await row(g, g.aina.playerId)).arrest).not.toBeNull()
+    // A poll well after the end still judges on the fix at or before it.
+    await poll(g, t0 + ARREST + 30 * S)
+    const aina = await row(g, g.aina.playerId)
+    expect(aina).toMatchObject({ jailed: false, freed_once: false, arrest: null })
+    expect((await ringRow(g)).used_at).not.toBeNull()
+    expect((await evs(g, 'arrest-ended')).map((e) => e.data)).toEqual([{ outcome: 'free', firedAt: new Date(t0).toISOString() }])
+    expect(notices('Aina')).toContain('Free! Super Ring is spent.')
+    // Spent: the next catch is a plain catch.
+    expect(await catchAt(g, 'chong', 'aina', t0 + ARREST + 40 * S)).toMatchObject({ ok: true })
+  })
+
+  it('steps outside early: Penjara at once', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    await stayAt(g, t0 + 10 * S, t0 + 30 * S)
+    // A rough fix outside doesn't count.
+    now = t0 + 40 * S
+    await run('location', { code: g.code, token: g.aina.token, ...at(80), accuracy_m: 60 })
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    now = t0 + 50 * S
+    await run('location', { code: g.code, token: g.aina.token, ...at(60) })
+    const aina = await row(g, g.aina.playerId)
+    expect(aina).toMatchObject({ jailed: true, caught_by: null, arrest: null, freed_once: false })
+    expect(notices('Aina')).toContain('Bail revoked. To Penjara.')
+    expect((await evs(g, 'arrest-ended')).map((e) => e.data)).toEqual([{ outcome: 'revoked', firedAt: new Date(t0).toISOString() }])
+    expect((await evs(g, 'auto-jailed')).map((e) => e.data)).toEqual([expect.objectContaining({ cause: 'revoked', who: 'Aina #07' })])
+    const v = await poll(g, now + S, g.aina.token)
+    expect(v.jailReason).toBe('bail-revoked')
+    expect(v.arrest).toBeNull()
+    // A marshal can still undo it as a phone problem.
+    const alert = (await poll(g, now + S)).alerts.find((a) => a.kind === 'auto-jail')!
+    expect(alert.text).toBe('Aina #07 sent to Penjara (bail revoked)')
+    now += 2 * S
+    expect(await run('undoAutoJail', { code: g.code, eventId: alert.id, token: g.siti.token })).toEqual({ ok: true })
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, freed_once: false })
+  })
+
+  it('stops sending fixes: Penjara at 2:36 (Review Focus 1)', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    await stayAt(g, t0 + 10 * S, t0 + 30 * S)
+    await poll(g, t0 + ARREST - S)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    await poll(g, t0 + ARREST)
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: true, arrest: null })
+    expect(notices('Aina')).toContain('Bail revoked. To Penjara.')
+    expect((await evs(g, 'arrest-ended')).map((e) => e.data.outcome)).toEqual(['revoked'])
+  })
+
+  it('paused for 1 min during house arrest: release comes 1 min later (Review Focus 2)', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    await stayAt(g, t0 + 10 * S, t0 + 60 * S)
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    // A fix outside while paused changes nothing.
+    now = t0 + 90 * S
+    await run('location', { code: g.code, token: g.aina.token, ...at(80) })
+    expect((await row(g, g.aina.playerId)).arrest).not.toBeNull()
+    now = t0 + 120 * S
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    expect((await row(g, g.aina.playerId)).arrest!.startedAt).toBe(new Date(t0 + MIN).toISOString())
+    expect((await poll(g, t0 + 121 * S, g.aina.token)).arrest!.endsAt).toBe(t0 + MIN + ARREST)
+    await stayAt(g, t0 + 130 * S, t0 + MIN + ARREST - 5 * S)
+    await poll(g, t0 + ARREST + S)
+    expect((await row(g, g.aina.playerId)).arrest).not.toBeNull()
+    await poll(g, t0 + MIN + ARREST)
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, arrest: null })
+    expect(notices('Aina')).toContain('Free! Super Ring is spent.')
+  })
+
+  it('a poll while paused does not judge, and the view holds the end still', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    now = t0 + 60 * S
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    const v = await poll(g, t0 + ARREST + 10 * S, g.aina.token)
+    expect(v.arrest!.endsAt).toBe(t0 + ARREST + ARREST - 50 * S)
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, arrest: expect.anything() })
+  })
+
+  describe('auto-jail with Super Ring', () => {
+    /** Schedule mode: pings reveal at +10 and +15. Hafiz checks in to both; Aina misses both, so +15 would jail her. */
+    async function missedTwo() {
+      const g = await holding({ checkinMode: 'schedule' })
+      for (const m of [10, 15]) {
+        now = T0 + m * MIN - 20 * S
+        await run('location', { code: g.code, token: g.hafiz.token, ...at(30) })
+        await poll(g, T0 + m * MIN)
+      }
+      return g
+    }
+
+    it('push to open Kejar; the first fresh fix starts it there', async () => {
+      const g = await missedTwo()
+      const fired = T0 + 15 * MIN
+      const aina = await row(g, g.aina.playerId)
+      expect(aina.jailed).toBe(false)
+      expect(aina.arrest).toMatchObject({ route: 'auto-jail', by: null, center: null, startedAt: null, catchEventId: null, firedAt: new Date(fired).toISOString() })
+      expect(await evs(g, 'auto-jailed')).toHaveLength(0)
+      expect(await evs(g, 'ring-locked')).toHaveLength(0)
+      expect(await evs(g, 'arrested')).toHaveLength(1)
+      expect(notices('Aina')).toEqual(['Super Ring! Open Kejar within 60 s to start house arrest.'])
+      expect((await poll(g, fired + S, g.aina.token)).arrest).toEqual({ endsAt: null, center: null, openBy: fired + 60 * S })
+      // A rough fix doesn't start it; a usable one does, right there.
+      now = fired + 20 * S
+      await run('location', { code: g.code, token: g.aina.token, ...at(150), accuracy_m: 70 })
+      expect((await row(g, g.aina.playerId)).arrest!.startedAt).toBeNull()
+      now = fired + 30 * S
+      await run('location', { code: g.code, token: g.aina.token, ...at(120) })
+      const { lat, lng } = at(120)
+      expect((await row(g, g.aina.playerId)).arrest).toMatchObject({ center: { lat, lng }, startedAt: new Date(now).toISOString() })
+      expect(notices('Aina').at(-1)).toBe('Super Ring! House arrest: stay within 26 m for 2:36.')
+      // Past the 60 s, a started arrest keeps going.
+      await stayAt(g, fired + 40 * S, fired + 90 * S, 120)
+      await poll(g, fired + 91 * S)
+      expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, arrest: expect.objectContaining({ center: { lat, lng } }) })
+    })
+
+    it('no fix in 60 s means Penjara, and Super Ring is spent', async () => {
+      const g = await missedTwo()
+      const fired = T0 + 15 * MIN
+      await poll(g, fired + 59 * S)
+      expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+      await poll(g, fired + 60 * S)
+      expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: true, caught_by: null, arrest: null })
+      expect((await ringRow(g)).used_at).not.toBeNull()
+      expect((await evs(g, 'auto-jailed')).map((e) => e.data)).toEqual([expect.objectContaining({ cause: 'no-show', who: 'Aina #07' })])
+      // Still the missed check-ins Penjara screen, with the check-ins that sent her.
+      const v = await poll(g, fired + 61 * S, g.aina.token)
+      expect(v.jailReason).toBe('missed-checkins')
+      expect(v.jailCheckins).toEqual([
+        { at: T0 + 10 * MIN, ok: false },
+        { at: T0 + 15 * MIN, ok: false },
+      ])
+    })
+  })
+
+  it('undo kejar on the arrest ends it, lifts the lock and gives Super Ring back', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    const roster = (await poll(g, t0 + 10 * S)).roster
+    const eventId = (await evs(g, 'arrested'))[0].id
+    expect(roster.find((p) => p.id === g.aina.playerId)!.undoKejarId).toBe(eventId)
+    now = t0 + 20 * S
+    expect(await run('undoKejar', { code: g.code, eventId, token: g.siti.token })).toEqual({ ok: true })
+    expect(await run('undoKejar', { code: g.code, eventId, token: g.siti.token })).toEqual({ ok: false, reason: 'not-undoable' })
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, arrest: null })
+    expect((await ringRow(g)).used_at).toBeNull()
+    expect((await evs(g, 'arrest-ended')).map((e) => e.data)).toEqual([{ outcome: 'undone', firedAt: new Date(t0).toISOString() }])
+    expect((await poll(g, t0 + 21 * S)).roster.find((p) => p.id === g.aina.playerId)!.undoKejarId).toBeNull()
+    // The lock is lifted: Ben's next catch fires Super Ring again, rather than being refused.
+    expect(await catchAt(g, 'ben', 'aina', t0 + 30 * S)).toEqual(LOCK_LINE)
+  })
+
+  it('the game ends during house arrest: they count as free (Dikejar win if nobody else is free)', async () => {
+    // A 15-minute chase: hiding to +5, the chase to +20, scheduled pings at +10 and +15.
+    const g = await holding({ lengthMin: 15, checkinMode: 'schedule' })
+    expect(await catchAt(g, 'chong', 'hafiz', T0 + 8 * MIN)).toMatchObject({ ok: true })
+    for (const m of [10, 15]) {
+      now = T0 + m * MIN - 20 * S
+      await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    }
+    expect(await catchAt(g, 'ben', 'aina', T0 + 19 * MIN)).toEqual(LOCK_LINE)
+    expect(await evs(g, 'final-whistle')).toHaveLength(0)
+    const over = await poll(g, T0 + 20 * MIN + S)
+    expect(over.phase).toBe('ended')
+    expect(over.results?.winner).toBe('runners')
+    expect(over.results?.survivors).toEqual([g.aina.playerId])
+  })
+
+  it('Luar Garisan still applies during house arrest', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    // Caught 5 m inside the edge (the play area reaches 200 m north): the circle pokes outside it.
+    expect(await catchAt(g, 'ben', 'aina', t0, 195, 190)).toEqual(LOCK_LINE)
+    // 25 m outside the play area but inside the circle (26 m + 8 m): warned, then disqualified 30 s later.
+    now = t0 + 10 * S
+    await run('location', { code: g.code, token: g.aina.token, ...at(225) })
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, out_warned_at: expect.any(String) })
+    now = t0 + 40 * S
+    await run('location', { code: g.code, token: g.aina.token, ...at(225) })
+    expect((await row(g, g.aina.playerId)).disqualified_at).toBe(new Date(now).toISOString())
+    expect(await evs(g, 'luar-garisan')).toHaveLength(1)
+    // Out of the round: the house arrest is over and nothing more happens to her.
+    await poll(g, t0 + ARREST + S)
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, arrest: null })
+    expect(await evs(g, 'auto-jailed')).toHaveLength(0)
+  })
+})

@@ -39,7 +39,13 @@ export type CatchJudgement =
         | 'already-out'
         | 'durian-locked'
         | 'durian-head-start'
-      /** The runner's name, on the Durian refusals (added by the catch action). */
+        /** Super Ring fired on this catch: house arrest instead of Penjara, and this chaser is locked off (catch action). */
+        | 'ring'
+        /** This chaser's catch once fired the runner's Super Ring: locked off them for the game. */
+        | 'ring-locked'
+        /** The runner is under house arrest: nobody can catch them right now. */
+        | 'arrest'
+      /** The runner's name, on the Durian and Super Ring refusals (added by the catch action). */
       name?: string
     }
 
@@ -56,6 +62,8 @@ export function judgeCatch(i: {
   now: number
   /** Every Durian block this game, from the `shielded` events. */
   shieldings: { chaserId: string; runnerId: string; at: number }[]
+  /** Every chaser locked off a runner by Super Ring, from the `ring-locked` events (minus any undone). */
+  ringLocks?: { chaserId: string; runnerId: string }[]
 }): CatchJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (i.chaser.role !== 'chaser') return { ok: false, reason: 'not-a-chaser' }
@@ -69,6 +77,10 @@ export function judgeCatch(i: {
   const stings = i.shieldings.filter((s) => s.runnerId === runner.id)
   if (stings.some((s) => s.chaserId === i.chaser.id)) return { ok: false, reason: 'durian-locked' }
   if (stings.some((s) => i.now - s.at < DURIAN_HEAD_START_MS)) return { ok: false, reason: 'durian-head-start' }
+  // Super Ring, like Durian: the chaser whose catch fired it is off this runner for the game, and nobody catches
+  // a runner under house arrest.
+  if ((i.ringLocks ?? []).some((l) => l.runnerId === runner.id && l.chaserId === i.chaser.id)) return { ok: false, reason: 'ring-locked' }
+  if (runner.arrest) return { ok: false, reason: 'arrest' }
 
   const age = (p: Position) => i.now - Date.parse(p.at)
   if (!i.chaserPos || age(i.chaserPos) > CHASER_FRESH_MS) return { ok: false, reason: 'no-location' }

@@ -18,7 +18,8 @@ import { autoJailDue, checkinsSince, countedCheckIn, fairlyWarned } from '../../
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
-import { isOut, undoableCatchId } from '../../shared/players.js'
+import { isOut, undoableArrestId, undoableCatchId } from '../../shared/players.js'
+import { ARREST_FIX_FRESH_MS, ARREST_OPEN_MS, arrestEndsAt, insideArrest, releaseVerdict, usableFix } from '../../shared/arrest.js'
 import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
 import { bomohCodeFromQr, datoCodeFromQr, hijauCodeFromQr, isBomohQr, isDatoQr, isHijauQr, isRingQr, ringCodeFromQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
@@ -28,7 +29,7 @@ import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
 import { fallbackFor, LEGENDARY_KINDS, pickLegendaries, sidesOf, type SideSwitch } from '../../shared/legendaries.js'
 import { validateTeams } from '../../shared/teams.js'
-import { DEFAULT_SETTINGS, type Arena, type BomohStash, type DatoStash, type Game, type LatLng, type LegendaryKind, type Player, type Position, type PowerUp, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
+import { DEFAULT_SETTINGS, type Arena, type Arrest, type BomohStash, type DatoStash, type Game, type LatLng, type LegendaryKind, type Player, type Position, type PowerUp, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
 import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
 import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
@@ -632,6 +633,8 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
   let pingRows = await store.pings(game.id)
   const work = dueWork(game, pingRows, now)
   let whistleNow = false
+  // Super Ring's house arrests are judged lazily, on any poll (there's no server tick); never while paused.
+  if (phase === 'chasing' && !game.paused_at && !game.ended_at && (await settleArrests(ctx, game))) whistleNow = true
   // Scheduled pings come from the clock; bonus (Flare) pings carry their own times.
   const times = new Map<number, { revealAt: number }>([
     ...pingTimes(game, now).map((t) => [t.seq, t] as const),
@@ -696,6 +699,8 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
       const lastTwo = warned({ seq, revealAt }) ? lastThree.slice(-2) : []
       const atReveals = lastTwo.length === 2 ? await store.latestPositions(game.id, lastThree.map((t) => iso(t.revealAt))) : {}
       for (const p of lastTwo.length === 2 ? free : []) {
+        // Under house arrest, the circle judges them, not check-ins.
+        if (p.arrest) continue
         // Only a location inside each ping's 45 s window counts as a check-in (§4.2).
         const since = sinceFor(p)
         const judged = lastThree.map((t) => {
@@ -703,12 +708,15 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
           return { alertAt: t.alertAt, revealAt: t.revealAt, lastAt: at ? Date.parse(at.at) : null }
         })
         const pings = judged.slice(-2)
-        // Two missed scheduled check-ins in a row: sent to Penjara like a catch, with no chaser.
-        if (autoJailDue(pings, since) && (await store.catchRunner(p.id, null))) {
+        // Two missed scheduled check-ins in a row: sent to Penjara like a catch, with no chaser (or house arrest,
+        // with Super Ring; its `arrested` event keeps the check-ins in case they never open Kejar).
+        if (autoJailDue(pings, since)) {
           const checkins = judged
             .filter((t) => t.alertAt >= since)
             .map((t) => ({ revealAt: t.revealAt, ok: countedCheckIn(t.alertAt, t.revealAt, t.lastAt, since) }))
-          await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: p.id, data: { who: who(p), seq, checkins } })
+          if ((await jailOrArrest(ctx, game, p, null, 'auto-jail', { seq, checkins })) === 'jailed') {
+            await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: p.id, data: { who: who(p), seq, checkins } })
+          }
         }
       }
       // Auto-jailing the last free runner blows the final whistle, the same as a catch.
@@ -805,6 +813,137 @@ async function finish(ctx: Ctx, game: Game) {
   if (await ctx.store.claimEnd(game.id, results.winner)) {
     await ctx.store.addEvent({ game_id: game.id, type: 'ended', actor_id: null, target_id: null, data: { winner: results.winner } })
   }
+}
+
+/** Super Ring's messages to the runner (new power-ups §6.2). */
+const ARREST_STARTED = 'Super Ring! House arrest: stay within 26 m for 2:36.'
+const ARREST_OPEN = 'Super Ring! Open Kejar within 60 s to start house arrest.'
+const ARREST_FREE = 'Free! Super Ring is spent.'
+const BAIL_REVOKED = 'Bail revoked. To Penjara.'
+
+/** A private notice to one player; a push that can't be delivered never fails the action. */
+async function notify(ctx: Ctx, game: Game, p: Player, title: string, body: string) {
+  try {
+    await pushTo(ctx, [p], { type: 'notice', code: game.code, title, body })
+  } catch {
+    // Their own screen still shows it on the next poll.
+  }
+}
+
+/**
+ * The one way into Penjara (new power-ups §6.2): every route (a catch, auto-jail, later Mak Kau Hijau) goes
+ * through here. A runner holding an unused Super Ring gets house arrest instead: on a catch it starts at once,
+ * centred on their fix if it's at most 20 s old (else the chaser's), and locks that chaser off them; on any other
+ * route it waits for them to open Kejar. `data` goes on the `arrested` event. Returns null when neither happened:
+ * already jailed, or a concurrent call is firing their Super Ring right now.
+ */
+async function jailOrArrest(
+  ctx: Ctx,
+  game: Game,
+  runner: Player,
+  by: Player | null,
+  route: Arrest['route'],
+  data: Record<string, unknown> = {},
+): Promise<'jailed' | 'arrested' | null> {
+  const { store, now } = ctx
+  const ring = (await store.powerUps(game.id)).find((u) => u.player_id === runner.id && u.kind === 'ring' && u.used_at === null && !u.taken_at)
+  if (!ring) return (await store.catchRunner(runner.id, by?.id ?? null)) ? 'jailed' : null
+  // Someone else's call won the card a moment ago: it is firing there, so this one does nothing.
+  if (!(await store.markUsed(ring.id))) return null
+  const firedAt = iso(now)
+  let center: LatLng | null = null
+  if (route === 'catch') {
+    const positions = await store.latestPositions(game.id, [firedAt])
+    const theirs = latest(positions[runner.id])
+    const chaser = by ? latest(positions[by.id]) : null
+    const pick = theirs && now - Date.parse(theirs.at) <= ARREST_FIX_FRESH_MS ? theirs : (chaser ?? theirs)
+    center = pick ? { lat: pick.lat, lng: pick.lng } : null
+  }
+  const arrest: Arrest = { firedAt, route, by: by?.id ?? null, center, startedAt: center ? firedAt : null, ringId: ring.id, catchEventId: null }
+  if (!(await store.startArrest(runner.id, arrest))) {
+    // Jailed by a racing call first: the card was never spent.
+    await store.updatePowerUp(ring.id, { used_at: null })
+    return null
+  }
+  // No actor: the feed line never says who, or which card.
+  const fired = await store.addEvent({ game_id: game.id, type: 'arrested', actor_id: null, target_id: runner.id, data: { route, firedAt, ...data } })
+  if (route === 'catch' && by) {
+    await store.updateArrest(runner.id, { catchEventId: fired.id })
+    await store.addEvent({ game_id: game.id, type: 'ring-locked', actor_id: by.id, target_id: runner.id, data: { firedAt } })
+  }
+  await notify(ctx, game, runner, 'House arrest', center ? ARREST_STARTED : ARREST_OPEN)
+  return 'arrested'
+}
+
+/**
+ * Ends a house arrest in Penjara: a fix outside the circle, no fresh fix inside at the end (`revoked`), or no fix
+ * at all within 60 s of a waiting one (`no-show`, which keeps the missed check-ins that started it). The runner
+ * goes in with no chaser, under an `auto-jailed` event, so the Penjara screens and a marshal's phone-problem undo
+ * work as for auto-jail. True when that put the last free runner out (a final whistle is pending).
+ */
+async function arrestToPenjara(ctx: Ctx, game: Game, runner: Player, a: Arrest, cause: 'revoked' | 'no-show', data: Record<string, unknown> = {}): Promise<boolean> {
+  const { store } = ctx
+  if (!(await store.endArrest(runner.id, a.firedAt))) return false
+  if (await store.catchRunner(runner.id, null)) {
+    if (cause === 'revoked') await notify(ctx, game, runner, 'Penjara', BAIL_REVOKED)
+    await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: runner.id, data: { who: who(runner), cause, ...data } })
+  }
+  await store.addEvent({ game_id: game.id, type: 'arrest-ended', actor_id: null, target_id: runner.id, data: { outcome: 'revoked', firedAt: a.firedAt } })
+  return allOutCheck(ctx, game, 'auto-jail')
+}
+
+/**
+ * Judges every house arrest that is due (the caller skips paused games): a waiting one with no fix 60 s after it
+ * fired goes to Penjara; a started one at its end is judged on the runner's latest fix at or before the end, so a
+ * late poll never changes the outcome. A Luar Garisan runner's arrest just ends. True if a final whistle is pending.
+ */
+async function settleArrests(ctx: Ctx, game: Game): Promise<boolean> {
+  const { store, now } = ctx
+  let allOut = false
+  for (const p of (await store.players(game.id)).filter((r) => r.role === 'runner' && r.arrest && !r.jailed)) {
+    const a = p.arrest!
+    if (p.disqualified_at) {
+      await store.endArrest(p.id, a.firedAt)
+      continue
+    }
+    const endsAt = arrestEndsAt(a)
+    if (endsAt === null) {
+      if (now < Date.parse(a.firedAt) + ARREST_OPEN_MS) continue
+      const fired = (await store.events(game.id)).filter((e) => e.type === 'arrested' && e.target_id === p.id && e.data.firedAt === a.firedAt).at(-1)
+      const kept = fired && Array.isArray(fired.data.checkins) ? { seq: fired.data.seq, checkins: fired.data.checkins } : {}
+      if (await arrestToPenjara(ctx, game, p, a, 'no-show', kept)) allOut = true
+      continue
+    }
+    if (now < endsAt) continue
+    const fix = latest((await store.latestPositions(game.id, [iso(endsAt)]))[p.id])
+    if (releaseVerdict(a, fix) === 'revoked') {
+      if (await arrestToPenjara(ctx, game, p, a, 'revoked')) allOut = true
+    } else if (await store.endArrest(p.id, a.firedAt)) {
+      // Free, and it doesn't use their one freed: they never went in.
+      await notify(ctx, game, p, 'Free!', ARREST_FREE)
+      await store.addEvent({ game_id: game.id, type: 'arrest-ended', actor_id: null, target_id: p.id, data: { outcome: 'free', firedAt: a.firedAt } })
+    }
+  }
+  return allOut
+}
+
+/**
+ * A fix from a runner under house arrest (the caller skips paused games and anything but the chase). A rough fix
+ * counts for nothing. The first usable fix starts a waiting arrest right there, if it lands within 60 s; once
+ * started, a usable fix outside the circle before the end sends them to Penjara at once.
+ */
+async function arrestFix(ctx: Ctx, game: Game, me: Player, fix: Position) {
+  const a = me.arrest
+  if (!a || !usableFix(fix)) return
+  if (!a.startedAt) {
+    if (ctx.now >= Date.parse(a.firedAt) + ARREST_OPEN_MS) return
+    await ctx.store.updateArrest(me.id, { center: { lat: fix.lat, lng: fix.lng }, startedAt: iso(ctx.now) })
+    await notify(ctx, game, me, 'House arrest', ARREST_STARTED)
+    return
+  }
+  // After the end, only the fix at or before it counts, which a poll judges.
+  if (ctx.now >= arrestEndsAt(a)! || insideArrest(a, fix)) return
+  await arrestToPenjara(ctx, game, me, a, 'revoked')
 }
 
 const create: Action = async (ctx, body) => {
@@ -1102,6 +1241,8 @@ const location: Action = async (ctx, body) => {
     }
   }
   await checkWhere(ctx, game, me, { lat, lng }, accuracy)
+  // Super Ring's house arrest freezes with the game, like Luar Garisan. Luar Garisan above still applies to it.
+  if (me.arrest && !game.paused_at && phaseAt(game, ctx.now).phase === 'chasing') await arrestFix(ctx, game, me, { ...fix, at: iso(ctx.now) })
   // Each fix is judged as it lands, so a step outside and back between two polls still counts (rules §9a).
   if (rescuing) await settleRescue(ctx, game, undefined, { ...fix, at: iso(ctx.now) })
   return { ok: true }
@@ -1189,9 +1330,15 @@ const catchAction: Action = async (ctx, body) => {
   const tagId = tagIdFromQr(str(body.tagQr))
   const runner = players.find((p) => p.role === 'runner' && p.tag_id === tagId)
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
-  const shieldings = (await ctx.store.events(game.id))
+  const events = await ctx.store.events(game.id)
+  const shieldings = events
     .filter((e) => e.type === 'shielded' && e.actor_id && e.target_id)
     .map((e) => ({ chaserId: e.actor_id as string, runnerId: e.target_id as string, at: Date.parse(e.at) }))
+  // Super Ring's locks, minus any whose house arrest a marshal undid (Undo kejar: the catch never happened).
+  const undone = new Set(events.filter((e) => e.type === 'arrest-ended' && e.data.outcome === 'undone').map((e) => `${e.target_id}|${str(e.data.firedAt)}`))
+  const ringLocks = events
+    .filter((e) => e.type === 'ring-locked' && e.actor_id && e.target_id && !undone.has(`${e.target_id}|${str(e.data.firedAt)}`))
+    .map((e) => ({ chaserId: e.actor_id as string, runnerId: e.target_id as string }))
   const verdict = judgeCatch({
     phase: phaseAt(fresh, ctx.now).phase,
     chaser: players.find((p) => p.id === me.id) ?? me,
@@ -1201,10 +1348,12 @@ const catchAction: Action = async (ctx, body) => {
     runnerPos: runner ? latest(positions[runner.id]) : null,
     now: ctx.now,
     shieldings,
+    ringLocks,
   })
   if (!verdict.ok) {
-    // The Durian refusals name the runner so the chaser knows who is off limits.
-    return runner && (verdict.reason === 'durian-locked' || verdict.reason === 'durian-head-start') ? { ...verdict, name: runner.name } : verdict
+    // The Durian and Super Ring refusals name the runner so the chaser knows who is off limits.
+    const named: string[] = ['durian-locked', 'durian-head-start', 'ring-locked', 'arrest']
+    return runner && named.includes(verdict.reason) ? { ...verdict, name: runner.name } : verdict
   }
   // A switched-on Shield absorbs one otherwise-valid catch.
   const shield = activeShield(await ctx.store.powerUps(game.id), verdict.runnerId, ctx.now)
@@ -1213,7 +1362,10 @@ const catchAction: Action = async (ctx, body) => {
     await ctx.store.addEvent({ game_id: game.id, type: 'shielded', actor_id: me.id, target_id: verdict.runnerId, data: {} })
     return { ok: false, reason: 'shielded', name: runner?.name }
   }
-  if (!(await ctx.store.catchRunner(verdict.runnerId, me.id))) return { ok: false, reason: 'already-caught' }
+  const sent = runner ? await jailOrArrest(ctx, fresh, runner, players.find((p) => p.id === me.id) ?? me, 'catch') : null
+  // Super Ring fired: house arrest, not a catch, and this chaser hands the tag back for good.
+  if (sent === 'arrested') return { ok: false, reason: 'ring', name: runner!.name }
+  if (sent !== 'jailed') return { ok: false, reason: 'already-caught' }
   await ctx.store.addEvent({
     game_id: game.id,
     type: 'caught',
@@ -2178,14 +2330,28 @@ const undoKejar: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const eventId = str(body.eventId)
   const events = await ctx.store.events(game.id)
-  const catching = events.find((e) => e.id === eventId && e.type === 'caught')
+  const catching = events.find((e) => e.id === eventId && (e.type === 'caught' || (e.type === 'arrested' && e.data.route === 'catch')))
   const target = catching && (await ctx.store.players(game.id)).find((p) => p.id === catching.target_id)
-  const undoable = !!target && phaseAt(game, ctx.now).phase === 'chasing' && undoableCatchId(target, events) === eventId
-  // Atomic, so two marshals tapping at once (or a racing release) free the runner only once.
-  if (!undoable || !(await ctx.store.releaseCaught(target.id, catching.actor_id!, iso(ctx.now)))) {
-    return { ok: false, reason: 'not-undoable' }
+  const chasing = phaseAt(game, ctx.now).phase === 'chasing'
+  if (catching?.type === 'arrested') {
+    // A catch that fired Super Ring (new power-ups §6.2): ends the live house arrest, lifts that chaser's lock (the
+    // reader skips locks whose arrest ended 'undone') and gives the card back, still switched on.
+    const a = target?.arrest
+    if (!target || !a || !chasing || undoableArrestId(target) !== eventId || !(await ctx.store.endArrest(target.id, a.firedAt))) {
+      return { ok: false, reason: 'not-undoable' }
+    }
+    await ctx.store.updatePowerUp(a.ringId, { used_at: null })
+    await ctx.store.addEvent({ game_id: game.id, type: 'arrest-ended', actor_id: marshal?.id ?? null, target_id: target.id, data: { outcome: 'undone', firedAt: a.firedAt } })
+  } else {
+    const undoable = !!target && chasing && undoableCatchId(target, events) === eventId
+    // Atomic, so two marshals tapping at once (or a racing release) free the runner only once.
+    if (!undoable || !(await ctx.store.releaseCaught(target.id, catching.actor_id!, iso(ctx.now)))) {
+      return { ok: false, reason: 'not-undoable' }
+    }
   }
-  await ctx.store.addEvent({ game_id: game.id, type: 'kejar-undone', actor_id: marshal?.id ?? null, target_id: target.id, data: { eventId, who: who(target) } })
+  // An undone house arrest's line names nobody: the feed never said who Super Ring saved.
+  const arrest = catching.type === 'arrested' ? { arrest: true } : {}
+  await ctx.store.addEvent({ game_id: game.id, type: 'kejar-undone', actor_id: marshal?.id ?? null, target_id: target.id, data: { eventId, who: who(target), ...arrest } })
   const name = await marshalName(ctx, game, body, marshal)
   await ctx.store.addEvent({ game_id: game.id, type: 'handled', actor_id: marshal?.id ?? null, target_id: null, data: { eventId, name } })
   await ctx.store.addSafetyRecord({

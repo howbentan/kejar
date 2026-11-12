@@ -6,7 +6,8 @@ import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { isTicked, kitOf, packItems, placeItems, SECRET_PLACE_IDS, type KitItem, type PlaceItem, type SecretLetters } from './kit.js'
 import { MOMENT_WINDOW_MS } from './moments.js'
 import { reelPulledThisStay, RESCUE_HOLD_MS } from './penjara.js'
-import { isOut, undoableCatchId } from './players.js'
+import { isOut, undoableArrestId, undoableCatchId } from './players.js'
+import { ARREST_OPEN_MS, arrestEndsAt } from './arrest.js'
 import { POWER_NAME } from './powerNames.js'
 import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, shieldArmedAt, slotBusy, TOLL_RADIUS_M } from './powerups.js'
 import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type LegendaryKind, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
@@ -60,7 +61,8 @@ export interface RosterEntry {
   pushOn?: boolean
   /**
    * The catch `Undo kejar` would undo (fair-play §1.4): this runner's latest catch while it still holds them, in
-   * the chase. Sent only in the organiser's and marshals' rosters; null when there is nothing to undo.
+   * the chase, or the `arrested` event of a live house arrest a catch fired (Super Ring). Sent only in the
+   * organiser's and marshals' rosters; null when there is nothing to undo.
    */
   undoKejarId?: string | null
 }
@@ -113,8 +115,16 @@ export interface View {
   caughtBy: string | null
   /** Luar Garisan: I've been warned for being outside the play area and have not yet come back or been disqualified. */
   outWarned: boolean
-  /** Why I'm in Penjara: caught by a chaser, or auto-jailed for missing two check-ins. */
-  jailReason: 'caught' | 'missed-checkins' | null
+  /**
+   * Why I'm in Penjara: caught by a chaser, auto-jailed for missing two check-ins, or sent from Super Ring's house
+   * arrest (`bail-revoked`: a fix outside the circle, or no fresh fix inside it at the end).
+   */
+  jailReason: 'caught' | 'missed-checkins' | 'bail-revoked' | null
+  /**
+   * My Super Ring house arrest, while it lasts (null otherwise): when it ends (held still while paused), the
+   * circle's centre, and while it waits for me to open Kejar, the deadline to start it (both others null then).
+   */
+  arrest: { endsAt: number | null; center: LatLng | null; openBy: number | null } | null
   /** My running Durian's end time; null for effects that wait for the next ping (motion design §7b). */
   activeEndsAt: number | null
   /** A chaser holding Mat Rempit while the team waits: when it unlocks (power-ups design §5a). */
@@ -476,8 +486,9 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
       if (sliding) dots.push(sliding)
       continue
     }
-    // Luar Garisan: out of the round, so neither a target on the map nor a "never checked in" note.
-    if (isOut(p)) continue
+    // Luar Garisan: out of the round, so neither a target on the map nor a "never checked in" note. Super Ring's
+    // house arrest hides the runner the same way, so nobody can wait outside the circle.
+    if (isOut(p) || p.arrest) continue
     const at = latestAtOrBefore(i.positions[p.id], revealAt)
     // A cloaked runner must look exactly like one who never checked in.
     if (!at || cloaked.has(p.id)) {
@@ -749,7 +760,22 @@ function jailReasonFor(i: ViewInput): View['jailReason'] {
   const latest = i.events
     .filter((e) => (e.type === 'caught' || e.type === 'auto-jailed') && e.target_id === i.me.id)
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0]
-  return latest?.type === 'auto-jailed' ? 'missed-checkins' : 'caught'
+  if (latest?.type !== 'auto-jailed') return 'caught'
+  return latest.data.cause === 'revoked' ? 'bail-revoked' : 'missed-checkins'
+}
+
+/** My house arrest for my own screen (see `View.arrest`). While paused, both deadlines move with the clock. */
+function arrestFor(i: ViewInput): View['arrest'] {
+  const a = i.me.arrest
+  if (!a || i.me.role !== 'runner') return null
+  const since = a.startedAt ?? a.firedAt
+  const frozen = i.game.paused_at ? Math.max(0, i.now - Math.max(Date.parse(i.game.paused_at), Date.parse(since))) : 0
+  const endsAt = arrestEndsAt(a)
+  return {
+    endsAt: endsAt === null ? null : endsAt + frozen,
+    center: a.center,
+    openBy: a.startedAt ? null : Date.parse(a.firedAt) + ARREST_OPEN_MS + frozen,
+  }
 }
 
 interface FeedContext {
@@ -859,7 +885,12 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
         `${n} more Dikejar ${n === 1 ? 'is' : 'are'} loose near Penjara.`,
       )
     }
+    case 'arrested':
+      // Never the card's name or the runner's (rules doc §9b).
+      return plain('Something legendary saved a Dikejar.')
     case 'auto-jailed':
+      // Out of Super Ring's house arrest: never says why, so the card stays a secret.
+      if (e.data.cause === 'revoked') return two(`${tag} went to Penjara.`, 'PENJARA', `${ctx.freeNow} Dikejar still free.`, `One less to find. ${tag} is in Penjara.`)
       return two(
         `${tag} missed 2 check-ins in a row.`,
         '2×',
@@ -921,6 +952,8 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
     case 'auto-jail-undone':
       return target ? `${tagLabel(target)} is back in the game (marshal)` : 'A runner is back in the game (marshal)'
     case 'kejar-undone':
+      // An undone house arrest names nobody: the feed never said who Super Ring saved.
+      if (e.data.arrest === true) return 'A marshal undid a kejar.'
       // The runner's name only, never the tag number (fair-play §1.4).
       return `A marshal undid a kejar. ${target?.name ?? 'A Dikejar'} is back in.`
     case 'final-whistle':
@@ -928,7 +961,10 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       return e.data.cause === 'removed' || e.data.cause === 'luar-garisan'
         ? 'No Dikejar left free! Final whistle in 60 s.'
         : 'Last Dikejar caught! Final whistle in 60 s.'
+    case 'arrested':
+      return 'Something legendary saved a Dikejar.'
     case 'auto-jailed':
+      if (e.data.cause === 'revoked') return target ? `${tagLabel(target)} sent to Penjara` : 'A runner was sent to Penjara'
       return target ? `${tagLabel(target)} missed 2 check-ins, sent to Penjara` : 'A runner missed 2 check-ins, sent to Penjara'
     default:
       return null
@@ -939,7 +975,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, ringZone: null, hijauZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, ringStash: undefined, ringCard: undefined, hijauStash: undefined, hijauCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, arrest: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, ringZone: null, hijauZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, ringStash: undefined, ringCard: undefined, hijauStash: undefined, hijauCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
   }
   return v
 }
@@ -1014,6 +1050,7 @@ function fullView(i: ViewInput): View {
     chaserNearby,
     caughtBy: i.me.jailed && i.me.caught_by ? (byId.get(i.me.caught_by)?.name ?? null) : null,
     jailReason: jailReasonFor(i),
+    arrest: arrestFor(i),
     outWarned: !!i.me.out_warned_at && !i.me.disqualified_at,
     activeEndsAt: (() => {
       const shield = activeShield(i.powerUps, i.me.id, i.now)
@@ -1049,7 +1086,7 @@ function fullView(i: ViewInput): View {
           caught_at: p.caught_at,
           freed_once: p.freed_once,
           ...(organiser || role === 'marshal'
-            ? { pushOn: !!p.push, undoKejarId: phase === 'chasing' && p.role === 'runner' ? undoableCatchId(p, i.events) : null }
+            ? { pushOn: !!p.push, undoKejarId: phase === 'chasing' && p.role === 'runner' ? (undoableCatchId(p, i.events) ?? undoableArrestId(p)) : null }
             : {}),
         }))
       : [],

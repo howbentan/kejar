@@ -178,6 +178,11 @@ describe('catchMessage', () => {
   it('explains the 15 s head start', () => {
     expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'durian-head-start', name: 'Aina' })).toBe('Durian! Aina gets a 15 s head start.')
   })
+  it('Super Ring: the catch that fires it, the lock after, and house arrest', () => {
+    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'ring', name: 'Aina' })).toBe("Super Ring! You can't catch Aina again this game. Hand the tag back.")
+    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'ring-locked', name: 'Aina' })).toBe("Super Ring! You can't catch Aina again this game.")
+    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'arrest', name: 'Aina' })).toBe("House arrest. Can't catch them right now.")
+  })
 })
 
 describe('ChaserChase Luar Garisan', () => {
