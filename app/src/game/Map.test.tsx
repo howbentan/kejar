@@ -5,6 +5,7 @@ const created = vi.hoisted(() => ({
   count: 0,
   flights: [] as unknown[],
   fits: [] as unknown[],
+  fitOpts: [] as unknown[],
   load: null as null | (() => void),
   layers: [] as { id: string; source: string }[],
   data: {} as Record<string, unknown>,
@@ -67,8 +68,9 @@ vi.mock('maplibre-gl', () => ({
       flyTo(opts: unknown) {
         created.flights.push(opts)
       }
-      fitBounds(bounds: unknown) {
+      fitBounds(bounds: unknown, opts?: unknown) {
         created.fits.push(bounds)
+        created.fitOpts.push(opts)
       }
     },
   },
@@ -534,12 +536,34 @@ describe('GameMap', () => {
       created.layers = []
       created.data = {}
       created.fits = []
+      created.fitOpts = []
       render(<GameMap arena={arena} dots={[]} circle={{ lat: 3.1, lng: 101.1, radiusM: 26 }} />)
       act(() => created.load!())
       expect(layer('house-line').paint['line-color']).toBe('#FFA94D')
       expect(layer('house-line').paint['line-dasharray']).toBeUndefined()
       expect(created.data.house).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
       expect(created.fits.length).toBeGreaterThan(0)
+    })
+
+    it('frames the 26 m circle close: up to zoom 19, a little past the circle edge', () => {
+      created.fits = []
+      created.fitOpts = []
+      render(<GameMap arena={arena} dots={[]} circle={{ lat: 3.1, lng: 101.1, radiusM: 26 }} />)
+      act(() => created.load!())
+      expect(created.fitOpts.at(-1)).toMatchObject({ maxZoom: 19 })
+      const [[w, s], [e, n]] = created.fits.at(-1) as [[number, number], [number, number]]
+      // About 1.3 × 26 m each way from the centre: the circle fills most of the frame.
+      const halfM = ((n - s) / 2) * 111_320
+      expect(halfM).toBeGreaterThan(26)
+      expect(halfM).toBeLessThan(40)
+      expect((w + e) / 2).toBeCloseTo(101.1, 6)
+    })
+
+    it("other maps keep the street-level cap", () => {
+      created.fitOpts = []
+      render(<GameMap arena={arena} dots={[]} fit={[{ lat: 3.1, lng: 101.1 }, { lat: 3.11, lng: 101.11 }]} />)
+      act(() => created.load!())
+      expect(created.fitOpts.at(-1)).toMatchObject({ maxZoom: 17 })
     })
 
     it('draws nothing without a circle', () => {

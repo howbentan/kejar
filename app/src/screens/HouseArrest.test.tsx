@@ -20,6 +20,9 @@ beforeEach(() => {
   localStorage.setItem('kejar.game.ABC234', JSON.stringify({ token: 't1' }))
   call.mockClear()
   wake.mockClear()
+  // Fake timers and a fixed Date.now: the countdowns tick off `useServerNow`'s 1 s interval, so a slow run on real
+  // timers could shift the value under an assertion.
+  vi.useFakeTimers({ now: 5_000_000 })
 })
 afterEach(() => {
   cleanup()
@@ -48,7 +51,6 @@ describe('HouseArrest (new power-ups §6.2)', () => {
   })
 
   it('the countdown holds still while paused', () => {
-    vi.useFakeTimers()
     render(<HouseArrest code="ABC234" view={{ ...running, paused: true }} />)
     act(() => vi.advanceTimersByTime(5_000))
     expect(screen.getByText('2:11')).toBeInTheDocument()
@@ -63,7 +65,6 @@ describe('HouseArrest (new power-ups §6.2)', () => {
   })
 
   it('keeps the screen awake and sends a fresh fix straight away, then every few seconds', async () => {
-    vi.useFakeTimers()
     render(<HouseArrest code="ABC234" view={waiting} />)
     expect(wake).toHaveBeenCalledWith(true)
     await act(async () => {})
@@ -71,6 +72,22 @@ describe('HouseArrest (new power-ups §6.2)', () => {
     const first = call.mock.calls.length
     await act(async () => vi.advanceTimersByTime(ARREST_PING_MS))
     expect(call.mock.calls.length).toBeGreaterThan(first)
+  })
+
+  it('both countdowns tick with the clock', () => {
+    const { rerender } = render(<HouseArrest code="ABC234" view={running} />)
+    act(() => vi.advanceTimersByTime(5_000))
+    expect(screen.getByText('2:06')).toBeInTheDocument()
+    rerender(<HouseArrest code="ABC234" view={{ ...waiting, now: 100_001 }} />)
+    expect(screen.getByText('48 s')).toBeInTheDocument()
+    act(() => vi.advanceTimersByTime(3_000))
+    expect(screen.getByText('45 s')).toBeInTheDocument()
+  })
+
+  it('waiting with no deadline leaves the seconds out instead of reading 0 s', () => {
+    render(<HouseArrest code="ABC234" view={testView({ arrest: { endsAt: null, center: null, openBy: null } })} />)
+    expect(screen.getByRole('heading', { name: 'Open Kejar to start house arrest' })).toBeInTheDocument()
+    expect(screen.queryByText(/^\d+ s$/)).toBeNull()
   })
 
   it('released: Free! Super Ring is spent.', () => {

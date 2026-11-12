@@ -156,7 +156,7 @@ function routeFeatures(route: { from: LatLng; to: LatLng } | null) {
 }
 
 /** Frames the camera on every point at once (at most street level), e.g. a marshal and the SOS they're walking to. */
-function fitTo(m: maplibregl.Map, points: LatLng[] | null) {
+function fitTo(m: maplibregl.Map, points: LatLng[] | null, maxZoom = 17, padding = 40) {
   if (!points || points.length < 2) return
   const lngs = points.map((p) => p.lng)
   const lats = points.map((p) => p.lat)
@@ -165,14 +165,21 @@ function fitTo(m: maplibregl.Map, points: LatLng[] | null) {
       [Math.min(...lngs), Math.min(...lats)],
       [Math.max(...lngs), Math.max(...lats)],
     ],
-    { padding: 40, maxZoom: 17, animate: false },
+    { padding, maxZoom, animate: false },
   )
 }
 
-/** Two corners a little outside a circle, so `fitTo` frames the whole of it (about 1.6× its radius each way). */
+/**
+ * The house-arrest circle is only 26 m across the radius: frame it close (up to zoom 19, small padding) so it fills
+ * most of the map and the runner's dot reads clearly inside it. Other maps keep `fitTo`'s street-level cap.
+ */
+const HOUSE_MAX_ZOOM = 19
+const HOUSE_PADDING = 12
+
+/** Two corners a little outside a circle, so `fitTo` frames the whole of it (about 1.3× its radius each way). */
 function circleBox(c: LegendaryZone | null): LatLng[] | null {
   if (!c) return null
-  const dLat = (c.radiusM * 1.6) / 111_320
+  const dLat = (c.radiusM * 1.3) / 111_320
   const dLng = dLat / Math.max(0.2, Math.cos((c.lat * Math.PI) / 180))
   return [
     { lat: c.lat - dLat, lng: c.lng - dLng },
@@ -667,7 +674,7 @@ export default function GameMap({
     const mp = map.current
     if (!ready.current || !mp) return
     ;(mp.getSource('house') as GeoJSONSource | undefined)?.setData(zoneFeatures(latestCircle.current).zone)
-    fitTo(mp, circleBox(latestCircle.current))
+    fitTo(mp, circleBox(latestCircle.current), HOUSE_MAX_ZOOM, HOUSE_PADDING)
   }, [circleKey, loaded])
 
   const fitKey = JSON.stringify(fit)

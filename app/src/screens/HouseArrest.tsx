@@ -1,4 +1,4 @@
-import { ARREST_RADIUS_M } from '../../shared/arrest.js'
+import { ARREST_MS, ARREST_RADIUS_M } from '../../shared/arrest.js'
 import type { View } from '../../shared/views.js'
 import GameMap from '../game/Map'
 import { clock, useServerNow } from '../game/time'
@@ -39,12 +39,17 @@ export default function HouseArrest({ code, view, released = false }: { code: st
   }
 
   if (arrest.endsAt === null) {
-    const left = arrest.openBy === null ? 0 : Math.max(0, Math.ceil((arrest.openBy - now) / 1000))
+    // No deadline to show (shouldn't happen while waiting): leave the seconds out rather than read `0 s`.
+    const left = arrest.openBy === null ? null : Math.max(0, Math.ceil((arrest.openBy - now) / 1000))
     return (
       <Screen eyebrow="HOUSE ARREST">
         <h1 className="jail-title">Open Kejar to start house arrest</h1>
-        <div className="arrest-count" style={{ fontSize: 48 }}>{`${left} s`}</div>
-        <p className="muted">Finding you. Your 26 m circle starts where you stand.</p>
+        {left !== null && (
+          <div className="arrest-count" style={{ fontSize: 48 }}>
+            {`${left} s`}
+          </div>
+        )}
+        <p className="muted">{`Finding you. Your ${ARREST_RADIUS_M} m circle starts where you stand.`}</p>
         <p className="muted">Keep Kejar open.</p>
         <GameMap arena={view.arena} dots={view.dots} height={220} />
         <Feed view={view} />
@@ -58,7 +63,7 @@ export default function HouseArrest({ code, view, released = false }: { code: st
         {clock(Math.max(0, arrest.endsAt - now))}
       </div>
       <h1 className="jail-title" style={{ fontSize: 22 }}>
-        House arrest: stay within 26 m for 2:36.
+        {`House arrest: stay within ${ARREST_RADIUS_M} m for ${clock(ARREST_MS)}.`}
       </h1>
       <GameMap
         arena={view.arena}

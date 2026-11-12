@@ -1,8 +1,13 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { testView } from '../screens/testView'
 import HijauTakeover, { SAFE_MS } from './HijauTakeover'
 
+// Fake timers and a fixed Date.now for every test: the countdown ticks off `useServerNow`'s 1 s interval, so a slow
+// run on real timers could shift the value under an assertion.
+beforeEach(() => {
+  vi.useFakeTimers({ now: 5_000_000 })
+})
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
@@ -31,7 +36,6 @@ describe('HijauTakeover (new power-ups §6.3)', () => {
   })
 
   it('a tap calls touchGreen once, waits while it is in flight, says Safe, then hides', async () => {
-    vi.useFakeTimers()
     let resolve: (r: { ok: true }) => void = () => {}
     const onTap = vi.fn(() => new Promise<{ ok: true }>((r) => (resolve = r)))
     const { container, rerender } = render(<HijauTakeover view={running()} onTap={onTap} />)
@@ -59,7 +63,6 @@ describe('HijauTakeover (new power-ups §6.3)', () => {
   })
 
   it('a dropped connection retries quietly inside the 45 s', async () => {
-    vi.useFakeTimers()
     const onTap = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ ok: true })
     render(<HijauTakeover view={running()} onTap={onTap} />)
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Tap the green' })))
@@ -70,9 +73,40 @@ describe('HijauTakeover (new power-ups §6.3)', () => {
   })
 
   it('the countdown holds still while paused', () => {
-    vi.useFakeTimers()
     render(<HijauTakeover view={{ ...running(), paused: true }} onTap={vi.fn()} />)
     act(() => vi.advanceTimersByTime(5_000))
     expect(screen.getByText('0:35')).toBeInTheDocument()
+  })
+
+  it('the countdown ticks with the clock', () => {
+    render(<HijauTakeover view={running()} onTap={vi.fn()} />)
+    act(() => vi.advanceTimersByTime(5_000))
+    expect(screen.getByText('0:30')).toBeInTheDocument()
+  })
+
+  it('after a good tap it stays hidden for that run, even if a slow poll still says not tapped', async () => {
+    const onTap = vi.fn(async () => ({ ok: true as const }))
+    const { container, rerender } = render(<HijauTakeover view={running()} onTap={onTap} />)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Tap the green' })))
+    act(() => vi.advanceTimersByTime(SAFE_MS))
+    rerender(<HijauTakeover view={{ ...running(), now: 100_000 + SAFE_MS }} onTap={onTap} />)
+    expect(container).toBeEmptyDOMElement()
+    expect(onTap).toHaveBeenCalledTimes(1)
+  })
+
+  it('a later Mak Kau Hijau still shows, with its button ready', async () => {
+    const onTap = vi.fn(async () => ({ ok: true as const }))
+    const { rerender } = render(<HijauTakeover view={running()} onTap={onTap} />)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Tap the green' })))
+    act(() => vi.advanceTimersByTime(SAFE_MS))
+    const later = testView({ now: 500_000, hijau: { startsAt: 490_000, deadline: 535_000, tapped: false } })
+    rerender(<HijauTakeover view={later} onTap={onTap} />)
+    expect(screen.getByRole('button', { name: 'Tap the green' })).toBeEnabled()
+  })
+
+  it('is a modal dialog, and focus moves to the button when it opens', () => {
+    render(<HijauTakeover view={running()} onTap={vi.fn()} />)
+    expect(screen.getByRole('alertdialog', { name: 'Mak kau hijau!' })).toHaveAttribute('aria-modal', 'true')
+    expect(screen.getByRole('button', { name: 'Tap the green' })).toHaveFocus()
   })
 })

@@ -23,17 +23,24 @@ export default function HijauTakeover({ view, onTap }: { view: View; onTap: () =
   const now = view.paused ? view.now : ticking
   const run = view.hijau
   const [sending, setSending] = useState(false)
-  const [done, setDone] = useState(false)
+  // The run this phone already has an answer for, and the run it tapped successfully. Keyed on `startsAt`, which
+  // names a run and (unlike the deadline) doesn't move while paused, so a later Mak Kau Hijau still shows.
+  const [answeredRun, setAnsweredRun] = useState<number | null>(null)
+  const [safeRun, setSafeRun] = useState<number | null>(null)
   const [safe, setSafe] = useState(false)
   const retry = useRef<number | null>(null)
   const deadline = useRef(run?.deadline ?? 0)
   deadline.current = run?.deadline ?? deadline.current
   const nowRef = useRef(now)
   nowRef.current = now
+  const button = useRef<HTMLButtonElement>(null)
 
-  const showing = !!run && !run.tapped && now >= run.startsAt
+  // Hidden once tapped, by the server's word or by this phone's own `ok` (a slow poll may still say not tapped).
+  const showing = !!run && !run.tapped && safeRun !== run.startsAt && now >= run.startsAt
   useEffect(() => {
-    if (showing) navigator.vibrate?.([200, 80, 200, 80, 200])
+    if (!showing) return
+    navigator.vibrate?.([200, 80, 200, 80, 200])
+    button.current?.focus()
   }, [showing])
   useEffect(() => {
     if (!safe) return
@@ -43,12 +50,16 @@ export default function HijauTakeover({ view, onTap }: { view: View; onTap: () =
   useEffect(() => () => void (retry.current !== null && window.clearTimeout(retry.current)), [])
 
   function send() {
+    const runAt = run?.startsAt ?? null
     setSending(true)
     onTap().then(
       (r) => {
         setSending(false)
-        setDone(true)
-        if (r.ok) setSafe(true)
+        setAnsweredRun(runAt)
+        if (r.ok) {
+          setSafeRun(runAt)
+          setSafe(true)
+        }
       },
       () => {
         // No answer: try again quietly while there's still time; the server judges the deadline.
@@ -63,7 +74,7 @@ export default function HijauTakeover({ view, onTap }: { view: View; onTap: () =
 
   if (safe) {
     return (
-      <div className="hijau-takeover" role="alertdialog" aria-label="Mak kau hijau!">
+      <div className="hijau-takeover" role="alertdialog" aria-modal="true" aria-label="Mak kau hijau!">
         <p className="eyebrow">MAK KAU HIJAU</p>
         <h1>Safe!</h1>
         <button type="button" className="green-btn safe" disabled aria-label="Tapped">
@@ -81,6 +92,7 @@ export default function HijauTakeover({ view, onTap }: { view: View; onTap: () =
     <m.div
       className="hijau-takeover"
       role="alertdialog"
+      aria-modal="true"
       aria-label="Mak kau hijau!"
       initial={{ opacity: 0, scale: 1.04 }}
       animate={{ opacity: 1, scale: 1 }}
@@ -91,7 +103,7 @@ export default function HijauTakeover({ view, onTap }: { view: View; onTap: () =
       <div className="hijau-count" aria-live="off">
         {clock(Math.max(0, run.deadline - now))}
       </div>
-      <button type="button" className="green-btn" disabled={sending || done || over} onClick={send}>
+      <button ref={button} type="button" className="green-btn" disabled={sending || answeredRun === run.startsAt || over} onClick={send}>
         Tap the green
       </button>
       <p>Tap the green in 45 s or go to Penjara.</p>
