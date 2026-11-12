@@ -27,6 +27,25 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+describe('GameScreen loading', () => {
+  it('shows the home logo with the game code while the game loads', () => {
+    state.view = null
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByRole('img', { name: 'kejar.' })).toBeInTheDocument()
+    expect(screen.getByText(/LOADING GAME ABC234/)).toBeInTheDocument()
+  })
+
+  it('once the game arrives the j runs off and the game shows', () => {
+    state.view = null
+    const { rerender } = render(<GameScreen code="ABC234" />)
+    state.view = testView({ paused: true })
+    rerender(<GameScreen code="ABC234" />)
+    // Without a measured screen (jsdom) the run-off finishes at once.
+    expect(screen.getByText('Game paused')).toBeInTheDocument()
+    expect(screen.queryByText(/LOADING GAME/)).toBeNull()
+  })
+})
+
 describe('GameScreen safety routing', () => {
   it('shows Game paused to runners, with SOS still there', () => {
     state.view = testView({ paused: true })

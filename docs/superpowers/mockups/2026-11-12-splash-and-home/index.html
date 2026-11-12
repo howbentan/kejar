@@ -29,12 +29,12 @@
 
   /* the game */
   .play { position: absolute; left: 0; right: 0; top: 0; bottom: 170px; cursor: pointer; z-index: 1; }
-  .word { position: absolute; width: 240px; aspect-ratio: 900 / 543; left: 25px; top: 150px; pointer-events: none; }
+  .word { position: absolute; width: 190px; aspect-ratio: 900 / 543; left: 50px; top: 158px; pointer-events: none; }
   .word img { position: absolute; inset: 0; width: 100%; height: 100%; }
   .word.whole { animation: wob .5s ease-in-out; }
   .slot { position: absolute; border: 1.5px dashed rgba(198,255,61,.0); border-radius: 12px; pointer-events: none; transition: border-color .2s; }
   .j { position: absolute; pointer-events: none; will-change: transform; }
-  .prize { position: absolute; width: 84px; height: 84px; pointer-events: none; z-index: 3; animation: morph .5s cubic-bezier(.2,.8,.3,1) forwards; }
+  .prize { position: absolute; width: 68px; height: 68px; pointer-events: none; z-index: 3; animation: morph .5s cubic-bezier(.2,.8,.3,1) forwards; }
   .prize svg { width: 100%; height: 100%; display: block; overflow: visible; }
   /* the j turns into a power-up for a moment, then turns back */
   @keyframes morph {
@@ -52,6 +52,45 @@
   @keyframes flash { 0% { opacity: .35; } 100% { opacity: 0; } }
   @keyframes wob { 0%,100% { transform: none; } 30% { transform: rotate(-3deg) scale(1.04); } 65% { transform: rotate(2deg); } }
 
+  /* loading into the game: the same logo, same size, same spot as home */
+  .logo { position: absolute; width: 190px; aspect-ratio: 900 / 543; left: 50px; top: 158px; pointer-events: none; }
+  .logo img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .logo .lj { left: calc(190 / 900 * 100%); top: calc(12 / 543 * 100%); width: calc(326 / 900 * 100%); height: calc(519 / 543 * 100%); right: auto; bottom: auto; transform-origin: 50% 100%; }
+  .logo .lj { position: absolute; overflow: visible; }
+  .logo .lj .s { fill: none; stroke: var(--volt); stroke-width: 36; stroke-linecap: round; stroke-linejoin: round; }
+  /* running: both legs swing from one hip point, so round caps keep the joint clean at every angle */
+  .logo .lj .leg { transform-box: view-box; transform-origin: 168px 338px; }
+  .logo .lj .run { transform-box: view-box; transform-origin: 168px 500px; }
+  /* the stride, the bob and the moves are driven frame by frame by the Runner script (legs tied to distance run) */
+  .logo .lj, .logo .lj .run, .logo .lj .leg { will-change: transform; }
+  .ld { position: absolute; left: 0; right: 0; top: 300px; text-align: center; font: 500 10px 'Geist Mono', monospace; letter-spacing: .2em; color: rgba(245,245,243,.55); }
+  .ld i { font-style: normal; animation: dot 1.2s infinite; opacity: 0; }
+  .ld i:nth-child(2) { animation-delay: .2s; } .ld i:nth-child(3) { animation-delay: .4s; }
+  @keyframes dot { 0%, 20% { opacity: 0; } 40%, 100% { opacity: 1; } }
+  .guide { position: absolute; left: 50px; top: 158px; width: 190px; aspect-ratio: 900 / 543; outline: 1px dashed rgba(91,209,255,.8); pointer-events: none; z-index: 5; }
+  .guide::after { content: '190 px'; position: absolute; left: 0; right: 0; top: -16px; text-align: center; font: 500 9px 'Geist Mono', monospace; color: rgba(91,209,255,.9); }
+  .demo .stack, .demo .link { transition: opacity .3s, transform .35s cubic-bezier(.3,.7,.4,1); }
+  .demo.going .stack, .demo.going .link { opacity: 0; transform: translateY(24px); pointer-events: none; }
+  .demo .ld { opacity: 0; transition: opacity .3s .15s; }
+  .demo.going .ld { opacity: 1; }
+  .demo .game { position: absolute; inset: 0; background: var(--ink); opacity: 0; pointer-events: none; transition: opacity .35s; padding: 22px 18px; z-index: 6; }
+  .demo.in .game { opacity: 1; pointer-events: auto; }
+  @media (prefers-reduced-motion: reduce) { .ld i { animation: none; opacity: 1; } }
+  /* opening the app: lime with the logo in black; the j runs in, lands, and every colour changes together on one curve */
+  .phone.opening { --flip: .5s cubic-bezier(.65,0,.35,1); background: var(--volt); transition: background-color var(--flip); }
+  .phone.opening.flipped { background: var(--ink); }
+  .ltr { position: absolute; inset: 0; background-color: var(--ink); -webkit-mask: var(--m) center / 100% 100% no-repeat; mask: var(--m) center / 100% 100% no-repeat; transition: background-color var(--flip); }
+  .opening.flipped .ltr { background-color: var(--volt); }
+  .opening .lj .s { stroke: var(--ink); transition: stroke var(--flip); }
+  .opening.flipped .lj .s { stroke: var(--volt); }
+  .opening .stack .btn, .opening .link { opacity: 0; transform: translateY(16px); transition: opacity .4s cubic-bezier(.2,.7,.2,1), transform .5s cubic-bezier(.2,.7,.2,1); }
+  .opening.ready .stack .btn, .opening.ready .link { opacity: 1; transform: none; }
+  .opening.ready .stack .btn:nth-child(2) { transition-delay: .06s; }
+  .opening.ready .link { transition-delay: .12s; }
+  .replay { display: block; margin: 10px auto 0; background: none; border: 0; color: var(--paper); opacity: .7; text-decoration: underline; font: 13px 'Geist', sans-serif; cursor: pointer; }
+  /* home, new idea: the j keeps running in its gap; tap and it jumps, with the lime flash */
+  .runhome .tap { position: absolute; left: 0; right: 0; top: 0; bottom: 170px; cursor: pointer; z-index: 2; }
+  .runhome .flash { z-index: 1; }
 </style>
 </head>
 <body>
@@ -59,6 +98,25 @@
   <h1>Catch the j<span>.</span></h1>
   <p>Playable. The j spins and bounces around like the old DVD logo. Tap when it's in its gap between ke and ar and it snaps in, then turns into a random power-up for a moment before turning back into the j and spinning off. No score, no penalty; just something to play with.</p>
 </header>
+
+<section>
+  <h2>New home: the j keeps running, tap it to jump</h2>
+  <p>The middle ground. The logo always reads kejar, with the j running on the spot in its gap like a screensaver. Tap anywhere above the buttons and it jumps, legs tucked, with the lime flash and a buzz, then lands back into its stride. No bouncing, no score, nothing to miss. Section 1 below is the old bouncing version, for comparison.</p>
+  <div class="grid">
+    <div class="cell">
+      <div class="phone runhome" id="runhome">
+        <div class="logo"><img src="letter-k-volt.png" alt=""><img src="letter-e-volt.png" alt=""><img src="letter-a-volt.png" alt=""><img src="letter-r-volt.png" alt=""><svg class="lj" viewBox="0 0 326 519" aria-hidden="true"><g class="run"><ellipse class="s" cx="190" cy="61" rx="59" ry="40"/><path class="s" d="M157 156 Q169 200 167 260 L168 338"/><path class="s leg l" d="M168 338 Q164 400 144 428 Q122 458 88 460 L22 460"/><path class="s leg r" d="M168 338 Q236 326 272 380 Q300 424 302 498"/></g></svg></div>
+        <div class="flash" id="runflash"></div>
+        <div class="tap" id="runtap"></div>
+        <div class="pad" style="pointer-events: none; justify-content: flex-end">
+          <div class="stack" style="pointer-events: auto"><button class="btn back">reconnect</button><button class="btn">join game</button><button class="btn ghost">organise game</button></div>
+          <div class="link" style="pointer-events: auto">if dk how to play click here :)</div>
+        </div>
+      </div>
+      <h3>Home: tap above the buttons</h3>
+    </div>
+  </div>
+</section>
 
 <section>
   <h2>1. Home with the game</h2>
@@ -83,7 +141,7 @@
 
     <div class="cell">
       <div class="phone"><div class="pad" style="justify-content: flex-end">
-        <img src="logo-volt.png" alt="kejar." style="width: 240px; position: absolute; left: 25px; top: 150px">
+        <img src="logo-volt.png" alt="kejar." style="width: 190px; position: absolute; left: 50px; top: 158px">
         <div class="stack"><button class="btn back">reconnect</button><button class="btn">join game</button><button class="btn ghost">organise game</button></div>
         <div class="link">if dk how to play click here :)</div>
       </div></div>
@@ -104,6 +162,217 @@
   </div>
 </section>
 
+<section>
+  <h2>2. Loading into the game</h2>
+  <p>Today opening a game just shows "Loading..." in small grey text. Here the logo stays exactly where it was on home, the same 190 px, and only the j moves: it runs on the spot in its gap, legs crossing, until the game arrives. When it's in, the j sprints off to the right and the game screen comes in behind it (try the third phone). The blue dashed box is the same on both phones, to show the logo doesn't move or resize.</p>
+  <div class="grid">
+    <div class="cell">
+      <div class="phone"><div class="pad" style="justify-content: flex-end">
+        <div class="logo"><img src="letter-k-volt.png" alt=""><img src="letter-e-volt.png" alt=""><img src="letter-a-volt.png" alt=""><img src="letter-r-volt.png" alt=""><svg class="lj" viewBox="0 0 326 519" aria-hidden="true"><g class="run"><ellipse class="s" cx="190" cy="61" rx="59" ry="40"/><path class="s" d="M157 156 Q169 200 167 260 L168 338"/><path class="s leg l" d="M168 338 Q164 400 144 428 Q122 458 88 460 L22 460"/><path class="s leg r" d="M168 338 Q236 326 272 380 Q300 424 302 498"/></g></svg></div>
+        <div class="guide"></div>
+        <div class="stack"><button class="btn back">reconnect</button><button class="btn">join game</button><button class="btn ghost">organise game</button></div>
+        <div class="link">if dk how to play click here :)</div>
+      </div></div>
+      <h3>Home</h3>
+    </div>
+
+    <div class="cell">
+      <div class="phone loading">
+        <div class="logo"><img src="letter-k-volt.png" alt=""><img src="letter-e-volt.png" alt=""><img src="letter-a-volt.png" alt=""><img src="letter-r-volt.png" alt=""><svg class="lj" viewBox="0 0 326 519" aria-hidden="true"><g class="run"><ellipse class="s" cx="190" cy="61" rx="59" ry="40"/><path class="s" d="M157 156 Q169 200 167 260 L168 338"/><path class="s leg l" d="M168 338 Q164 400 144 428 Q122 458 88 460 L22 460"/><path class="s leg r" d="M168 338 Q236 326 272 380 Q300 424 302 498"/></g></svg></div>
+        <div class="guide"></div>
+        <div class="ld">LOADING GAME ABC234<i>.</i><i>.</i><i>.</i></div>
+      </div>
+      <h3>Loading the game: same logo, same size, same spot</h3>
+    </div>
+
+    <div class="cell">
+      <div class="phone demo" id="demo"><div class="pad" style="justify-content: flex-end">
+        <div class="logo"><img src="letter-k-volt.png" alt=""><img src="letter-e-volt.png" alt=""><img src="letter-a-volt.png" alt=""><img src="letter-r-volt.png" alt=""><svg class="lj" viewBox="0 0 326 519" aria-hidden="true"><g class="run"><ellipse class="s" cx="190" cy="61" rx="59" ry="40"/><path class="s" d="M157 156 Q169 200 167 260 L168 338"/><path class="s leg l" d="M168 338 Q164 400 144 428 Q122 458 88 460 L22 460"/><path class="s leg r" d="M168 338 Q236 326 272 380 Q300 424 302 498"/></g></svg></div>
+        <div class="ld">LOADING GAME ABC234<i>.</i><i>.</i><i>.</i></div>
+        <div class="stack"><button class="btn back" id="go">reconnect</button><button class="btn">join game</button><button class="btn ghost">organise game</button></div>
+        <div class="link">if dk how to play click here :)</div>
+        <div class="game"><div class="eb">KEJAR. · GAME ABC234</div><p style="opacity:.6; font-size: 13px; margin-top: 14px">(the game screen)</p><div class="link" id="again" style="margin-top: 30px">play the transition again</div></div>
+      </div></div>
+      <h3>Try it: tap reconnect</h3>
+    </div>
+  </div>
+</section>
+
+
+<section>
+  <h2>3. Opening the app</h2>
+  <p>Only on a fresh open. Lime screen, the logo in black with its gap empty. The j runs in from the left with the same stride, stops in its gap, and the colours flip: lime to black, black to lime. Then home's buttons come up. Entering a game is the reverse: the j runs off to the right.</p>
+  <div class="grid">
+    <div class="cell">
+      <div class="phone opening" id="opening">
+        <div class="logo">
+          <i class="ltr" style="--m: url(letter-k-volt.png)"></i><i class="ltr" style="--m: url(letter-e-volt.png)"></i><i class="ltr" style="--m: url(letter-a-volt.png)"></i><i class="ltr" style="--m: url(letter-r-volt.png)"></i>
+          <svg class="lj" viewBox="0 0 326 519" aria-hidden="true"><g class="run"><ellipse class="s" cx="190" cy="61" rx="59" ry="40"/><path class="s" d="M157 156 Q169 200 167 260 L168 338"/><path class="s leg l" d="M168 338 Q164 400 144 428 Q122 458 88 460 L22 460"/><path class="s leg r" d="M168 338 Q236 326 272 380 Q300 424 302 498"/></g></svg>
+        </div>
+        <div class="pad" style="justify-content: flex-end">
+          <div class="stack"><button class="btn">join game</button><button class="btn ghost">organise game</button></div>
+          <div class="link">if dk how to play click here :)</div>
+        </div>
+      </div>
+      <button class="replay" id="replayOpen">play it again</button>
+      <h3>Fresh open, about 1.8 s, then home</h3>
+    </div>
+  </div>
+</section>
+
+<script>
+  /*
+   * The runner: one engine for every running j, all on the same clock. The legs are tied to the distance run
+   * (no feet sliding), plus a steady cadence when running on the spot. Every stop lands on a whole stride, so the
+   * j always comes to rest in the logo's own pose. Only transforms change, once per frame.
+   */
+  const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
+  const CADENCE = 1 / 0.38 // strides per second on the spot
+  const easeOutCubic = (k) => 1 - Math.pow(1 - k, 3)
+  const easeInQuad = (k) => k * k
+  class Runner {
+    constructor(svg) {
+      this.svg = svg
+      this.run = svg.querySelector('.run')
+      this.l = svg.querySelector('.leg.l')
+      this.r = svg.querySelector('.leg.r')
+      this.x = 0
+      this.phase = 0
+      this.lean = 0
+      this.raf = 0
+      this.jumpAt = 0
+      this.pose()
+    }
+    // A hop: 0.46 s in the air, legs tucked, a small squash as it lands. Taps in the air are ignored.
+    jump() {
+      const now = performance.now()
+      if (now - this.jumpAt < 560) return false
+      this.jumpAt = now
+      return true
+    }
+    width() { return this.svg.getBoundingClientRect().width || 69 }
+    pose() {
+      const c = (1 - Math.cos(this.phase * 2 * Math.PI)) / 2 // 0 at rest, 1 at full stride
+      const bob = Math.abs(Math.sin(this.phase * 2 * Math.PI)) * this.lean
+      const j = this.jumpAt ? (performance.now() - this.jumpAt) / 460 : 9
+      const air = j < 1 ? Math.sin(Math.PI * j) : 0 // 0 on the ground, 1 at the top
+      const squash = j >= 1 && j < 1.22 ? Math.sin(Math.PI * (j - 1) / 0.22) : 0
+      const legL = -58 * c * (1 - air) - 38 * air
+      const legR = 50 * c * (1 - air) + 34 * air
+      this.l.style.transform = `rotate(${legL.toFixed(2)}deg)`
+      this.r.style.transform = `rotate(${legR.toFixed(2)}deg)`
+      const lift = -20 * bob * (1 - air) - 150 * air
+      this.run.style.transform = `translateY(${lift.toFixed(2)}px) rotate(${(5 * this.lean - 10 * air).toFixed(2)}deg) scale(${(1 + 0.06 * squash).toFixed(3)}, ${(1 - 0.1 * squash).toFixed(3)})`
+      this.svg.style.transform = `translateX(${this.x.toFixed(2)}px)`
+    }
+    // One frame loop per runner; `task(dt, now)` returns true when it is done.
+    play(task) {
+      cancelAnimationFrame(this.raf)
+      let last = performance.now()
+      return new Promise((resolve) => {
+        const tick = (now) => {
+          const dt = Math.min(0.05, (now - last) / 1000)
+          last = now
+          const done = task(dt, now)
+          this.pose()
+          if (done) resolve()
+          else this.raf = requestAnimationFrame(tick)
+        }
+        this.raf = requestAnimationFrame(tick)
+      })
+    }
+    // Running on the spot, easing up to full cadence and lean.
+    spot() {
+      let rate = 0
+      return this.play((dt) => {
+        rate = Math.min(CADENCE, rate + dt * CADENCE * 4)
+        this.lean = Math.min(1, this.lean + dt * 4)
+        this.phase += rate * dt
+        return false
+      })
+    }
+    // Run to x over ms; the legs follow the distance (plus `spin` extra strides a second) and end on a whole stride.
+    runTo(x1, ms, ease, spin = 0) {
+      const x0 = this.x, p0 = this.phase, t0 = performance.now()
+      const strides = Math.max(1, Math.round(Math.abs(x1 - x0) / (this.width() * 1.15) + (spin * ms) / 1000))
+      const target = Math.floor(p0) + strides
+      const lean0 = this.lean
+      return this.play((dt, now) => {
+        const k = Math.min(1, (now - t0) / ms)
+        const e = ease(k)
+        this.x = x0 + (x1 - x0) * e
+        this.phase = p0 + (target - p0) * e
+        const speed = (ease(Math.min(1, k + 0.02)) - e) / 0.02 // the curve's slope, 0 when stopped
+        this.lean = Math.min(1, Math.max(speed * 0.9, k < 0.15 ? lean0 : 0))
+        if (k >= 1) {
+          this.phase = target
+          this.lean = 0
+          return true
+        }
+        return false
+      })
+    }
+    reset(x = 0) {
+      cancelAnimationFrame(this.raf)
+      this.x = x
+      this.phase = 0
+      this.lean = 0
+      this.pose()
+    }
+  }
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+  // Section 2, phone 2: running on the spot, always.
+  const loopRunner = new Runner(document.querySelector('.phone.loading .lj'))
+  if (!reduceMotion) loopRunner.spot()
+
+  // Section 2, phone 3: reconnect -> buttons drop away -> runs on the spot -> sprints off right -> game in.
+  const demo = document.getElementById('demo')
+  const demoRunner = new Runner(demo.querySelector('.lj'))
+  document.getElementById('go').addEventListener('click', async () => {
+    demo.classList.add('going')
+    if (reduceMotion) { await sleep(1200); demo.classList.add('in'); return }
+    demoRunner.spot()
+    await sleep(2400)
+    const off = demo.getBoundingClientRect().right - demoRunner.svg.getBoundingClientRect().left + demoRunner.x + 20
+    demoRunner.runTo(off, 700, easeInQuad, 1.5)
+    await sleep(540)
+    demo.classList.add('in')
+  })
+  document.getElementById('again').addEventListener('click', () => {
+    demo.classList.remove('going', 'in')
+    demoRunner.reset(0)
+  })
+
+  // Section 3: fresh open -> runs in from the left -> lands on a whole stride -> colours flip -> buttons up.
+  const op = document.getElementById('opening')
+  const opRunner = new Runner(op.querySelector('.lj'))
+  async function playOpening() {
+    op.classList.remove('flipped', 'ready')
+    opRunner.reset(0)
+    if (reduceMotion) { await sleep(400); op.classList.add('flipped'); await sleep(300); op.classList.add('ready'); return }
+    const start = op.getBoundingClientRect().left - opRunner.svg.getBoundingClientRect().left - opRunner.width() - 10
+    opRunner.reset(start)
+    await sleep(250)
+    await opRunner.runTo(0, 950, easeOutCubic)
+    await sleep(120)
+    op.classList.add('flipped')
+    await sleep(260)
+    op.classList.add('ready')
+  }
+  document.getElementById('replayOpen').addEventListener('click', playOpening)
+  setTimeout(playOpening, 500)
+
+  // New home: running on the spot; a tap makes it jump, with the flash and a buzz.
+  const homeRunner = new Runner(document.querySelector('#runhome .lj'))
+  if (!reduceMotion) homeRunner.spot()
+  const runFlash = document.getElementById('runflash')
+  document.getElementById('runtap').addEventListener('pointerdown', () => {
+    if (reduceMotion || !homeRunner.jump()) return
+    runFlash.classList.remove('on'); void runFlash.offsetWidth; runFlash.classList.add('on')
+    try { navigator.vibrate?.(25) } catch {}
+  })
+</script>
 <script src="stickers.js"></script>
 <script>
   const phone = document.getElementById('game'), play = document.getElementById('play')
@@ -112,7 +381,7 @@
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
 
   const W = 290, FLOOR = 600 - 170
-  const scale = 240 / 900, wl = 25, wt = 150
+  const scale = 190 / 900, wl = 50, wt = 158
   // Where the j sits in the logo (cropped box 190,12 to 516,531 in the 900 x 543 frame).
   const jw = (516 - 190) * scale, jh = (531 - 12) * scale
   const slot = { x: wl + 190 * scale, y: wt + 12 * scale }
@@ -141,7 +410,7 @@
     let k; do { k = KINDS[Math.floor(Math.random() * KINDS.length)] } while (k === lastKind && KINDS.length > 1)
     lastKind = k
     const el = document.createElement('div'); el.className = 'prize'
-    Object.assign(el.style, { left: slot.x + jw / 2 - 42 + 'px', top: slot.y + jh / 2 - 42 + 'px' })
+    Object.assign(el.style, { left: slot.x + jw / 2 - 34 + 'px', top: slot.y + jh / 2 - 34 + 'px' })
     el.innerHTML = `<svg viewBox="-8 -6 116 116"><defs>
       <filter id="stk-p" x="-25%" y="-25%" width="150%" height="150%">
         <feMorphology in="SourceAlpha" operator="dilate" radius="4.5" result="d"/><feFlood flood-color="#F5F5F3"/><feComposite in2="d" operator="in" result="w"/>

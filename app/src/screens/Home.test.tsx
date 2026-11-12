@@ -11,6 +11,7 @@ const assign = vi.fn()
 beforeEach(() => {
   assign.mockClear()
   localStorage.clear()
+  sessionStorage.clear()
   vi.stubGlobal('location', { ...window.location, assign })
 })
 afterEach(() => {
@@ -21,7 +22,7 @@ afterEach(() => {
 describe('Home', () => {
   it('shows the logo, join game, organise game and the how-to-play link, and no tagline', () => {
     render(<Home />)
-    expect(screen.getByTestId('toy')).toBeInTheDocument()
+    expect(screen.getByTestId('hl')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'join game' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'organise game' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'if dk how to play click here :)' })).toBeInTheDocument()
@@ -43,6 +44,21 @@ describe('Home', () => {
     } finally {
       Object.defineProperty(window, 'localStorage', real)
     }
+  })
+
+  it('a fresh open plays the opening: lime with the logo in black, then home', () => {
+    render(<Home />)
+    // Without a measured screen (jsdom) the j arrives at once, so the opening hands over straight away.
+    expect(sessionStorage.getItem('kejar.opened')).toBe('1')
+    expect(screen.getByRole('button', { name: 'join game' })).toBeInTheDocument()
+  })
+
+  it('once opened this visit, home starts straight away with the j running', () => {
+    sessionStorage.setItem('kejar.opened', '1')
+    render(<Home />)
+    expect(screen.getByRole('main')).not.toHaveClass('opening')
+    expect(screen.getByTestId('hl')).not.toHaveClass('inverted')
+    expect(screen.getByTestId('hl')).toHaveClass('tappable')
   })
 
   it('has no reconnect without a last game', () => {
@@ -68,9 +84,9 @@ describe('Home', () => {
     expect(screen.getByRole('link', { name: 'organise game' })).toHaveAttribute('href', '/host/new')
   })
 
-  it('the buttons sit outside the toy, so a tap on them is never a catch', () => {
+  it('the buttons sit outside the logo, so a tap on them never makes the j jump', () => {
     render(<Home />)
-    const toy = screen.getByTestId('toy')
+    const toy = screen.getByTestId('hl')
     expect(toy).not.toContainElement(screen.getByRole('button', { name: 'join game' }))
     expect(toy).not.toContainElement(screen.getByRole('link', { name: 'organise game' }))
     expect(toy).not.toContainElement(screen.getByRole('button', { name: 'if dk how to play click here :)' }))
