@@ -8,7 +8,7 @@ import { MOMENT_WINDOW_MS } from './moments.js'
 import { reelPulledThisStay, RESCUE_HOLD_MS } from './penjara.js'
 import { isOut, undoableCatchId } from './players.js'
 import { POWER_NAME } from './powerNames.js'
-import { activeShield, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, slotBusy } from './powerups.js'
+import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, slotBusy } from './powerups.js'
 import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
 
 /** Spec §4.5–4.6 constants. */
@@ -184,6 +184,8 @@ export interface View {
   freezeTargets: { id: string; name: string }[] | null
   /** When my own power-up freeze ends (chasers), or null when I'm not frozen. */
   frozenUntil: number | null
+  /** Nasi Lemak KFC: I used one, so my next deck card arrives doubled (`COMBO READY` on the slot). */
+  comboReady: boolean
   /**
    * The organiser only: exactly where the stash is (null if none), and who claimed it. Left out of players' and
    * marshals' views entirely, so not even the key's name reaches their phones (rules doc §9b).
@@ -882,7 +884,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
   }
   return v
 }
@@ -1013,6 +1015,7 @@ function fullView(i: ViewInput): View {
     reel: reelFor(i),
     freezeTargets: freezeTargetsFor(i),
     frozenUntil: frozenForMs(i.me, i.now) > 0 ? Date.parse(i.me.frozen_until as string) : null,
+    comboReady: comboReady(i.powerUps, i.me.id),
     // The stash and the card go only to the organiser, who prints and hides it (ruling R15). Marshals are the
     // helper, and never see either (rules doc §9b).
     ...(organiser

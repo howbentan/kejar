@@ -65,6 +65,7 @@ export function testView(over: Partial<View> = {}): View {
     reel: null,
     freezeTargets: null,
     frozenUntil: null,
+    comboReady: false,
     briefing: null,
     results: null,
     ...over,

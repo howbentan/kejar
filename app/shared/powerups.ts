@@ -136,12 +136,13 @@ export function comboReady(powerUps: PowerUp[], playerId: string): boolean {
 
 /**
  * When a used Durian actually switches on (ms). A plain one: when it was used. A twin (from Nasi Lemak KFC):
- * when its partner blocked a catch, or when the partner's 10 minutes ran out unused. Null if not used.
+ * when its partner blocked a catch, or when the partner's 10 minutes ran out unused. A twin whose partner was
+ * stolen before it was switched on is a plain one. Null if not used.
  */
 export function shieldArmedAt(u: PowerUp, all: PowerUp[]): number | null {
   if (u.used_at === null) return null
   const partner = u.twin_of ? all.find((x) => x.id === u.twin_of) : undefined
-  if (!partner) return Date.parse(u.used_at)
+  if (!partner || (partner.used_at === null && partner.taken_at)) return Date.parse(u.used_at)
   if (partner.consumed_at) return Date.parse(partner.consumed_at)
   return Date.parse(partner.used_at ?? u.used_at) + SHIELD_MS
 }

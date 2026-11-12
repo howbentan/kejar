@@ -22,12 +22,12 @@ import { isOut, undoableCatchId } from '../../shared/players.js'
 import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
 import { bomohCodeFromQr, datoCodeFromQr, isBomohQr, isDatoQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
-import { activeShield, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, frozenForMs, FREEZE_MS, STATION_LOCK_MS } from '../../shared/powerups.js'
+import { activeShield, COMBO_EXCLUDED, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
 import { validateTeams } from '../../shared/teams.js'
-import { DEFAULT_SETTINGS, type Arena, type BomohStash, type DatoStash, type Game, type LatLng, type Player, type Position, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
+import { DEFAULT_SETTINGS, type Arena, type BomohStash, type DatoStash, type Game, type LatLng, type Player, type Position, type PowerUp, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
 import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
 import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
@@ -1494,7 +1494,17 @@ const claim: Action = async (ctx, body) => {
   )
   if (!claimed.ok) return claimed
   await ctx.store.addEvent({ game_id: game.id, type: 'powerup', actor_id: me.id, target_id: null, data: {} })
-  return { ok: true, kind }
+  return { ok: true, kind, ...(await doubleIfCombo(ctx, me, claimed.powerUp)) }
+}
+
+/**
+ * Nasi Lemak KFC (new power-ups §5.2): a card delivered while the player is combo ready arrives with a twin, the
+ * second use. A card it can't double (COMBO_EXCLUDED) arrives as normal and leaves the combo ready for the card
+ * after. `delivered` must be this player's own just-delivered card: the store doesn't check whose it is.
+ */
+async function doubleIfCombo(ctx: Ctx, me: Player, delivered: PowerUp): Promise<{ double?: true }> {
+  if (COMBO_EXCLUDED.includes(delivered.kind)) return {}
+  return (await ctx.store.applyCombo(me.id, delivered.id)) ? { double: true } : {}
 }
 
 /**
@@ -1660,13 +1670,16 @@ const usePowerup: Action = async (ctx, body) => {
   // A frozen chaser's power-up slot is shut (Cheese Ais): nothing is spent.
   const frozenFor = frozenForMs(me, ctx.now)
   if (frozenFor > 0) return { ok: false, reason: 'frozen', frozenForMs: frozenFor }
+  // A doubled card's second use waits until the first one's effect has finished (new power-ups §5.2), so both
+  // uses can't land on one ping. A doubled Durian's twin never gets here: it is switched on with its partner.
+  const pings = await ctx.store.pings(game.id)
+  if (runningEffect(all, me.id, pings, ctx.now) !== null) return { ok: false, reason: 'effect-running' }
   // Dato Seri is only ever used through Settle, at Penjara (jail design §4b).
   if (u.kind === 'dato') return { ok: false, reason: 'settle-at-penjara' }
   // A Flare's reveal must land before the whistle.
   if (u.kind === 'flare' && (endsAt ?? 0) - ctx.now < ALERT_LEAD_MS) return { ok: false, reason: 'too-late' }
 
   // Mat Rempit: one at a time, team-wide, then a 3-minute wait (power-ups §5a). A refusal isn't spent.
-  const pings = u.kind === 'flare' ? await ctx.store.pings(game.id) : []
   if (u.kind === 'flare') {
     const blocked = flareBlocked(pings, ctx.now)
     if (blocked) return { ok: false, ...blocked }
@@ -1696,6 +1709,12 @@ const usePowerup: Action = async (ctx, body) => {
   }
   // markUsed is atomic: a double-tap uses the power-up once.
   if (!(await ctx.store.markUsed(u.id))) return { ok: false, reason: 'already-used' }
+  if (u.kind === 'shield') {
+    // A doubled Durian is one tap (new power-ups §5.2): its other half is switched on too, whichever row was
+    // tapped, and arms itself through shieldArmedAt when this one blocks a catch or runs out. A stolen half is skipped.
+    const other = all.find((x) => x.id !== u.id && x.player_id === me.id && x.kind === 'shield' && (x.twin_of === u.id || x.id === u.twin_of))
+    if (other && other.used_at === null && !other.taken_at) await ctx.store.markUsed(other.id)
+  }
   if (u.kind === 'cheese' && cheeseTarget) {
     // Spent first, frozen second (atomic in the store: of two racing runners only one lands); a lost race gives the card back.
     const until = iso(ctx.now + FREEZE_MS)
@@ -1776,7 +1795,7 @@ const grabPick: Action = async (ctx, body) => {
   // The other two aren't put back: their draw numbers are spent, so they return at the next reshuffle
   // (our stand-in for "the bottom of the deck", power-ups §6.3).
   await ctx.store.addEvent({ game_id: game.id, type: 'powerup', actor_id: me.id, target_id: null, data: {} })
-  return { ok: true, kind: picked.powerUp.kind, powerupId: picked.powerUp.id }
+  return { ok: true, kind: picked.powerUp.kind, powerupId: picked.powerUp.id, ...(await doubleIfCombo(ctx, me, picked.powerUp)) }
 }
 
 const sos: Action = async (ctx, body) => {
