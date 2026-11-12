@@ -1657,11 +1657,36 @@ describe('Nasi Lemak KFC', () => {
     const rows = await store.powerUps(g.gameId)
     expect(rows.find((u) => u.id === twin.id)!.used_at).not.toBeNull() // one tap switches both on
     expect(await use(g, g.aina.token, twin.id)).toEqual({ ok: false, reason: 'already-used' })
+    const usedAt = now
+    expect((await view(g, g.aina.token)).activeEndsAt).toBe(usedAt + 10 * MIN)
+    now += 2 * MIN
     expect(await scan(g, g.ben, 7, g.aina)).toEqual({ ok: false, reason: 'shielded', name: 'Aina' })
+    // The first half blocked early: the second runs its own fresh 10 minutes from that block.
+    const blockedAt = now
+    expect((await view(g, g.aina.token)).activeEndsAt).toBe(blockedAt + 10 * MIN)
     now += 20_000
     expect(await scan(g, g.kim, 7, g.aina)).toEqual({ ok: false, reason: 'shielded', name: 'Aina' })
     now += 20_000
     expect(await scan(g, g.lee, 7, g.aina)).toMatchObject({ ok: true })
+    // The second block stings too: Kim stays locked off Aina for the game, even once she's free again.
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: false } }])
+    now += 20 * MIN
+    expect(await scan(g, g.kim, 7, g.aina)).toEqual({ ok: false, reason: 'durian-locked', name: 'Aina' })
+  })
+
+  it('the unused twin keeps the slot busy until the second use', async () => {
+    const g = await chasing()
+    const { first, twin } = await doubled(g.gameId, g.aina.playerId, 'decoy')
+    const claim = () => run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    expect(await claim()).toMatchObject({ ok: false, reason: 'hand-full', busyKind: 'decoy', busyRunning: false })
+    expect(await use(g, g.aina.token, first.id)).toEqual({ ok: true, kind: 'decoy' })
+    now = T0 + 9.5 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    now = T0 + 10 * MIN + 1_000
+    await run('state', { code: g.code, organiserToken: g.organiserToken }) // the first half's ping lands
+    // The first half is done, but the twin is still held.
+    expect(await claim()).toMatchObject({ ok: false, reason: 'hand-full', busyKind: 'decoy', busyRunning: false })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === twin.id)!.used_at).toBeNull()
   })
 
   it("a doubled Durian's second shield arms when the first runs out unused", async () => {
@@ -1672,6 +1697,10 @@ describe('Nasi Lemak KFC', () => {
     expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'shield' && u.used_at)).toHaveLength(2)
     await keepCheckingIn(g, 8, 17) // ten minutes on, with no catch tried
     now = T0 + 17 * MIN
+    // The first half ran out unused: the second shows its own fresh 10 minutes, not 0:00.
+    const v = await view(g, g.aina.token)
+    expect(v.shieldActive).toBe(true)
+    expect(v.activeEndsAt).toBe(T0 + 27 * MIN)
     expect(await scan(g, g.ben, 7, g.aina)).toEqual({ ok: false, reason: 'shielded', name: 'Aina' })
     now += 20_000
     expect(await scan(g, g.kim, 7, g.aina)).toMatchObject({ ok: true })

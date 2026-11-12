@@ -8,7 +8,7 @@ import { MOMENT_WINDOW_MS } from './moments.js'
 import { reelPulledThisStay, RESCUE_HOLD_MS } from './penjara.js'
 import { isOut, undoableCatchId } from './players.js'
 import { POWER_NAME } from './powerNames.js'
-import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, slotBusy } from './powerups.js'
+import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, shieldArmedAt, slotBusy } from './powerups.js'
 import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
 
 /** Spec §4.5–4.6 constants. */
@@ -962,7 +962,9 @@ function fullView(i: ViewInput): View {
     outWarned: !!i.me.out_warned_at && !i.me.disqualified_at,
     activeEndsAt: (() => {
       const shield = activeShield(i.powerUps, i.me.id, i.now)
-      return shield?.used_at ? Date.parse(shield.used_at) + SHIELD_MS : null
+      // When it armed, not when it was used: a doubled Durian's second half gets its own fresh 10 minutes.
+      const armed = shield ? shieldArmedAt(shield, i.powerUps) : null
+      return armed === null ? null : armed + SHIELD_MS
     })(),
     flareReadyAt: (() => {
       const holding = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'flare' && u.used_at === null && !u.taken_at)
