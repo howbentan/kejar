@@ -22,6 +22,7 @@ import { isOut, undoableArrestId, undoableCatchId } from '../../shared/players.j
 import { ARREST_FIX_FRESH_MS, ARREST_OPEN_MS, arrestEndsAt, insideArrest, releaseVerdict, usableFix } from '../../shared/arrest.js'
 import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
+import { HIJAU_MS, hijauCounts, hijauStartsAt, hijauTargets } from '../../shared/hijau.js'
 import { bomohCodeFromQr, datoCodeFromQr, hijauCodeFromQr, isBomohQr, isDatoQr, isHijauQr, isRingQr, ringCodeFromQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, judgeHijauClaim, judgeRingClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS, TOLL_FRESH_MS } from '../../shared/powerups.js'
 import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict } from '../../shared/penjara.js'
@@ -635,6 +636,8 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
   let whistleNow = false
   // Super Ring's house arrests are judged lazily, on any poll (there's no server tick); never while paused.
   if (phase === 'chasing' && !game.paused_at && !game.ended_at && (await settleArrests(ctx, game))) whistleNow = true
+  // Mak Kau Hijau's push and judging, likewise lazy; a pause holds both (resume moves its times).
+  if (game.hijau && !game.hijau.settledAt && !game.paused_at && (await stepHijau(ctx, game))) whistleNow = true
   // Scheduled pings come from the clock; bonus (Flare) pings carry their own times.
   const times = new Map<number, { revealAt: number }>([
     ...pingTimes(game, now).map((t) => [t.seq, t] as const),
@@ -769,7 +772,7 @@ async function settleRescue(ctx: Ctx, game: Game, phase = phaseAt(game, ctx.now)
 }
 
 /** What put the last free Dikejar out: it picks the feed line (views.ts). */
-type WhistleCause = 'catch' | 'auto-jail' | 'removed' | 'luar-garisan'
+type WhistleCause = 'catch' | 'auto-jail' | 'removed' | 'luar-garisan' | 'hijau'
 
 /**
  * Everyone is out (fair-play §1.4): instead of ending at once, the final whistle starts, and the end is held for
@@ -934,6 +937,54 @@ async function settleArrests(ctx: Ctx, game: Game): Promise<boolean> {
     }
   }
   return allOut
+}
+
+/** Mak Kau Hijau's push (new power-ups §6.3). */
+const HIJAU_PUSH = 'Mak kau hijau! Tap the green in 45 s or go to Penjara.'
+
+/**
+ * Moves an unsettled Mak Kau Hijau along (the caller skips paused games). From `startsAt`, the first call sends
+ * the one batch push and records its time; from the deadline, the first call settles it once. It is void (nobody
+ * jailed) when the push went out under 25 s before the deadline or never, and silently when the deadline fell
+ * after the game's end. Otherwise every target who didn't tap goes to Penjara (or house arrest, with Super Ring)
+ * under an `auto-jailed` event, so the marshals' undo works. True if a final whistle is pending.
+ */
+async function stepHijau(ctx: Ctx, game: Game): Promise<boolean> {
+  const { store, now } = ctx
+  const run = game.hijau!
+  const deadline = Date.parse(run.deadline)
+  if (now < Date.parse(run.startsAt)) return false
+  if (now < deadline) {
+    if (run.sentAt || game.ended_at || !(await store.claimHijauPush(game.id, iso(now)))) return false
+    const targets = hijauTargets(await store.players(game.id))
+    await store.addEvent({ game_id: game.id, type: 'hijau', actor_id: null, target_id: null, data: { deadline } })
+    try {
+      await pushTo(ctx, targets, { type: 'hijau', code: game.code, deadline, title: 'Mak kau hijau!', body: HIJAU_PUSH })
+    } catch {
+      // The takeover still shows to anyone with Kejar open, and the batch time is what counts.
+    }
+    return false
+  }
+  const settled = await store.claimHijauSettle(game.id, iso(now))
+  if (!settled) return false
+  const done = (data: Record<string, unknown>) => store.addEvent({ game_id: game.id, type: 'hijau-done', actor_id: null, target_id: null, data })
+  // The whistle went first (an early end, or the clock ran out before the deadline): it judges nobody.
+  if (game.ended_at || phaseAt(game, deadline).phase === 'ended') {
+    await done({ void: true, jailed: 0, ended: true })
+    return false
+  }
+  if (!hijauCounts(settled)) {
+    await done({ void: true, jailed: 0 })
+    return false
+  }
+  let jailed = 0
+  for (const p of hijauTargets(await store.players(game.id)).filter((r) => !settled.tapped.includes(r.id))) {
+    if ((await jailOrArrest(ctx, game, p, null, 'hijau')) !== 'jailed') continue
+    jailed++
+    await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: p.id, data: { who: who(p), cause: 'hijau' } })
+  }
+  await done({ void: false, jailed })
+  return allOutCheck(ctx, game, 'hijau')
 }
 
 /**
@@ -1881,14 +1932,11 @@ async function claimRing(ctx: Ctx, game: GameRow, me: Player, scanned: string | 
   return { ok: true, kind: 'ring' }
 }
 
-/** How long runners have to tap green once Mak Kau Hijau is claimed. Task 5 moves the start clear of check-in windows. */
-const HIJAU_WINDOW_MS = 45_000
-
 /**
  * Scanning Mak Kau Hijau's hidden stash: exactly Bomoh's flow and refusals (`claimBomoh`, plus the frozen
  * refusal from `judgeHijauClaim`), with its own wrong-scan count. The store marks the stash claimed and writes
- * `games.hijau` in one step. Timing is a placeholder (starts at the claim); Task 5 replaces it and adds the push,
- * the taps and the judging.
+ * `games.hijau` in one step. The 45 s starts clear of every check-in window, scheduled or Mat Rempit (§6.3);
+ * starting now, its push goes out at once. One that can't finish before the whistle is claimed and settled void.
  */
 async function claimHijau(ctx: Ctx, game: GameRow, me: Player, scanned: string | null) {
   const miss = await stashMisses(ctx, game, me, 'hijau')
@@ -1904,12 +1952,53 @@ async function claimHijau(ctx: Ctx, game: GameRow, me: Player, scanned: string |
     now: ctx.now,
   })
   if (!verdict.ok) return verdict.reason === 'no-stash' || verdict.reason === 'too-far' ? miss(verdict) : verdict
-  const run = { startsAt: iso(ctx.now), deadline: iso(ctx.now + HIJAU_WINDOW_MS) }
+  const windows = [
+    ...pingTimes(game, ctx.now),
+    ...(await ctx.store.pings(game.id))
+      .filter((p) => p.seq >= BONUS_SEQ_BASE && !p.revealed)
+      .map((p) => ({ alertAt: Date.parse(p.alert_at), revealAt: Date.parse(p.reveal_at) })),
+  ]
+  const startsAt = hijauStartsAt(ctx.now, windows)
+  const run = { startsAt: iso(startsAt), deadline: iso(startsAt + HIJAU_MS) }
   // Losing the race to another chaser isn't a miss.
   if (!(await ctx.store.claimHijau(game.id, me.id, run))) return NO_STASH
   if (game.hijau_stash?.card) await ctx.store.setSecretCard(game.hijau_stash.card.id, { state: 'retired', found_at: iso(ctx.now) })
   await ctx.store.addEvent({ game_id: game.id, type: 'legendary', actor_id: me.id, target_id: null, data: {} })
+  const endsAt = phaseAt(game, ctx.now).endsAt
+  if (endsAt !== null && startsAt + HIJAU_MS > endsAt) {
+    // It can't run to its deadline before the whistle: the card is spent and does nothing.
+    if (await ctx.store.claimHijauSettle(game.id, iso(ctx.now))) {
+      await ctx.store.addEvent({ game_id: game.id, type: 'hijau-done', actor_id: null, target_id: null, data: { void: true, jailed: 0, ended: true } })
+    }
+  } else if (startsAt <= ctx.now) {
+    // Starting now: the push goes out with the claim instead of waiting for the next poll.
+    const fresh = await ctx.store.gameByCode(game.code)
+    if (fresh?.hijau && !fresh.hijau.settledAt) await stepHijau(ctx, fresh)
+  }
   return { ok: true, kind: 'hijau' }
+}
+
+/**
+ * A runner taps green during Mak Kau Hijau (§6.3). Judged by server time against the one shared deadline: a tap
+ * that lands at or after it is `too-late`. A tap while paused counts as made at the pause (the 45 s is held
+ * still, and resume moves the deadline). A repeat tap (a retry on a bad connection) is fine.
+ */
+const touchGreen: Action = async (ctx, body) => {
+  const loaded = await loadGame(ctx, body)
+  await requirePlayer(ctx, loaded, body)
+  await advance(ctx, loaded)
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  const run = game.hijau
+  if (!run || ctx.now < Date.parse(run.startsAt)) return { ok: false, reason: 'not-running' }
+  if (run.tapped.includes(me.id)) return { ok: true }
+  const at = game.paused_at ? Math.min(ctx.now, Date.parse(game.paused_at)) : ctx.now
+  if (run.settledAt || at >= Date.parse(run.deadline)) return { ok: false, reason: 'too-late' }
+  if (!hijauTargets([me]).length) return { ok: false, reason: 'not-a-target' }
+  if (await ctx.store.tapHijau(game.id, me.id, iso(at))) return { ok: true }
+  // Lost to the deadline, or a racing tap of their own already landed.
+  const after = (await loadGame(ctx, body)).hijau
+  return after?.tapped.includes(me.id) ? { ok: true } : { ok: false, reason: 'too-late' }
 }
 
 /**
@@ -2016,6 +2105,8 @@ const usePowerup: Action = async (ctx, body) => {
 
   // Mat Rempit: one at a time, team-wide, then a 3-minute wait (power-ups §5a). A refusal isn't spent.
   if (u.kind === 'flare') {
+    // No new check-in window may open inside Mak Kau Hijau's 45 s (§6.3): refused from its claim until it settles.
+    if (fresh.hijau && !fresh.hijau.settledAt) return { ok: false, reason: 'hijau-running' }
     const blocked = flareBlocked(pings, ctx.now)
     if (blocked) return { ok: false, ...blocked }
   }
@@ -2665,6 +2756,7 @@ export const actions = {
   claim,
   usePowerup,
   grabPick,
+  touchGreen,
   dropDatoSeri,
   dropBomoh,
   dropRing,

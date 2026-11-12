@@ -6126,7 +6126,9 @@ describe('one legendary per side, picked by the app (Plan E2 task 2)', () => {
     const check = async (body: object) => {
       for (const phase of ['lobby', 'chase']) {
         const v = await run<View>('state', { code: g.code, ...body })
-        const text = JSON.stringify(v)
+        // Every view carries the Mak Kau Hijau takeover field (task 5); null says nothing about this game.
+        expect(v.hijau).toBeNull()
+        const text = JSON.stringify(v).replace('"hijau":null', '')
         for (const s of [...secrets, ...names]) expect(text, `${phase}: ${s}`).not.toContain(s)
         expect(v.settings).not.toHaveProperty('legendaries')
         if (phase === 'lobby' && (body as { token?: string }).token === siti.token) {
@@ -6145,7 +6147,7 @@ describe('one legendary per side, picked by the app (Plan E2 task 2)', () => {
     await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 7 * MIN
     for (const body of [{ token: siti.token }, { token: g.aina.token }, { token: g.ben.token }]) {
-      const text = JSON.stringify(await run<View>('state', { code: g.code, ...body }))
+      const text = JSON.stringify(await run<View>('state', { code: g.code, ...body })).replace('"hijau":null', '')
       for (const s of [...secrets, ...names]) expect(text).not.toContain(s)
     }
   })
@@ -6269,7 +6271,8 @@ describe('Super Ring and Mak Kau Hijau: the hidden stashes (Plan E2 task 3)', ()
     expect(await hijau(g, g.ben.token)).toEqual({ ok: true, kind: 'hijau' })
     const after = await game(g)
     expect(after.hijau_stash).toMatchObject({ claimedBy: g.ben.playerId, claimedAt: stamp(now) })
-    expect(after.hijau).toMatchObject({ claimedBy: g.ben.playerId, claimedAt: stamp(now), startsAt: stamp(now), deadline: stamp(now + 45_000), sentAt: null, settledAt: null, tapped: [] })
+    // Starting at the claim, its push goes out with it (task 5).
+    expect(after.hijau).toMatchObject({ claimedBy: g.ben.playerId, claimedAt: stamp(now), startsAt: stamp(now), deadline: stamp(now + 45_000), sentAt: stamp(now), settledAt: null, tapped: [] })
     const org = (await store.organiserBySessionTokenHash(hashToken(g.organiserToken)))!.organisation_id
     expect((await store.secretCards(org)).find((c) => c.id === card.id)).toMatchObject({ state: 'retired', found_at: stamp(now) })
     expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'hijau')).toHaveLength(0)
@@ -6326,7 +6329,8 @@ describe('Super Ring and Mak Kau Hijau: the hidden stashes (Plan E2 task 3)', ()
     for (const token of [g.hafiz.token, g.chong.token, g.aina.token]) {
       const v = await run<View>('state', { code: g.code, token })
       expect(v.feed.filter((f) => f.text === 'Something legendary was found.')).toHaveLength(2)
-      expect(v.feed.map((f) => f.text).join(' ')).not.toMatch(/Ring|Hijau|Mak Kau/i)
+      // Mak Kau Hijau announces itself once its 45 s starts (task 5, §6.3); the found line still names nothing.
+      expect(v.feed.filter((f) => !f.text.startsWith('Mak kau hijau!')).map((f) => f.text).join(' ')).not.toMatch(/Ring|Hijau|Mak Kau/i)
       expect(v.ringZone).toBeNull()
       expect(v.hijauZone).toBeNull()
     }
@@ -6783,5 +6787,286 @@ describe('Super Ring: house arrest instead of Penjara (Plan E2 task 4)', () => {
     await poll(g, t0 + ARREST + S)
     expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, arrest: null })
     expect(await evs(g, 'auto-jailed')).toHaveLength(0)
+  })
+})
+
+describe('Mak Kau Hijau (Plan E2 task 5)', () => {
+  const S = 1000
+  const STASH = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const atStash = { ...STASH, accuracy_m: 8 }
+  const PUSH_BODY = 'Mak kau hijau! Tap the green in 45 s or go to Penjara.'
+  type G = Awaited<ReturnType<typeof chasing>>
+
+  /**
+   * A chasing Full game with Super Ring and Mak Kau Hijau dropped. Runners: Aina (#07), Hafiz (#03).
+   * Chasers: Ben, Chong (Chong has no push). Siti is a marshal. `now` is left at +7 min.
+   */
+  async function chasing(settings: object = {}, moreRunners: string[] = []) {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' }, ...settings })
+    const chong = await run('join', { code: g.code, name: 'Chong', accepted: true })
+    await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [chong.playerId]: 'chaser' } })
+    const more: Record<string, { token: string; playerId: string }> = {}
+    for (const [k, name] of moreRunners.entries()) {
+      const r = await run('join', { code: g.code, name, accepted: true })
+      await run('subscribe', { code: g.code, token: r.token, subscription: { endpoint: `https://push/${name}` } })
+      await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [r.playerId]: 'runner' } })
+      await run('linkTag', { code: g.code, token: r.token, tagId: 11 + k })
+      more[name] = r
+    }
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    await run('dropRing', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('dropHijau', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    pushes = []
+    return { ...g, chong, siti, more, gameId: (await store.gameByCode(g.code))!.id }
+  }
+  const game = async (g: G) => (await store.gameByCode(g.code))!
+  const stamp = (t: number) => new Date(t).toISOString()
+  /** A chaser (Ben by default) scans the green card at the stash at `ms`. */
+  const claimAt = async (g: G, ms: number, token = g.ben.token) => {
+    now = ms
+    return run('claim', { code: g.code, token, qr: hijauQr((await game(g)).hijau_stash!.code!), ...atStash })
+  }
+  const poll = (g: G, ms: number, token?: string) => {
+    now = ms
+    return run<View>('state', token ? { code: g.code, token } : { code: g.code, organiserToken: g.organiserToken })
+  }
+  const tap = (g: G, token: string, ms: number) => {
+    now = ms
+    return run('touchGreen', { code: g.code, token })
+  }
+  const row = async (g: G, id: string) => (await store.players(g.gameId)).find((p) => p.id === id)!
+  const evs = async (g: G, type: string) => (await store.events(g.gameId)).filter((e) => e.type === type)
+  const hijauPushes = () => pushes.filter((p) => (p.payload as any).type === 'hijau')
+  const texts = (v: View) => v.feed.map((f) => f.text)
+
+  it("claiming it pushes every free runner once and jails those who don't tap in 45 s", async () => {
+    const g = await chasing()
+    const t = T0 + 7 * MIN
+    expect(await claimAt(g, t)).toEqual({ ok: true, kind: 'hijau' })
+    expect((await game(g)).hijau).toMatchObject({ startsAt: stamp(t), deadline: stamp(t + 45 * S), sentAt: stamp(t), settledAt: null })
+    expect(hijauPushes().map((p) => p.endpoint).sort()).toEqual(['https://push/Aina', 'https://push/Hafiz'])
+    expect(hijauPushes()[0].payload).toMatchObject({ type: 'hijau', code: g.code, deadline: t + 45 * S, body: PUSH_BODY })
+    expect(await evs(g, 'hijau')).toHaveLength(1)
+    await poll(g, t + 5 * S)
+    expect(hijauPushes()).toHaveLength(2)
+
+    const aina = await poll(g, t + 5 * S, g.aina.token)
+    expect(aina.hijau).toEqual({ startsAt: t, deadline: t + 45 * S, tapped: false })
+    expect(aina.feed[0]).toMatchObject({ text: 'Mak kau hijau! Tap the green.', act: true })
+    const ben = await poll(g, t + 5 * S, g.ben.token)
+    expect(ben.hijau).toBeNull()
+    expect(ben.feed[0]).toMatchObject({ text: 'Mak kau hijau! Dikejar have 45 s.', act: false })
+    expect(await tap(g, g.ben.token, t + 6 * S)).toEqual({ ok: false, reason: 'not-a-target' })
+
+    expect(await tap(g, g.aina.token, t + 10 * S)).toEqual({ ok: true })
+    // A retry after a bad connection is still fine.
+    expect(await tap(g, g.aina.token, t + 11 * S)).toEqual({ ok: true })
+    expect((await poll(g, t + 12 * S, g.aina.token)).hijau).toMatchObject({ tapped: true })
+    await poll(g, t + 44 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
+
+    await poll(g, t + 45 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    expect(await evs(g, 'auto-jailed')).toEqual([expect.objectContaining({ target_id: g.hafiz.playerId, data: expect.objectContaining({ cause: 'hijau' }) })])
+    expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: false, jailed: 1 }])
+
+    const after = await poll(g, t + 46 * S, g.aina.token)
+    expect(after.hijau).toBeNull()
+    expect(texts(after)).toContain('Safe! You touched green.')
+    expect(texts(after)).toContain('Mak kau hijau: 1 Dikejar to Penjara.')
+    const benAfter = await poll(g, t + 46 * S, g.ben.token)
+    expect(texts(benAfter)).toContain('Mak kau hijau: 1 Dikejar to Penjara.')
+    expect(texts(benAfter).join(' ')).not.toMatch(/check-in|Safe/)
+    // Marshals get the runner's own line, with the undo.
+    const siti = await poll(g, t + 46 * S, g.siti.token)
+    expect(siti.alerts.find((a) => a.kind === 'auto-jail')).toMatchObject({ targetId: g.hafiz.playerId, text: 'Hafiz #03 missed Mak kau hijau, sent to Penjara' })
+  })
+
+  it("a tap after the deadline doesn't count", async () => {
+    const g = await chasing()
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    expect(await tap(g, g.hafiz.token, t + 45 * S)).toEqual({ ok: false, reason: 'too-late' })
+    expect(await tap(g, g.aina.token, t + 50 * S)).toEqual({ ok: false, reason: 'too-late' })
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(true)
+    expect((await game(g)).hijau!.tapped).toEqual([])
+  })
+
+  it('nobody polls until 3 minutes later: judged once, same result', async () => {
+    const g = await chasing()
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    await tap(g, g.aina.token, t + 20 * S)
+    await poll(g, t + 3 * MIN)
+    await poll(g, t + 3 * MIN + S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    expect(await evs(g, 'auto-jailed')).toHaveLength(1)
+    expect(await evs(g, 'hijau-done')).toHaveLength(1)
+    expect(hijauPushes()).toHaveLength(2)
+  })
+
+  it('claimed during a check-in window: starts when it closes', async () => {
+    const g = await chasing()
+    // Ping 1: alert 9:15, reveal 10:00.
+    await claimAt(g, T0 + 9 * MIN + 20 * S)
+    expect((await game(g)).hijau).toMatchObject({ startsAt: stamp(T0 + 10 * MIN), deadline: stamp(T0 + 10 * MIN + 45 * S), sentAt: null })
+    expect(hijauPushes()).toHaveLength(0)
+    expect((await poll(g, T0 + 10 * MIN - S, g.aina.token)).hijau).toBeNull()
+    expect(hijauPushes()).toHaveLength(0)
+    await poll(g, T0 + 10 * MIN)
+    expect(hijauPushes()).toHaveLength(2)
+    expect((await poll(g, T0 + 10 * MIN + S, g.aina.token)).hijau).toMatchObject({ startsAt: T0 + 10 * MIN, deadline: T0 + 10 * MIN + 45 * S })
+  })
+
+  it("claimed while a Mat Rempit window is pending: starts at that window's reveal", async () => {
+    const g = await chasing()
+    const flare = await store.addPowerUp({ game_id: g.gameId, player_id: g.chong.playerId, kind: 'flare', station: 1 })
+    expect(await run('usePowerup', { code: g.code, token: g.chong.token, powerupId: flare.id })).toEqual({ ok: true, kind: 'flare' })
+    await claimAt(g, T0 + 7 * MIN + 10 * S)
+    expect((await game(g)).hijau!.startsAt).toBe(stamp(T0 + 7 * MIN + 30 * S))
+  })
+
+  it('push went out late (first poll 30 s after start): void, nobody jailed', async () => {
+    const g = await chasing()
+    await claimAt(g, T0 + 9 * MIN + 20 * S)
+    const start = T0 + 10 * MIN
+    // Ping 1 reveals at 10:00 with nobody polling; the first poll is 30 s into the 45 s.
+    await poll(g, start + 30 * S)
+    expect((await game(g)).hijau!.sentAt).toBe(stamp(start + 30 * S))
+    await poll(g, start + 45 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: true, jailed: 0 }])
+    expect(texts(await poll(g, start + 46 * S, g.ben.token))).toContain('Mak kau hijau fizzled. The alert went out too late.')
+    expect(texts(await poll(g, start + 46 * S, g.aina.token)).join(' ')).not.toMatch(/fizzled|to Penjara/)
+  })
+
+  it('nobody polls inside the 45 s at all: no push went out, so it is void', async () => {
+    const g = await chasing()
+    await claimAt(g, T0 + 9 * MIN + 20 * S)
+    await poll(g, T0 + 11 * MIN)
+    expect(hijauPushes()).toHaveLength(0)
+    expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: true, jailed: 0 }])
+    expect(await evs(g, 'auto-jailed')).toHaveLength(0)
+  })
+
+  it('a runner with push turned off is not immune', async () => {
+    const g = await chasing()
+    await store.updatePlayers([{ id: g.hafiz.playerId, patch: { push: null } }])
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    expect(hijauPushes().map((p) => p.endpoint)).toEqual(['https://push/Aina'])
+    await tap(g, g.aina.token, t + 5 * S)
+    await poll(g, t + 45 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+  })
+
+  it('Super Ring holder who misses gets house arrest instead', async () => {
+    const g = await chasing()
+    const ringCode = (await game(g)).ring_stash!.code!
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: ringQr(ringCode), ...atStash })).toEqual({ ok: true, kind: 'ring' })
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    pushes = []
+    await poll(g, t + 45 * S)
+    const aina = await row(g, g.aina.playerId)
+    expect(aina.jailed).toBe(false)
+    expect(aina.arrest).toMatchObject({ route: 'hijau', by: null, center: null, startedAt: null })
+    expect(pushes.filter((p) => p.endpoint === 'https://push/Aina').map((p) => (p.payload as any).body)).toEqual(['Super Ring! Open Kejar within 60 s to start house arrest.'])
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect((await evs(g, 'auto-jailed')).map((e) => e.target_id)).toEqual([g.hafiz.playerId])
+    expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: false, jailed: 1 }])
+  })
+
+  it('Luar Garisan, jailed and arrested runners are left out', async () => {
+    const g = await chasing({}, ['Dan', 'Eve'])
+    const { Dan: dan, Eve: eve } = g.more
+    const arrest = { firedAt: stamp(now), route: 'catch' as const, by: g.ben.playerId, center: STASH, startedAt: stamp(now), ringId: 'r1', catchEventId: null }
+    await store.updatePlayers([
+      { id: dan.playerId, patch: { disqualified_at: stamp(now) } },
+      { id: g.hafiz.playerId, patch: { jailed: true } },
+      { id: g.aina.playerId, patch: { arrest } },
+    ])
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    expect(hijauPushes().map((p) => p.endpoint)).toEqual(['https://push/Eve'])
+    expect(await tap(g, g.hafiz.token, t + S)).toEqual({ ok: false, reason: 'not-a-target' })
+    expect((await poll(g, t + S, g.aina.token)).hijau).toBeNull()
+    await poll(g, t + 45 * S)
+    expect((await evs(g, 'auto-jailed')).map((e) => e.target_id)).toEqual([eve.playerId])
+    expect((await row(g, g.aina.playerId)).arrest).toEqual(arrest)
+    expect((await row(g, dan.playerId)).jailed).toBe(false)
+  })
+
+  it('Mat Rempit is refused while it runs', async () => {
+    const g = await chasing()
+    const flare = await store.addPowerUp({ game_id: g.gameId, player_id: g.chong.playerId, kind: 'flare', station: 1 })
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    expect(await run('usePowerup', { code: g.code, token: g.chong.token, powerupId: flare.id })).toEqual({ ok: false, reason: 'hijau-running' })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === flare.id)!.used_at).toBeNull()
+    now = t + 45 * S
+    expect(await run('usePowerup', { code: g.code, token: g.chong.token, powerupId: flare.id })).toEqual({ ok: true, kind: 'flare' })
+  })
+
+  it('paused during the 45 s: the deadline moves by the pause', async () => {
+    const g = await chasing()
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    now = t + 10 * S
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    // A tap while paused counts (as if made at the pause).
+    expect(await tap(g, g.aina.token, t + 30 * S)).toEqual({ ok: true })
+    // The countdown holds still while paused.
+    expect((await poll(g, t + 40 * S, g.hafiz.token)).hijau).toMatchObject({ deadline: t + 75 * S })
+    // Past the old deadline while paused: nobody is judged.
+    await poll(g, t + 60 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
+    now = t + 70 * S
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    expect((await game(g)).hijau!.deadline).toBe(stamp(t + 105 * S))
+    await poll(g, t + 104 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
+    await poll(g, t + 105 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+  })
+
+  it('jails the last free runners: final whistle; Phone problem undo during the 60 s calls it off', async () => {
+    const g = await chasing()
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    await poll(g, t + 45 * S)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(true)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect((await evs(g, 'final-whistle')).map((e) => e.data)).toEqual([{ cause: 'hijau' }])
+    expect(texts(await poll(g, t + 46 * S, g.ben.token))).toContain('No Dikejar left free! Final whistle in 60 s.')
+    const hafizJail = (await evs(g, 'auto-jailed')).find((e) => e.target_id === g.hafiz.playerId)!
+    now = t + 70 * S
+    expect(await run('undoAutoJail', { code: g.code, token: g.siti.token, eventId: hafizJail.id })).toEqual({ ok: true })
+    expect((await game(g)).final_whistle_at).toBeNull()
+    await poll(g, t + 45 * S + 61 * S)
+    expect((await game(g)).ended_at).toBeNull()
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
+  })
+
+  it('too close to the end to run: the card is claimed and settles void at once, with no push', async () => {
+    const g = await chasing({ lengthMin: 15 })
+    const endsAt = (await poll(g, T0 + 7 * MIN)).endsAt!
+    await keepCheckingIn(g, 7, Math.floor((endsAt - T0) / MIN) - 1)
+    expect(await claimAt(g, endsAt - 30 * S)).toEqual({ ok: true, kind: 'hijau' })
+    expect((await game(g)).hijau!.settledAt).toBe(stamp(endsAt - 30 * S))
+    expect(hijauPushes()).toHaveLength(0)
+    expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: true, jailed: 0, ended: true }])
+    expect(await evs(g, 'hijau')).toHaveLength(0)
+    expect((await poll(g, endsAt - 29 * S, g.aina.token)).hijau).toBeNull()
   })
 })

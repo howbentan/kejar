@@ -8,6 +8,7 @@ import { MOMENT_WINDOW_MS } from './moments.js'
 import { reelPulledThisStay, RESCUE_HOLD_MS } from './penjara.js'
 import { isOut, undoableArrestId, undoableCatchId } from './players.js'
 import { ARREST_OPEN_MS, arrestEndsAt } from './arrest.js'
+import { hijauTargets } from './hijau.js'
 import { POWER_NAME } from './powerNames.js'
 import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, shieldArmedAt, slotBusy, TOLL_RADIUS_M } from './powerups.js'
 import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type LegendaryKind, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
@@ -125,6 +126,11 @@ export interface View {
    * circle's centre, and while it waits for me to open Kejar, the deadline to start it (both others null then).
    */
   arrest: { endsAt: number | null; center: LatLng | null; openBy: number | null } | null
+  /**
+   * Mak Kau Hijau's takeover (new power-ups §6.3): for a runner who must tap green, from its start until it
+   * settles; the deadline is held still while paused. Null for everyone else (chasers get a feed line).
+   */
+  hijau: { startsAt: number; deadline: number; tapped: boolean } | null
   /** My running Durian's end time; null for effects that wait for the next ping (motion design §7b). */
   activeEndsAt: number | null
   /** A chaser holding Mat Rempit while the team waits: when it unlocks (power-ups design §5a). */
@@ -779,18 +785,30 @@ function arrestFor(i: ViewInput): View['arrest'] {
   }
 }
 
+/** My Mak Kau Hijau takeover (see `View.hijau`). */
+function hijauFor(i: ViewInput, phase: Phase): View['hijau'] {
+  const run = i.game.hijau
+  if (!run || run.settledAt || phase !== 'chasing' || !hijauTargets([i.me]).length) return null
+  const startsAt = Date.parse(run.startsAt)
+  if (i.now < startsAt) return null
+  const frozen = i.game.paused_at ? Math.max(0, i.now - Math.max(Date.parse(i.game.paused_at), startsAt)) : 0
+  return { startsAt, deadline: Date.parse(run.deadline) + frozen, tapped: run.tapped.includes(i.me.id) }
+}
+
 interface FeedContext {
   meId: string
   side: 'runner' | 'chaser' | null
   freeNow: number
   jailedNow: number
+  /** I tapped green in this game's Mak Kau Hijau. */
+  tappedGreen: boolean
 }
 
 type Line = Omit<FeedItem, 'at'>
 const plain = (text: string): Line => ({ text, means: null, act: false, label: null })
 
 /** The two-part lines (motion §8.2). Runner power-up uses never appear, so nothing secret leaks. */
-function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Line | null {
+function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Line | Line[] | null {
   const actor = e.actor_id ? byId.get(e.actor_id) : undefined
   const target = e.target_id ? byId.get(e.target_id) : undefined
   const tag = target ? tagLabel(target) : 'A Dikejar'
@@ -892,12 +910,25 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
     case 'auto-jailed':
       // Out of Super Ring's house arrest: never says why, so the card stays a secret.
       if (e.data.cause === 'revoked') return two(`${tag} went to Penjara.`, 'PENJARA', `${ctx.freeNow} Dikejar still free.`, `One less to find. ${tag} is in Penjara.`)
+      // Mak Kau Hijau: players get its one count line (`hijau-done`); marshals see who, for the undo.
+      if (e.data.cause === 'hijau') return ctx.side === null ? plain(`${tag} missed Mak kau hijau, sent to Penjara.`) : null
       return two(
         `${tag} missed 2 check-ins in a row.`,
         '2×',
         `${tag} went to Penjara. Check in when your phone buzzes, or you're next.`,
         `One less to find. ${tag} is in Penjara.`,
       )
+    case 'hijau':
+      // Runners (and marshals) need not act: only a runner's line buzzes.
+      if (ctx.side === 'runner') return { ...plain('Mak kau hijau! Tap the green.'), act: true }
+      return plain('Mak kau hijau! Dikejar have 45 s.')
+    case 'hijau-done': {
+      const safe = ctx.side === 'runner' && ctx.tappedGreen ? [plain('Safe! You touched green.')] : []
+      // Too close to the end to run: nothing happened, so nothing to explain beyond the found card.
+      if (e.data.ended === true) return null
+      if (e.data.void === true) return ctx.side === 'runner' ? safe : [plain('Mak kau hijau fizzled. The alert went out too late.')]
+      return [plain(`Mak kau hijau: ${Number(e.data.jailed ?? 0)} Dikejar to Penjara.`), ...safe]
+    }
     case 'luar-garisan':
       // For everyone. The warning (`out-warned`) stays private to the player, so it has no line.
       return actor ? plain(`${tagLabel(actor)} is Luar Garisan, out of this round.`) : null
@@ -959,7 +990,7 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       return `A marshal undid a kejar. ${target?.name ?? 'A Dikejar'} is back in.`
     case 'final-whistle':
       // A removal or Luar Garisan put the last runner out without a catch; older events carry no cause (a catch).
-      return e.data.cause === 'removed' || e.data.cause === 'luar-garisan'
+      return e.data.cause === 'removed' || e.data.cause === 'luar-garisan' || e.data.cause === 'hijau'
         ? 'No Dikejar left free! Final whistle in 60 s.'
         : 'Last Dikejar caught! Final whistle in 60 s.'
     case 'arrested':
@@ -976,7 +1007,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, arrest: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, ringZone: null, hijauZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, ringStash: undefined, ringCard: undefined, hijauStash: undefined, hijauCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, arrest: null, hijau: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, ringZone: null, hijauZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, ringStash: undefined, ringCard: undefined, hijauStash: undefined, hijauCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
   }
   return v
 }
@@ -1015,12 +1046,13 @@ function fullView(i: ViewInput): View {
     side: i.me.role === 'runner' || i.me.role === 'chaser' ? i.me.role : null,
     freeNow: runnersNow.filter((p) => !isOut(p)).length,
     jailedNow: runnersNow.filter((p) => p.jailed).length,
+    tappedGreen: !!i.game.hijau?.tapped.includes(i.me.id),
   }
   // Newest first; events recorded in the same millisecond keep their recorded order (later first).
   const feed = [
     ...i.events.flatMap((e) => {
       const line = feedLine(e, byId, feedContext)
-      return line ? [{ at: e.at, ...line }] : []
+      return (Array.isArray(line) ? line : line ? [line] : []).map((l) => ({ at: e.at, ...l }))
     }),
     ...[...notes, ...snapshotLines(i, phase, endsAt)].map((n) => ({ ...n, means: null, act: false, label: null })),
   ]
@@ -1052,6 +1084,7 @@ function fullView(i: ViewInput): View {
     caughtBy: i.me.jailed && i.me.caught_by ? (byId.get(i.me.caught_by)?.name ?? null) : null,
     jailReason: jailReasonFor(i),
     arrest: arrestFor(i),
+    hijau: hijauFor(i, phase),
     outWarned: !!i.me.out_warned_at && !i.me.disqualified_at,
     activeEndsAt: (() => {
       const shield = activeShield(i.powerUps, i.me.id, i.now)
