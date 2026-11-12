@@ -196,6 +196,8 @@ export interface Arrest {
   startedAt: string | null
   ringId: string
   catchEventId: string | null
+  /** The `arrested` event's id, on every route (`firedAt` moves on resume, so it can't find the event). */
+  eventId?: string | null
 }
 
 /**

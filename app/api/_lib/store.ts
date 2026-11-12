@@ -138,6 +138,8 @@ export interface GameStore {
    * Bounded by players × times, so it stays small however long the game runs.
    */
   latestPositions(gameId: string, atIsos: string[]): Promise<Record<string, Position[]>>
+  /** One player's fixes from `fromIso` to `toIso` inclusive, oldest first. Keep the window short (Super Ring's release). */
+  playerPositions(gameId: string, playerId: string, fromIso: string, toIso: string): Promise<Position[]>
   addPings(pings: Ping[]): Promise<void>
   pings(gameId: string): Promise<Ping[]>
   /** Sets the flag only if it was false; true for the first caller. */
@@ -596,6 +598,12 @@ export class MemoryStore implements GameStore {
     }
     for (const list of Object.values(out)) list.sort((a, b) => a.at.localeCompare(b.at))
     return out
+  }
+  async playerPositions(gameId: string, playerId: string, fromIso: string, toIso: string) {
+    return this.locs
+      .filter((l) => l.game_id === gameId && l.player_id === playerId && l.at >= fromIso && l.at <= toIso)
+      .map((l) => ({ lat: l.lat, lng: l.lng, accuracy_m: l.accuracy_m, at: l.at }))
+      .sort((a, b) => a.at.localeCompare(b.at))
   }
   /** Bulk read for tests only — the game must never depend on reading every row. */
   async positions(gameId: string, sinceIso: string) {

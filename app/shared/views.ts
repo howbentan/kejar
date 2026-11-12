@@ -1,4 +1,4 @@
-import { alertLeadFor, checkedIn, checkinsSince, countedCheckIn, fairlyWarned } from './checkins.js'
+import { alertLeadFor, checkedIn, checkinsSince, countedCheckIn, countRestartAt, fairlyWarned } from './checkins.js'
 import { alertsFrom, type Alert, type ReportReason } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
 import { distanceM, fuzz, hash, offset } from './geo.js'
@@ -592,8 +592,8 @@ function myLastAt(i: Pick<ViewInput, 'me' | 'positions'>): (t: number) => number
 }
 
 /** Check-ins only count from the chase start or my last release, whichever is later (checkins design §4.4). */
-function sinceRelease(i: Pick<ViewInput, 'game' | 'me' | 'now'>): number {
-  return checkinsSince(chaseStartOf(i.game, i.now)!, i.me.freed_at)
+function sinceRelease(i: Pick<ViewInput, 'game' | 'me' | 'now' | 'events'>): number {
+  return checkinsSince(chaseStartOf(i.game, i.now)!, countRestartAt(i.me, i.events))
 }
 
 export type SnapshotInput = Pick<ViewInput, 'game' | 'me' | 'positions' | 'events' | 'now'>
@@ -767,7 +767,8 @@ function jailReasonFor(i: ViewInput): View['jailReason'] {
 /** My house arrest for my own screen (see `View.arrest`). While paused, both deadlines move with the clock. */
 function arrestFor(i: ViewInput): View['arrest'] {
   const a = i.me.arrest
-  if (!a || i.me.role !== 'runner') return null
+  // Once the game is over a leftover arrest means nothing (they counted as free): no stale circle on the results.
+  if (!a || i.me.role !== 'runner' || phaseAt(i.game, i.now).phase === 'ended') return null
   const since = a.startedAt ?? a.firedAt
   const frozen = i.game.paused_at ? Math.max(0, i.now - Math.max(Date.parse(i.game.paused_at), Date.parse(since))) : 0
   const endsAt = arrestEndsAt(a)

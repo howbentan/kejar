@@ -173,6 +173,18 @@ export class SupabaseStore implements GameStore {
     for (const list of Object.values(out)) list.sort((a, b) => a.at.localeCompare(b.at))
     return out
   }
+  async playerPositions(gameId: string, playerId: string, fromIso: string, toIso: string): Promise<Position[]> {
+    return check(
+      await this.db
+        .from('locations')
+        .select('lat, lng, accuracy_m, at')
+        .eq('game_id', gameId)
+        .eq('player_id', playerId)
+        .gte('at', fromIso)
+        .lte('at', toIso)
+        .order('at'),
+    ) as Position[]
+  }
   async addPings(pings: Ping[]) {
     check(await this.db.from('pings').insert(pings))
   }

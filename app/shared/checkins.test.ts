@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { alertLeadFor, autoJailDue, checkedIn, fairlyWarned, LATE_PING_MIN_WARNING_MS } from './checkins.js'
-import { MIN, T0 } from './fixtures.js'
+import { alertLeadFor, autoJailDue, checkedIn, countRestartAt, fairlyWarned, LATE_PING_MIN_WARNING_MS } from './checkins.js'
+import { iso, MIN, T0 } from './fixtures.js'
+import type { GameEvent } from './types.js'
+
+describe('countRestartAt', () => {
+  const ended = (outcome: string, at: number, target = 'r1'): GameEvent => ({ id: `e${at}`, game_id: 'g', at: iso(at), type: 'arrest-ended', actor_id: null, target_id: target, data: { outcome } })
+  it('is freed_at with no released house arrest', () => {
+    expect(countRestartAt({ id: 'r1', freed_at: null }, [])).toBeNull()
+    expect(countRestartAt({ id: 'r1', freed_at: iso(T0) }, [ended('revoked', T0 + MIN), ended('free', T0 + MIN, 'r2')])).toBe(iso(T0))
+  })
+  it('is the later of freed_at and a house arrest that ended free or undone', () => {
+    expect(countRestartAt({ id: 'r1', freed_at: iso(T0) }, [ended('free', T0 + MIN)])).toBe(iso(T0 + MIN))
+    expect(countRestartAt({ id: 'r1', freed_at: null }, [ended('undone', T0 + MIN)])).toBe(iso(T0 + MIN))
+    expect(countRestartAt({ id: 'r1', freed_at: iso(T0 + 2 * MIN) }, [ended('free', T0 + MIN)])).toBe(iso(T0 + 2 * MIN))
+  })
+})
 
 const R = T0 + 10 * MIN
 const LEAD = 45_000

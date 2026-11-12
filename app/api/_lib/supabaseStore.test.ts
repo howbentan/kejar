@@ -185,6 +185,25 @@ describe('SupabaseStore', () => {
     expect(orders).toEqual(['at', 'id', 'at', 'id'])
   })
 
+  it("playerPositions reads one player's fixes in a time window, oldest first", async () => {
+    const calls: unknown[][] = []
+    const rows = [{ lat: 3, lng: 101, accuracy_m: 8, at: 't1' }]
+    const builder: Record<string, unknown> = {}
+    for (const m of ['select', 'eq', 'gte', 'lte']) builder[m] = (...args: unknown[]) => (calls.push([m, ...args]), builder)
+    builder.order = (col: string) => (calls.push(['order', col]), Promise.resolve({ data: rows, error: null }))
+    const db = { from: (table: string) => (calls.push(['from', table]), builder) } as unknown as SupabaseClient
+    expect(await new SupabaseStore(db, () => 0).playerPositions('g1', 'p1', 'a', 'b')).toEqual(rows)
+    expect(calls).toEqual([
+      ['from', 'locations'],
+      ['select', 'lat, lng, accuracy_m, at'],
+      ['eq', 'game_id', 'g1'],
+      ['eq', 'player_id', 'p1'],
+      ['gte', 'at', 'a'],
+      ['lte', 'at', 'b'],
+      ['order', 'at'],
+    ])
+  })
+
   it('draws a card through the draw_card function', async () => {
     const { db, rpcs } = fakeDb()
     expect(await new SupabaseStore(db, () => 0).drawCard('g1', 'chaser')).toBe(90000)

@@ -14,7 +14,7 @@ import {
   type ReportReason,
   type SosReason,
 } from '../../shared/alerts.js'
-import { autoJailDue, checkinsSince, countedCheckIn, fairlyWarned } from '../../shared/checkins.js'
+import { autoJailDue, checkinsSince, countedCheckIn, countRestartAt, fairlyWarned } from '../../shared/checkins.js'
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
@@ -658,7 +658,9 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     if (!(await store.claimPing(game.id, seq, 'revealed'))) continue
     const revealAt = times.get(seq)?.revealAt ?? now
     const positions = await store.latestPositions(game.id, [iso(revealAt)])
-    const free = (await store.players(game.id)).filter((p) => p.role === 'runner' && !isOut(p))
+    // A runner under house arrest is left out entirely: hidden from chasers, so not in the seen/missed counts
+    // either (comparing counts with dots would give them away), and judged by the circle, not check-ins.
+    const free = (await store.players(game.id)).filter((p) => p.role === 'runner' && !isOut(p) && !p.arrest)
     // Cloaked runners don't count as seen, so the feed can't give them away.
     const prevRevealAt = Math.max(
       chaseStartOf(game, now) ?? 0,
@@ -670,8 +672,10 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
         .map((u) => u.player_id),
     )
     const seen = free.filter((p) => !cloaked.has(p.id) && (positions[p.id] ?? []).length > 0).length
-    // The count starts fresh at each runner's own last release (checkins design §4.4).
-    const sinceFor = (p: Player) => checkinsSince(chaseStartOf(game, now)!, p.freed_at)
+    // The count starts fresh at each runner's own last release (checkins design §4.4), from Penjara or from house
+    // arrest (one events read per claimed reveal).
+    const events = (await store.events(game.id)).filter((e) => e.type === 'arrest-ended')
+    const sinceFor = (p: Player) => checkinsSince(chaseStartOf(game, now)!, countRestartAt(p, events))
     // With the chaser-snapshot switch on, a scheduled reveal records who checked in (a location inside its
     // 45 s window, counted under the same release rule as auto-jail), so a runner's view can find the last
     // window they checked into without loading every reveal's positions (checkins design §5.4).
@@ -699,8 +703,6 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
       const lastTwo = warned({ seq, revealAt }) ? lastThree.slice(-2) : []
       const atReveals = lastTwo.length === 2 ? await store.latestPositions(game.id, lastThree.map((t) => iso(t.revealAt))) : {}
       for (const p of lastTwo.length === 2 ? free : []) {
-        // Under house arrest, the circle judges them, not check-ins.
-        if (p.arrest) continue
         // Only a location inside each ping's 45 s window counts as a check-in (§4.2).
         const since = sinceFor(p)
         const judged = lastThree.map((t) => {
@@ -856,7 +858,11 @@ async function jailOrArrest(
     const positions = await store.latestPositions(game.id, [firedAt])
     const theirs = latest(positions[runner.id])
     const chaser = by ? latest(positions[by.id]) : null
-    const pick = theirs && now - Date.parse(theirs.at) <= ARREST_FIX_FRESH_MS ? theirs : (chaser ?? theirs)
+    // The runner's own fix if it's fresh and usable, else the chaser's usable fix. Final fallback: the chaser's fix
+    // whatever its accuracy (the catch scan just stored it, so the tag was ripped right there), then the runner's.
+    const usable = (f: Position | null) => !!f && usableFix(f)
+    const pick =
+      theirs && usable(theirs) && now - Date.parse(theirs.at) <= ARREST_FIX_FRESH_MS ? theirs : usable(chaser) ? chaser : (chaser ?? theirs)
     center = pick ? { lat: pick.lat, lng: pick.lng } : null
   }
   const arrest: Arrest = { firedAt, route, by: by?.id ?? null, center, startedAt: center ? firedAt : null, ringId: ring.id, catchEventId: null }
@@ -867,8 +873,8 @@ async function jailOrArrest(
   }
   // No actor: the feed line never says who, or which card.
   const fired = await store.addEvent({ game_id: game.id, type: 'arrested', actor_id: null, target_id: runner.id, data: { route, firedAt, ...data } })
+  await store.updateArrest(runner.id, route === 'catch' && by ? { eventId: fired.id, catchEventId: fired.id } : { eventId: fired.id })
   if (route === 'catch' && by) {
-    await store.updateArrest(runner.id, { catchEventId: fired.id })
     await store.addEvent({ game_id: game.id, type: 'ring-locked', actor_id: by.id, target_id: runner.id, data: { firedAt } })
   }
   await notify(ctx, game, runner, 'House arrest', center ? ARREST_STARTED : ARREST_OPEN)
@@ -909,13 +915,16 @@ async function settleArrests(ctx: Ctx, game: Game): Promise<boolean> {
     const endsAt = arrestEndsAt(a)
     if (endsAt === null) {
       if (now < Date.parse(a.firedAt) + ARREST_OPEN_MS) continue
-      const fired = (await store.events(game.id)).filter((e) => e.type === 'arrested' && e.target_id === p.id && e.data.firedAt === a.firedAt).at(-1)
+      // By id: a resume moves a waiting arrest's `firedAt`, so it no longer matches the event's.
+      const fired = a.eventId ? (await store.events(game.id)).find((e) => e.id === a.eventId) : undefined
       const kept = fired && Array.isArray(fired.data.checkins) ? { seq: fired.data.seq, checkins: fired.data.checkins } : {}
       if (await arrestToPenjara(ctx, game, p, a, 'no-show', kept)) allOut = true
       continue
     }
     if (now < endsAt) continue
-    const fix = latest((await store.latestPositions(game.id, [iso(endsAt)]))[p.id])
+    // The latest usable fix in the last 20 s up to the end: a rough fix is ignored, never a revoke on its own.
+    const recent = await store.playerPositions(game.id, p.id, iso(endsAt - ARREST_FIX_FRESH_MS), iso(endsAt))
+    const fix = [...recent].reverse().find(usableFix) ?? null
     if (releaseVerdict(a, fix) === 'revoked') {
       if (await arrestToPenjara(ctx, game, p, a, 'revoked')) allOut = true
     } else if (await store.endArrest(p.id, a.firedAt)) {
@@ -1363,9 +1372,19 @@ const catchAction: Action = async (ctx, body) => {
     return { ok: false, reason: 'shielded', name: runner?.name }
   }
   const sent = runner ? await jailOrArrest(ctx, fresh, runner, players.find((p) => p.id === me.id) ?? me, 'catch') : null
+  if (sent === null) return { ok: false, reason: 'already-caught' }
+  // Catching the rescuer fails a live rescue: nobody gets out, even with a joiner still close (rules §9a). Super
+  // Ring saving the rescuer from Penjara doesn't save the rescue.
+  const failRescue = async () => {
+    if (fresh.rescue?.by === verdict.runnerId && (await ctx.store.endRescue(game.id, fresh.rescue.startedAt))) {
+      await ctx.store.addEvent({ game_id: game.id, type: 'rescue-failed', actor_id: verdict.runnerId, target_id: null, data: {} })
+    }
+  }
   // Super Ring fired: house arrest, not a catch, and this chaser hands the tag back for good.
-  if (sent === 'arrested') return { ok: false, reason: 'ring', name: runner!.name }
-  if (sent !== 'jailed') return { ok: false, reason: 'already-caught' }
+  if (sent === 'arrested') {
+    await failRescue()
+    return { ok: false, reason: 'ring', name: runner!.name }
+  }
   await ctx.store.addEvent({
     game_id: game.id,
     type: 'caught',
@@ -1373,10 +1392,7 @@ const catchAction: Action = async (ctx, body) => {
     target_id: verdict.runnerId,
     data: { flagged: verdict.flagged, who: tagLabelOf(players, verdict.runnerId), chaser: me.name, ...(verdict.flagged ? { farFromLast: true } : {}) },
   })
-  // Catching the rescuer fails a live rescue: nobody gets out, even with a joiner still close (rules §9a).
-  if (fresh.rescue?.by === verdict.runnerId && (await ctx.store.endRescue(game.id, fresh.rescue.startedAt))) {
-    await ctx.store.addEvent({ game_id: game.id, type: 'rescue-failed', actor_id: verdict.runnerId, target_id: null, data: {} })
-  }
+  await failRescue()
   // The last free runner caught: the final whistle, not the end (fair-play §1.4).
   await allOutCheck(ctx, fresh)
   const caught = players.find((p) => p.id === verdict.runnerId)
