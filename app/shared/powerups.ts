@@ -1,7 +1,7 @@
 import { distanceM, hash, offset } from './geo.js'
 import { inPlayArea } from './playArea.js'
 import { BONUS_SEQ_BASE } from './clock.js'
-import { placedStash, type Arena, type BomohStash, type DatoStash, type LatLng, type Phase, type Ping, type Player, type Position, type PowerUp, type PowerUpKind } from './types.js'
+import { placedStash, type Arena, type BomohStash, type DatoStash, type HijauStash, type LatLng, type Phase, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type RingStash } from './types.js'
 
 /** Spec §4.8.1. */
 export const CLAIM_RADIUS_M = 30
@@ -16,7 +16,7 @@ export const FREEZE_MS = 3 * 60_000
 export const TOLL_RADIUS_M = 40
 export const TOLL_FRESH_MS = 60_000
 /** Cards Nasi Lemak KFC can't double. */
-export const COMBO_EXCLUDED: readonly PowerUpKind[] = ['grab', 'combo', 'dato']
+export const COMBO_EXCLUDED: readonly PowerUpKind[] = ['grab', 'combo', 'dato', 'ring']
 const MAX_ACCURACY_M = 20
 const DECOY_MIN_M = 120
 const DECOY_MAX_M = 180
@@ -59,7 +59,7 @@ export function judgeClaim(i: {
   const lockedForMs = lastClaim + STATION_LOCK_MS - i.now
   if (lockedForMs > 0) return { ok: false, reason: 'locked', lockedForMs }
 
-  const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now)
+  const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now, i.me)
   if (busy) return { ok: false, reason: 'hand-full', busyKind: busy.kind, busyRunning: busy.running }
   return { ok: true }
 }
@@ -93,8 +93,24 @@ export function judgeDatoClaim(i: {
   const stash = placedStash(i.stash) // made with the game, but not dropped yet: nothing to find
   if (!stash || stash.claimedBy !== null) return { ok: false, reason: 'no-stash' }
   if (!withinClaimReach(i.myPos, stash, i.now)) return { ok: false, reason: 'too-far' }
-  if (slotBusy(i.powerUps, i.me.id, i.pings, i.now)) return { ok: false, reason: 'hand-full' }
+  if (slotBusy(i.powerUps, i.me.id, i.pings, i.now, i.me)) return { ok: false, reason: 'hand-full' }
   return { ok: true }
+}
+
+/**
+ * Scanning Super Ring's hidden stash: exactly Dato Seri's rules (a free runner in reach with an empty slot). The
+ * ring then sits unused in the slot until it is needed.
+ */
+export function judgeRingClaim(i: {
+  phase: Phase
+  me: Player
+  stash: RingStash | null | undefined
+  myPos: Position | null
+  powerUps: PowerUp[]
+  pings: Ping[]
+  now: number
+}): DatoClaimJudgement {
+  return judgeDatoClaim(i)
 }
 
 export type BomohClaimJudgement =
@@ -124,6 +140,17 @@ export function judgeBomohClaim(i: {
   return { ok: true }
 }
 
+/** Scanning Mak Kau Hijau's hidden stash: exactly Bomoh's rules (a chaser in reach, not frozen). */
+export function judgeHijauClaim(i: {
+  phase: Phase
+  me: Player
+  stash: HijauStash | null | undefined
+  myPos: Position | null
+  now: number
+}): BomohClaimJudgement {
+  return judgeBomohClaim(i)
+}
+
 /** Ms left on a chaser's Cheese Ais freeze; 0 when not frozen. */
 export function frozenForMs(p: Pick<Player, 'frozen_until'>, now: number): number {
   return p.frozen_until ? Math.max(0, Date.parse(p.frozen_until) - now) : 0
@@ -148,7 +175,9 @@ export function shieldArmedAt(u: PowerUp, all: PowerUp[]): number | null {
 }
 
 /** Whether a used card's effect is still running. */
-function usedRunning(u: PowerUp, powerUps: PowerUp[], pings: Ping[], now: number): boolean {
+function usedRunning(u: PowerUp, powerUps: PowerUp[], pings: Ping[], now: number, me?: Pick<Player, 'arrest'>): boolean {
+  // Super Ring: runs for as long as its holder is under the house arrest it brought on.
+  if (u.kind === 'ring') return !!me?.arrest
   // Done the moment they succeed or act (power-ups §5a): nothing keeps running.
   if (u.kind === 'toyol' || u.kind === 'along' || u.kind === 'grab' || u.kind === 'dato' || u.kind === 'combo' || u.kind === 'cheese') return false
   const usedAt = Date.parse(u.used_at as string)
@@ -176,12 +205,12 @@ export function runningEffect(powerUps: PowerUp[], playerId: string, pings: Ping
  * Gostan, Ponteng, Pak Guard and Tuch and Ga until the next reveal after use; Mat Rempit until its own
  * surprise ping is revealed. Nasi Lemak KFC and Cheese Ais are done the moment they're used.
  */
-export function slotBusy(powerUps: PowerUp[], playerId: string, pings: Ping[], now: number): { kind: PowerUpKind; running: boolean } | null {
+export function slotBusy(powerUps: PowerUp[], playerId: string, pings: Ping[], now: number, me?: Pick<Player, 'arrest'>): { kind: PowerUpKind; running: boolean } | null {
   for (const u of powerUps.filter((x) => x.player_id === playerId)) {
     // Toyol or Ah Long took it: gone from the hand. Truthy, not `!== null`: before migration 0011 it's undefined.
     if (u.taken_at) continue
     if (u.used_at === null) return { kind: u.kind, running: false }
-    if (usedRunning(u, powerUps, pings, now)) return { kind: u.kind, running: true }
+    if (usedRunning(u, powerUps, pings, now, me)) return { kind: u.kind, running: true }
   }
   return null
 }

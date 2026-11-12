@@ -28,4 +28,10 @@ describe('scanTarget', () => {
     expect(scanTarget('KEJAR:JAIL', 'chaser')).toEqual({ error: "That's not a tag or station code" })
     expect(scanTarget('https://example.com', 'chaser')).toEqual({ error: "That's not a tag or station code" })
   })
+
+  it('the orange and green cards scan like any hidden stash, for either side', () => {
+    expect(scanTarget('KEJAR:RING:Zx9_q-4', 'runner')).toEqual({ action: 'claim', body: { qr: 'KEJAR:RING:Zx9_q-4' } })
+    expect(scanTarget('KEJAR:HIJAU:Zx9_q-4', 'chaser')).toEqual({ action: 'claim', body: { qr: 'KEJAR:HIJAU:Zx9_q-4' } })
+    expect(scanTarget('KEJAR:RING', 'chaser')).toEqual({ action: 'claim', body: { qr: 'KEJAR:RING' } })
+  })
 })

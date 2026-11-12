@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import type { CatchJudgement } from '../../shared/catch.js'
-import { isBomohQr, isDatoQr, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
+import { isBomohQr, isDatoQr, isHijauQr, isRingQr, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
 import CatchMoment from '../game/CatchMoment'
@@ -56,7 +56,7 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
     (s: { action: string }, text: string, r: unknown) =>
       s.action === 'catch'
         ? catchMessage(text, r as CatchJudgement)
-        : isDatoQr(text) || isBomohQr(text)
+        : isDatoQr(text) || isBomohQr(text) || isRingQr(text) || isHijauQr(text)
           ? stashMessage(r as ClaimResult, 'chaser')
           : claimMessage(r as ClaimResult, stationFromQr(text)),
     [],

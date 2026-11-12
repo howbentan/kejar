@@ -17,7 +17,7 @@ import { ErrorText } from './ui'
  * What a successful claim can hand back: a deck card, Dato Seri, or Bomoh. Bomoh is never a `PowerUpKind` (he works on
  * claim and never sits in a hand), so every place that names a claimed kind has to handle him on purpose.
  */
-export type ClaimedKind = PowerUpKind | 'bomoh'
+export type ClaimedKind = PowerUpKind | 'bomoh' | 'hijau'
 export type ClaimResult = ({ ok: true; kind: ClaimedKind; double?: boolean } | Exclude<ClaimJudgement, { ok: true }>)
 type UseResult =
   | { ok: true; kind: PowerUpKind; offer?: PowerUpKind[]; name?: string; wasted?: true }
@@ -53,9 +53,15 @@ const USE_REJECTIONS: Record<string, string> = {
 /** A chaser claiming Bomoh: what it does, since there's no card or reveal for it. */
 export const BOMOH_FOUND = 'Bomoh found! Every Dikejar shows up for Kejar at the next 2 pings.'
 
+/** A runner claiming Super Ring: what it does, since it sits unused in the slot until it steps in. */
+export const RING_FOUND = "Super Ring! Next time you'd go to Penjara, it's house arrest instead."
+
+/** A chaser claiming Mak Kau Hijau: the runners are told separately. */
+export const HIJAU_FOUND = 'Mak kau hijau! Dikejar have 45 s.'
+
 /** A card that arrived doubled (a Nasi Lemak KFC combo) says so; Bomoh never does. */
 const claimedLine = (kind: ClaimedKind, double?: boolean) =>
-  kind === 'bomoh' ? BOMOH_FOUND : double ? `Combo! ${INFO[kind].name} x2.` : `Got ${INFO[kind].name} ✓`
+  kind === 'bomoh' ? BOMOH_FOUND : kind === 'hijau' ? HIJAU_FOUND : kind === 'ring' ? RING_FOUND : double ? `Combo! ${INFO[kind].name} x2.` : `Got ${INFO[kind].name} ✓`
 
 const frozenLine = (ms: number | undefined) => `Brain freeze! Wait ${clock(ms ?? 0)}.`
 

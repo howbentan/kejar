@@ -21,8 +21,8 @@ import { arenaAroundPoint } from '../../shared/arenas.js'
 import { isOut, undoableCatchId } from '../../shared/players.js'
 import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
-import { bomohCodeFromQr, datoCodeFromQr, isBomohQr, isDatoQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
-import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS, TOLL_FRESH_MS } from '../../shared/powerups.js'
+import { bomohCodeFromQr, datoCodeFromQr, hijauCodeFromQr, isBomohQr, isDatoQr, isHijauQr, isRingQr, ringCodeFromQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
+import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, judgeHijauClaim, judgeRingClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS, TOLL_FRESH_MS } from '../../shared/powerups.js'
 import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
@@ -1547,6 +1547,8 @@ const claim: Action = async (ctx, body) => {
     return claimDato(ctx, fresh as GameRow, me, code)
   }
   if (isBomohQr(qr)) return claimBomoh(ctx, fresh as GameRow, me, bomohCodeFromQr(qr))
+  if (isRingQr(qr)) return claimRing(ctx, fresh as GameRow, me, ringCodeFromQr(qr))
+  if (isHijauQr(qr)) return claimHijau(ctx, fresh as GameRow, me, hijauCodeFromQr(qr))
   const station = stationFromQr(str(body.qr))
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeClaim({
@@ -1684,6 +1686,65 @@ async function claimBomoh(ctx: Ctx, game: GameRow, me: Player, scanned: string |
 }
 
 /**
+ * Scanning Super Ring's hidden stash: exactly Dato Seri's flow and refusals (`claimDato`), with its own wrong-scan
+ * count. The store puts an unused `ring` row in the runner's slot; it is used automatically later, never from the
+ * slot. The feed only ever says `Something legendary was found.`
+ */
+async function claimRing(ctx: Ctx, game: GameRow, me: Player, scanned: string | null) {
+  const miss = await stashMisses(ctx, game, me, 'ring')
+  if (!miss) return NO_STASH
+  const secret = game.settings.mode === 'full' ? (game.ring_stash?.code ?? null) : null
+  if (!scanned || !secret || hashToken(scanned) !== hashToken(secret)) return miss(NO_STASH)
+  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
+  const verdict = judgeRingClaim({
+    phase: phaseAt(game, ctx.now).phase,
+    me,
+    stash: game.ring_stash,
+    myPos: latest(positions[me.id]),
+    powerUps: await ctx.store.powerUps(game.id),
+    pings: await ctx.store.pings(game.id),
+    now: ctx.now,
+  })
+  if (!verdict.ok) return verdict.reason === 'no-stash' || verdict.reason === 'too-far' ? miss(verdict) : verdict
+  // Losing the race to another runner isn't a miss.
+  if (!(await ctx.store.claimRing(game.id, me.id))) return NO_STASH
+  if (game.ring_stash?.card) await ctx.store.setSecretCard(game.ring_stash.card.id, { state: 'retired', found_at: iso(ctx.now) })
+  await ctx.store.addEvent({ game_id: game.id, type: 'legendary', actor_id: me.id, target_id: null, data: {} })
+  return { ok: true, kind: 'ring' }
+}
+
+/** How long runners have to tap green once Mak Kau Hijau is claimed. Task 5 moves the start clear of check-in windows. */
+const HIJAU_WINDOW_MS = 45_000
+
+/**
+ * Scanning Mak Kau Hijau's hidden stash: exactly Bomoh's flow and refusals (`claimBomoh`, plus the frozen
+ * refusal from `judgeHijauClaim`), with its own wrong-scan count. The store marks the stash claimed and writes
+ * `games.hijau` in one step. Timing is a placeholder (starts at the claim); Task 5 replaces it and adds the push,
+ * the taps and the judging.
+ */
+async function claimHijau(ctx: Ctx, game: GameRow, me: Player, scanned: string | null) {
+  const miss = await stashMisses(ctx, game, me, 'hijau')
+  if (!miss) return NO_STASH
+  const secret = game.settings.mode === 'full' ? (game.hijau_stash?.code ?? null) : null
+  if (!scanned || !secret || hashToken(scanned) !== hashToken(secret)) return miss(NO_STASH)
+  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
+  const verdict = judgeHijauClaim({
+    phase: phaseAt(game, ctx.now).phase,
+    me,
+    stash: game.hijau_stash,
+    myPos: latest(positions[me.id]),
+    now: ctx.now,
+  })
+  if (!verdict.ok) return verdict.reason === 'no-stash' || verdict.reason === 'too-far' ? miss(verdict) : verdict
+  const run = { startsAt: iso(ctx.now), deadline: iso(ctx.now + HIJAU_WINDOW_MS) }
+  // Losing the race to another chaser isn't a miss.
+  if (!(await ctx.store.claimHijau(game.id, me.id, run))) return NO_STASH
+  if (game.hijau_stash?.card) await ctx.store.setSecretCard(game.hijau_stash.card.id, { state: 'retired', found_at: iso(ctx.now) })
+  await ctx.store.addEvent({ game_id: game.id, type: 'legendary', actor_id: me.id, target_id: null, data: {} })
+  return { ok: true, kind: 'hijau' }
+}
+
+/**
  * The organiser hides the printed Dato Seri card and saves the spot (jail design §4b). Organiser only: marshals are
  * the helper, and never learn where it is. Full mode only. Dropping again before the start moves it; once the
  * game starts it stays put.
@@ -1780,6 +1841,8 @@ const usePowerup: Action = async (ctx, body) => {
   if (runningEffect(all, me.id, pings, ctx.now) !== null) return { ok: false, reason: 'effect-running' }
   // Dato Seri is only ever used through Settle, at Penjara (jail design §4b).
   if (u.kind === 'dato') return { ok: false, reason: 'settle-at-penjara' }
+  // Super Ring is never used from the slot: it steps in by itself when its holder would go to Penjara.
+  if (u.kind === 'ring') return { ok: false, reason: 'automatic' }
   // A Flare's reveal must land before the whistle.
   if (u.kind === 'flare' && (endsAt ?? 0) - ctx.now < ALERT_LEAD_MS) return { ok: false, reason: 'too-late' }
 

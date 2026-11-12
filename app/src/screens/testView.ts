@@ -59,6 +59,8 @@ export function testView(over: Partial<View> = {}): View {
     shieldActive: false,
     legendaryZone: null,
     bomohZone: null,
+    ringZone: null,
+    hijauZone: null,
     settle: null,
     rescue: null,
     fiveLeft: false,

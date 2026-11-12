@@ -3,7 +3,7 @@ import type { BreakJudgement } from '../../shared/catch.js'
 import { RESCUE_HOLD_MS, RESCUE_PING_MS } from '../../shared/penjara.js'
 import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
-import { isBomohQr, isDatoQr, stationFromQr } from '../../shared/ids.js'
+import { isBomohQr, isDatoQr, isHijauQr, isRingQr, stationFromQr } from '../../shared/ids.js'
 import AlertsCard from '../game/AlertsCard'
 import { call } from '../game/api'
 import ChaseLayout from '../game/ChaseLayout'
@@ -125,7 +125,7 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
       if (b.ok) return b.rescue === 'joined' ? 'You joined the rescue. Stay close!' : 'Rescue on! Stay close to Penjara for 10 s.'
       return BREAK_REJECTIONS[b.reason] ?? 'Nobody freed'
     }
-    if (isDatoQr(text) || isBomohQr(text)) return stashMessage(r as ClaimResult, 'runner')
+    if (isDatoQr(text) || isBomohQr(text) || isRingQr(text) || isHijauQr(text)) return stashMessage(r as ClaimResult, 'runner')
     return claimMessage(r as ClaimResult, stationFromQr(text))
   }, [])
   const deckLeft = view.deckLeft

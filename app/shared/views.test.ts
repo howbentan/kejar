@@ -1234,3 +1234,53 @@ describe('how to play: briefing view', () => {
     expect(v(organiserMe, { game: lobby(false) }).briefing).toMatchObject({ started: false, ready: 0 })
   })
 })
+
+describe("Super Ring's and Mak Kau Hijau's hint zones (Plan E2)", () => {
+  const stash = { lat: 3.004, lng: 101.004, claimedBy: null, claimedAt: null }
+  const claimed = { ...stash, claimedBy: 'r2', claimedAt: iso(NOW) }
+  const full = (over: Partial<ReturnType<typeof game>> = {}) =>
+    game({ id: 'g1', settings: { ...DEFAULT_SETTINGS, mode: 'full' }, ring_stash: stash, hijau_stash: stash, ...over })
+
+  it('each is a 100 to 200 m zone with its stash well inside, distinct from the others', () => {
+    const v = view(aina, { game: full({ dato_stash: stash, bomoh_stash: stash }) })
+    for (const z of [v.ringZone, v.hijauZone]) {
+      expect(z).not.toBeNull()
+      expect(z!.radiusM).toBe(LEGENDARY_ZONE_M)
+      const d = distanceM(z!, stash)
+      expect(d).toBeGreaterThanOrEqual(0.3 * LEGENDARY_ZONE_M - 0.5)
+      expect(d).toBeLessThanOrEqual(0.8 * LEGENDARY_ZONE_M + 0.5)
+    }
+    const all = [v.legendaryZone, v.bomohZone, v.ringZone, v.hijauZone].map((z) => JSON.stringify(z))
+    expect(new Set(all).size).toBe(4)
+  })
+
+  it('is placed with the secret seed, and carries no name', () => {
+    const zone = (deck_seed: string) => view(aina, { game: full({ deck_seed }) }).ringZone
+    expect(zone('one')).not.toEqual(zone('two'))
+    expect(zone('one')).toEqual(zone('one'))
+    expect(Object.keys(view(aina, { game: full() }).ringZone!).sort()).toEqual(['lat', 'lng', 'radiusM'])
+  })
+
+  it('runners and chasers see both; the organiser and a marshal see neither', () => {
+    const z = view(aina, { game: full() })
+    expect(view(chaser, { game: full() }).ringZone).toEqual(z.ringZone)
+    expect(view(chaser, { game: full() }).hijauZone).toEqual(z.hijauZone)
+    for (const me of [organiserMe, siti]) {
+      const v = view(me, { game: full() })
+      expect(v.ringZone).toBeNull()
+      expect(v.hijauZone).toBeNull()
+    }
+    expect(view(organiserMe, { game: full() }).ringStash).toEqual(stash)
+  })
+
+  it('is gone once claimed, undropped, outside the chase or in Core', () => {
+    expect(view(aina, { game: full({ ring_stash: claimed, hijau_stash: claimed }) }).ringZone).toBeNull()
+    expect(view(aina, { game: full({ ring_stash: claimed, hijau_stash: claimed }) }).hijauZone).toBeNull()
+    const undropped = { lat: null, lng: null, claimedBy: null, claimedAt: null }
+    expect(view(aina, { game: full({ ring_stash: undropped, hijau_stash: undropped }) }).ringZone).toBeNull()
+    expect(view(aina, { game: full(), now: T0 + 2 * MIN }).hijauZone).toBeNull()
+    const core = full({ settings: { ...DEFAULT_SETTINGS, mode: 'core' } })
+    expect(view(aina, { game: core }).ringZone).toBeNull()
+    expect(view(aina, { game: core }).hijauZone).toBeNull()
+  })
+})

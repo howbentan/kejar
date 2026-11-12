@@ -161,6 +161,10 @@ export interface View {
    * `legendaryZone`, seeded independently so the two zones never land at the same offset.
    */
   bomohZone: { lat: number; lng: number; radiusM: number } | null
+  /** Super Ring's hint zone (Plan E2): same shape and rules as `legendaryZone`, seeded apart. No name. */
+  ringZone: { lat: number; lng: number; radiusM: number } | null
+  /** Mak Kau Hijau's hint zone (Plan E2): same shape and rules as `bomohZone`, seeded apart. No name. */
+  hijauZone: { lat: number; lng: number; radiusM: number } | null
   /**
    * What Settle could do, for a jailed runner holding an unused Dato Seri (jail design §4b, §4d); null for
    * everyone else. `options` are the other runners in Penjara; those who already used their one escape are
@@ -679,6 +683,18 @@ function bomohZoneFor(i: ViewInput, phase: Phase): View['bomohZone'] {
   return { lat: c.lat, lng: c.lng, radiusM: LEGENDARY_ZONE_M }
 }
 
+/** A legendary's hint zone: the stash moved 30-80% of the radius in a direction seeded by the secret seed and `suffix`. */
+function stashZoneFor(i: ViewInput, phase: Phase, stash: Game['dato_stash'], suffix: string): View['ringZone'] {
+  const s = placedStash(stash)
+  if (i.game.settings.mode !== 'full' || phase !== 'chasing' || !s || s.claimedBy !== null) return null
+  if (i.me.role !== 'runner' && i.me.role !== 'chaser') return null
+  const h = hash(`${secretSeed(i.game)}:${suffix}`)
+  const angle = ((h & 0xffff) / 0x10000) * 2 * Math.PI
+  const dist = (0.3 + ((h >>> 16) / 0x10000) * 0.5) * LEGENDARY_ZONE_M
+  const c = offset({ lat: s.lat, lng: s.lng }, dist, angle)
+  return { lat: c.lat, lng: c.lng, radiusM: LEGENDARY_ZONE_M }
+}
+
 /** The Settle picker's choices, the same eligibility `judgeSettle` applies. */
 function settleFor(i: ViewInput, phase: Phase): View['settle'] {
   if (phase !== 'chasing' || i.game.paused_at || i.me.role !== 'runner' || !i.me.jailed) return null
@@ -923,7 +939,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, ringStash: undefined, ringCard: undefined, hijauStash: undefined, hijauCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, ringZone: null, hijauZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, ringStash: undefined, ringCard: undefined, hijauStash: undefined, hijauCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
   }
   return v
 }
@@ -1045,11 +1061,13 @@ function fullView(i: ViewInput): View {
     shieldActive: activeShield(i.powerUps, i.me.id, i.now) !== null,
     deckLeft: deckLeftFor(i),
     activePowerUp: (() => {
-      const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now)
+      const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now, i.me)
       return busy?.running ? busy.kind : null
     })(),
     legendaryZone: legendaryZoneFor(i, phase),
     bomohZone: bomohZoneFor(i, phase),
+    ringZone: stashZoneFor(i, phase, i.game.ring_stash, 'ring-legendary-zone'),
+    hijauZone: stashZoneFor(i, phase, i.game.hijau_stash, 'hijau-legendary-zone'),
     settle: settleFor(i, phase),
     rescue: rescueFor(i, phase),
     fiveLeft: Boolean(i.game.five_warned_at),

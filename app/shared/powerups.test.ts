@@ -3,8 +3,9 @@ import { arenaAroundPoint } from './arenas.js'
 import { iso, MIN, ping, player, pos, T0 } from './fixtures.js'
 import { circlePolygon, distanceM, offset, pointInPolygon } from './geo.js'
 import { buildPlayArea, inPlayArea } from './playArea.js'
-import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, judgeBomohClaim, judgeClaim, runningEffect, shieldArmedAt, slotBusy } from './powerups.js'
+import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, judgeBomohClaim, judgeClaim, judgeHijauClaim, judgeRingClaim, runningEffect, shieldArmedAt, slotBusy } from './powerups.js'
 import { BONUS_SEQ_BASE } from './clock.js'
+import { COMBO_EXCLUDED } from './powerups.js'
 import type { Ping, PowerUp } from './types.js'
 
 const NOW = T0 + 20 * MIN
@@ -260,5 +261,65 @@ describe('new-card rules', () => {
     expect(runningEffect([pu({ kind: 'cloak' })], 'r1', [], NOW)).toBeNull()
     expect(runningEffect([used('cloak')], 'r1', [], NOW)).toBe('cloak')
     expect(runningEffect([used('combo')], 'r1', [], NOW)).toBeNull()
+  })
+})
+
+describe('judgeRingClaim (Super Ring)', () => {
+  const dropped = { lat: S1.lat, lng: S1.lng, claimedBy: null, claimedAt: null }
+  const ringbase = { phase: 'chasing' as const, me: aina, stash: dropped, myPos: atS1, powerUps: [] as PowerUp[], pings: [] as Ping[], now: NOW }
+
+  it('a free runner in reach with an empty slot can claim', () => {
+    expect(judgeRingClaim(ringbase)).toEqual({ ok: true })
+  })
+  it('only during the chase', () => {
+    expect(judgeRingClaim({ ...ringbase, phase: 'hiding' })).toEqual({ ok: false, reason: 'not-chasing' })
+  })
+  it('chasers, marshals and jailed runners cannot claim it', () => {
+    expect(judgeRingClaim({ ...ringbase, me: ben })).toEqual({ ok: false, reason: 'cannot-claim' })
+    expect(judgeRingClaim({ ...ringbase, me: player('m1', 'marshal') })).toEqual({ ok: false, reason: 'cannot-claim' })
+    expect(judgeRingClaim({ ...ringbase, me: { ...aina, jailed: true } })).toEqual({ ok: false, reason: 'cannot-claim' })
+  })
+  it('nothing to find when missing, undropped or already claimed; too-far when out of reach', () => {
+    expect(judgeRingClaim({ ...ringbase, stash: null })).toEqual({ ok: false, reason: 'no-stash' })
+    expect(judgeRingClaim({ ...ringbase, stash: { ...dropped, lat: null, lng: null } })).toEqual({ ok: false, reason: 'no-stash' })
+    expect(judgeRingClaim({ ...ringbase, stash: { ...dropped, claimedBy: 'r2', claimedAt: iso(NOW) } })).toEqual({ ok: false, reason: 'no-stash' })
+    expect(judgeRingClaim({ ...ringbase, myPos: pos(S1.lat + 200 / 111_195, S1.lng, NOW - 5_000) })).toEqual({ ok: false, reason: 'too-far' })
+  })
+  it('a full slot refuses with hand-full', () => {
+    expect(judgeRingClaim({ ...ringbase, powerUps: [pu({ kind: 'cloak' })] })).toEqual({ ok: false, reason: 'hand-full' })
+  })
+})
+
+describe('judgeHijauClaim (Mak Kau Hijau)', () => {
+  const dropped = { lat: S1.lat, lng: S1.lng, claimedBy: null, claimedAt: null }
+  const hbase = { phase: 'chasing' as const, me: ben, stash: dropped, myPos: atS1, now: NOW }
+
+  it('a chaser in reach can claim; runners cannot', () => {
+    expect(judgeHijauClaim(hbase)).toEqual({ ok: true })
+    expect(judgeHijauClaim({ ...hbase, me: aina })).toEqual({ ok: false, reason: 'cannot-claim' })
+  })
+  it('a frozen chaser cannot', () => {
+    const frozen = { ...ben, frozen_until: iso(NOW + 60_000) }
+    expect(judgeHijauClaim({ ...hbase, me: frozen })).toEqual({ ok: false, reason: 'frozen', frozenForMs: 60_000 })
+  })
+  it('only during the chase, and needs an unclaimed dropped stash in reach', () => {
+    expect(judgeHijauClaim({ ...hbase, phase: 'hiding' })).toEqual({ ok: false, reason: 'not-chasing' })
+    expect(judgeHijauClaim({ ...hbase, stash: null })).toEqual({ ok: false, reason: 'no-stash' })
+    expect(judgeHijauClaim({ ...hbase, myPos: null })).toEqual({ ok: false, reason: 'too-far' })
+  })
+})
+
+describe('Super Ring in the slot', () => {
+  it('an unused ring is busy, not running', () => {
+    expect(slotBusy([pu({ kind: 'ring' })], 'r1', [], NOW)).toEqual({ kind: 'ring', running: false })
+  })
+  it('a used ring is running while the player is under house arrest, and done after', () => {
+    const arrest = { firedAt: iso(NOW - MIN), route: 'catch' as const, by: 'c1', center: null, startedAt: null, ringId: 'u1', catchEventId: null }
+    const used = pu({ kind: 'ring', used_at: iso(NOW - MIN) })
+    expect(slotBusy([used], 'r1', [], NOW, { ...aina, arrest })).toEqual({ kind: 'ring', running: true })
+    expect(slotBusy([used], 'r1', [], NOW, aina)).toBeNull()
+  })
+  it('Nasi Lemak KFC cannot double it', () => {
+    expect(COMBO_EXCLUDED).toContain('ring')
   })
 })

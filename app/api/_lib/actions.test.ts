@@ -4,7 +4,7 @@ import { MIN, T0 } from '../../shared/fixtures.js'
 import { BONUS_SEQ_BASE } from '../../shared/clock.js'
 import { cardAt, deckFor } from '../../shared/deck.js'
 import { distanceM } from '../../shared/geo.js'
-import { bomohQr, datoQr, JAIL_QR, stationQr, tagQr } from '../../shared/ids.js'
+import { bomohQr, datoQr, hijauQr, JAIL_QR, ringQr, stationQr, tagQr } from '../../shared/ids.js'
 import { seeded } from '../../shared/testing.js'
 import type { PowerUpKind, Role } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
@@ -6116,8 +6116,8 @@ describe('one legendary per side, picked by the app (Plan E2 task 2)', () => {
     const g = await readyGame(BOTH)
     const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
     const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
-    const RING_AT = { lat: CENTER.lat + 77 / 111_195, lng: CENTER.lng + 0.0003 }
-    const HIJAU_AT = { lat: CENTER.lat - 66 / 111_195, lng: CENTER.lng - 0.0004 }
+    const RING_AT = { lat: CENTER.lat + 77 / 111_195, lng: CENTER.lng + 0.00031234 }
+    const HIJAU_AT = { lat: CENTER.lat - 66 / 111_195, lng: CENTER.lng - 0.00041357 }
     await run('dropRing', { code: g.code, organiserToken: g.organiserToken, ...RING_AT })
     await run('dropHijau', { code: g.code, organiserToken: g.organiserToken, ...HIJAU_AT })
     const game = await gameOf(g.code)
@@ -6177,5 +6177,191 @@ describe('one legendary per side, picked by the app (Plan E2 task 2)', () => {
     expect(inGame.map((c: { legendary: string; letter: string }) => `${c.legendary}${c.letter}`).sort()).toEqual(
       [`hijau${game.hijau_stash!.card!.letter}`, `ring${game.ring_stash!.card!.letter}`].sort(),
     )
+  })
+})
+
+describe('Super Ring and Mak Kau Hijau: the hidden stashes (Plan E2 task 3)', () => {
+  const STASH = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const atStash = { lat: STASH.lat, lng: STASH.lng, accuracy_m: 8 }
+
+  /** A chasing Full game with Super Ring and Mak Kau Hijau picked and dropped. Runners: Aina, Chong. Chasers: Ben, Hafiz. */
+  async function chasing() {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' } })
+    const chong = await run('join', { code: g.code, name: 'Chong', accepted: true })
+    await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [g.hafiz.playerId]: 'chaser', [chong.playerId]: 'runner' } })
+    await run('linkTag', { code: g.code, token: chong.token, tagId: 5 })
+    await run('dropRing', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('dropHijau', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    return { ...g, chong, gameId: (await store.gameByCode(g.code))!.id }
+  }
+  const game = async (g: { code: string }) => (await store.gameByCode(g.code))!
+  const scanQr = (g: { code: string }, token: string, qr: string, where: object = atStash) => run('claim', { code: g.code, token, qr, ...where })
+  const ring = async (g: { code: string }, token: string, where: object = atStash) => scanQr(g, token, ringQr((await game(g)).ring_stash!.code!), where)
+  const hijau = async (g: { code: string }, token: string, where: object = atStash) => scanQr(g, token, hijauQr((await game(g)).hijau_stash!.code!), where)
+  const misses = async (g: { gameId: string }) => (await store.events(g.gameId)).filter((e) => e.type === 'stash-miss')
+  const stamp = (t: number) => new Date(t).toISOString()
+
+  it('the first free runner in reach claims Super Ring: an unused ring in the slot, the card retired, the stash claimed', async () => {
+    const g = await chasing()
+    const card = (await game(g)).ring_stash!.card!
+    expect(await ring(g, g.aina.token)).toEqual({ ok: true, kind: 'ring' })
+    expect((await game(g)).ring_stash).toMatchObject({ claimedBy: g.aina.playerId, claimedAt: stamp(now) })
+    const rows = (await store.powerUps(g.gameId)).filter((u) => u.kind === 'ring')
+    expect(rows).toEqual([expect.objectContaining({ player_id: g.aina.playerId, used_at: null })])
+    const org = (await store.organiserBySessionTokenHash(hashToken(g.organiserToken)))!.organisation_id
+    expect((await store.secretCards(org)).find((c) => c.id === card.id)).toMatchObject({ state: 'retired', found_at: stamp(now) })
+    // Already claimed: nobody else gets it.
+    expect(await ring(g, g.chong.token)).toEqual({ ok: false, reason: 'no-stash' })
+  })
+
+  it('two runners at once: exactly one gets Super Ring', async () => {
+    const g = await chasing()
+    const [a, b] = await Promise.all([ring(g, g.aina.token), ring(g, g.chong.token)])
+    expect([a, b].filter((r: { ok: boolean }) => r.ok)).toHaveLength(1)
+    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'ring')).toHaveLength(1)
+  })
+
+  it('a chaser cannot claim Super Ring and a runner cannot claim Mak Kau Hijau; neither is a miss', async () => {
+    const g = await chasing()
+    for (let k = 0; k < 3; k++) {
+      expect(await ring(g, g.ben.token)).toEqual({ ok: false, reason: 'cannot-claim' })
+      expect(await hijau(g, g.aina.token)).toEqual({ ok: false, reason: 'cannot-claim' })
+    }
+    expect(await misses(g)).toHaveLength(0)
+    expect(await ring(g, g.aina.token)).toEqual({ ok: true, kind: 'ring' })
+    expect(await hijau(g, g.ben.token)).toEqual({ ok: true, kind: 'hijau' })
+  })
+
+  it('a full slot refuses Super Ring with hand-full, and it is not a miss', async () => {
+    const g = await chasing()
+    const cloak = await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'cloak', station: 1 })
+    for (let k = 0; k < 3; k++) expect(await ring(g, g.aina.token)).toEqual({ ok: false, reason: 'hand-full' })
+    expect(await misses(g)).toHaveLength(0)
+    await store.updatePowerUp(cloak.id, { taken_at: stamp(now) })
+    expect(await ring(g, g.aina.token)).toEqual({ ok: true, kind: 'ring' })
+  })
+
+  it('a jailed runner cannot claim Super Ring', async () => {
+    const g = await chasing()
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: true } }])
+    expect(await ring(g, g.aina.token)).toEqual({ ok: false, reason: 'cannot-claim' })
+  })
+
+  it('a Luar Garisan player is refused before anything is judged', async () => {
+    const g = await chasing()
+    await store.updatePlayers([
+      { id: g.aina.playerId, patch: { disqualified_at: stamp(now) } },
+      { id: g.ben.playerId, patch: { disqualified_at: stamp(now) } },
+    ])
+    expect(await ring(g, g.aina.token)).toEqual({ ok: false, reason: 'disqualified' })
+    expect(await hijau(g, g.ben.token)).toEqual({ ok: false, reason: 'disqualified' })
+    expect((await game(g)).ring_stash!.claimedBy).toBeNull()
+    expect((await game(g)).hijau_stash!.claimedBy).toBeNull()
+  })
+
+  it('a chaser in reach claims Mak Kau Hijau: games.hijau gets a 45 s window from the claim, the card is retired, no powerups row', async () => {
+    const g = await chasing()
+    const card = (await game(g)).hijau_stash!.card!
+    expect(await hijau(g, g.ben.token)).toEqual({ ok: true, kind: 'hijau' })
+    const after = await game(g)
+    expect(after.hijau_stash).toMatchObject({ claimedBy: g.ben.playerId, claimedAt: stamp(now) })
+    expect(after.hijau).toMatchObject({ claimedBy: g.ben.playerId, claimedAt: stamp(now), startsAt: stamp(now), deadline: stamp(now + 45_000), sentAt: null, settledAt: null, tapped: [] })
+    const org = (await store.organiserBySessionTokenHash(hashToken(g.organiserToken)))!.organisation_id
+    expect((await store.secretCards(org)).find((c) => c.id === card.id)).toMatchObject({ state: 'retired', found_at: stamp(now) })
+    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'hijau')).toHaveLength(0)
+    expect(await hijau(g, g.hafiz.token)).toEqual({ ok: false, reason: 'no-stash' })
+  })
+
+  it('a frozen chaser cannot claim Mak Kau Hijau, and it is not a miss', async () => {
+    const g = await chasing()
+    await store.updatePlayers([{ id: g.ben.playerId, patch: { frozen_until: stamp(now + 3 * MIN) } }])
+    expect(await hijau(g, g.ben.token)).toEqual({ ok: false, reason: 'frozen', frozenForMs: 3 * MIN })
+    expect(await misses(g)).toHaveLength(0)
+    expect((await game(g)).hijau).toBeFalsy()
+  })
+
+  it('the wrong-scan limit applies to each, tagged with its legendary; one does not lock the other', async () => {
+    const g = await chasing()
+    for (let i = 0; i < STASH_MISS_LIMIT; i++) {
+      expect(await scanQr(g, g.aina.token, ringQr('x'.repeat(22)))).toEqual({ ok: false, reason: 'no-stash' })
+      expect(await scanQr(g, g.ben.token, hijauQr('y'.repeat(22)))).toEqual({ ok: false, reason: 'no-stash' })
+    }
+    const all = await misses(g)
+    expect(all.filter((e) => e.data.legendary === 'ring' && e.actor_id === g.aina.playerId)).toHaveLength(3)
+    expect(all.filter((e) => e.data.legendary === 'hijau' && e.actor_id === g.ben.playerId)).toHaveLength(3)
+    // The right code at the right spot is now ignored for those two, silently and unrecorded.
+    expect(await ring(g, g.aina.token)).toEqual({ ok: false, reason: 'no-stash' })
+    expect(await hijau(g, g.ben.token)).toEqual({ ok: false, reason: 'no-stash' })
+    expect(await misses(g)).toHaveLength(6)
+    // Others still claim.
+    expect(await ring(g, g.chong.token)).toEqual({ ok: true, kind: 'ring' })
+    expect(await hijau(g, g.hafiz.token)).toEqual({ ok: true, kind: 'hijau' })
+  })
+
+  it("a bare or made-up card is a miss and claims nothing; a too-far scan is a miss too", async () => {
+    const g = await chasing()
+    for (const qr of ['KEJAR:RING', ringQr('z'.repeat(22)), 'KEJAR:RING:']) expect(await scanQr(g, g.aina.token, qr)).toEqual({ ok: false, reason: 'no-stash' })
+    expect(await ring(g, g.chong.token, { lat: CENTER.lat, lng: CENTER.lng, accuracy_m: 8 })).toEqual({ ok: false, reason: 'too-far' })
+    expect(await misses(g)).toHaveLength(4)
+    expect((await game(g)).ring_stash!.claimedBy).toBeNull()
+  })
+
+  it('a game that picked Dato Seri and Bomoh never answers a ring or hijau card', async () => {
+    forcedDraws = [0.1, 0.1]
+    const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' } })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    expect(await scanQr(g, g.aina.token, ringQr('x'.repeat(22)))).toEqual({ ok: false, reason: 'no-stash' })
+    expect(await scanQr(g, g.ben.token, hijauQr('x'.repeat(22)))).toEqual({ ok: false, reason: 'no-stash' })
+  })
+
+  it('secret: the feed says only "Something legendary was found." and no view names a legendary', async () => {
+    const g = await chasing()
+    await ring(g, g.aina.token)
+    await hijau(g, g.ben.token)
+    for (const token of [g.hafiz.token, g.chong.token, g.aina.token]) {
+      const v = await run<View>('state', { code: g.code, token })
+      expect(v.feed.filter((f) => f.text === 'Something legendary was found.')).toHaveLength(2)
+      expect(v.feed.map((f) => f.text).join(' ')).not.toMatch(/Ring|Hijau|Mak Kau/i)
+      expect(v.ringZone).toBeNull()
+      expect(v.hijauZone).toBeNull()
+    }
+  })
+
+  it('zones appear to runners and chasers, name nothing, and vanish once claimed', async () => {
+    const g = await chasing()
+    for (const token of [g.aina.token, g.ben.token]) {
+      const v = await run<View>('state', { code: g.code, token })
+      expect(v.ringZone).toMatchObject({ radiusM: expect.any(Number) })
+      expect(v.hijauZone).toMatchObject({ radiusM: expect.any(Number) })
+      expect(v.legendaryZone).toBeNull()
+      expect(v.bomohZone).toBeNull()
+    }
+    await ring(g, g.aina.token)
+    expect((await run<View>('state', { code: g.code, token: g.chong.token })).ringZone).toBeNull()
+    expect((await run<View>('state', { code: g.code, token: g.chong.token })).hijauZone).not.toBeNull()
+    await hijau(g, g.ben.token)
+    expect((await run<View>('state', { code: g.code, token: g.chong.token })).hijauZone).toBeNull()
+  })
+
+  it('Super Ring cannot be used from the slot: it is automatic', async () => {
+    const g = await chasing()
+    await ring(g, g.aina.token)
+    const row = (await store.powerUps(g.gameId)).find((u) => u.kind === 'ring')!
+    expect(await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: row.id })).toEqual({ ok: false, reason: 'automatic' })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === row.id)!.used_at).toBeNull()
+  })
+
+  it('a Core game has no ring or hijau zones', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    const v = await run<View>('state', { code: g.code, token: g.aina.token })
+    expect(v.ringZone).toBeNull()
+    expect(v.hijauZone).toBeNull()
   })
 })
