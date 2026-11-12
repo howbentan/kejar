@@ -1,10 +1,10 @@
 import { LUAR_GARISAN_GRACE_MS } from '../../shared/alerts.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard } from '../../shared/types.js'
+import type { Arrest, Game, GameEvent, HijauRun, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard } from '../../shared/types.js'
 import { newDatoCode } from './secrets.js'
 import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PhoneMoveRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, RedeemPhoneMoveResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
-const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, reel_pulled_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at, brief_opened_at, brief_ready_at, frozen_until'
+const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, reel_pulled_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at, brief_opened_at, brief_ready_at, frozen_until, arrest'
 const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, final_whistle_at, rescue, five_warned_at, wiped_at, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit, briefed_at'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
@@ -288,6 +288,50 @@ export class SupabaseStore implements GameStore {
   async claimBomoh(gameId: string, playerId: string, at: Date): Promise<boolean> {
     // The database function locks the game row, re-checks the stash is unclaimed, and marks it claimed. True for the winner.
     return check(await this.db.rpc('claim_bomoh', { p_game: gameId, p_player: playerId, p_at: at.toISOString() })) === true
+  }
+  async claimRing(gameId: string, playerId: string): Promise<PowerUp | null> {
+    // The database function locks the game row, re-checks the stash is unclaimed, marks it and inserts the 'ring' card.
+    const rows = check(await this.db.rpc('claim_ring', { p_game: gameId, p_player: playerId, p_at: this.nowIso() })) as
+      | PowerUp[]
+      | null
+    return rows?.[0] ?? null
+  }
+  async claimHijau(gameId: string, playerId: string, run: Omit<HijauRun, 'claimedBy' | 'claimedAt' | 'sentAt' | 'settledAt' | 'tapped'>): Promise<boolean> {
+    // One function: locks the game row, re-checks the stash, marks it claimed and writes the run together. True for the winner.
+    return (
+      check(
+        await this.db.rpc('claim_hijau', {
+          p_game: gameId,
+          p_player: playerId,
+          p_at: this.nowIso(),
+          p_starts: run.startsAt,
+          p_deadline: run.deadline,
+        }),
+      ) === true
+    )
+  }
+  async claimHijauPush(gameId: string, atIso: string): Promise<boolean> {
+    // One conditional update in the database: only a run with no sentAt takes it. True for the winner.
+    return check(await this.db.rpc('claim_hijau_push', { p_game: gameId, p_at: atIso })) === true
+  }
+  async tapHijau(gameId: string, playerId: string, atIso: string): Promise<boolean> {
+    // One conditional update: before the deadline, and only if this player isn't in the list yet.
+    return check(await this.db.rpc('tap_hijau', { p_game: gameId, p_player: playerId, p_at: atIso })) === true
+  }
+  async claimHijauSettle(gameId: string, atIso: string): Promise<HijauRun | null> {
+    // One conditional update that returns the run it settled; null if there was none or it had settled already.
+    return (check(await this.db.rpc('claim_hijau_settle', { p_game: gameId, p_at: atIso })) as HijauRun | null) ?? null
+  }
+  async startArrest(playerId: string, arrest: Arrest): Promise<boolean> {
+    // One conditional update: only a runner with no arrest who isn't jailed. True for the winner.
+    return check(await this.db.rpc('start_arrest', { p_player: playerId, p_arrest: arrest })) === true
+  }
+  async updateArrest(playerId: string, patch: Partial<Arrest>): Promise<void> {
+    check(await this.db.rpc('update_arrest', { p_player: playerId, p_patch: patch }))
+  }
+  async endArrest(playerId: string, firedAt: string): Promise<boolean> {
+    // One conditional update: clears the arrest only if its firedAt still matches. True for the winner.
+    return check(await this.db.rpc('end_arrest', { p_player: playerId, p_fired_at: firedAt })) === true
   }
   async freezeChaser(chaserId: string, untilIso: string): Promise<boolean> {
     // One conditional update in the database: only a chaser who isn't frozen right now takes it. True for the winner.

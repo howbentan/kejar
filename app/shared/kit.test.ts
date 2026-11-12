@@ -63,7 +63,7 @@ describe('packItems', () => {
 
   it('Full with no letter, or Dato Seri off, lists no yellow card', () => {
     expect(packItems(full(), {}).map((i) => i.id)).not.toContain('dato-card')
-    const off = full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'off' } } })
+    const off = full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'off', ring: 'off', hijau: 'off' } } })
     expect(packItems(off, { dato: 'B' }).map((i) => i.id)).not.toContain('dato-card')
   })
 
@@ -128,7 +128,7 @@ describe('placeItems', () => {
   })
 
   it('puts bomoh after dato, purple, and only for the organiser', () => {
-    const both = full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'stash', bomoh: 'stash' } } })
+    const both = full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'stash', bomoh: 'stash', ring: 'off', hijau: 'off' } } })
     const ids = placeItems(both, true, { dato: 'B', bomoh: 'C' }).map((p) => p.id)
     expect(ids.slice(-2)).toEqual(['dato', 'bomoh'])
     expect(placeItems(both, true, { dato: 'B', bomoh: 'C' }).at(-1)).toMatchObject({ id: 'bomoh', tone: 'purple', label: 'Purple card' })
@@ -136,7 +136,7 @@ describe('placeItems', () => {
   })
 
   it('no bomoh place when off, in Core, with no letter, or once claimed; it sits where it was dropped', () => {
-    const on = (over = {}) => full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } }, ...over })
+    const on = (over = {}) => full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash', ring: 'off', hijau: 'off' } }, ...over })
     expect(placeItems(on(), true, { bomoh: 'C' }).map((p) => p.id)).toContain('bomoh')
     expect(placeItems(full(), true, { bomoh: 'C' }).map((p) => p.id)).not.toContain('bomoh')
     expect(placeItems(on(), true, {}).map((p) => p.id)).not.toContain('bomoh')
@@ -147,7 +147,7 @@ describe('placeItems', () => {
   })
 
   it('lists Purple card C in the pack, purple and secret, only when Bomoh is on with a letter', () => {
-    const on = full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } } })
+    const on = full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash', ring: 'off', hijau: 'off' } } })
     expect(packItems(on, { bomoh: 'C' }).find((i) => i.id === 'bomoh-card')).toMatchObject({ label: 'Purple card C', tone: 'purple', note: '(secret)', group: 'pack' })
     expect(packItems(on, {}).map((i) => i.id)).not.toContain('bomoh-card')
     expect(packItems(full(), { bomoh: 'C' }).map((i) => i.id)).not.toContain('bomoh-card')

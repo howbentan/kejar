@@ -1135,7 +1135,7 @@ describe('the packing list in organiser and marshal views', () => {
   describe("Bomoh's walk step (R8: placed only once the card is really dropped)", () => {
     const bomohGame = (over: object = {}, placed: Record<string, boolean> = {}) =>
       game({
-        settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } },
+        settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash', ring: 'off', hijau: 'off' } },
         arena: { ...game().arena, stations: [{ lat: 3.001, lng: 101.001 }] },
         kit: { ticks: {}, placed: { 'station-1': true, ...placed } },
         ...over,

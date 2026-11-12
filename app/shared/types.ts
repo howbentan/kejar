@@ -36,7 +36,7 @@ export interface Settings {
    * Which legendary cards this game uses. Only Full mode reads it. Bomoh isn't built yet, so it stays 'off'.
    * Older games have none: read them as the defaults.
    */
-  legendaries: { dato: 'off' | 'stash'; bomoh: 'off' | 'stash' }
+  legendaries: { dato: 'off' | 'stash'; bomoh: 'off' | 'stash'; ring: 'off' | 'stash'; hijau: 'off' | 'stash' }
   /**
    * When the organiser plans to start (home upgrades design): an ISO time, or null. It only informs (the home
    * countdown); it never starts the game. Older games have none: read them as null.
@@ -54,7 +54,7 @@ export const DEFAULT_SETTINGS: Settings = {
   mode: 'core',
   chaserSnapshot: false,
   playersBand: 20,
-  legendaries: { dato: 'stash', bomoh: 'off' },
+  legendaries: { dato: 'stash', bomoh: 'off', ring: 'off', hijau: 'off' },
 }
 
 export interface Arena {
@@ -118,6 +118,11 @@ export interface Game {
    * secrecy as `dato_stash`. Older games have none.
    */
   bomoh_stash?: BomohStash | null
+  /** Super Ring's and Mak Kau Hijau's hidden stashes: the same shape and secrecy as `bomoh_stash`. Older games have none. */
+  ring_stash?: RingStash | null
+  hijau_stash?: HijauStash | null
+  /** Mak Kau Hijau's run, once a player scans the green card; null or absent before that. */
+  hijau?: HijauRun | null
   /**
    * The organiser's packing list: `ticks` maps an item id to the label it was ticked under (the item un-ticks
    * itself if its label changes), and `placed` is which cards are taped up. Older games have none.
@@ -157,6 +162,42 @@ export interface BomohStash {
   claimedAt: string | null
 }
 
+/** Super Ring's hidden stash (the runner legendary): the same shape as `BomohStash`. */
+export type RingStash = BomohStash
+/** Mak Kau Hijau's hidden stash (the chaser legendary): the same shape as `BomohStash`. */
+export type HijauStash = BomohStash
+
+/** Which legendary a card-lifecycle function acts on: Dato Seri, Bomoh, Super Ring or Mak Kau Hijau. */
+export type LegendaryKind = 'dato' | 'bomoh' | 'ring' | 'hijau'
+
+/**
+ * Mak Kau Hijau's run (stored on `games.hijau`): who claimed the green card, when the 45 s window opens and closes,
+ * when the push went out, when it settled, and which players tapped green in time.
+ */
+export interface HijauRun {
+  claimedBy: string
+  claimedAt: string
+  startsAt: string
+  deadline: string
+  sentAt: string | null
+  settledAt: string | null
+  tapped: string[]
+}
+
+/**
+ * A runner's house arrest (Super Ring), stored on `players.arrest` (null when not arrested). `center` and
+ * `startedAt` are null while waiting for the runner to open Kejar.
+ */
+export interface Arrest {
+  firedAt: string
+  route: 'catch' | 'auto-jail' | 'hijau'
+  by: string | null
+  center: LatLng | null
+  startedAt: string | null
+  ringId: string
+  catchEventId: string | null
+}
+
 /**
  * One of an organisation's six reusable secret cards: A-C yellow (Dato Seri) and A-C purple (Bomoh).
  * `ready`: printed and can be put in play. `retired`: found, or retired by hand. `printing`: has a new code that
@@ -165,7 +206,7 @@ export interface BomohStash {
 export interface SecretCard {
   id: string
   organisation_id: string
-  legendary: 'dato' | 'bomoh'
+  legendary: LegendaryKind
   letter: 'A' | 'B' | 'C'
   code: string
   state: 'ready' | 'retired' | 'printing'
@@ -217,6 +258,8 @@ export interface Player {
   brief_ready_at?: string | null
   /** Cheese Ais: this chaser is frozen until this time (ISO). Null or past means free. */
   frozen_until?: string | null
+  /** Super Ring: this runner's house arrest, or null/absent when not arrested. */
+  arrest?: Arrest | null
 }
 
 export interface Ping {
@@ -281,8 +324,31 @@ export type EventType =
   | 'five-left'
   /** A runner froze a chaser with Cheese Ais. actor: the runner, target: the chaser. data: { until } */
   | 'frozen'
+  /** A runner was put under house arrest by Super Ring. target: the runner. data: { route } */
+  | 'arrested'
+  /** A house arrest ended. target: the runner. data: { outcome: 'free' | 'revoked' | 'undone' } */
+  | 'arrest-ended'
+  /** A chaser's catch landed on a runner under house arrest. actor: the chaser, target: the runner. data: {} */
+  | 'ring-locked'
+  /** Mak Kau Hijau's green window opened. data: { deadline } */
+  | 'hijau'
+  /** Mak Kau Hijau settled. data: { jailed: number; void: boolean } */
+  | 'hijau-done'
 
-export type PowerUpKind = 'decoy' | 'shield' | 'cloak' | 'flare' | 'focus' | 'toyol' | 'along' | 'grab' | 'dato' | 'cheese' | 'combo' | 'toll'
+export type PowerUpKind =
+  | 'decoy'
+  | 'shield'
+  | 'cloak'
+  | 'flare'
+  | 'focus'
+  | 'toyol'
+  | 'along'
+  | 'grab'
+  | 'dato'
+  | 'cheese'
+  | 'combo'
+  | 'toll'
+  | 'ring'
 
 export interface PowerUp {
   id: string

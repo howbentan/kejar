@@ -27,7 +27,7 @@ import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdic
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
 import { validateTeams } from '../../shared/teams.js'
-import { DEFAULT_SETTINGS, type Arena, type BomohStash, type DatoStash, type Game, type LatLng, type Player, type Position, type PowerUp, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
+import { DEFAULT_SETTINGS, type Arena, type BomohStash, type DatoStash, type Game, type LatLng, type LegendaryKind, type Player, type Position, type PowerUp, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
 import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
 import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
@@ -169,14 +169,17 @@ function secretLettersFor(game: Game): SecretLetters {
 
 // ---- Secret card sets: each organisation's reusable A-C yellow and A-C purple cards ----
 
-/** Which legendary a card-lifecycle function acts on: Dato Seri's yellow cards, or Bomoh's purple ones. */
-type LegendaryKind = 'dato' | 'bomoh'
-
 /** What `create` and `setMode` say when every yellow card is retired, waiting to be printed or in another game. */
 export const NO_FREE_CARD_NOTICE = 'Reprint a yellow card to use Dato Seri.'
 /** The same, for Bomoh's purple cards. */
 export const NO_FREE_BOMOH_CARD_NOTICE = 'Reprint a purple card to use Bomoh.'
-const NO_FREE_NOTICE: Record<LegendaryKind, string> = { dato: NO_FREE_CARD_NOTICE, bomoh: NO_FREE_BOMOH_CARD_NOTICE }
+const NO_FREE_NOTICE: Record<LegendaryKind, string> = {
+  dato: NO_FREE_CARD_NOTICE,
+  bomoh: NO_FREE_BOMOH_CARD_NOTICE,
+  // Super Ring and Mak Kau Hijau have no cards or settings yet (Plan E2 task 2 builds them).
+  ring: 'Reprint a card to use Super Ring.',
+  hijau: 'Reprint a card to use Mak Kau Hijau.',
+}
 /** Stash scans that don't claim before a player's later stash scans are all ignored (Review Focus 2). */
 export const STASH_MISS_LIMIT = 3
 const NO_STASH = { ok: false, reason: 'no-stash' } as const
@@ -217,12 +220,15 @@ function expiredLobby(g: Game, now: number): boolean {
 
 /** The stash a game holds for one legendary, by its own field (`dato_stash` or `bomoh_stash`). */
 function stashOf(g: Game, legendary: LegendaryKind): DatoStash | BomohStash | null | undefined {
+  if (legendary === 'ring') return g.ring_stash
+  if (legendary === 'hijau') return g.hijau_stash
   return legendary === 'dato' ? g.dato_stash : g.bomoh_stash
 }
 
 /** Writes (or clears, with `null`) a legendary's stash onto a game, into its own field. */
 function writeStash(ctx: Ctx, gameId: string, legendary: LegendaryKind, stash: DatoStash | BomohStash | null): Promise<void> {
-  return ctx.store.updateGame(gameId, legendary === 'dato' ? { dato_stash: stash } : { bomoh_stash: stash })
+  const field = { dato: 'dato_stash', bomoh: 'bomoh_stash', ring: 'ring_stash', hijau: 'hijau_stash' }[legendary] as const
+  return ctx.store.updateGame(gameId, { [field]: stash })
 }
 
 /**
@@ -461,7 +467,7 @@ function settingsFrom(input: unknown): Settings {
   }
   // Bomoh is accepted as sent now that he's built end to end: his own purple cards, claim, reveal and lobby toggle.
   // Only the two known keys are stored, so nothing else a client sends ends up in the game's settings.
-  s.legendaries = { dato: legendaries.dato, bomoh: legendaries.bomoh }
+  s.legendaries = { ...DEFAULT_SETTINGS.legendaries, dato: legendaries.dato, bomoh: legendaries.bomoh }
   // The planned start only survives as a real time; anything else a client sends is dropped.
   s.startsAt = typeof s.startsAt === 'string' && Number.isFinite(Date.parse(s.startsAt)) ? s.startsAt : null
   return s

@@ -123,7 +123,7 @@ describe('HiddenCard: dropping Dato Seri', () => {
 
 describe('HiddenCard: dropping Bomoh', () => {
   const bomohLobby = (over: Parameters<typeof testView>[0] = {}) =>
-    lobby({ datoStash: undefined, bomohStash: null, settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } }, ...over })
+    lobby({ datoStash: undefined, bomohStash: null, settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash', ring: 'off', hijau: 'off' } }, ...over })
   const creds = { code: 'ABC234', credentials: { organiserToken: 'h1' }, refresh: () => {} }
 
   it('drops Bomoh at the organiser spot with its own action and purple copy', async () => {

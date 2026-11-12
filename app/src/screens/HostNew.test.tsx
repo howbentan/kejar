@@ -283,7 +283,7 @@ describe('HostNew step 3, how long', () => {
     expect(screen.getByRole('radio', { name: 'Bomoh: Off' })).toHaveAttribute('aria-checked', 'true')
     createGame()
     await waitFor(() =>
-      createdWith({ settings: expect.objectContaining({ mode: 'full', legendaries: { dato: 'stash', bomoh: 'off' } }) }),
+      createdWith({ settings: expect.objectContaining({ mode: 'full', legendaries: { dato: 'stash', bomoh: 'off', ring: 'off', hijau: 'off' } }) }),
     )
   })
 
@@ -292,7 +292,7 @@ describe('HostNew step 3, how long', () => {
     await toStep3('Full')
     fireEvent.click(screen.getByRole('radio', { name: 'Dato Seri: Off' }))
     createGame()
-    await waitFor(() => createdWith({ settings: expect.objectContaining({ legendaries: { dato: 'off', bomoh: 'off' } }) }))
+    await waitFor(() => createdWith({ settings: expect.objectContaining({ legendaries: { dato: 'off', bomoh: 'off', ring: 'off', hijau: 'off' } }) }))
   })
 
   it('Bomoh can be turned on as a hidden stash, with its copy and no build badge', async () => {
@@ -307,7 +307,7 @@ describe('HostNew step 3, how long', () => {
     fireEvent.click(stash)
     expect(stash).toHaveAttribute('aria-checked', 'true')
     createGame()
-    await waitFor(() => createdWith({ settings: expect.objectContaining({ legendaries: { dato: 'stash', bomoh: 'stash' } }) }))
+    await waitFor(() => createdWith({ settings: expect.objectContaining({ legendaries: { dato: 'stash', bomoh: 'stash', ring: 'off', hijau: 'off' } }) }))
   })
 
   it('the chaser-snapshot switch is Full only, off by default, and can be turned on', async () => {
@@ -470,7 +470,7 @@ describe('HostNew creating', () => {
     await waitFor(() =>
       createdWith({
         savedArenaId: 'ar3',
-        settings: expect.objectContaining({ mode: 'full', lengthMin: 60, playersBand: 30, legendaries: { dato: 'off', bomoh: 'off' } }),
+        settings: expect.objectContaining({ mode: 'full', lengthMin: 60, playersBand: 30, legendaries: { dato: 'off', bomoh: 'off', ring: 'off', hijau: 'off' } }),
       }),
     )
   })

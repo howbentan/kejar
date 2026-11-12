@@ -19,4 +19,6 @@ export const INFO: Record<PowerUpKind, { name: string; effect: string; used: str
   cheese: { name: POWER_NAME.cheese, effect: "Freeze one Kejar's power-up for 3 min", used: 'Brain freeze!' },
   combo: { name: POWER_NAME.combo, effect: 'Your next power-up works twice', used: 'Nasi Lemak KFC! Your next power-up works twice.' },
   toll: { name: POWER_NAME.toll, effect: 'Dikejar checking in within 40 m of you show exactly', used: 'Tuch and Ga! Toll gate up. Runners checking in near it get charged.' },
+  // Used automatically: it waits in the hand until the runner would go to Penjara.
+  ring: { name: POWER_NAME.ring, effect: "Next time you'd go to Penjara: house arrest instead", used: 'Super Ring is on' },
 }

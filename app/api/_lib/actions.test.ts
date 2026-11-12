@@ -3850,7 +3850,7 @@ describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
     const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     expect(v.datoStash).toEqual({ ...STASH, claimedBy: null, claimedAt: null })
     expect(v.legendaryZone).toBeNull()
-    expect(v.settings.legendaries).toEqual({ dato: 'stash', bomoh: 'off' })
+    expect(v.settings.legendaries).toEqual({ dato: 'stash', bomoh: 'off', ring: 'off', hijau: 'off' })
     const m = await run<View>('state', { code: g.code, token: g.siti.token })
     expect(m).not.toHaveProperty('datoStash')
     expect(m).not.toHaveProperty('datoCode')
@@ -4565,12 +4565,12 @@ describe('setup settings and the packing list', () => {
 
   it('lets Bomoh be turned on alongside Dato Seri, now that its cards exist', async () => {
     const { code } = await create({ legendaries: { dato: 'stash', bomoh: 'stash' } })
-    expect((await store.gameByCode(code))!.settings.legendaries).toEqual({ dato: 'stash', bomoh: 'stash' })
+    expect((await store.gameByCode(code))!.settings.legendaries).toEqual({ dato: 'stash', bomoh: 'stash', ring: 'off', hijau: 'off' })
   })
 
   it('stores only the two legendaries, dropping any extra keys a client sends (M6)', async () => {
     const { code } = await create({ legendaries: { dato: 'stash', bomoh: 'off', toyol: 'stash' } })
-    expect((await store.gameByCode(code))!.settings.legendaries).toEqual({ dato: 'stash', bomoh: 'off' })
+    expect((await store.gameByCode(code))!.settings.legendaries).toEqual({ dato: 'stash', bomoh: 'off', ring: 'off', hijau: 'off' })
   })
 
   it('setKit ticks and unticks, storing the label it was ticked under', async () => {
