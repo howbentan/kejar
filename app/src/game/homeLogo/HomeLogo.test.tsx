@@ -4,6 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const reduce = vi.hoisted(() => ({ on: false }))
 vi.mock('motion/react', async (orig) => ({ ...(await orig<typeof import('motion/react')>()), useReducedMotion: () => reduce.on }))
 
+// The letter images: tests decide when they have loaded (by default, at once).
+const letters = vi.hoisted(() => ({ ready: () => Promise.resolve() }))
+vi.mock('./letters', async (orig) => ({ ...(await orig<typeof import('./letters')>()), lettersReady: () => letters.ready() }))
+
 import HomeLogo from './HomeLogo'
 import { stageGeometry } from './geometry'
 
@@ -29,6 +33,7 @@ const lift = () => Number(/translateY\(([-\d.]+)px\)/.exec((screen.getByTestId('
 
 beforeEach(() => {
   reduce.on = false
+  letters.ready = () => Promise.resolve()
   frames = []
   clock = 1000
   vi.stubGlobal('requestAnimationFrame', (f: FrameRequestCallback) => (frames.push(f), frames.length))
@@ -81,14 +86,28 @@ describe('HomeLogo', () => {
     expect(vibrate).not.toHaveBeenCalled()
   })
 
-  it('opening runs in from off the left edge and lands in its gap on a whole stride', () => {
+  it('opening runs in from off the left edge and lands in its gap on a whole stride', async () => {
     const onArrived = vi.fn()
     render(<HomeLogo mode="opening" onArrived={onArrived} />)
+    await act(async () => {}) // the letters report ready
     advance(16)
     expect(x()).toBeLessThan(-g.home.x)
     advance(1200)
     expect(x()).toBe(0)
     expect(legL()).toBe('rotate(0deg)')
+    expect(onArrived).toHaveBeenCalledTimes(1)
+  })
+
+  it('opening waits off screen until the letters have loaded, then runs in', async () => {
+    let loaded = () => {}
+    letters.ready = () => new Promise<void>((r) => (loaded = r))
+    const onArrived = vi.fn()
+    render(<HomeLogo mode="opening" onArrived={onArrived} />)
+    advance(600)
+    expect(x()).toBeLessThan(-g.home.x)
+    await act(async () => loaded())
+    advance(1200)
+    expect(x()).toBe(0)
     expect(onArrived).toHaveBeenCalledTimes(1)
   })
 
@@ -117,7 +136,7 @@ describe('HomeLogo', () => {
       const onArrived = vi.fn()
       const onLeft = vi.fn()
       const { rerender } = render(<HomeLogo mode="opening" onArrived={onArrived} />)
-      act(() => void vi.advanceTimersByTime(2600))
+      act(() => void vi.advanceTimersByTime(3300))
       expect(onArrived).toHaveBeenCalledTimes(1)
       expect(x()).toBe(0)
       rerender(<HomeLogo mode="leaving" onLeft={onLeft} />)

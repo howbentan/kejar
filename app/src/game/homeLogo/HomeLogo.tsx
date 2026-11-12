@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { useReducedMotion } from 'motion/react'
 import { stageGeometry, type Geometry } from './geometry'
+import { LETTERS, letterSrc, lettersReady } from './letters'
 import { pose, STRIDE, wholeStride } from './stride'
 
 /**
@@ -20,7 +21,6 @@ type Task = (dt: number, now: number) => boolean
 const easeOutCubic = (k: number) => 1 - Math.pow(1 - k, 3)
 const easeInQuad = (k: number) => k * k
 const n = (v: number) => String(Math.round(v * 100) / 100)
-const LETTERS = ['k', 'e', 'a', 'r'] as const
 
 /** Restart a one-shot CSS animation class. */
 function replay(el: Element | null, cls: string) {
@@ -175,9 +175,17 @@ export default function HomeLogo({
         return
       }
       Object.assign(s, { x: -(g.home.x + g.jw + 10), phase: 0, lean: 0, rate: 0 })
-      const end = finishOnce(0, () => live.current.onArrived?.(), 2500)
-      cancel = end.cancel
-      task.current = runTo(0, 950, easeOutCubic, 0, end.finish)
+      task.current = null
+      // Wait for the letters, so a first visit never shows a half-drawn logo (capped at 1.2 s).
+      const end = finishOnce(0, () => live.current.onArrived?.(), 3200)
+      let stale = false
+      void lettersReady().then(() => {
+        if (!stale) task.current = runTo(0, 950, easeOutCubic, 0, end.finish)
+      })
+      cancel = () => {
+        stale = true
+        end.cancel()
+      }
     } else if (mode === 'leaving') {
       if (quick) {
         task.current = null
@@ -218,7 +226,7 @@ export default function HomeLogo({
       {/* Always in the page, so the logo is there for screen readers even before the first measure. */}
       <div className="hl-logo" role="img" aria-label="kejar." style={g ? { left: g.logo.x, top: g.logo.y, width: g.logo.w, height: g.logo.h } : { opacity: 0 }}>
         {LETTERS.map((l) => (
-          <span key={l} className="hl-ltr" style={{ ['--m' as string]: `url(/home/letter-${l}.png)` }} />
+          <span key={l} className="hl-ltr" style={{ ['--m' as string]: `url(${letterSrc(l)})` }} />
         ))}
         <svg
           ref={jEl}
