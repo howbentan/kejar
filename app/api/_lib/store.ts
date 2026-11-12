@@ -207,8 +207,11 @@ export interface GameStore {
   startArrest(playerId: string, arrest: Arrest): Promise<boolean>
   /** Merges a patch into the runner's arrest; nothing happens without one. */
   updateArrest(playerId: string, patch: Partial<Arrest>): Promise<void>
-  /** Clears the runner's arrest only if its `firedAt` is still `firedAt`; true for the one caller who wins. */
-  endArrest(playerId: string, firedAt: string): Promise<boolean>
+  /**
+   * Clears the runner's arrest only if its `firedAt` is still `firedAt` (and, with `waiting`, only while it hasn't
+   * started, so a no-show never beats an opening fix); true for the one caller who wins.
+   */
+  endArrest(playerId: string, firedAt: string, opts?: { waiting?: boolean }): Promise<boolean>
   /**
    * Cheese Ais: freezes a chaser until `untilIso`, only if they aren't frozen now (frozen_until null or not after
    * the store clock). True for the one caller that wins.
@@ -830,9 +833,10 @@ export class MemoryStore implements GameStore {
     // A fresh object: players() hands out shallow copies that share the old one.
     if (p?.arrest) p.arrest = { ...p.arrest, ...patch }
   }
-  async endArrest(playerId: string, firedAt: string) {
+  async endArrest(playerId: string, firedAt: string, opts: { waiting?: boolean } = {}) {
     const p = this.playerRows.find((x) => x.id === playerId)
     if (!p?.arrest || p.arrest.firedAt !== firedAt) return false
+    if (opts.waiting && p.arrest.startedAt) return false
     p.arrest = null
     return true
   }

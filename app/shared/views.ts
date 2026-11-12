@@ -918,17 +918,21 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
     case 'arrested':
       // Never the card's name or the runner's (rules doc §9b).
       return plain('Something legendary saved a Dikejar.')
-    case 'auto-jailed':
+    case 'auto-jailed': {
       // Out of Super Ring's house arrest: never says why, so the card stays a secret.
-      if (e.data.cause === 'revoked') return two(`${tag} went to Penjara.`, 'PENJARA', `${ctx.freeNow} Dikejar still free.`, `One less to find. ${tag} is in Penjara.`)
-      // Mak Kau Hijau: players get its one count line (`hijau-done`); marshals see who, for the undo.
-      if (e.data.cause === 'hijau') return ctx.side === null ? plain(`${tag} missed Mak kau hijau, sent to Penjara.`) : null
+      const revoked = two(`${tag} went to Penjara.`, 'PENJARA', `${ctx.freeNow} Dikejar still free.`, `One less to find. ${tag} is in Penjara.`)
+      if (e.data.cause === 'revoked') return revoked
+      // Mak Kau Hijau: players get its one count line (`hijau-done`); marshals see who, for the undo. A Super Ring
+      // holder it sent to house arrest who never opened Kejar comes later, outside that count: players get the plain
+      // Penjara line, so the card stays a secret.
+      if (e.data.cause === 'hijau') return ctx.side === null ? plain(`${tag} missed Mak kau hijau, sent to Penjara.`) : e.data.arrest === true ? revoked : null
       return two(
         `${tag} missed 2 check-ins in a row.`,
         '2×',
         `${tag} went to Penjara. Check in when your phone buzzes, or you're next.`,
         `One less to find. ${tag} is in Penjara.`,
       )
+    }
     case 'hijau':
       // Only a runner who must tap gets the buzz; jailed, arrested or Luar Garisan runners just read it.
       if (ctx.side === 'runner') return { ...plain('Mak kau hijau! Tap the green.'), act: ctx.hijauTarget }
@@ -1009,6 +1013,7 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       return 'Something legendary saved a Dikejar.'
     case 'auto-jailed':
       if (e.data.cause === 'revoked') return target ? `${tagLabel(target)} sent to Penjara` : 'A runner was sent to Penjara'
+      if (e.data.cause === 'hijau') return target ? `${tagLabel(target)} missed Mak kau hijau, sent to Penjara` : 'A runner missed Mak kau hijau, sent to Penjara'
       return target ? `${tagLabel(target)} missed 2 check-ins, sent to Penjara` : 'A runner missed 2 check-ins, sent to Penjara'
     default:
       return null

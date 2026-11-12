@@ -305,15 +305,17 @@ describe('SupabaseStore legendaries: Super Ring and Mak Kau Hijau', () => {
   })
 
   it('starts, updates and ends an arrest through the arrest functions', async () => {
-    const { rpcs, store } = rpcStore([true, false, null, true, false])
+    const { rpcs, store } = rpcStore([true, false, null, true, false, true])
     expect(await store.startArrest('p1', arrest)).toBe(true)
     expect(await store.startArrest('p1', arrest)).toBe(false)
     await store.updateArrest('p1', { startedAt: NOW })
     expect(await store.endArrest('p1', NOW)).toBe(true)
     expect(await store.endArrest('p1', NOW)).toBe(false)
+    expect(await store.endArrest('p1', NOW, { waiting: true })).toBe(true)
     expect(rpcs[0]).toEqual({ fn: 'start_arrest', args: { p_player: 'p1', p_arrest: arrest } })
     expect(rpcs[2]).toEqual({ fn: 'update_arrest', args: { p_player: 'p1', p_patch: { startedAt: NOW } } })
-    expect(rpcs[3]).toEqual({ fn: 'end_arrest', args: { p_player: 'p1', p_fired_at: NOW } })
+    expect(rpcs[3]).toEqual({ fn: 'end_arrest', args: { p_player: 'p1', p_fired_at: NOW, p_waiting: false } })
+    expect(rpcs[5]).toEqual({ fn: 'end_arrest', args: { p_player: 'p1', p_fired_at: NOW, p_waiting: true } })
   })
 
   it('reads a player arrest back with the player columns', async () => {

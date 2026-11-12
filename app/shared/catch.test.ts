@@ -144,6 +144,10 @@ describe('judgeJailbreak', () => {
   it('only while chasing', () => {
     expect(judgeJailbreak({ ...input, phase: 'ended' })).toEqual({ ok: false, reason: 'not-chasing' })
   })
+  it('a runner under house arrest cannot break out others (they cannot be caught, so no uncatchable rescue)', () => {
+    const arrest = { firedAt: new Date(NOW).toISOString(), route: 'catch' as const, by: 'c1', center: { lat: 3.0, lng: 101.0 }, startedAt: new Date(NOW).toISOString(), ringId: 'u1', catchEventId: 'e1' }
+    expect(judgeJailbreak({ ...input, runner: { ...aina, arrest } })).toEqual({ ok: false, reason: 'not-a-free-runner' })
+  })
 })
 
 describe('judgeCatch and Luar Garisan', () => {

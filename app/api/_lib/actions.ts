@@ -25,7 +25,7 @@ import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS,
 import { HIJAU_MS, hijauCounts, hijauStartsAt, hijauTargets } from '../../shared/hijau.js'
 import { bomohCodeFromQr, datoCodeFromQr, hijauCodeFromQr, isBomohQr, isDatoQr, isHijauQr, isRingQr, ringCodeFromQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, judgeHijauClaim, judgeRingClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS, TOLL_FRESH_MS } from '../../shared/powerups.js'
-import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict } from '../../shared/penjara.js'
+import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict, sentDuringPause } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
 import { fallbackFor, LEGENDARY_KINDS, pickLegendaries, sidesOf, type SideSwitch } from '../../shared/legendaries.js'
@@ -634,8 +634,10 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
   let pingRows = await store.pings(game.id)
   const work = dueWork(game, pingRows, now)
   let whistleNow = false
-  // Super Ring's house arrests are judged lazily, on any poll (there's no server tick); never while paused.
-  if (phase === 'chasing' && !game.paused_at && !game.ended_at && (await settleArrests(ctx, game))) whistleNow = true
+  // Super Ring's house arrests are judged lazily, on any poll (there's no server tick); never while paused. Only a
+  // claimed Super Ring can put anyone under house arrest, so until then this skips the players read.
+  const arrestsPossible = !!game.ring_stash?.claimedBy
+  if (arrestsPossible && phase === 'chasing' && !game.paused_at && !game.ended_at && (await settleArrests(ctx, game))) whistleNow = true
   // Mak Kau Hijau's push and judging, likewise lazy; a pause holds both (resume moves its times).
   if (game.hijau && !game.hijau.settledAt && !game.paused_at && (await stepHijau(ctx, game))) whistleNow = true
   // Scheduled pings come from the clock; bonus (Flare) pings carry their own times.
@@ -886,16 +888,20 @@ async function jailOrArrest(
 
 /**
  * Ends a house arrest in Penjara: a fix outside the circle, no fresh fix inside at the end (`revoked`), or no fix
- * at all within 60 s of a waiting one (`no-show`, which keeps the missed check-ins that started it). The runner
- * goes in with no chaser, under an `auto-jailed` event, so the Penjara screens and a marshal's phone-problem undo
- * work as for auto-jail. True when that put the last free runner out (a final whistle is pending).
+ * at all within 60 s of a waiting one (`no-show`). The runner goes in with no chaser, under an `auto-jailed` event,
+ * so the Penjara screens and a marshal's phone-problem undo work as for auto-jail. A no-show reads as what sent
+ * them: missed check-ins (cause `no-show`, keeping the check-ins in `data`), Mak Kau Hijau (cause `hijau`, with
+ * `arrest` so players' feed stays quiet about the card), or a catch (cause `revoked`, bail revoked). A no-show only
+ * ends an arrest still waiting, so it never beats an opening fix. True when that put the last free runner out.
  */
-async function arrestToPenjara(ctx: Ctx, game: Game, runner: Player, a: Arrest, cause: 'revoked' | 'no-show', data: Record<string, unknown> = {}): Promise<boolean> {
+async function arrestToPenjara(ctx: Ctx, game: Game, runner: Player, a: Arrest, why: 'revoked' | 'no-show', data: Record<string, unknown> = {}): Promise<boolean> {
   const { store } = ctx
-  if (!(await store.endArrest(runner.id, a.firedAt))) return false
+  if (!(await store.endArrest(runner.id, a.firedAt, { waiting: why === 'no-show' }))) return false
+  const cause = why === 'revoked' || a.route === 'catch' ? 'revoked' : a.route === 'hijau' ? 'hijau' : 'no-show'
+  const extra = cause === 'hijau' ? { arrest: true } : cause === 'no-show' ? data : {}
   if (await store.catchRunner(runner.id, null)) {
-    if (cause === 'revoked') await notify(ctx, game, runner, 'Penjara', BAIL_REVOKED)
-    await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: runner.id, data: { who: who(runner), cause, ...data } })
+    if (why === 'revoked') await notify(ctx, game, runner, 'Penjara', BAIL_REVOKED)
+    await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: runner.id, data: { who: who(runner), cause, ...extra } })
   }
   await store.addEvent({ game_id: game.id, type: 'arrest-ended', actor_id: null, target_id: runner.id, data: { outcome: 'revoked', firedAt: a.firedAt } })
   return allOutCheck(ctx, game, 'auto-jail')
@@ -925,9 +931,10 @@ async function settleArrests(ctx: Ctx, game: Game): Promise<boolean> {
       continue
     }
     if (now < endsAt) continue
-    // The latest usable fix in the last 20 s up to the end: a rough fix is ignored, never a revoke on its own.
+    // The latest usable fix in the last 20 s up to the end: a rough fix is ignored, never a revoke on its own. A
+    // resume moves the end, so that window can reach back into a pause: a fix sent then counts for nothing.
     const recent = await store.playerPositions(game.id, p.id, iso(endsAt - ARREST_FIX_FRESH_MS), iso(endsAt))
-    const fix = [...recent].reverse().find(usableFix) ?? null
+    const fix = [...recent].reverse().find((f) => usableFix(f) && !sentDuringPause(Date.parse(f.at), game.pauses, game.paused_at)) ?? null
     if (releaseVerdict(a, fix) === 'revoked') {
       if (await arrestToPenjara(ctx, game, p, a, 'revoked')) allOut = true
     } else if (await store.endArrest(p.id, a.firedAt)) {
@@ -994,11 +1001,17 @@ async function stepHijau(ctx: Ctx, game: Game): Promise<boolean> {
 /**
  * A fix from a runner under house arrest (the caller skips paused games and anything but the chase). A rough fix
  * counts for nothing. The first usable fix starts a waiting arrest right there, if it lands within 60 s; once
- * started, a usable fix outside the circle before the end sends them to Penjara at once.
+ * started, a usable fix outside the circle before the end sends them to Penjara at once. A runner who is Luar
+ * Garisan (perhaps from this very fix) is out of the round: the arrest just ends, as `settleArrests` does.
  */
 async function arrestFix(ctx: Ctx, game: Game, me: Player, fix: Position) {
   const a = me.arrest
-  if (!a || !usableFix(fix)) return
+  if (!a) return
+  if (me.disqualified_at) {
+    await ctx.store.endArrest(me.id, a.firedAt)
+    return
+  }
+  if (!usableFix(fix)) return
   if (!a.startedAt) {
     if (ctx.now >= Date.parse(a.firedAt) + ARREST_OPEN_MS) return
     await ctx.store.updateArrest(me.id, { center: { lat: fix.lat, lng: fix.lng }, startedAt: iso(ctx.now) })
@@ -1305,8 +1318,11 @@ const location: Action = async (ctx, body) => {
     }
   }
   await checkWhere(ctx, game, me, { lat, lng }, accuracy)
-  // Super Ring's house arrest freezes with the game, like Luar Garisan. Luar Garisan above still applies to it.
-  if (me.arrest && !game.paused_at && phaseAt(game, ctx.now).phase === 'chasing') await arrestFix(ctx, game, me, { ...fix, at: iso(ctx.now) })
+  // Super Ring's house arrest freezes with the game, like Luar Garisan. Luar Garisan above still applies to it, so
+  // they're read again: this same fix may just have disqualified them.
+  if (me.arrest && !game.paused_at && phaseAt(game, ctx.now).phase === 'chasing') {
+    await arrestFix(ctx, game, await requirePlayer(ctx, game, body), { ...fix, at: iso(ctx.now) })
+  }
   // Each fix is judged as it lands, so a step outside and back between two polls still counts (rules §9a).
   if (rescuing) await settleRescue(ctx, game, undefined, { ...fix, at: iso(ctx.now) })
   return { ok: true }

@@ -1018,6 +1018,19 @@ describe('MemoryStore legendaries: Super Ring and Mak Kau Hijau', () => {
     expect((await store.players(g.id))[0].arrest).toBeNull()
   })
 
+  it('endArrest with waiting clears only an arrest that has not started (a no-show never beats an opening fix)', async () => {
+    const g = await startedGame()
+    const r = await newPlayer(g.id, 'runner')
+    await store.startArrest(r.id, arrestOf({ center: null, startedAt: null }))
+    await store.updateArrest(r.id, { center: { lat: 3.1, lng: 101.6 }, startedAt: iso(T0 + 30_000) })
+    expect(await store.endArrest(r.id, iso(T0), { waiting: true })).toBe(false)
+    expect((await store.players(g.id))[0].arrest).not.toBeNull()
+    expect(await store.endArrest(r.id, iso(T0))).toBe(true)
+    await store.startArrest(r.id, arrestOf({ center: null, startedAt: null }))
+    expect(await store.endArrest(r.id, iso(T0), { waiting: true })).toBe(true)
+    expect((await store.players(g.id))[0].arrest).toBeNull()
+  })
+
   it('stealFrom never takes a Super Ring, just as it never takes Dato Seri', async () => {
     const g = await startedGame()
     const r = await newPlayer(g.id, 'runner')

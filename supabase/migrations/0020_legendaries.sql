@@ -181,21 +181,23 @@ $$;
 revoke execute on function update_arrest(uuid, jsonb) from public, anon, authenticated;
 grant execute on function update_arrest(uuid, jsonb) to service_role;
 
--- end_arrest: clears the arrest only if its firedAt is still p_fired_at. True iff this call cleared it.
-create or replace function end_arrest(p_player uuid, p_fired_at text) returns boolean
+-- end_arrest: clears the arrest only if its firedAt is still p_fired_at and, when p_waiting, only while it hasn't
+-- started (startedAt null), so a no-show never beats an opening fix. True iff this call cleared it.
+create or replace function end_arrest(p_player uuid, p_fired_at text, p_waiting boolean default false) returns boolean
 language plpgsql
 as $$
 begin
   update players
      set arrest = null
    where id = p_player
-     and (arrest ->> 'firedAt') = p_fired_at;
+     and (arrest ->> 'firedAt') = p_fired_at
+     and (not p_waiting or (arrest ->> 'startedAt') is null);
   return found;
 end;
 $$;
 
-revoke execute on function end_arrest(uuid, text) from public, anon, authenticated;
-grant execute on function end_arrest(uuid, text) to service_role;
+revoke execute on function end_arrest(uuid, text, boolean) from public, anon, authenticated;
+grant execute on function end_arrest(uuid, text, boolean) to service_role;
 
 -- 10. steal_card, from 0013_luar_garisan.sql, unchanged except that Super Ring is immune like Dato Seri.
 create or replace function steal_card(p_game uuid, p_side text, p_at timestamptz) returns setof powerups

@@ -117,7 +117,8 @@ export function judgeJailbreak(i: {
   now: number
 }): BreakJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
-  if (i.runner.role !== 'runner' || isOut(i.runner)) return { ok: false, reason: 'not-a-free-runner' }
+  // Under house arrest they can't be caught, so they mustn't hold a rescue nobody could stop (new power-ups §6.2).
+  if (i.runner.role !== 'runner' || isOut(i.runner) || i.runner.arrest) return { ok: false, reason: 'not-a-free-runner' }
   if (!atJail(i.runnerPos, i.jail, i.now)) return { ok: false, reason: 'too-far-from-jail' }
   const freedIds = i.players.filter((p) => p.role === 'runner' && p.jailed && !p.freed_once).map((p) => p.id)
   if (freedIds.length === 0) return { ok: false, reason: 'nobody-to-free' }

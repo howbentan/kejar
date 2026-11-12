@@ -341,9 +341,10 @@ export class SupabaseStore implements GameStore {
   async updateArrest(playerId: string, patch: Partial<Arrest>): Promise<void> {
     check(await this.db.rpc('update_arrest', { p_player: playerId, p_patch: patch }))
   }
-  async endArrest(playerId: string, firedAt: string): Promise<boolean> {
-    // One conditional update: clears the arrest only if its firedAt still matches. True for the winner.
-    return check(await this.db.rpc('end_arrest', { p_player: playerId, p_fired_at: firedAt })) === true
+  async endArrest(playerId: string, firedAt: string, opts: { waiting?: boolean } = {}): Promise<boolean> {
+    // One conditional update: clears the arrest only if its firedAt still matches (and, with waiting, it hasn't
+    // started). True for the winner.
+    return check(await this.db.rpc('end_arrest', { p_player: playerId, p_fired_at: firedAt, p_waiting: !!opts.waiting })) === true
   }
   async freezeChaser(chaserId: string, untilIso: string): Promise<boolean> {
     // One conditional update in the database: only a chaser who isn't frozen right now takes it. True for the winner.
