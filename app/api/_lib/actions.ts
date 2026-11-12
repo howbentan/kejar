@@ -22,7 +22,7 @@ import { isOut, undoableCatchId } from '../../shared/players.js'
 import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
 import { bomohCodeFromQr, datoCodeFromQr, isBomohQr, isDatoQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
-import { activeShield, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, STATION_LOCK_MS } from '../../shared/powerups.js'
+import { activeShield, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, frozenForMs, FREEZE_MS, STATION_LOCK_MS } from '../../shared/powerups.js'
 import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
@@ -1657,6 +1657,9 @@ const usePowerup: Action = async (ctx, body) => {
   if (u.used_at) return { ok: false, reason: 'already-used' }
   if (phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (me.jailed) return { ok: false, reason: 'cannot-use' }
+  // A frozen chaser's power-up slot is shut (Cheese Ais): nothing is spent.
+  const frozenFor = frozenForMs(me, ctx.now)
+  if (frozenFor > 0) return { ok: false, reason: 'frozen', frozenForMs: frozenFor }
   // Dato Seri is only ever used through Settle, at Penjara (jail design §4b).
   if (u.kind === 'dato') return { ok: false, reason: 'settle-at-penjara' }
   // A Flare's reveal must land before the whistle.
@@ -1684,8 +1687,32 @@ const usePowerup: Action = async (ctx, body) => {
     }
     return { ok: true, kind: 'grab', offer }
   }
+  // Cheese Ais: the target is checked before the card is spent; a refusal keeps the card.
+  let cheeseTarget: Player | undefined
+  if (u.kind === 'cheese') {
+    cheeseTarget = (await ctx.store.players(game.id)).find((p) => p.id === str(body.targetId))
+    const t = cheeseTarget
+    if (!t || t.role !== 'chaser' || t.removed_at || t.disqualified_at || frozenForMs(t, ctx.now) > 0) return { ok: false, reason: 'no-target' }
+  }
   // markUsed is atomic: a double-tap uses the power-up once.
   if (!(await ctx.store.markUsed(u.id))) return { ok: false, reason: 'already-used' }
+  if (u.kind === 'cheese' && cheeseTarget) {
+    // Spent first, frozen second (atomic in the store: of two racing runners only one lands); a lost race gives the card back.
+    const until = iso(ctx.now + FREEZE_MS)
+    let landed: boolean
+    try {
+      landed = await ctx.store.freezeChaser(cheeseTarget.id, until)
+    } catch (e) {
+      await ctx.store.updatePowerUp(u.id, { used_at: null })
+      throw e
+    }
+    if (!landed) {
+      await ctx.store.updatePowerUp(u.id, { used_at: null })
+      return { ok: false, reason: 'no-target' }
+    }
+    await ctx.store.addEvent({ game_id: game.id, type: 'frozen', actor_id: me.id, target_id: cheeseTarget.id, data: { until } })
+    return { ok: true, kind: 'cheese', name: cheeseTarget.name }
+  }
   if (u.kind === 'toyol' || u.kind === 'along') {
     // Spent first (so two taps can't both steal), taken second (atomic per card in the store, so two thieves never
     // take the same one); if nothing was there to take, the card goes back unspent (power-ups §6.2).

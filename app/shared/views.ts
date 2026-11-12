@@ -8,7 +8,7 @@ import { MOMENT_WINDOW_MS } from './moments.js'
 import { reelPulledThisStay, RESCUE_HOLD_MS } from './penjara.js'
 import { isOut, undoableCatchId } from './players.js'
 import { POWER_NAME } from './powerNames.js'
-import { activeShield, decoySpot, flareBlocked, SHIELD_MS, slotBusy } from './powerups.js'
+import { activeShield, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, slotBusy } from './powerups.js'
 import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
 
 /** Spec §4.5–4.6 constants. */
@@ -180,6 +180,10 @@ export interface View {
    * pull frees them, so it never shows here.
    */
   reel: { pulled: boolean; result: 'free' | 'black' | null } | null
+  /** Cheese Ais: the chasers a runner holding an unused one can freeze (live, not Luar Garisan, not frozen), by name; null otherwise. */
+  freezeTargets: { id: string; name: string }[] | null
+  /** When my own power-up freeze ends (chasers), or null when I'm not frozen. */
+  frozenUntil: number | null
   /**
    * The organiser only: exactly where the stash is (null if none), and who claimed it. Left out of players' and
    * marshals' views entirely, so not even the key's name reaches their phones (rules doc §9b).
@@ -652,6 +656,17 @@ function settleFor(i: ViewInput, phase: Phase): View['settle'] {
   return { canFreeSelf: !i.me.freed_once, options }
 }
 
+/** Who a runner's unused Cheese Ais can freeze: chasers still in the round and not already frozen, ordered by name. */
+function freezeTargetsFor(i: ViewInput): View['freezeTargets'] {
+  if (i.me.role !== 'runner') return null
+  const holds = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'cheese' && u.used_at === null && !u.taken_at)
+  if (!holds) return null
+  return i.players
+    .filter((p) => p.role === 'chaser' && !p.removed_at && !p.disqualified_at && frozenForMs(p, i.now) === 0)
+    .map((p) => ({ id: p.id, name: p.name }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
 /** The reel for the jailed runner: spent this stay or not. */
 function reelFor(i: ViewInput): View['reel'] {
   if (i.me.role !== 'runner' || !i.me.jailed) return null
@@ -737,6 +752,12 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
       }
       return plain(thief === 'Ah Long' ? 'Ah Long came to collect!' : 'Toyol stole a power-up!')
     }
+    case 'frozen':
+      // The frozen chaser is told it is theirs (it buzzes); nobody learns who froze whom.
+      if (e.target_id && e.target_id === ctx.meId) return { ...plain('Brain freeze! A runner froze your power-up for 3 minutes.'), act: true }
+      // Marshals and the organiser may see names (no side).
+      if (ctx.side === null && target) return plain(`A Dikejar froze ${target.name}'s power-up`)
+      return plain('Brain freeze on a Kejar.')
     case 'legendary':
       // Never the card's name or the finder's (jail design §4c, rules doc §9b).
       return plain('Something legendary was found.')
@@ -830,6 +851,8 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       if (e.data.kind === 'flare') return 'A Kejar used Mat Rempit. Extra ping in 30 s!'
       if (e.data.kind === 'focus') return 'A Kejar used Pak Guard'
       return null
+    case 'frozen':
+      return target ? `A Dikejar froze ${target.name}'s power-up` : 'A Dikejar froze a chaser power-up'
     case 'shielded':
       return target ? `${tagLabel(target)} blocked a catch with Durian` : 'A Dikejar blocked a catch with Durian'
     case 'paused':
@@ -859,7 +882,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, settle: null, rescue: null, reel: null, datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
   }
   return v
 }
@@ -988,6 +1011,8 @@ function fullView(i: ViewInput): View {
     rescue: rescueFor(i, phase),
     fiveLeft: Boolean(i.game.five_warned_at),
     reel: reelFor(i),
+    freezeTargets: freezeTargetsFor(i),
+    frozenUntil: frozenForMs(i.me, i.now) > 0 ? Date.parse(i.me.frozen_until as string) : null,
     // The stash and the card go only to the organiser, who prints and hides it (ruling R15). Marshals are the
     // helper, and never see either (rules doc §9b).
     ...(organiser
