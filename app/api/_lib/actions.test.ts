@@ -2130,9 +2130,15 @@ describe('game mode', () => {
       expect(await stored({ mode: 'full' })).toEqual({ bomba: 'on', hebat: 'on', pkp: 'on', banjir: 'off' })
     })
 
-    it('keep only Bomba in Core', async () => {
-      expect(await stored({ mode: 'core', endgames: { bomba: 'off', hebat: 'on', pkp: 'on' } })).toEqual({ bomba: 'off', hebat: 'off', pkp: 'off', banjir: 'off' })
-      expect(await stored({ mode: 'core' })).toEqual({ bomba: 'on', hebat: 'off', pkp: 'off', banjir: 'off' })
+    it("keep Core's hidden switches as given, since rollEndgame ignores them there", async () => {
+      expect(await stored({ mode: 'core', endgames: { bomba: 'off', hebat: 'on', pkp: 'off' } })).toEqual({ bomba: 'off', hebat: 'on', pkp: 'off', banjir: 'off' })
+      expect(await stored({ mode: 'core' })).toEqual({ bomba: 'on', hebat: 'on', pkp: 'on', banjir: 'off' })
+    })
+
+    it('a Core game switched to Full keeps Hang Hebat and PKP on', async () => {
+      const g = await readyGame({ mode: 'core' })
+      await run('setMode', { code: g.code, organiserToken: g.organiserToken, mode: 'full' })
+      expect((await store.gameByCode(g.code))!.settings.endgames).toEqual({ bomba: 'on', hebat: 'on', pkp: 'on', banjir: 'off' })
     })
 
     it('store what a Full game asks for, and only the four keys', async () => {
@@ -2145,7 +2151,7 @@ describe('game mode', () => {
 
     it('reject a bad value', async () => {
       const organiserToken = await createOrganiser()
-      for (const endgames of [{ bomba: 'yes' }, { pkp: true }, 'on', null, []]) {
+      for (const endgames of [{ bomba: 'yes' }, { hebat: 'maybe' }, { pkp: true }, 'on', null, []]) {
         await rejects(run('create', { arenaId: 'around-me', center: CENTER, settings: { endgames }, organiserToken }), 400, 'Unknown endgame setting')
       }
     })

@@ -525,23 +525,18 @@ function legendariesFrom(input: object, pick?: () => number): Settings['legendar
 
 /**
  * The endgame switches a request asks for. Missing ones take the defaults. Banjir Kilat is "coming soon", so it is
- * stored off whatever is sent. Core only has Bomba, so Hang Hebat and PKP are stored off there. Only the four known
- * keys are stored.
+ * stored off whatever is sent. Core's hidden switches (Hang Hebat, PKP) are kept as given, not forced off: `setMode`
+ * re-reads the stored settings, so a Core game switched to Full must still have them. `rollEndgame` ignores them in
+ * Core. Only the four known keys are stored.
  */
-function endgamesFrom(input: object, mode: unknown): NonNullable<Settings['endgames']> {
+function endgamesFrom(input: object): NonNullable<Settings['endgames']> {
   const { endgames: given } = input as { endgames?: unknown }
   if (given !== undefined && (typeof given !== 'object' || given === null || Array.isArray(given))) throw new ActionError(400, 'Unknown endgame setting')
   const merged = { ...DEFAULT_SETTINGS.endgames, ...(given ?? {}) } as Record<string, unknown>
   for (const kind of ['bomba', 'hebat', 'pkp'] as const) {
     if (merged[kind] !== 'on' && merged[kind] !== 'off') throw new ActionError(400, 'Unknown endgame setting')
   }
-  const core = mode === 'core'
-  return {
-    bomba: merged.bomba as 'on' | 'off',
-    hebat: core ? 'off' : (merged.hebat as 'on' | 'off'),
-    pkp: core ? 'off' : (merged.pkp as 'on' | 'off'),
-    banjir: 'off',
-  }
+  return { bomba: merged.bomba as 'on' | 'off', hebat: merged.hebat as 'on' | 'off', pkp: merged.pkp as 'on' | 'off', banjir: 'off' }
 }
 
 function settingsFrom(input: unknown, pick?: () => number): Settings {
@@ -562,7 +557,7 @@ function settingsFrom(input: unknown, pick?: () => number): Settings {
   if (s.mode === 'core') s.chaserSnapshot = false
   if (![20, 30, 40].includes(s.playersBand)) throw new ActionError(400, 'Expected players must be 20, 30 or 40')
   s.legendaries = legendaries
-  s.endgames = endgamesFrom(given, s.mode)
+  s.endgames = endgamesFrom(given)
   // The planned start only survives as a real time; anything else a client sends is dropped.
   s.startsAt = typeof s.startsAt === 'string' && Number.isFinite(Date.parse(s.startsAt)) ? s.startsAt : null
   return s
