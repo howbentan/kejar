@@ -202,7 +202,7 @@ Name, logo, colour and the rough idea only: the play area floods inward every fe
 
 - Works with the existing lazy, poll-driven server (no ticks): the reveal, the Bomba schedule and the Hang Hebat check all run inside `advance`.
 - Pauses hold everything (the reveal, Bomba's times), as for all timers today.
-- Both the memory store and the Supabase store, with one migration (`0021`): `games.endgame` (kind, revealed at, wanted runner) and the settings default.
+- Both the memory store and the Supabase store, with one migration (`0021`): `games.endgame` (kind, revealed at, wanted runner) and its functions (`claim_endgame_reveal`, `claim_bounty`, `clear_bounty`, `set_wanted`, `add_twin`). The endgames settings default lives in code (`DEFAULT_SETTINGS.endgames`), not the migration.
 - Older games keep working (no endgame).
 - The surprise must hold at the API level, not just in the UI (§6.2, §7.3).
 

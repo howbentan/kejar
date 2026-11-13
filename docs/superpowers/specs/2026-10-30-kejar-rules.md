@@ -241,14 +241,14 @@ Dato Seri is the one legendary, so its Settle is now bigger: it frees **the hold
 
 ## 9d. The endgame (owner's decision, 2026-11-13; **built** in Plan E3)
 
-Every Full game can end with a twist. One endgame is rolled in secret when the game starts, and nobody (players, marshals, even the organiser's view) learns which until it is revealed. Design: `docs/superpowers/specs/2026-11-13-kejar-endgame-design.md`. Core always gets Bomba. The organiser can switch each endgame on or off in setup (all on by default; all off means no endgame). Games made before this shipped never get one.
+Every game can end with a twist. One endgame is rolled in secret when the game starts, and nobody (players, marshals, even the organiser's view) learns which until it is revealed. Design: `docs/superpowers/specs/2026-11-13-kejar-endgame-design.md`. Core always gets Bomba, and Full picks one at random. The organiser can switch each endgame on or off in setup (all on by default; all off means no endgame). Games made before this shipped never get one.
 
 | Endgame | Revealed at | In one line |
 |---|---|---|
 | Bomba (red) | 10 minutes left | Pings every 2 minutes, then every minute, then an exact "Last call" |
 | Hang Hebat (cream) | 10 minutes left | The longest-free runner is wanted: catch them and the Kejar win, they reach the whistle and the Dikejar win |
 | PKP (hot pink) | 5 minutes left | Penjara closes for good and every station gives two goes |
-| Banjir Kilat (blue) | later | Designed in name only; the shrinking play area comes in a second plan |
+| Banjir Kilat (blue) | 10 minutes left (not built yet) | Designed in name only; the shrinking play area comes in a second plan |
 
 Everyone gets a full-screen takeover and a push at the reveal, then a small chip on the chase screen that reopens the rule card. Only the organiser's setup screen shows the endgame switches. Players and marshals are told only that "an endgame may happen" (one card in the how-to-play story).
 
