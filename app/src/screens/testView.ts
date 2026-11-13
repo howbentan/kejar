@@ -48,6 +48,7 @@ export function testView(over: Partial<View> = {}): View {
     chaserSnapshot: null,
     snapshotted: false,
     endgame: null,
+    endgameOn: false,
     feed: [],
     counts: { runnersFree: 3, runnersJailed: 0, runnersLuarGarisan: 0, chasers: 1 },
     roster: [],

@@ -128,7 +128,7 @@ export default function BeforeYouStart({ code, view, refresh }: { code: string; 
           Kejar
         </button>
       </p>
-      {preview && <HowToPlay side={preview} mode={view.settings.mode} snapshot={view.settings.chaserSnapshot === true} endgame={Object.values(view.settings.endgames ?? {}).includes('on')} onClose={() => setPreview(null)} />}
+      {preview && <HowToPlay side={preview} mode={view.settings.mode} snapshot={view.settings.chaserSnapshot === true} endgame={view.endgameOn} onClose={() => setPreview(null)} />}
       {showKit && <PackList code={code} view={view} refresh={refresh} compact />}
     </div>
   )

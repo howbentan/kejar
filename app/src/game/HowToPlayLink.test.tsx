@@ -61,8 +61,7 @@ describe('How to play link', () => {
     expect(container.contains(dialog)).toBe(false)
     expect(dialog.parentElement).toBe(document.body)
     expect(dialog.style.pointerEvents).toBe('auto')
-    // Eight cards, so seven taps: the default settings have the endgames on, which adds the endgame card.
-    for (let i = 0; i < 7; i++) fireEvent.click(screen.getByRole('button', { name: 'Next card' }))
+    for (let i = 0; i < 6; i++) fireEvent.click(screen.getByRole('button', { name: 'Next card' }))
     fireEvent.click(screen.getByRole('button', { name: "I'm ready" }))
     expect(screen.queryByRole('dialog')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'How to play' }))

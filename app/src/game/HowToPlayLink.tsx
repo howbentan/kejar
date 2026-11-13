@@ -26,7 +26,7 @@ export default function HowToPlayLink({ code, view }: { code: string; view: View
           side={side}
           mode={view.settings.mode}
           snapshot={view.settings.chaserSnapshot === true}
-          endgame={Object.values(view.settings.endgames ?? {}).includes('on')}
+          endgame={view.endgameOn}
           onClose={() => setOpen(false)}
           onReady={() => {
             const token = loadSession(localStorage, code).token

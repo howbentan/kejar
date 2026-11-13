@@ -1482,4 +1482,19 @@ describe('what views carry once an endgame is revealed (Plan E3)', () => {
       expect(lines(aina, [five])).toContain('5 minutes left!')
     })
   })
+
+  describe('the switches stay with the organiser', () => {
+    it('a runner, a chaser and a marshal see no `endgames` in settings, the organiser still does', () => {
+      for (const me of [aina, chaser, siti]) expect(view(me).settings).not.toHaveProperty('endgames')
+      expect(view(organiserMe).settings.endgames).toEqual(DEFAULT_SETTINGS.endgames)
+    })
+    it('endgameOn says only whether any switch is on', () => {
+      const off = { bomba: 'off', hebat: 'off', pkp: 'off', banjir: 'off' } as const
+      const only = game({ settings: { ...DEFAULT_SETTINGS, endgames: { ...off, hebat: 'on' } } })
+      expect(view(aina, { game: only }).endgameOn).toBe(true)
+      expect(view(aina, { game: game({ settings: { ...DEFAULT_SETTINGS, endgames: off } }) }).endgameOn).toBe(false)
+      const { endgames: _none, ...older } = DEFAULT_SETTINGS
+      expect(view(aina, { game: game({ settings: older }) }).endgameOn).toBe(false)
+    })
+  })
 })

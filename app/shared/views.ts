@@ -1,7 +1,7 @@
 import { alertLeadFor, checkedIn, checkinsSince, countedCheckIn, countRestartAt, fairlyWarned } from './checkins.js'
 import { alertsFrom, type Alert, type ReportReason } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
-import { hebatLive, maskEndgame, revealed } from './endgame.js'
+import { endgamesOf, hebatLive, maskEndgame, revealed } from './endgame.js'
 import { distanceM, fuzz, hash, offset } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { isTicked, kitOf, packItems, placeItems, SECRET_PLACE_IDS, type KitItem, type PlaceItem, type SecretLetters } from './kit.js'
@@ -112,7 +112,9 @@ export interface View {
    * The game's settings. `legendaries` is in the organiser's own view only: even the name of a secret card stays
    * off players' and marshals' phones.
    */
-  settings: Omit<Settings, 'legendaries'> & { legendaries?: Settings['legendaries'] }
+  settings: Omit<Settings, 'legendaries' | 'endgames'> & { legendaries?: Settings['legendaries']; endgames?: Settings['endgames'] }
+  /** Any endgame switch is on: the how-to-play card shows. Says only that there may be one, never which. */
+  endgameOn: boolean
   dots: MapDot[]
   nextRevealAt: number | null
   nextAlertAt: number | null
@@ -1176,7 +1178,8 @@ function fullView(input: ViewInput): View {
     reportable: i.players.filter((p) => p.id !== i.me.id).map((p) => ({ id: p.id, name: p.name })),
     me: i.me,
     arena: i.game.arena,
-    settings: organiser ? i.game.settings : withoutLegendaries(i.game.settings),
+    settings: organiser ? i.game.settings : withoutSecrets(i.game.settings),
+    endgameOn: (['bomba', 'hebat', 'pkp'] as const).some((k) => endgamesOf(i.game.settings)[k] === 'on'),
     dots,
     nextRevealAt: upcoming?.revealAt ?? null,
     nextAlertAt: upcoming?.alertAt ?? null,
@@ -1316,8 +1319,9 @@ function cardOf(s: Game['bomoh_stash']): { letter: string; code: string } | null
   return s?.card && s.code ? { letter: s.card.letter, code: s.code } : null
 }
 
-function withoutLegendaries(s: Settings): Omit<Settings, 'legendaries'> {
-  const { legendaries: _hidden, ...rest } = s
+/** Players' and marshals' settings: the legendaries and the endgame switches stay with the organiser. */
+function withoutSecrets(s: Settings): Omit<Settings, 'legendaries' | 'endgames'> {
+  const { legendaries: _hidden, endgames: _secret, ...rest } = s
   return rest
 }
 
