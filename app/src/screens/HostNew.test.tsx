@@ -341,7 +341,11 @@ describe('HostNew step 3, how long', () => {
     expect(screen.getByText('ENDGAME · SECRET FROM PLAYERS')).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: 'Bomba: On' })).toHaveAttribute('aria-checked', 'true')
     expect(screen.queryByRole('radio', { name: /Hang Hebat|PKP|Banjir Kilat/ })).toBeNull()
+    expect(screen.getByText(/Bomba speeds up the pings/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('radio', { name: 'Bomba: Off' }))
+    // The note follows the switch: with Bomba off, Core has no endgame.
+    expect(screen.queryByText(/Bomba speeds up the pings/)).toBeNull()
+    expect(screen.getByText("Bomba's off, so there's no endgame this game. It plays out as usual.")).toBeInTheDocument()
     createGame()
     await waitFor(() =>
       createdWith({ settings: expect.objectContaining({ mode: 'core', endgames: { bomba: 'off', hebat: 'on', pkp: 'on', banjir: 'off' } }) }),

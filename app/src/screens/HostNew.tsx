@@ -709,7 +709,9 @@ export default function HostNew() {
           <p className="muted" style={{ fontSize: 12 }}>
             {settings.mode === 'full'
               ? "The app secretly picks one that's on. Even you find out when it happens."
-              : 'At 10 minutes left, Bomba speeds up the pings. Players find out when it happens.'}
+              : endgames.bomba === 'on'
+                ? 'At 10 minutes left, Bomba speeds up the pings. Players find out when it happens.'
+                : "Bomba's off, so there's no endgame this game. It plays out as usual."}
           </p>
 
           <ErrorText>{error}</ErrorText>
