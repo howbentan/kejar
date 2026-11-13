@@ -376,6 +376,13 @@ select.input option { background: #141614; color: var(--white); }
 }
 .hijau-safe-line { margin: 0; font-size: 16px; font-weight: 700; max-width: 300px; }
 
+/* Penjara locked after Mak Kau Hijau: a dark pill with a deep-green edge and the countdown in green mono. */
+.penjara-lock {
+  align-self: flex-start; display: inline-flex; align-items: baseline; gap: 6px; padding: 7px 14px; border-radius: 999px;
+  background: var(--black); border: 1.5px solid var(--hijau-2); color: var(--white); font: 600 13px var(--font);
+}
+.penjara-lock .mono { font: 700 13px var(--mono); color: var(--hijau-2); }
+
 /* Super Ring's house arrest screen. */
 .arrest-count { font: 700 64px var(--mono); letter-spacing: -0.05em; color: var(--ring-2); line-height: 1; }
 .arrest-chip { align-self: flex-start; border: 1.5px solid var(--ring-2); color: var(--ring-2); border-radius: 999px; padding: 5px 10px; font: 500 10px var(--mono); letter-spacing: 0.1em; }

@@ -16,6 +16,9 @@ import PowerUpHand, { claimMessage, stashMessage, type ClaimResult } from '../ga
 import { loadSession } from '../game/session'
 import { clock, useServerNow } from '../game/time'
 
+/** A green tap waits at most this long for a fix that's ready, so a last-second tap still lands in time. */
+const TAP_FIX_WAIT_MS = 300
+
 /** The full feed as a list, for screens without the dock (Penjara, the marshal). */
 export function Feed({ view }: { view: View }) {
   if (view.feed.length === 0) return null
@@ -146,13 +149,16 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
     [deckLeft],
   )
 
-  // Mak Kau Hijau: one tap of the green pill, sent with my token and where I am (the Kejar see the spot). The fix
-  // gets 1.5 s at most so the tap still lands inside the 20 s; without one the server uses my last fix. The takeover
-  // retries a lost tap.
+  // Mak Kau Hijau: one tap of the green pill, sent with my token and where I am (the Kejar see the spot). The tap
+  // never waits on GPS: it takes whatever fix is ready within TAP_FIX_WAIT_MS, else none, and the server uses my
+  // last stored fix. The takeover retries a lost tap.
   const tapGreen = useCallback(async (): Promise<TapResult> => {
     const token = loadSession(localStorage, code).token
     if (!token) return { ok: false, reason: 'no-token' }
-    const here = await currentCoords(1_500)
+    const here = await Promise.race([
+      currentCoords(TAP_FIX_WAIT_MS),
+      new Promise<Record<string, never>>((resolve) => window.setTimeout(() => resolve({}), TAP_FIX_WAIT_MS)),
+    ])
     return call<TapResult>('touchGreen', { code, token, ...here })
   }, [code])
 

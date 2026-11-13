@@ -337,7 +337,8 @@ $$;
 revoke execute on function resume_game(uuid, timestamptz) from public, anon, authenticated;
 grant execute on function resume_game(uuid, timestamptz) to service_role;
 
--- 12. wipe_game, from 0019_new_deck_cards.sql, plus clearing every arrest (its centre is a runner's position).
+-- 12. wipe_game, from 0019_new_deck_cards.sql, plus clearing every arrest (its centre is a runner's position) and
+-- Mak Kau Hijau's tap spots (hijau.fixes, runners' exact positions; fair-play §1.8). The rest of the run stays.
 create or replace function wipe_game(p_game uuid) returns boolean
 language plpgsql
 as $$
@@ -356,6 +357,7 @@ begin
   delete from marshal_invites where game_id = p_game;
   update powerups set spot = null where game_id = p_game;
   update players set arrest = null where game_id = p_game;
+  update games set hijau = hijau - 'fixes' where id = p_game and jsonb_typeof(hijau) = 'object';
   update players p
     set name = case n.role when 'runner' then 'Dikejar ' when 'chaser' then 'Kejar ' when 'marshal' then 'Marshal ' else 'Player ' end || n.num,
         push = null,

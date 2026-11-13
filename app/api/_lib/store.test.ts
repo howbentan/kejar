@@ -1119,4 +1119,16 @@ describe('MemoryStore legendaries: Super Ring and Mak Kau Hijau', () => {
     expect((await store.players(g.id))[0].arrest ?? null).toBeNull()
     expect(JSON.stringify((store as unknown as { playerRows: unknown[] }).playerRows)).not.toContain('3.123')
   })
+
+  it("wiping a game clears Mak Kau Hijau's tap spots (runners' exact positions) and keeps the rest of the run", async () => {
+    const g = await startedGame()
+    await store.updateGame(g.id, { hijau_stash: stash() })
+    await store.claimHijau(g.id, 'p1', runOf())
+    await store.tapHijau(g.id, 'c1', iso(T0 + 20_000), { lat: 3.987, lng: 101.654, at: iso(T0 + 20_000) })
+    await store.wipeGame(g.id)
+    const run = (await store.gameByCode('ABC234'))!.hijau!
+    expect(run.fixes).toBeUndefined()
+    expect(run.tapped).toEqual(['c1'])
+    expect(JSON.stringify(run)).not.toContain('3.987')
+  })
 })

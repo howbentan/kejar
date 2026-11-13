@@ -155,6 +155,9 @@ describe('Penjara locked after Mak Kau Hijau (owner, 2026-11-13)', () => {
     const lock = screen.getByRole('status', { name: 'Penjara locked' })
     expect(lock).toHaveTextContent('Penjara locked · 2:14')
     expect(lock.querySelector('.mono')).toHaveTextContent('2:14')
+    // Readable: the dark lock pill, not the lime pill-on.
+    expect(lock).toHaveClass('penjara-lock')
+    expect(lock).not.toHaveClass('pill-on')
     act(() => vi.advanceTimersByTime(4_000))
     expect(lock).toHaveTextContent('Penjara locked · 2:10')
     rerender(<Jail code="ABC234" view={{ ...caught(60_000), penjaraLockedUntil: null }} />)

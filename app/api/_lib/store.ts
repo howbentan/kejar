@@ -395,6 +395,11 @@ export class MemoryStore implements GameStore {
     for (const u of this.powerUpRows) if (u.game_id === id) u.spot = null
     // A house arrest's centre is a runner's position.
     for (const p of this.playerRows) if (p.game_id === id) p.arrest = null
+    // Mak Kau Hijau's tap spots are runners' exact positions (fair-play §1.8): the rest of the run stays.
+    if (g.hijau?.fixes) {
+      const { fixes: _fixes, ...rest } = g.hijau
+      g.hijau = rest
+    }
     const mine = this.playerRows
       .filter((p) => p.game_id === id)
       .sort((a, b) => Date.parse(a.accepted_at) - Date.parse(b.accepted_at) || this.playerRows.indexOf(a) - this.playerRows.indexOf(b))

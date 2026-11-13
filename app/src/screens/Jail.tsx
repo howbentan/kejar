@@ -47,7 +47,7 @@ function PenjaraLock({ view }: { view: View }) {
   const left = until - (view.paused ? view.now : ticking)
   if (left <= 0) return null
   return (
-    <div role="status" aria-label="Penjara locked" className="pill pill-on" style={{ alignSelf: 'flex-start', borderColor: 'var(--hijau-2)', color: 'var(--hijau-2)' }}>
+    <div role="status" aria-label="Penjara locked" className="penjara-lock">
       Penjara locked · <span className="mono">{clock(left)}</span>
     </div>
   )

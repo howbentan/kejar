@@ -13,8 +13,8 @@ vi.mock('../game/Map', () => ({
     return <div data-testid="map" />
   },
 }))
-const here = vi.hoisted(() => ({ coords: {} as Record<string, number> }))
-vi.mock('../game/here', () => ({ currentCoords: async () => here.coords }))
+const here = vi.hoisted(() => ({ coords: {} as Record<string, number>, pending: null as null | Promise<Record<string, number>> }))
+vi.mock('../game/here', () => ({ currentCoords: () => here.pending ?? Promise.resolve(here.coords) }))
 vi.mock('../game/Scanner', () => ({
   default: ({ onResult }: { onResult: (t: string) => void }) => (
     <button type="button" onClick={() => onResult(scanned.text)}>
@@ -57,6 +57,24 @@ describe('RunnerChase: Mak Kau Hijau and the new hint zones (Plan E2)', () => {
     expect(call).toHaveBeenCalledWith('touchGreen', { code: 'ABC234', token: 't1', lat: 3.1, lng: 101.6, accuracy_m: 9 })
     expect(screen.getByText('Safe! You touched green. The Kejar can see where you tapped.')).toBeInTheDocument()
     here.coords = {}
+  })
+
+  it("a tap never waits on a slow GPS: it goes out within 300 ms with no fix, and the server uses the stored one", async () => {
+    vi.useFakeTimers({ now: 5_000_000 })
+    try {
+      call.mockResolvedValue({ ok: true })
+      here.pending = new Promise(() => {}) // the phone never answers
+      render(<RunnerChase code="ABC234" view={testView({ hijau: { claimedAt: 90_000, startsAt: 90_000, deadline: 110_000, tapped: false } })} />)
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Tap the green' })))
+      await act(async () => vi.advanceTimersByTime(299))
+      expect(call).not.toHaveBeenCalled()
+      await act(async () => vi.advanceTimersByTime(1))
+      expect(call).toHaveBeenCalledTimes(1)
+      expect(call).toHaveBeenCalledWith('touchGreen', { code: 'ABC234', token: 't1' })
+    } finally {
+      here.pending = null
+      vi.useRealTimers()
+    }
   })
 
   it('passes the orange and green hint zones to the map', () => {

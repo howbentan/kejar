@@ -56,7 +56,7 @@ Rules:
 
 **The two new legendaries** (new power-ups design §6.2, §6.3):
 - **Super Ring** (runners): switches on when found and waits in the slot. The next time the holder would go to Penjara, by any route, it's house arrest instead (§4).
-- **Mak Kau Hijau** (chasers): works on claim, like Bomoh. Every free Dikejar gets `Mak kau hijau! Tap the green in 20 s or go to Penjara.` Anyone who doesn't tap in time goes to Penjara as if auto-jailed. Tapping shows you to the Kejar where you tapped, until the next ping. Then Penjara is locked for 3 minutes: no rescue, Settle or reel (updated 2026-11-13, owner's decision).
+- **Mak Kau Hijau** (chasers): works on claim, like Bomoh. Every free Dikejar gets a push, `Mak kau hijau! Tap the green in 20 s or go to Penjara.`, and a full-screen takeover saying `Miss it and you go to Penjara. Tap and the Kejar see where you are.` Anyone who doesn't tap in time goes to Penjara as if auto-jailed. Tapping shows you to the Kejar where you tapped, until the next ping. Then Penjara is locked for 3 minutes: no rescue, Settle or reel (updated 2026-11-13, owner's decision).
 
 **Core's deck counts** (**Claude's call**, tune after playtests):
 - runners, per 10 runners: Durian ×3, Ponteng ×3 (6 cards);

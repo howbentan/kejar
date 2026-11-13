@@ -7338,6 +7338,26 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
       expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true, rescue: 'started' })
     })
 
+    it("a marshal's Undo kejar still works while Penjara is locked", async () => {
+      const g = await chasing({}, ['Dan'])
+      const dan = g.more.Dan
+      const t = T0 + 7 * MIN
+      await claimAt(g, t)
+      await tap(g, g.aina.token, t + 5 * S)
+      await tap(g, dan.token, t + 5 * S)
+      await poll(g, t + 20 * S)
+      expect((await game(g)).hijau!.lockedUntil).toBe(stamp(t + 20 * S + 3 * MIN))
+      // Ben catches Dan (#11) during the lock.
+      now = t + 40 * S
+      await run('location', { code: g.code, token: dan.token, ...at(10) })
+      expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(11), ...at(0) })).toMatchObject({ ok: true })
+      expect((await row(g, dan.playerId)).jailed).toBe(true)
+      const caught = (await evs(g, 'caught')).find((e) => e.target_id === dan.playerId)!
+      now = t + 50 * S
+      expect(await run('undoKejar', { code: g.code, eventId: caught.id, token: g.siti.token })).toEqual({ ok: true })
+      expect(await row(g, dan.playerId)).toMatchObject({ jailed: false, freed_once: false })
+    })
+
     it('a rescue holding when the 20 s ends cannot succeed', async () => {
       const g = await chasing({}, ['Dan'])
       const dan = g.more.Dan
