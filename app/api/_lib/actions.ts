@@ -31,7 +31,7 @@ import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
 import { fallbackFor, LEGENDARY_KINDS, pickLegendaries, sidesOf, type SideSwitch } from '../../shared/legendaries.js'
 import { validateTeams } from '../../shared/teams.js'
-import { DEFAULT_SETTINGS, type Arena, type Arrest, type BomohStash, type DatoStash, type Game, type HijauFix, type LatLng, type LegendaryKind, type Player, type Position, type PowerUp, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
+import { DEFAULT_SETTINGS, type Arena, type Arrest, type BomohStash, type DatoStash, type Game, type GameEvent, type HijauFix, type LatLng, type LegendaryKind, type Player, type Position, type PowerUp, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
 import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
 import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
@@ -856,8 +856,10 @@ async function withFreshEndgame(ctx: Ctx, game: Game): Promise<Game> {
  * arrest) claims the bounty and blows the whistle, and with them free "everyone out" can't happen.
  */
 async function allOutCheck(ctx: Ctx, game: Game, cause: WhistleCause = 'catch'): Promise<boolean> {
-  const players = await ctx.store.players(game.id)
+  // The endgame first, then the players: an undo frees the runner before it clears the bounty, so a call that sees
+  // no bounty also sees them free, and can't claim a fresh one from a stale read.
   const g = await withFreshEndgame(ctx, game)
+  const players = await ctx.store.players(game.id)
   if (hebatLive(g)) {
     const e = g.endgame!
     const wanted = players.find((p) => p.id === e.wanted)
@@ -2535,6 +2537,16 @@ const handleAlert: Action = async (ctx, body) => {
   return { ok: true }
 }
 
+/**
+ * True when undoing `out` takes Hang Hebat's bounty back: it put the wanted runner out and claimed the bounty. The
+ * claim is stamped in the same request as the out's event, so that event is at or before `bountyAt`; a later out
+ * (caught again after a rescue, a revoked house arrest) came after a real one, and caught is caught (§8.2).
+ */
+function claimedBounty(game: Game, target: Player, out: GameEvent): boolean {
+  const e = game.endgame
+  return !!e?.bountyAt && e.wanted === target.id && Date.parse(out.at) <= Date.parse(e.bountyAt)
+}
+
 /** A marshal frees an auto-jailed runner after a phone fault, without using their one escape (motion design §5b). */
 const undoAutoJail: Action = async (ctx, body) => {
   const loaded = await loadGame(ctx, body)
@@ -2564,8 +2576,8 @@ const undoAutoJail: Action = async (ctx, body) => {
     lng: null,
     data: { game_code: game.code, by: marshal?.name ?? 'Organiser', target_name: target.name },
   })
-  // Hang Hebat's wanted runner back in the game: the auto-jail never happened, so neither did the bounty.
-  if (game.endgame?.wanted === target.id) await ctx.store.clearBounty(game.id)
+  // The auto-jail never happened, so neither did a bounty it claimed (only the out that claimed it, not a later one).
+  if (claimedBounty(game, target, jailing)) await ctx.store.clearBounty(game.id)
   // Someone is free again: no final whistle (advance would call it off too, on the next poll).
   if (game.final_whistle_at) await callOffWhistle(ctx, game)
   return { ok: true }
@@ -2617,8 +2629,8 @@ const undoKejar: Action = async (ctx, body) => {
     lng: null,
     data: { game_code: game.code, by: marshal?.name ?? 'Organiser', target_name: target.name },
   })
-  // Hang Hebat's wanted runner back in the game: the catch never happened, so neither did the bounty.
-  if (game.endgame?.wanted === target.id) await ctx.store.clearBounty(game.id)
+  // The catch never happened, so neither did a bounty it claimed (only the out that claimed it, not a later one).
+  if (claimedBounty(game, target, catching)) await ctx.store.clearBounty(game.id)
   await callOffWhistle(ctx, game)
   return { ok: true }
 }

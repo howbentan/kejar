@@ -7769,6 +7769,34 @@ describe('Hang Hebat: the wanted runner decides the game (Plan E3 task 5)', () =
     expect((await gameRow(g)).ended_at).toBeNull()
   })
 
+  it('hebat: undoing a later catch of the wanted runner keeps the bounty an earlier real catch claimed', async () => {
+    const g = await live()
+    await catchAt(g, 'aina', T0 + 8 * MIN)
+    now = T0 + 8 * MIN + 5 * S
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+    expect(await breakOut(g.code, g.hafiz.token)).toMatchObject({ ok: true })
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    expect(await catchAt(g, 'aina', T0 + 8 * MIN + 20 * S)).toMatchObject({ ok: true })
+    now = T0 + 8 * MIN + 30 * S
+    expect(await run('undoKejar', { code: g.code, eventId: await catchId(g, g.aina.playerId), token: g.siti.token })).toEqual({ ok: true })
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    expect((await gameRow(g)).final_whistle_at).toBe(stamp(T0 + 8 * MIN))
+    await kejarWin(g, T0 + 8 * MIN)
+  })
+
+  it('hebat: a Dato Seri Settle that frees the wanted runner during the hold leaves the whistle: a Kejar win', async () => {
+    const g = await live()
+    await store.addPowerUp({ game_id: g.gameId, player_id: g.hafiz.playerId, kind: 'dato', station: null })
+    await catchAt(g, 'hafiz', T0 + 7.5 * MIN)
+    await catchAt(g, 'aina', T0 + 8 * MIN)
+    now = T0 + 8 * MIN + 10 * S
+    const settled = await run('settle', { code: g.code, token: g.hafiz.token, qr: JAIL_QR, targetIds: [g.aina.playerId], ...at(10) })
+    expect(settled).toEqual({ ok: true, freedIds: [g.hafiz.playerId, g.aina.playerId] })
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    expect((await gameRow(g)).final_whistle_at).toBe(stamp(T0 + 8 * MIN))
+    await kejarWin(g, T0 + 8 * MIN)
+  })
+
   it('hebat: time runs out with the wanted runner free and everyone else jailed: a Dikejar win', async () => {
     const g = await live()
     await catchAt(g, 'hafiz', T0 + 7.5 * MIN)
