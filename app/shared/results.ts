@@ -1,6 +1,17 @@
 import { chaseStartOf, phaseAt } from './clock.js'
+import { hebatLive } from './endgame.js'
 import { isOut } from './players.js'
 import type { Game, GameEvent, Player, Results } from './types.js'
+
+/**
+ * Who won. Once Hang Hebat is revealed only the wanted runner decides it (endgame design §8.2): the Kejar win if
+ * the bounty was claimed (caught is caught, even if a teammate freed them since), else the Dikejar win, however many
+ * other runners are in Penjara. Otherwise the Dikejar win while anyone is still free.
+ */
+function winnerOf(game: Game, survivors: string[]): Results['winner'] {
+  if (hebatLive(game)) return game.endgame!.bountyAt ? 'chasers' : 'runners'
+  return survivors.length > 0 ? 'runners' : 'chasers'
+}
 
 export function computeResults(game: Game, players: Player[], events: GameEvent[]): Results {
   const runners = players.filter((p) => p.role === 'runner')
@@ -43,7 +54,7 @@ export function computeResults(game: Game, players: Player[], events: GameEvent[
   )
 
   return {
-    winner: survivors.length > 0 ? 'runners' : 'chasers',
+    winner: winnerOf(game, survivors),
     survivors,
     longestSurvivor,
     mostCatches: catches ? { id: catches.id, count: catches.n } : null,

@@ -7592,3 +7592,234 @@ describe('the endgame: roll, reveal and push (Plan E3 task 4)', () => {
     expect(pings.find((e) => e.data.seq === lastSeq - 1)!.data.lastCall).toBeUndefined()
   })
 })
+
+describe('Hang Hebat: the wanted runner decides the game (Plan E3 task 5)', () => {
+  const S = 1000
+  const STASH = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng, accuracy_m: 8 }
+  const TAGS = { aina: 7, hafiz: 3, ravi: 12 } as const
+  type Who = keyof typeof TAGS
+  type G = Awaited<ReturnType<typeof live>>
+  const stamp = (ms: number) => new Date(ms).toISOString()
+
+  /**
+   * A chasing Full game with only Hang Hebat on, revealed at +7 min with Aina (#07) wanted. The reveal is forced on
+   * the row, so no test has to keep everyone checking in for 33 minutes first. Runners: Aina, Hafiz (#03), Ravi
+   * (#12). Ben chases; Siti is a marshal. `legendary` also drops Super Ring and Mak Kau Hijau.
+   */
+  async function live(settings: object = {}, legendary = false) {
+    if (legendary) forcedDraws = [0.9, 0.9]
+    const sides = legendary ? { legendarySides: { runner: 'on', chaser: 'on' } } : {}
+    const g = await readyGame({ mode: 'full', endgames: { bomba: 'off', hebat: 'on', pkp: 'off' }, ...sides, ...settings })
+    const ravi = await run('join', { code: g.code, name: 'Ravi', accepted: true })
+    await run('subscribe', { code: g.code, token: ravi.token, subscription: { endpoint: 'https://push/Ravi' } })
+    await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [ravi.playerId]: 'runner' } })
+    await run('linkTag', { code: g.code, token: ravi.token, tagId: 12 })
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    if (legendary) {
+      await run('dropRing', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+      await run('dropHijau', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    }
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    const gameId = (await store.gameByCode(g.code))!.id
+    expect(await store.claimEndgameReveal(gameId, stamp(now), g.aina.playerId)).toBe(true)
+    pushes = []
+    return { ...g, ravi, siti, gameId }
+  }
+  /** Ben scans a runner's tag at `ms`, standing 10 m from where the runner just reported. */
+  async function catchAt(g: G, who: Who, ms: number) {
+    now = ms
+    await run('location', { code: g.code, token: g[who].token, ...at(10) })
+    return run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(TAGS[who]), ...at(0) })
+  }
+  const gameRow = async (g: G) => (await store.gameByCode(g.code))!
+  const row = async (g: G, id: string) => (await store.players(g.gameId)).find((p) => p.id === id)!
+  const whistles = async (g: G) => (await store.events(g.gameId)).filter((e) => e.type === 'final-whistle').map((e) => e.data)
+  const catchId = async (g: G, runnerId: string) => (await store.events(g.gameId)).filter((e) => e.type === 'caught' && e.target_id === runnerId).at(-1)!.id
+  const poll = (g: G, ms: number) => {
+    now = ms
+    return run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+  }
+  /** The bounty whistle blew at `whistleAt`: the game holds 60 s, then ends as a Kejar win. */
+  async function kejarWin(g: G, whistleAt: number) {
+    expect(await whistles(g)).toEqual([{ cause: 'bounty' }])
+    expect((await gameRow(g)).endgame!.bountyAt).toBe(stamp(whistleAt))
+    expect((await poll(g, whistleAt + 59 * S)).phase).toBe('chasing')
+    const over = await poll(g, whistleAt + 61 * S)
+    expect(over.phase).toBe('ended')
+    expect(over.results?.winner).toBe('chasers')
+    return over
+  }
+  /** No whistle and no bounty: the game goes on. */
+  async function noBounty(g: G) {
+    expect(await whistles(g)).toEqual([])
+    expect((await gameRow(g)).final_whistle_at).toBeNull()
+    expect((await gameRow(g)).endgame).toMatchObject({ wanted: g.aina.playerId, bountyAt: null })
+  }
+
+  it('hebat: a catch on a runner who is not wanted gives no whistle', async () => {
+    const g = await live()
+    expect(await catchAt(g, 'hafiz', T0 + 7.5 * MIN)).toMatchObject({ ok: true })
+    await noBounty(g)
+  })
+
+  it('hebat: catching the wanted runner blows the bounty whistle, and 60 s later the Kejar win with two runners free', async () => {
+    const g = await live()
+    expect(await catchAt(g, 'aina', T0 + 8 * MIN)).toMatchObject({ ok: true })
+    const over = await kejarWin(g, T0 + 8 * MIN)
+    expect([...over.results!.survivors].sort()).toEqual([g.hafiz.playerId, g.ravi.playerId].sort())
+  })
+
+  it('hebat: auto-jail on two missed check-ins puts the wanted runner out: a Kejar win', async () => {
+    const g = await live({ checkinMode: 'schedule' })
+    for (const m of [10, 15]) {
+      now = T0 + m * MIN - 20 * S
+      await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+      await run('location', { code: g.code, token: g.ravi.token, ...at(10) })
+    }
+    await poll(g, T0 + 15 * MIN)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(true)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
+    await kejarWin(g, T0 + 15 * MIN)
+  })
+
+  it('hebat: undoing the wanted runner auto-jail during the hold takes the bounty back', async () => {
+    const g = await live({ checkinMode: 'schedule' })
+    for (const m of [10, 15]) {
+      now = T0 + m * MIN - 20 * S
+      await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+      await run('location', { code: g.code, token: g.ravi.token, ...at(10) })
+    }
+    await poll(g, T0 + 15 * MIN)
+    const eventId = (await store.events(g.gameId)).find((e) => e.type === 'auto-jailed' && e.target_id === g.aina.playerId)!.id
+    now = T0 + 15 * MIN + 10 * S
+    expect(await run('undoAutoJail', { code: g.code, token: g.siti.token, eventId })).toEqual({ ok: true })
+    expect((await gameRow(g)).final_whistle_at).toBeNull()
+    expect((await gameRow(g)).endgame!.bountyAt).toBeNull()
+    expect((await poll(g, T0 + 16 * MIN + 5 * S)).phase).toBe('chasing')
+  })
+
+  it('hebat: Mak Kau Hijau jailing the wanted runner is a Kejar win', async () => {
+    const g = await live({}, true)
+    const t = T0 + 7.5 * MIN
+    now = t
+    const hijau = (await gameRow(g)).hijau_stash!.code!
+    expect(await run('claim', { code: g.code, token: g.ben.token, qr: hijauQr(hijau), ...STASH })).toEqual({ ok: true, kind: 'hijau' })
+    now = t + 10 * S
+    expect(await run('touchGreen', { code: g.code, token: g.hafiz.token })).toEqual({ ok: true })
+    expect(await run('touchGreen', { code: g.code, token: g.ravi.token })).toEqual({ ok: true })
+    await poll(g, t + 20 * S)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(true)
+    await kejarWin(g, t + 20 * S)
+  })
+
+  it('hebat: a Luar Garisan disqualification of the wanted runner is a Kejar win', async () => {
+    const g = await live()
+    now = T0 + 7.5 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(240) })
+    now = T0 + 8 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(250) })
+    expect((await row(g, g.aina.playerId)).disqualified_at).toBe(stamp(T0 + 8 * MIN))
+    await kejarWin(g, T0 + 8 * MIN)
+  })
+
+  it('hebat: a catch that puts the wanted runner under Super Ring house arrest is a Kejar win', async () => {
+    const g = await live({}, true)
+    now = T0 + 7.5 * MIN
+    const ring = (await gameRow(g)).ring_stash!.code!
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: ringQr(ring), ...STASH })).toEqual({ ok: true, kind: 'ring' })
+    expect(await catchAt(g, 'aina', T0 + 8 * MIN)).toEqual({ ok: false, reason: 'ring', name: 'Aina' })
+    expect((await row(g, g.aina.playerId))).toMatchObject({ jailed: false, arrest: expect.objectContaining({ route: 'catch' }) })
+    await kejarWin(g, T0 + 8 * MIN)
+  })
+
+  it('hebat: a rescue and the reel during the hold free runners, but the whistle stays and the Kejar still win', async () => {
+    const g = await live()
+    await catchAt(g, 'ravi', T0 + 7.5 * MIN)
+    await catchAt(g, 'aina', T0 + 8 * MIN)
+    // Ravi's reel lands on the free slot.
+    now = T0 + 8 * MIN + 5 * S
+    const pulled = await actions.pullReel(
+      { store, now, rng: () => 0, push: async () => {}, fetchJson: async () => ({}) },
+      { code: g.code, token: g.ravi.token, ...at(10) },
+    )
+    expect(pulled).toEqual({ ok: true, result: 'free' })
+    // Hafiz frees the wanted runner from Penjara.
+    now = T0 + 8 * MIN + 10 * S
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+    expect(await breakOut(g.code, g.hafiz.token)).toMatchObject({ ok: true })
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    expect((await row(g, g.ravi.playerId)).jailed).toBe(false)
+    expect((await gameRow(g)).final_whistle_at).toBe(stamp(T0 + 8 * MIN))
+    const over = await kejarWin(g, T0 + 8 * MIN)
+    expect(over.results!.survivors).toContain(g.aina.playerId)
+  })
+
+  it('hebat: Undo kejar on the wanted runner during the hold calls off the whistle and the game goes on', async () => {
+    const g = await live()
+    await catchAt(g, 'aina', T0 + 8 * MIN)
+    now = T0 + 8 * MIN + 30 * S
+    expect(await run('undoKejar', { code: g.code, eventId: await catchId(g, g.aina.playerId), token: g.siti.token })).toEqual({ ok: true })
+    expect((await gameRow(g)).final_whistle_at).toBeNull()
+    expect((await gameRow(g)).endgame).toMatchObject({ wanted: g.aina.playerId, bountyAt: null })
+    const v = await poll(g, T0 + 9 * MIN + 5 * S)
+    expect(v.phase).toBe('chasing')
+    expect((await gameRow(g)).ended_at).toBeNull()
+  })
+
+  it('hebat: time runs out with the wanted runner free and everyone else jailed: a Dikejar win', async () => {
+    const g = await live()
+    await catchAt(g, 'hafiz', T0 + 7.5 * MIN)
+    await catchAt(g, 'ravi', T0 + 7.75 * MIN)
+    await noBounty(g)
+    for (let m = 8; m <= 49; m++) {
+      now = T0 + m * MIN
+      await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    }
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    const over = await poll(g, T0 + 50 * MIN)
+    expect(over.phase).toBe('ended')
+    expect(over.results?.winner).toBe('runners')
+    expect(await whistles(g)).toEqual([])
+  })
+
+  it('hebat: a Durian blocks the catch on the wanted runner: no bounty', async () => {
+    const g = await live()
+    const shield = await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'shield', station: 1 })
+    expect(await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: shield.id })).toEqual({ ok: true, kind: 'shield' })
+    expect(await catchAt(g, 'aina', T0 + 9 * MIN)).toEqual({ ok: false, reason: 'shielded', name: 'Aina' })
+    await noBounty(g)
+  })
+
+  it('hebat: removing the wanted runner passes the bounty to the next longest-free runner', async () => {
+    const g = await live()
+    // Hafiz (#03) is caught and freed, so Ravi (#12), never caught, has the longer free stretch.
+    await catchAt(g, 'hafiz', T0 + 7.5 * MIN)
+    await run('location', { code: g.code, token: g.ravi.token, ...at(10) })
+    expect(await breakOut(g.code, g.ravi.token)).toMatchObject({ ok: true })
+    pushes = []
+    now = T0 + 8 * MIN
+    expect(await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.aina.playerId })).toEqual({ ok: true })
+    expect((await gameRow(g)).endgame).toMatchObject({ wanted: g.ravi.playerId, bountyAt: null })
+    const passed = (await store.events(g.gameId)).filter((e) => e.type === 'wanted')
+    expect(passed).toEqual([expect.objectContaining({ target_id: g.ravi.playerId, data: { who: 'Ravi #12' } })])
+    const bodies = pushes.map((p) => (p.payload as { body?: string }).body)
+    expect(bodies.filter((b) => b === 'Hang Hebat: #12 Ravi is now wanted.')).toHaveLength(3)
+    expect(await whistles(g)).toEqual([])
+    // Ravi is the bounty now.
+    await catchAt(g, 'ravi', T0 + 8.5 * MIN)
+    expect(await whistles(g)).toEqual([{ cause: 'bounty' }])
+  })
+
+  it('hebat: removing the wanted runner with nobody else free puts the normal rules back', async () => {
+    const g = await live()
+    await catchAt(g, 'hafiz', T0 + 7.5 * MIN)
+    await catchAt(g, 'ravi', T0 + 7.75 * MIN)
+    now = T0 + 8 * MIN
+    await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.aina.playerId })
+    expect((await gameRow(g)).endgame).toMatchObject({ wanted: null, bountyAt: null })
+    expect(await whistles(g)).toEqual([{ cause: 'removed' }])
+  })
+})

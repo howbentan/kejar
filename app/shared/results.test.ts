@@ -173,3 +173,20 @@ describe('Luar Garisan', () => {
     expect(computeResults(g, players, events).jailbreakHero).toBeNull()
   })
 })
+
+describe('Hang Hebat (endgame design §8.2)', () => {
+  const hebat = (bountyAt: string | null) =>
+    game({ ended_at: iso(T0 + 50 * MIN), endgame: { kind: 'hebat', revealedAt: iso(T0 + 40 * MIN), wanted: 'r1', bountyAt } })
+
+  it('hebat: the wanted runner out is a Kejar win, with other runners still free', () => {
+    const players = [ben, player('r1', 'runner', { jailed: true }), player('r2', 'runner'), player('r3', 'runner')]
+    const r = computeResults(hebat(iso(T0 + 45 * MIN)), players, [])
+    expect(r.winner).toBe('chasers')
+    expect(r.survivors).toEqual(['r2', 'r3'])
+  })
+
+  it('hebat: the wanted runner free at time-up is a Dikejar win, with every other runner jailed', () => {
+    const players = [ben, player('r1', 'runner'), player('r2', 'runner', { jailed: true }), player('r3', 'runner', { jailed: true })]
+    expect(computeResults(hebat(null), players, []).winner).toBe('runners')
+  })
+})

@@ -18,7 +18,7 @@ import { autoJailDue, checkinsSince, countedCheckIn, countRestartAt, fairlyWarne
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
-import { maskEndgame, pickWanted, revealDue, rollEndgame } from '../../shared/endgame.js'
+import { hebatLive, maskEndgame, pickWanted, revealDue, rollEndgame, wantedOut } from '../../shared/endgame.js'
 import { isOut, undoableArrestId, undoableCatchId } from '../../shared/players.js'
 import { ARREST_FIX_FRESH_MS, ARREST_OPEN_MS, arrestEndsAt, insideArrest, releaseVerdict, usableFix } from '../../shared/arrest.js'
 import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
@@ -835,16 +835,39 @@ async function settleRescue(ctx: Ctx, game: Game, phase = phaseAt(game, ctx.now)
 }
 
 /** What put the last free Dikejar out: it picks the feed line (views.ts). */
-type WhistleCause = 'catch' | 'auto-jail' | 'removed' | 'luar-garisan' | 'hijau'
+type WhistleCause = 'catch' | 'auto-jail' | 'removed' | 'luar-garisan' | 'hijau' | 'bounty'
+
+/**
+ * Hang Hebat's state moves under a `game` read earlier in the request (a reveal or a bounty claimed in this call or
+ * a concurrent one, an undo), so the whistle rules read it fresh. Other games skip the read.
+ */
+async function withFreshEndgame(ctx: Ctx, game: Game): Promise<Game> {
+  if (game.endgame?.kind !== 'hebat') return game
+  const fresh = await ctx.store.gameByCode(game.code)
+  return fresh ? { ...game, endgame: fresh.endgame } : game
+}
 
 /**
  * Everyone is out (fair-play §1.4): instead of ending at once, the final whistle starts, and the end is held for
  * FINAL_WHISTLE_MS so a marshal can undo a wrong last catch. The first caller posts the feed line. True when every
  * runner is out (a whistle is pending, here or already).
+ *
+ * Once Hang Hebat is live only the wanted runner counts (endgame design §8.2): out by any route (or under house
+ * arrest) claims the bounty and blows the whistle, and with them free "everyone out" can't happen.
  */
 async function allOutCheck(ctx: Ctx, game: Game, cause: WhistleCause = 'catch'): Promise<boolean> {
-  const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
-  if (runners.length === 0 || !runners.every(isOut)) return false
+  const players = await ctx.store.players(game.id)
+  const g = await withFreshEndgame(ctx, game)
+  if (hebatLive(g)) {
+    const e = g.endgame!
+    const wanted = players.find((p) => p.id === e.wanted)
+    if (!e.bountyAt && !(wanted && wantedOut(wanted))) return false
+    if (!e.bountyAt) await ctx.store.claimBounty(game.id, iso(ctx.now))
+    cause = 'bounty'
+  } else {
+    const runners = players.filter((p) => p.role === 'runner')
+    if (runners.length === 0 || !runners.every(isOut)) return false
+  }
   if (await ctx.store.claimFinalWhistle(game.id, iso(ctx.now))) {
     await ctx.store.addEvent({ game_id: game.id, type: 'final-whistle', actor_id: null, target_id: null, data: { cause } })
   }
@@ -853,31 +876,39 @@ async function allOutCheck(ctx: Ctx, game: Game, cause: WhistleCause = 'catch'):
 
 /**
  * A pending final whistle: someone free again calls it off (and a chase whose time ran out during the hold then
- * ends on time, as a Dikejar win); otherwise the game ends once the hold is over. Never while paused.
+ * ends on time, as a Dikejar win); otherwise the game ends once the hold is over. Never while paused. Under Hang
+ * Hebat a claimed bounty holds whoever is free (caught is caught); without one it is called off.
  */
 async function settleWhistle(ctx: Ctx, game: Game) {
-  const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
-  if (runners.length > 0 && runners.every(isOut)) {
-    if (!game.paused_at && ctx.now >= Date.parse(game.final_whistle_at!) + FINAL_WHISTLE_MS) await finish(ctx, game)
+  const g = await withFreshEndgame(ctx, game)
+  const allOut = async () => {
+    const runners = (await ctx.store.players(game.id)).filter((p) => p.role === 'runner')
+    return runners.length > 0 && runners.every(isOut)
+  }
+  if (hebatLive(g) ? !!g.endgame!.bountyAt : await allOut()) {
+    if (!g.paused_at && ctx.now >= Date.parse(g.final_whistle_at!) + FINAL_WHISTLE_MS) await finish(ctx, g)
     return
   }
-  if (await callOffWhistle(ctx, game)) return
-  const cleared = { ...game, final_whistle_at: null }
+  if (await callOffWhistle(ctx, g)) return
+  const cleared = { ...g, final_whistle_at: null }
   if (phaseAt(cleared, ctx.now).phase === 'ended') await finish(ctx, cleared)
 }
 
 /**
  * Clears the final whistle because someone is free again, then checks once more: a catch racing this call may
  * have found the old whistle still set (so started none) just before it was cleared. True if a whistle is
- * pending again.
+ * pending again. A claimed Hang Hebat bounty is never called off here (a rescue, the reel, Settle): only an undo
+ * clears it first.
  */
 async function callOffWhistle(ctx: Ctx, game: Game): Promise<boolean> {
+  const g = await withFreshEndgame(ctx, game)
+  if (hebatLive(g) && g.endgame!.bountyAt) return true
   await ctx.store.clearFinalWhistle(game.id)
-  return allOutCheck(ctx, game)
+  return allOutCheck(ctx, g)
 }
 
 async function finish(ctx: Ctx, game: Game) {
-  const results = computeResults(game, await ctx.store.players(game.id), await ctx.store.events(game.id))
+  const results = computeResults(await withFreshEndgame(ctx, game), await ctx.store.players(game.id), await ctx.store.events(game.id))
   if (await ctx.store.claimEnd(game.id, results.winner)) {
     await ctx.store.addEvent({ game_id: game.id, type: 'ended', actor_id: null, target_id: null, data: { winner: results.winner } })
   }
@@ -1524,6 +1555,8 @@ const catchAction: Action = async (ctx, body) => {
   // Super Ring fired: house arrest, not a catch, and this chaser hands the tag back for good.
   if (sent === 'arrested') {
     await failRescue()
+    // Nobody under house arrest is out, but Hang Hebat's wanted runner put under it loses the bounty (§8.2).
+    await allOutCheck(ctx, fresh)
     return { ok: false, reason: 'ring', name: runner!.name }
   }
   await ctx.store.addEvent({
@@ -2531,6 +2564,8 @@ const undoAutoJail: Action = async (ctx, body) => {
     lng: null,
     data: { game_code: game.code, by: marshal?.name ?? 'Organiser', target_name: target.name },
   })
+  // Hang Hebat's wanted runner back in the game: the auto-jail never happened, so neither did the bounty.
+  if (game.endgame?.wanted === target.id) await ctx.store.clearBounty(game.id)
   // Someone is free again: no final whistle (advance would call it off too, on the next poll).
   if (game.final_whistle_at) await callOffWhistle(ctx, game)
   return { ok: true }
@@ -2582,8 +2617,30 @@ const undoKejar: Action = async (ctx, body) => {
     lng: null,
     data: { game_code: game.code, by: marshal?.name ?? 'Organiser', target_name: target.name },
   })
+  // Hang Hebat's wanted runner back in the game: the catch never happened, so neither did the bounty.
+  if (game.endgame?.wanted === target.id) await ctx.store.clearBounty(game.id)
   await callOffWhistle(ctx, game)
   return { ok: true }
+}
+
+/**
+ * Hang Hebat's wanted runner was removed (endgame design §8.2): the bounty passes to the next free runner by the
+ * same rule as the reveal, with a feed line and a push. With nobody left it is cleared, and the normal rules end the
+ * game as today.
+ */
+async function passBounty(ctx: Ctx, game: Game, removed: Player) {
+  const { store, now } = ctx
+  const players = await store.players(game.id)
+  const next = pickWanted(players, await store.events(game.id), chaseStartOf(game, now)!, removed.id)
+  await store.setWanted(game.id, next?.id ?? null)
+  if (!next) return
+  await store.addEvent({ game_id: game.id, type: 'wanted', actor_id: null, target_id: next.id, data: { who: who(next) } })
+  const body = `Hang Hebat: ${next.tag_id !== null ? `#${tag2(next.tag_id)} ` : ''}${next.name} is now wanted.`
+  try {
+    await pushTo(ctx, players, { type: 'notice', code: game.code, title: 'kejar.', body })
+  } catch {
+    // The feed line carries it, and every screen shows the new poster from the next poll.
+  }
 }
 
 const removePlayer: Action = async (ctx, body) => {
@@ -2607,6 +2664,7 @@ const removePlayer: Action = async (ctx, body) => {
     lng: null,
     data: { game_code: game.code, by: marshal?.name ?? 'Organiser', target_name: target.name },
   })
+  if (hebatLive(game) && !game.endgame!.bountyAt && game.endgame!.wanted === target.id) await passBounty(ctx, game, target)
   // The removed runner may have been the last one still free: the final whistle (fair-play §1.4).
   const phase = phaseAt(game, ctx.now).phase
   if (phase === 'hiding' || phase === 'chasing') await allOutCheck(ctx, game, 'removed')
