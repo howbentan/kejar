@@ -129,22 +129,63 @@ describe('wantedOut', () => {
 
 describe('pickWanted', () => {
   const start = T0 + 5 * MIN
+  const caught = (id: string, atMs: number) => event('caught', atMs, { id: `caught-${id}-${atMs}`, target_id: id })
   it('prefers never caught over freed at minute 3', () => {
     const a = player('a', 'runner', { tag_id: 1, freed_at: iso(start + 3 * MIN) })
     const b = player('b', 'runner', { tag_id: 2 })
-    expect(pickWanted([a, b], [], start)?.id).toBe('b')
+    expect(pickWanted([a, b], [caught('a', start + MIN)], start)?.id).toBe('b')
   })
   it('prefers freed at minute 3 over freed at minute 6', () => {
     const a = player('a', 'runner', { tag_id: 1, freed_at: iso(start + 6 * MIN) })
     const b = player('b', 'runner', { tag_id: 2, freed_at: iso(start + 3 * MIN) })
-    expect(pickWanted([a, b], [], start)?.id).toBe('b')
+    expect(pickWanted([a, b], [caught('a', start + MIN), caught('b', start + MIN)], start)?.id).toBe('b')
   })
   it('counts the end of a house arrest as a release', () => {
     const a = player('a', 'runner', { tag_id: 1 })
     const b = player('b', 'runner', { tag_id: 2, freed_at: iso(start + 2 * MIN) })
-    const ended = event('arrest-ended', start + 4 * MIN, { target_id: 'a', data: { outcome: 'free' } })
+    const arrested = event('arrested', start + MIN, { target_id: 'a', data: { route: 'checkins', firedAt: iso(start + MIN) } })
+    const ended = event('arrest-ended', start + 4 * MIN, { target_id: 'a', data: { outcome: 'free', firedAt: iso(start + MIN) } })
     // a's stretch restarted at minute 4, later than b's minute 2.
-    expect(pickWanted([a, b], [ended], start)?.id).toBe('b')
+    expect(pickWanted([a, b], [caught('b', start + MIN), arrested, ended], start)?.id).toBe('b')
+  })
+  it('treats an undone catch as never having happened', () => {
+    // a was caught at minute 5 and the catch was undone; undo stamps freed_at, but a has been free since the start.
+    const a = player('a', 'runner', { tag_id: 1, freed_at: iso(start + 6 * MIN) })
+    const b = player('b', 'runner', { tag_id: 2 })
+    const c = caught('a', start + 5 * MIN)
+    const undone = event('kejar-undone', start + 6 * MIN, { target_id: 'a', data: { eventId: c.id } })
+    expect(pickWanted([a, b], [c, undone], start)?.id).toBe('a')
+  })
+  it('treats an undone Super Ring arrest as never having happened', () => {
+    const a = player('a', 'runner', { tag_id: 1 })
+    const b = player('b', 'runner', { tag_id: 2 })
+    const firedAt = iso(start + 5 * MIN)
+    const arrested = event('arrested', start + 5 * MIN, { target_id: 'a', data: { route: 'catch', firedAt } })
+    const ended = event('arrest-ended', start + 6 * MIN, { target_id: 'a', data: { outcome: 'undone', firedAt } })
+    const undone = event('kejar-undone', start + 6 * MIN, { target_id: 'a', data: { eventId: arrested.id, arrest: true } })
+    expect(pickWanted([a, b], [arrested, ended, undone], start)?.id).toBe('a')
+  })
+  it('treats an undone auto-jail as never having happened', () => {
+    const a = player('a', 'runner', { tag_id: 1, freed_at: iso(start + 6 * MIN) })
+    const b = player('b', 'runner', { tag_id: 2 })
+    const jailed = event('auto-jailed', start + 5 * MIN, { target_id: 'a', data: { cause: 'hijau' } })
+    const undone = event('auto-jail-undone', start + 6 * MIN, { target_id: 'a', data: { eventId: jailed.id } })
+    expect(pickWanted([a, b], [jailed, undone], start)?.id).toBe('a')
+  })
+  it('runs the stretch from the real release before an undone catch', () => {
+    // a: caught at 1, rescued at 2, caught again at 5 and that catch undone at 6 (freed_at now says 6).
+    // b: caught after the rescue and out by minute 3. a's stretch runs from minute 2, so a is wanted.
+    const a = player('a', 'runner', { tag_id: 2, freed_at: iso(start + 6 * MIN) })
+    const b = player('b', 'runner', { tag_id: 1, freed_at: iso(start + 3 * MIN) })
+    const again = caught('a', start + 5 * MIN)
+    const events = [
+      caught('a', start + MIN),
+      event('jailbreak', start + 2 * MIN, { data: { freed: 1 } }),
+      caught('b', start + 2.5 * MIN),
+      again,
+      event('kejar-undone', start + 6 * MIN, { target_id: 'a', data: { eventId: again.id } }),
+    ]
+    expect(pickWanted([a, b], events, start)?.id).toBe('a')
   })
   it('skips house arrest, jailed, disqualified and removed runners, and chasers', () => {
     const players = [
