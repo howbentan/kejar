@@ -1488,10 +1488,14 @@ describe('what views carry once an endgame is revealed (Plan E3)', () => {
       for (const me of [aina, chaser, siti]) expect(view(me).settings).not.toHaveProperty('endgames')
       expect(view(organiserMe).settings.endgames).toEqual(DEFAULT_SETTINGS.endgames)
     })
-    it('endgameOn says only whether any switch is on', () => {
+    it('endgameOn says only whether the game can roll an endgame', () => {
       const off = { bomba: 'off', hebat: 'off', pkp: 'off', banjir: 'off' } as const
-      const only = game({ settings: { ...DEFAULT_SETTINGS, endgames: { ...off, hebat: 'on' } } })
+      const only = game({ settings: { ...DEFAULT_SETTINGS, mode: 'full', endgames: { ...off, hebat: 'on' } } })
       expect(view(aina, { game: only }).endgameOn).toBe(true)
+      // Core only rolls Bomba: its switch alone decides.
+      const core = (endgames: NonNullable<typeof DEFAULT_SETTINGS.endgames>) => game({ settings: { ...DEFAULT_SETTINGS, mode: 'core', endgames } })
+      expect(view(aina, { game: core({ ...off, hebat: 'on', pkp: 'on' }) }).endgameOn).toBe(false)
+      expect(view(aina, { game: core({ ...off, bomba: 'on' }) }).endgameOn).toBe(true)
       expect(view(aina, { game: game({ settings: { ...DEFAULT_SETTINGS, endgames: off } }) }).endgameOn).toBe(false)
       const { endgames: _none, ...older } = DEFAULT_SETTINGS
       expect(view(aina, { game: game({ settings: older }) }).endgameOn).toBe(false)

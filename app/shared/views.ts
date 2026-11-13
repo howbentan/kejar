@@ -1,7 +1,7 @@
 import { alertLeadFor, checkedIn, checkinsSince, countedCheckIn, countRestartAt, fairlyWarned } from './checkins.js'
 import { alertsFrom, type Alert, type ReportReason } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
-import { endgamesOf, hebatLive, maskEndgame, revealed } from './endgame.js'
+import { hebatLive, maskEndgame, revealed, rollEndgame } from './endgame.js'
 import { distanceM, fuzz, hash, offset } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { isTicked, kitOf, packItems, placeItems, SECRET_PLACE_IDS, type KitItem, type PlaceItem, type SecretLetters } from './kit.js'
@@ -113,7 +113,10 @@ export interface View {
    * off players' and marshals' phones.
    */
   settings: Omit<Settings, 'legendaries' | 'endgames'> & { legendaries?: Settings['legendaries']; endgames?: Settings['endgames'] }
-  /** Any endgame switch is on: the how-to-play card shows. Says only that there may be one, never which. */
+  /**
+   * The game can roll an endgame (in Core, only Bomba's switch counts): the how-to-play card shows. Says only that
+   * there may be one, never which.
+   */
   endgameOn: boolean
   dots: MapDot[]
   nextRevealAt: number | null
@@ -1180,7 +1183,8 @@ function fullView(input: ViewInput): View {
     me: i.me,
     arena: i.game.arena,
     settings: organiser ? i.game.settings : withoutSecrets(i.game.settings),
-    endgameOn: (['bomba', 'hebat', 'pkp'] as const).some((k) => endgamesOf(i.game.settings)[k] === 'on'),
+    // The roll's own rule (Core only knows Bomba), asked with a fixed draw; only whether it finds a kind leaves here.
+    endgameOn: rollEndgame(i.game.settings, () => 0) !== null,
     dots,
     nextRevealAt: upcoming?.revealAt ?? null,
     nextAlertAt: upcoming?.alertAt ?? null,
