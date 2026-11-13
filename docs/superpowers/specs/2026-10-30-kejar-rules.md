@@ -56,7 +56,7 @@ Rules:
 
 **The two new legendaries** (new power-ups design §6.2, §6.3):
 - **Super Ring** (runners): switches on when found and waits in the slot. The next time the holder would go to Penjara, by any route, it's house arrest instead (§4).
-- **Mak Kau Hijau** (chasers): works on claim, like Bomoh. Every free Dikejar gets `Mak kau hijau! Tap the green in 45 s or go to Penjara.` Anyone who doesn't tap in time goes to Penjara as if auto-jailed.
+- **Mak Kau Hijau** (chasers): works on claim, like Bomoh. Every free Dikejar gets `Mak kau hijau! Tap the green in 20 s or go to Penjara.` Anyone who doesn't tap in time goes to Penjara as if auto-jailed. Tapping shows you to the Kejar where you tapped, until the next ping. Then Penjara is locked for 3 minutes: no rescue, Settle or reel (updated 2026-11-13, owner's decision).
 
 **Core's deck counts** (**Claude's call**, tune after playtests):
 - runners, per 10 runners: Durian ×3, Ponteng ×3 (6 cards);
@@ -92,7 +92,7 @@ Rules:
 | Bomoh reveal | every free Dikejar's exact live position; 1 min, or until the game ends if triggered in the last 5 min | chaser legendary design §2 |
 | Super Ring and Mak Kau Hijau hints | fuzzy zone 100–200 m, orange and green, unlabelled | new power-ups design §6.1 |
 | Super Ring house arrest | stay within 26 m for 2:36 (clock held while paused). After a catch the circle is centred where they were caught; after auto-jail or Mak Kau Hijau they have 60 s to open Kejar, and it starts at their first fresh fix. A usable fix outside, or no usable fix inside in the last 20 s at the end: Penjara | new power-ups design §6.2 |
-| Mak Kau Hijau | 45 s to tap green, one shared deadline. Nobody is jailed if the push batch went out less than 25 s before the deadline (or never went). Never overlaps a check-in window | new power-ups design §6.3 |
+| Mak Kau Hijau | 20 s to tap green, one shared deadline. A tap shows the Dikejar to every Kejar as an exact dot where they tapped (their tap's fix, else their last usable fix from 20 s before), until the next ping reveal. A run that counts locks Penjara for 3 minutes from the deadline (no rescue, Settle or reel; clock held while paused; marshal undos still work). Void, with nobody jailed, revealed or locked, if the push batch went out less than 15 s before the deadline (or never went). Never overlaps a check-in window (updated 2026-11-13) | new power-ups design §6.3 |
 | Spectator delay in Penjara | 2 min | base §4.3 |
 | SOS | hold 1 s; details card closes after 20 s | motion design §6 |
 
