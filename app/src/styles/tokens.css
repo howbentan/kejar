@@ -238,16 +238,9 @@ select.input option { background: #141614; color: var(--white); }
 .slot:disabled { cursor: default; border-style: dashed; opacity: 0.85; }
 .slot.live { background: rgba(198, 255, 61, 0.1); cursor: default; }
 .slot.empty { border-style: dashed; border-color: #444; color: var(--dim); cursor: default; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; line-height: 1.25; }
-/* Dato Seri in the slot: the same legendary yellow as its card, with the foil underneath the text. */
-.slot.legendary {
-  position: relative; overflow: hidden; border-color: var(--legendary-3); color: var(--legendary-ink);
-  background: linear-gradient(155deg, var(--legendary-1), var(--legendary-2) 55%, var(--legendary-3));
-  box-shadow: 0 0 12px rgba(255, 214, 10, 0.45); animation: legendary-glow 3.2s ease-in-out infinite;
-}
-.slot.legendary > span, .slot.legendary svg { position: relative; z-index: 2; }
-.slot.legendary b, .slot.legendary .slot-deck { color: var(--legendary-ink); }
-.slot.legendary > span > span { color: rgba(26, 20, 0, 0.75); }
-@media (prefers-reduced-motion: reduce) { .slot.legendary { animation: none; } }
+/* A legendary in the slot: the ordinary slot outline in its own colour (Dato Seri yellow, Super Ring orange). No fill or glow. */
+.slot.legendary { --leg: var(--legendary-2); border-color: var(--leg); cursor: default; }
+.slot.legendary b, .slot.legendary .slot-deck { color: var(--leg); }
 .slot-deck { flex: none; font: 500 8px var(--mono); letter-spacing: 0.1em; color: var(--volt); }
 /* A doubled card (Nasi Lemak KFC): one card, a small x2 badge. */
 .slot-x2 { flex: none; font: 700 11px var(--mono); color: var(--black); background: var(--volt); border-radius: 6px; padding: 2px 5px; }
@@ -310,15 +303,15 @@ select.input option { background: #141614; color: var(--white); }
   background-image: repeating-linear-gradient(45deg, rgba(198, 255, 61, 0.07) 0 1px, transparent 1px 10px),
     repeating-linear-gradient(-45deg, rgba(198, 255, 61, 0.07) 0 1px, transparent 1px 10px);
 }
-.power-card.legendary {
-  background: linear-gradient(155deg, var(--legendary-1), var(--legendary-2) 55%, var(--legendary-3)); border-color: var(--legendary-3);
-  color: var(--legendary-ink); box-shadow: 0 0 14px rgba(255, 214, 10, 0.45); animation: legendary-glow 3.2s ease-in-out infinite;
-}
-.power-card.legendary::before { border-color: rgba(26, 20, 0, 0.35); z-index: 2; }
-.power-card.legendary .pc-eyebrow { color: var(--legendary-ink); font-weight: 600; line-height: 1.25; letter-spacing: 0.08em; text-align: center; position: relative; z-index: 2; }
-.power-card.legendary .pc-art { background: rgba(26, 20, 0, 0.1); position: relative; z-index: 2; }
-.power-card.legendary .pc-name, .power-card.legendary .pc-effect { position: relative; z-index: 2; }
-.power-card.legendary .pc-effect { opacity: 0.85; }
+/* A legendary is the ordinary dark card in its own colour (Dato Seri yellow, Super Ring orange, Mak Kau Hijau green),
+   with marker scribbles drawn round the outside to say it's the big one. No gradient, foil or glow. */
+.power-card.legendary { --leg: var(--legendary-2); --leg-soft: rgba(255, 214, 10, 0.35); --leg-tint: rgba(255, 214, 10, 0.1); border-color: var(--leg); overflow: visible; }
+.power-card.legendary.ring { --leg: var(--ring-2); --leg-soft: rgba(255, 169, 77, 0.35); --leg-tint: rgba(255, 169, 77, 0.1); }
+.power-card.legendary.hijau { --leg: var(--hijau-2); --leg-soft: rgba(63, 168, 107, 0.4); --leg-tint: rgba(63, 168, 107, 0.12); }
+.power-card.legendary::before { border-color: var(--leg-soft); }
+.power-card.legendary .pc-eyebrow { color: var(--leg); font-weight: 600; line-height: 1.25; letter-spacing: 0.08em; text-align: center; }
+.power-card.legendary .pc-art { background: var(--leg-tint); }
+.pc-scribbles { position: absolute; left: -26px; top: -30px; width: calc(100% + 52px); height: calc(100% + 56px); pointer-events: none; overflow: visible; z-index: 3; }
 .pc-foil {
   position: absolute; inset: 0; z-index: 1; pointer-events: none; mix-blend-mode: soft-light; opacity: 0.85;
   background:
@@ -345,19 +338,7 @@ select.input option { background: #141614; color: var(--white); }
 .legendary-marker[data-still='true'] .legendary-ring { display: none; }
 
 /* Plan E2: Super Ring's cheese orange and Mak Kau Hijau's deep green, on the same legendary face, slot and ? marker. */
-.power-card.legendary.ring, .slot.legendary.ring {
-  background: linear-gradient(155deg, var(--ring-1), var(--ring-2) 55%, var(--ring-3)); border-color: var(--ring-3); color: var(--ring-ink);
-  box-shadow: 0 0 14px rgba(255, 169, 77, 0.5); animation-name: ring-glow;
-}
-.power-card.legendary.hijau {
-  background: linear-gradient(155deg, var(--hijau-1), var(--hijau-2) 55%, var(--hijau-3)); border-color: var(--hijau-3); color: var(--hijau-ink);
-  box-shadow: 0 0 14px rgba(63, 168, 107, 0.55); animation-name: hijau-glow;
-}
-.power-card.legendary.ring .pc-eyebrow, .slot.legendary.ring b, .slot.legendary.ring .slot-deck { color: var(--ring-ink); }
-.slot.legendary.ring > span > span { color: rgba(58, 26, 0, 0.75); }
-.power-card.legendary.hijau .pc-eyebrow { color: var(--hijau-ink); }
-.power-card.legendary.ring::before { border-color: rgba(58, 26, 0, 0.35); }
-.power-card.legendary.hijau::before { border-color: rgba(6, 36, 15, 0.35); }
+.slot.legendary.ring { --leg: var(--ring-2); }
 @keyframes ring-glow { 50% { box-shadow: 0 0 24px rgba(255, 169, 77, 0.85); } }
 @keyframes hijau-glow { 50% { box-shadow: 0 0 24px rgba(63, 168, 107, 0.9); } }
 .ring-marker b { background: var(--ring-2); border-color: var(--ring-3); color: var(--ring-ink); }
@@ -700,3 +681,9 @@ select.input option { background: #141614; color: var(--white); }
 .planned-start { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .planned-start .input { width: auto; padding: 8px 12px; }
 .home-scanner .card { background: #111; }
+
+/* "Mak Kau Hijau" is the longest name: a size smaller so it stays on one line and the effect line fits. */
+.power-card.legendary.hijau .pc-name { font-size: 11px; white-space: nowrap; }
+.power-card.big.legendary.hijau .pc-name { font-size: 18px; }
+.green-btn.safe { display: grid; place-items: center; }
+.bold-tick { width: 64%; height: 64%; overflow: visible; }

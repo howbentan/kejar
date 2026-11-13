@@ -270,10 +270,10 @@ describe('PowerUpHand', () => {
     expect(screen.getByText('READY')).toBeInTheDocument()
   })
 
-  it('the Dato Seri slot is legendary with a foil; every other kind gets a plain slot', () => {
+  it('the Dato Seri slot is a legendary outline with no foil; every other kind gets a plain slot', () => {
     const { rerender } = render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'dato' }] })} />)
     expect(screen.getByText('Dato Seri').closest('.slot')).toHaveClass('legendary')
-    expect(screen.getByTestId('foil')).toBeInTheDocument()
+    expect(screen.queryByTestId('foil')).toBeNull()
     rerender(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'shield' }] })} />)
     expect(screen.getByRole('button', { name: /durian/i })).not.toHaveClass('legendary')
     expect(screen.queryByTestId('foil')).toBeNull()

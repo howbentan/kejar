@@ -9,7 +9,6 @@ import { clock, useServerNow } from './time'
 import { INFO } from './powerInfo'
 import FreezePicker from './FreezePicker'
 import GrabChooser from './GrabChooser'
-import { Foil } from './PowerCard'
 import Sticker from './Sticker'
 import { ErrorText } from './ui'
 
@@ -208,7 +207,6 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 500, damping: 18 }}
               >
-                <Foil />
                 <Sticker kind="dato" size={40} tilt={-4} />
                 <span>
                   <b>{INFO.dato.name}</b>
@@ -228,7 +226,6 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 500, damping: 18 }}
               >
-                <Foil />
                 <Sticker kind="ring" size={40} tilt={-4} />
                 <span>
                   <b>{INFO.ring.name}</b>

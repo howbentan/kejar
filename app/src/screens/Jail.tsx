@@ -101,7 +101,11 @@ function AutoJailed({ code, view, reason = 'missed-checkins' }: { code: string; 
       {view.me.jailed && !view.me.freed_once && <RescueBanner view={view} />}
       <PenjaraTicket
         playerId={view.me.id}
-        variant={{ kind: 'auto', lastSeenMs: lastOk?.at ?? null }}
+        variant={
+          reason === 'hijau' || reason === 'bail-revoked'
+            ? { kind: reason, caughtAtMs: view.me.caught_at ? Date.parse(view.me.caught_at) : null }
+            : { kind: 'auto', lastSeenMs: lastOk?.at ?? null }
+        }
         distanceM={distanceM}
         outForGood={outForGood}
         settled={settled}

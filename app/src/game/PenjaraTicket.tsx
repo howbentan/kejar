@@ -19,6 +19,14 @@ function pick<T>(list: T[], id: string): T {
 type Variant =
   | { kind: 'catch'; caughtBy: string; caughtAtMs: number | null }
   | { kind: 'auto'; lastSeenMs: number | null }
+  /** Sent in without a catch or a missed check-in: Mak Kau Hijau, or leaving Super Ring's house arrest. */
+  | { kind: 'hijau' | 'bail-revoked'; caughtAtMs: number | null }
+
+/** What each way in says under STATUS, with its small English echo. */
+const REASON_STATUS = {
+  hijau: ['TAK SENTUH HIJAU', "didn't touch green"],
+  'bail-revoked': ['LANGGAR TAHANAN RUMAH', 'broke house arrest'],
+} as const
 
 export default function PenjaraTicket({
   playerId,
@@ -38,8 +46,9 @@ export default function PenjaraTicket({
   settled: boolean
 }) {
   const number = pick(TICKET_NUMBERS, playerId)
-  const status = settled ? 'FREE' : outForGood ? 'HABIS · TIADA KELUARAN' : variant.kind === 'catch' ? 'BELUM BAYAR' : 'SESSION TIMED OUT'
-  const statusEcho = settled ? 'bebas' : outForGood ? 'no further exit this round' : variant.kind === 'catch' ? 'unpaid, walk to the gate' : 'tempoh tamat, jalan ke gerbang'
+  const reason = variant.kind === 'hijau' || variant.kind === 'bail-revoked' ? REASON_STATUS[variant.kind] : null
+  const status = settled ? 'FREE' : outForGood ? 'HABIS · TIADA KELUARAN' : reason ? reason[0] : variant.kind === 'catch' ? 'BELUM BAYAR' : 'SESSION TIMED OUT'
+  const statusEcho = settled ? 'bebas' : outForGood ? 'no further exit this round' : reason ? reason[1] : variant.kind === 'catch' ? 'unpaid, walk to the gate' : 'tempoh tamat, jalan ke gerbang'
 
   return (
     <div className="toll-ticket">
@@ -63,6 +72,11 @@ export default function PenjaraTicket({
           <>
             <Field label="MASUK" value={variant.caughtAtMs !== null ? wallClock(variant.caughtAtMs) : '-'} />
             <Field label="JARAK KE GERBANG" value={distanceM !== null ? `${Math.round(distanceM / 10) * 10} M` : '-'} />
+          </>
+        ) : variant.kind !== 'auto' ? (
+          <>
+            <Field label="MASUK" value={variant.caughtAtMs !== null ? wallClock(variant.caughtAtMs) : '-'} />
+            <Field label="DISTANCE TO GATE" value={distanceM !== null ? `${Math.round(distanceM / 10) * 10} M` : '-'} />
           </>
         ) : (
           <>

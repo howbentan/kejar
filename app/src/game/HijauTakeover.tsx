@@ -1,4 +1,6 @@
+import Marker from './Marker'
 import * as m from 'motion/react-m'
+import { useReducedMotion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import type { View } from '../../shared/views.js'
 import { clock, useServerNow } from './time'
@@ -35,6 +37,9 @@ export default function HijauTakeover({ view, onTap }: { view: View; onTap: () =
   const nowRef = useRef(now)
   nowRef.current = now
   const button = useRef<HTMLButtonElement>(null)
+  const title = useRef<HTMLHeadingElement>(null)
+  const safeTitle = useRef<HTMLHeadingElement>(null)
+  const safeBtn = useRef<HTMLButtonElement>(null)
 
   // Hidden once tapped, by the server's word or by this phone's own `ok` (a slow poll may still say not tapped).
   const showing = !!run && !run.tapped && safeRun !== run.claimedAt && now >= run.startsAt
@@ -77,10 +82,11 @@ export default function HijauTakeover({ view, onTap }: { view: View; onTap: () =
     return (
       <div className="hijau-takeover" role="alertdialog" aria-modal="true" aria-label="Mak kau hijau!">
         <p className="eyebrow">MAK KAU HIJAU</p>
-        <h1>Safe!</h1>
-        <button type="button" className="green-btn safe" disabled aria-label="Tapped">
-          ✓
+        <h1 ref={safeTitle}>Safe!</h1>
+        <button ref={safeBtn} type="button" className="green-btn safe" disabled aria-label="Tapped">
+          <BoldTick />
         </button>
+        <Marker marks={[{ shape: 'stars', target: safeTitle }]} colour="white" delayMs={300} />
         <p role="status" style={{ fontWeight: 700, fontSize: 16 }}>
           Safe! You touched green.
         </p>
@@ -100,7 +106,7 @@ export default function HijauTakeover({ view, onTap }: { view: View; onTap: () =
       transition={{ duration: 0.25 }}
     >
       <p className="eyebrow">MAK KAU HIJAU</p>
-      <h1>Mak kau hijau!</h1>
+      <h1 ref={title}>Mak kau hijau!</h1>
       <div className="hijau-count" aria-live="off">
         {clock(Math.max(0, run.deadline - now))}
       </div>
@@ -108,6 +114,39 @@ export default function HijauTakeover({ view, onTap }: { view: View; onTap: () =
         Tap the green
       </button>
       <p>Tap the green in 45 s or go to Penjara.</p>
+      <Marker
+        marks={[
+          { shape: 'underline', target: title },
+          { shape: 'stars', target: title },
+          { shape: 'burst', target: button },
+        ]}
+        colour="white"
+        delayMs={150}
+      />
     </m.div>
+  )
+}
+
+/**
+ * The owner's hand-drawn tick, traced from their sketch: a short, slightly wobbly down-stroke and a long sweep up,
+ * thick black marker with round ends. Draws itself in once; still under reduced motion.
+ */
+function BoldTick() {
+  const reduce = useReducedMotion()
+  const d = 'M142 222 C156 262 166 290 186 326 C206 362 228 412 252 464 C300 408 356 338 410 264 C466 186 524 104 584 22'
+  return (
+    <svg className="bold-tick" viewBox="100 0 520 500" aria-hidden="true">
+      <m.path
+        d={d}
+        fill="none"
+        stroke="#0A0A0B"
+        strokeWidth={50}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        initial={reduce ? false : { pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={reduce ? { duration: 0 } : { duration: 0.45, ease: 'easeOut' }}
+      />
+    </svg>
   )
 }
