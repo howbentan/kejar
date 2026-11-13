@@ -185,6 +185,25 @@ describe('SupabaseStore', () => {
     expect(orders).toEqual(['at', 'id', 'at', 'id'])
   })
 
+  it("playerPositions reads one player's fixes in a time window, oldest first", async () => {
+    const calls: unknown[][] = []
+    const rows = [{ lat: 3, lng: 101, accuracy_m: 8, at: 't1' }]
+    const builder: Record<string, unknown> = {}
+    for (const m of ['select', 'eq', 'gte', 'lte']) builder[m] = (...args: unknown[]) => (calls.push([m, ...args]), builder)
+    builder.order = (col: string) => (calls.push(['order', col]), Promise.resolve({ data: rows, error: null }))
+    const db = { from: (table: string) => (calls.push(['from', table]), builder) } as unknown as SupabaseClient
+    expect(await new SupabaseStore(db, () => 0).playerPositions('g1', 'p1', 'a', 'b')).toEqual(rows)
+    expect(calls).toEqual([
+      ['from', 'locations'],
+      ['select', 'lat, lng, accuracy_m, at'],
+      ['eq', 'game_id', 'g1'],
+      ['eq', 'player_id', 'p1'],
+      ['gte', 'at', 'a'],
+      ['lte', 'at', 'b'],
+      ['order', 'at'],
+    ])
+  })
+
   it('draws a card through the draw_card function', async () => {
     const { db, rpcs } = fakeDb()
     expect(await new SupabaseStore(db, () => 0).drawCard('g1', 'chaser')).toBe(90000)
@@ -233,5 +252,82 @@ describe('SupabaseStore', () => {
     const store = new SupabaseStore(db, () => 0)
     expect(await store.arenaById('abc')).toBeNull()
     expect(await store.arenaById('')).toBeNull()
+  })
+})
+
+describe('SupabaseStore legendaries: Super Ring and Mak Kau Hijau', () => {
+  const NOW = '2026-10-25T09:07:00.000Z'
+  function rpcStore(replies: unknown[]) {
+    const rpcs: { fn: string; args: Record<string, unknown> }[] = []
+    const db = {
+      rpc: async (fn: string, args: Record<string, unknown>) => (rpcs.push({ fn, args }), { data: replies.shift(), error: null }),
+    } as unknown as SupabaseClient
+    return { rpcs, store: new SupabaseStore(db, () => Date.parse(NOW)) }
+  }
+  const arrest = {
+    firedAt: NOW, route: 'catch' as const, by: 'c1', center: null, startedAt: null, ringId: 'u1', catchEventId: null,
+  }
+
+  it('claims a Super Ring through claim_ring, returning the card or null', async () => {
+    const { rpcs, store } = rpcStore([[{ id: 'u1', kind: 'ring', player_id: 'p1' }], []])
+    expect(await store.claimRing('g1', 'p1')).toMatchObject({ id: 'u1', kind: 'ring' })
+    expect(await store.claimRing('g1', 'p2')).toBeNull()
+    expect(rpcs[0]).toEqual({ fn: 'claim_ring', args: { p_game: 'g1', p_player: 'p1', p_at: NOW } })
+  })
+
+  it('claims Mak Kau Hijau through claim_hijau with the window, true only for the winner', async () => {
+    const { rpcs, store } = rpcStore([true, false])
+    const run = { startsAt: '2026-10-25T09:07:10.000Z', deadline: '2026-10-25T09:07:55.000Z' }
+    expect(await store.claimHijau('g1', 'p1', run)).toBe(true)
+    expect(await store.claimHijau('g1', 'p2', run)).toBe(false)
+    expect(rpcs[0]).toEqual({
+      fn: 'claim_hijau',
+      args: { p_game: 'g1', p_player: 'p1', p_at: NOW, p_starts: run.startsAt, p_deadline: run.deadline },
+    })
+  })
+
+  it('sets the push once through claim_hijau_push, and taps through tap_hijau', async () => {
+    const { rpcs, store } = rpcStore([true, false, true, false])
+    expect(await store.claimHijauPush('g1', NOW, ['r1', 'r2'])).toBe(true)
+    expect(await store.claimHijauPush('g1', NOW, [])).toBe(false)
+    const fix = { lat: 3.2, lng: 101.7, at: NOW }
+    expect(await store.tapHijau('g1', 'c1', NOW, fix)).toBe(true)
+    expect(await store.tapHijau('g1', 'c1', NOW)).toBe(false)
+    expect(rpcs[0]).toEqual({ fn: 'claim_hijau_push', args: { p_game: 'g1', p_at: NOW, p_targets: ['r1', 'r2'] } })
+    expect(rpcs[2]).toEqual({ fn: 'tap_hijau', args: { p_game: 'g1', p_player: 'c1', p_at: NOW, p_fix: fix } })
+    expect(rpcs[3]).toEqual({ fn: 'tap_hijau', args: { p_game: 'g1', p_player: 'c1', p_at: NOW, p_fix: null } })
+  })
+
+  it('settles through claim_hijau_settle, returning the run or null', async () => {
+    const run = { claimedBy: 'p1', claimedAt: NOW, startsAt: NOW, deadline: NOW, sentAt: NOW, settledAt: NOW, tapped: ['c1'] }
+    const { rpcs, store } = rpcStore([run, null])
+    const until = '2026-10-25T09:10:00.000Z'
+    expect(await store.claimHijauSettle('g1', NOW, until)).toEqual(run)
+    expect(await store.claimHijauSettle('g1', NOW, null)).toBeNull()
+    expect(rpcs[0]).toEqual({ fn: 'claim_hijau_settle', args: { p_game: 'g1', p_at: NOW, p_locked_until: until } })
+    expect(rpcs[1]).toEqual({ fn: 'claim_hijau_settle', args: { p_game: 'g1', p_at: NOW, p_locked_until: null } })
+  })
+
+  it('starts, updates and ends an arrest through the arrest functions', async () => {
+    const { rpcs, store } = rpcStore([true, false, null, true, false, true])
+    expect(await store.startArrest('p1', arrest)).toBe(true)
+    expect(await store.startArrest('p1', arrest)).toBe(false)
+    await store.updateArrest('p1', { startedAt: NOW })
+    expect(await store.endArrest('p1', NOW)).toBe(true)
+    expect(await store.endArrest('p1', NOW)).toBe(false)
+    expect(await store.endArrest('p1', NOW, { waiting: true })).toBe(true)
+    expect(rpcs[0]).toEqual({ fn: 'start_arrest', args: { p_player: 'p1', p_arrest: arrest } })
+    expect(rpcs[2]).toEqual({ fn: 'update_arrest', args: { p_player: 'p1', p_patch: { startedAt: NOW } } })
+    expect(rpcs[3]).toEqual({ fn: 'end_arrest', args: { p_player: 'p1', p_fired_at: NOW, p_waiting: false } })
+    expect(rpcs[5]).toEqual({ fn: 'end_arrest', args: { p_player: 'p1', p_fired_at: NOW, p_waiting: true } })
+  })
+
+  it('reads a player arrest back with the player columns', async () => {
+    let columns = ''
+    const db = {
+      from: () => ({ select: (c: string) => ((columns = c), { eq: () => ({ is: () => ({ order: async () => ({ data: [], error: null }) }) }) }) }),
+    } as unknown as SupabaseClient
+    await new SupabaseStore(db, () => 0).players('g1')
+    expect(columns.split(', ')).toContain('arrest')
   })
 })

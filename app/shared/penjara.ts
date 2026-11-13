@@ -33,12 +33,20 @@ export function rescueVerdict(i: {
   const away = i.fixes.some((f) => {
     const at = Date.parse(f.at)
     if (at < i.rescue.startedAt || at > endsAt || !(f.accuracy_m <= RESCUE_MAX_ACCURACY_M)) return false
-    if (i.pausedAt && at >= Date.parse(i.pausedAt)) return false
-    if (i.pauses?.some((p) => at >= Date.parse(p.from) && at <= Date.parse(p.to))) return false
+    if (sentDuringPause(at, i.pauses, i.pausedAt)) return false
     return distanceM(f, i.jail) > RESCUE_RADIUS_M + Math.max(f.accuracy_m, 0)
   })
   if (away) return 'failed'
   return i.now >= endsAt ? 'success' : 'holding'
+}
+
+/**
+ * True for a fix sent during one of the game's finished pauses, or since its open one began: such a fix counts for
+ * nothing (rules §9a). Used by the rescue and by Super Ring's release check.
+ */
+export function sentDuringPause(at: number, pauses?: { from: string; to: string }[], pausedAt?: string | null): boolean {
+  if (pausedAt && at >= Date.parse(pausedAt)) return true
+  return !!pauses?.some((p) => at >= Date.parse(p.from) && at <= Date.parse(p.to))
 }
 
 /** The Penjara reel's slots (rules §9a): nine black and one lime free slot. */

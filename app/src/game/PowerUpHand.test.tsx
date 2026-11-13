@@ -81,6 +81,16 @@ describe('PowerUpHand', () => {
     expect(call).not.toHaveBeenCalled()
   })
 
+  it('a held Super Ring has no Use: it is on and waiting, in cheese orange', () => {
+    const { container } = render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'ring', station: null }] })} />)
+    expect(screen.queryByRole('button', { name: /super ring/i })).toBeNull()
+    expect(screen.getByText('Super Ring')).toBeInTheDocument()
+    expect(screen.getByText('Super Ring is on')).toBeInTheDocument()
+    expect(screen.getByText('ON · WAITING')).toBeInTheDocument()
+    expect(container.querySelector('.slot')).toHaveClass('legendary', 'ring')
+    expect(screen.getByRole('img', { name: 'Super Ring' })).toBeInTheDocument()
+  })
+
   describe('new deck cards', () => {
     const cheese: PowerUp = { ...decoy, id: 'ch1', kind: 'cheese' }
     const chasers = [{ id: 'c1', name: 'Ben' }, { id: 'c2', name: 'Aini' }]
@@ -260,10 +270,10 @@ describe('PowerUpHand', () => {
     expect(screen.getByText('READY')).toBeInTheDocument()
   })
 
-  it('the Dato Seri slot is legendary with a foil; every other kind gets a plain slot', () => {
+  it('the Dato Seri slot is a legendary outline with no foil; every other kind gets a plain slot', () => {
     const { rerender } = render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'dato' }] })} />)
     expect(screen.getByText('Dato Seri').closest('.slot')).toHaveClass('legendary')
-    expect(screen.getByTestId('foil')).toBeInTheDocument()
+    expect(screen.queryByTestId('foil')).toBeNull()
     rerender(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'shield' }] })} />)
     expect(screen.getByRole('button', { name: /durian/i })).not.toHaveClass('legendary')
     expect(screen.queryByTestId('foil')).toBeNull()

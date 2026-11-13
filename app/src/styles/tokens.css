@@ -14,6 +14,16 @@
   --bomoh-2: #C9A4FF;
   --bomoh-3: #9B5DE5;
   --bomoh-ink: #2B0B45;
+  /* Super Ring's cheese orange: clearly apart from Dato Seri's yellow, never on any other card. */
+  --ring-1: #FFE0B8;
+  --ring-2: #FFA94D;
+  --ring-3: #E8590C;
+  --ring-ink: #3A1A00;
+  /* Mak Kau Hijau's deep green: clearly apart from the Volt lime, never on any other card. */
+  --hijau-1: #CDEFD8;
+  --hijau-2: #3FA86B;
+  --hijau-3: #1B6B3F;
+  --hijau-ink: #06240F;
   --black: #0A0A0B;
   --white: #F5F5F3;
   --dim: rgba(245, 245, 243, 0.55);
@@ -228,16 +238,9 @@ select.input option { background: #141614; color: var(--white); }
 .slot:disabled { cursor: default; border-style: dashed; opacity: 0.85; }
 .slot.live { background: rgba(198, 255, 61, 0.1); cursor: default; }
 .slot.empty { border-style: dashed; border-color: #444; color: var(--dim); cursor: default; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; line-height: 1.25; }
-/* Dato Seri in the slot: the same legendary yellow as its card, with the foil underneath the text. */
-.slot.legendary {
-  position: relative; overflow: hidden; border-color: var(--legendary-3); color: var(--legendary-ink);
-  background: linear-gradient(155deg, var(--legendary-1), var(--legendary-2) 55%, var(--legendary-3));
-  box-shadow: 0 0 12px rgba(255, 214, 10, 0.45); animation: legendary-glow 3.2s ease-in-out infinite;
-}
-.slot.legendary > span, .slot.legendary svg { position: relative; z-index: 2; }
-.slot.legendary b, .slot.legendary .slot-deck { color: var(--legendary-ink); }
-.slot.legendary > span > span { color: rgba(26, 20, 0, 0.75); }
-@media (prefers-reduced-motion: reduce) { .slot.legendary { animation: none; } }
+/* A legendary in the slot: the ordinary slot outline in its own colour (Dato Seri yellow, Super Ring orange). No fill or glow. */
+.slot.legendary { --leg: var(--legendary-2); border-color: var(--leg); cursor: default; }
+.slot.legendary b, .slot.legendary .slot-deck { color: var(--leg); }
 .slot-deck { flex: none; font: 500 8px var(--mono); letter-spacing: 0.1em; color: var(--volt); }
 /* A doubled card (Nasi Lemak KFC): one card, a small x2 badge. */
 .slot-x2 { flex: none; font: 700 11px var(--mono); color: var(--black); background: var(--volt); border-radius: 6px; padding: 2px 5px; }
@@ -300,15 +303,15 @@ select.input option { background: #141614; color: var(--white); }
   background-image: repeating-linear-gradient(45deg, rgba(198, 255, 61, 0.07) 0 1px, transparent 1px 10px),
     repeating-linear-gradient(-45deg, rgba(198, 255, 61, 0.07) 0 1px, transparent 1px 10px);
 }
-.power-card.legendary {
-  background: linear-gradient(155deg, var(--legendary-1), var(--legendary-2) 55%, var(--legendary-3)); border-color: var(--legendary-3);
-  color: var(--legendary-ink); box-shadow: 0 0 14px rgba(255, 214, 10, 0.45); animation: legendary-glow 3.2s ease-in-out infinite;
-}
-.power-card.legendary::before { border-color: rgba(26, 20, 0, 0.35); z-index: 2; }
-.power-card.legendary .pc-eyebrow { color: var(--legendary-ink); font-weight: 600; line-height: 1.25; letter-spacing: 0.08em; text-align: center; position: relative; z-index: 2; }
-.power-card.legendary .pc-art { background: rgba(26, 20, 0, 0.1); position: relative; z-index: 2; }
-.power-card.legendary .pc-name, .power-card.legendary .pc-effect { position: relative; z-index: 2; }
-.power-card.legendary .pc-effect { opacity: 0.85; }
+/* A legendary is the ordinary dark card in its own colour (Dato Seri yellow, Super Ring orange, Mak Kau Hijau green),
+   with marker scribbles drawn round the outside to say it's the big one. No gradient, foil or glow. */
+.power-card.legendary { --leg: var(--legendary-2); --leg-soft: rgba(255, 214, 10, 0.35); --leg-tint: rgba(255, 214, 10, 0.1); border-color: var(--leg); overflow: visible; }
+.power-card.legendary.ring { --leg: var(--ring-2); --leg-soft: rgba(255, 169, 77, 0.35); --leg-tint: rgba(255, 169, 77, 0.1); }
+.power-card.legendary.hijau { --leg: var(--hijau-2); --leg-soft: rgba(63, 168, 107, 0.4); --leg-tint: rgba(63, 168, 107, 0.12); }
+.power-card.legendary::before { border-color: var(--leg-soft); }
+.power-card.legendary .pc-eyebrow { color: var(--leg); font-weight: 600; line-height: 1.25; letter-spacing: 0.08em; text-align: center; }
+.power-card.legendary .pc-art { background: var(--leg-tint); }
+.pc-scribbles { position: absolute; left: -26px; top: -30px; width: calc(100% + 52px); height: calc(100% + 56px); pointer-events: none; overflow: visible; z-index: 3; }
 .pc-foil {
   position: absolute; inset: 0; z-index: 1; pointer-events: none; mix-blend-mode: soft-light; opacity: 0.85;
   background:
@@ -333,6 +336,54 @@ select.input option { background: #141614; color: var(--white); }
 .bomoh-marker .legendary-ring { border-color: var(--bomoh-2); }
 .legendary-marker[data-still='true'] b, .legendary-marker[data-still='true'] .legendary-ring { animation: none; }
 .legendary-marker[data-still='true'] .legendary-ring { display: none; }
+
+/* Plan E2: Super Ring's cheese orange and Mak Kau Hijau's deep green, on the same legendary face, slot and ? marker. */
+.slot.legendary.ring { --leg: var(--ring-2); }
+@keyframes ring-glow { 50% { box-shadow: 0 0 24px rgba(255, 169, 77, 0.85); } }
+.ring-marker b { background: var(--ring-2); border-color: var(--ring-3); color: var(--ring-ink); }
+.ring-marker .legendary-ring { border-color: var(--ring-2); }
+.hijau-marker b { background: var(--hijau-2); border-color: var(--hijau-3); color: var(--hijau-ink); }
+.hijau-marker .legendary-ring { border-color: var(--hijau-2); }
+
+/* Mak Kau Hijau's takeover (tap screen A): flat green fills the runner's screen, black type, a black countdown panel
+   and one black pill, like the SOS takeover fills lime. No gradients, shine or glow. */
+.hijau-takeover {
+  position: fixed; inset: 0; z-index: 58; overflow-y: auto; background: var(--hijau-2); color: var(--black);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  padding: 28px 20px calc(28px + env(safe-area-inset-bottom)); text-align: center;
+}
+.hijau-takeover > .eyebrow { color: var(--black); opacity: 0.7; }
+.hijau-title { margin: 0 0 14px; font: 800 44px var(--font); letter-spacing: -0.06em; line-height: 1; }
+.hijau-panel {
+  width: 100%; max-width: 420px; background: var(--black); color: var(--white); border-radius: 16px; padding: 14px 16px;
+  display: grid; gap: 10px; text-align: left;
+}
+.hijau-panel-top { display: flex; justify-content: space-between; align-items: baseline; }
+.hijau-count { font: 700 34px var(--mono); letter-spacing: -0.02em; color: var(--hijau-2); }
+.hijau-panel p { margin: 0; font-size: 13px; color: var(--dim); }
+.hijau-segs { display: flex; gap: 4px; width: 100%; }
+.hijau-seg { flex: 1; height: 8px; border-radius: 4px; background: #2a2a2a; }
+.hijau-seg.on { background: var(--hijau-2); }
+.hijau-pill {
+  appearance: none; cursor: pointer; border: 0; border-radius: 999px; padding: 18px 22px; width: 100%; max-width: 420px;
+  background: var(--black); color: var(--hijau-2); font: 800 20px var(--font); letter-spacing: -0.03em;
+}
+.hijau-pill:active:not(:disabled) { transform: translateY(2px); }
+.hijau-pill:disabled { cursor: default; opacity: 0.6; }
+.hijau-stamp { padding: 30px 20px; }
+.hijau-safe-line { margin: 0; font-size: 16px; font-weight: 700; max-width: 300px; }
+
+/* Penjara locked after Mak Kau Hijau: a dark pill with a deep-green edge and the countdown in green mono. */
+.penjara-lock {
+  align-self: flex-start; display: inline-flex; align-items: baseline; gap: 6px; padding: 7px 14px; border-radius: 999px;
+  background: var(--black); border: 1.5px solid var(--hijau-2); color: var(--white); font: 600 13px var(--font);
+}
+.penjara-lock .mono { font: 700 13px var(--mono); color: var(--hijau-2); }
+
+/* Super Ring's house arrest screen. */
+.arrest-count { font: 700 64px var(--mono); letter-spacing: -0.05em; color: var(--ring-2); line-height: 1; }
+.arrest-chip { align-self: flex-start; border: 1.5px solid var(--ring-2); color: var(--ring-2); border-radius: 999px; padding: 5px 10px; font: 500 10px var(--mono); letter-spacing: 0.1em; }
+.arrest-stop { color: var(--ring-2); }
 .pc-corner { position: absolute; width: 10px; height: 10px; border: 0 solid var(--volt); }
 .pc-corner.tl { top: 8px; left: 8px; border-top-width: 2px; border-left-width: 2px; }
 .pc-corner.tr { top: 8px; right: 8px; border-top-width: 2px; border-right-width: 2px; }
@@ -476,7 +527,6 @@ select.input option { background: #141614; color: var(--white); }
 .toll-ticket-head { display: flex; justify-content: space-between; align-items: flex-start; }
 .toll-ticket-brand { margin: 0; font-weight: 800; font-size: 13px; letter-spacing: -0.01em; }
 .toll-ticket-kind, .toll-ticket-label { margin: 1px 0 0; font-size: 9px; letter-spacing: 0.08em; color: rgba(10, 10, 11, 0.5); }
-.toll-ticket-echo { margin: 0; font-size: 8px; letter-spacing: 0.04em; color: rgba(10, 10, 11, 0.5); font-style: italic; }
 .toll-ticket-gate { margin: 0; font-size: 14px; font-weight: 800; }
 .toll-ticket-number { margin: 12px 0 2px; font-size: 32px; font-weight: 900; letter-spacing: -0.01em; line-height: 1; }
 .toll-ticket-fields { display: flex; gap: 22px; margin-top: 12px; }
@@ -539,6 +589,8 @@ select.input option { background: #141614; color: var(--white); }
 @media (prefers-reduced-motion: reduce) { .reel-machine.shake, .reel-flash { animation: none; } .reel-flash { opacity: 0; } .reel-handle { transition: none; } }
 .btn.btn-legendary { background: var(--legendary-2); color: var(--legendary-ink); border-color: var(--legendary-3); }
 .btn.btn-bomoh { background: var(--bomoh-2); color: var(--bomoh-ink); border-color: var(--bomoh-3); }
+.btn.btn-ring { background: var(--ring-2); color: var(--ring-ink); border-color: var(--ring-3); }
+.btn.btn-hijau { background: var(--hijau-2); color: var(--hijau-ink); border-color: var(--hijau-3); }
 
 /* How to play doodle scenes (motion design 8.8): marker strokes that draw themselves, then stay still. */
 .kd-doodle path, .kd-doodle circle, .kd-doodle rect { fill: none; stroke: var(--volt); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
@@ -643,3 +695,7 @@ select.input option { background: #141614; color: var(--white); }
 .planned-start { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .planned-start .input { width: auto; padding: 8px 12px; }
 .home-scanner .card { background: #111; }
+
+/* "Mak Kau Hijau" is the longest name: a size smaller so it stays on one line and the effect line fits. */
+.power-card.legendary.hijau .pc-name { font-size: 11px; white-space: nowrap; }
+.power-card.big.legendary.hijau .pc-name { font-size: 18px; }

@@ -5,10 +5,16 @@ import {
   bomohQr,
   datoCodeFromQr,
   datoQr,
+  hijauCodeFromQr,
+  hijauQr,
   isBomohQr,
   isDatoQr,
+  isHijauQr,
+  isRingQr,
   JAIL_QR,
   newGameCode,
+  ringCodeFromQr,
+  ringQr,
   stationFromQr,
   stationQr,
   tagIdFromQr,
@@ -56,6 +62,33 @@ describe("Bomoh's card QR (ruling R15)", () => {
     expect(isBomohQr('KEJAR:DATO:aB3_-x')).toBe(false)
     expect(bomohCodeFromQr('KEJAR:DATO:aB3_-x')).toBeNull()
     expect(datoCodeFromQr('KEJAR:BOMOH:aB3_-x')).toBeNull()
+  })
+})
+
+describe("Super Ring's and Mak Kau Hijau's card QRs", () => {
+  it("carry this game's own code, and read it back", () => {
+    expect(ringQr('aB3_-x')).toBe('KEJAR:RING:aB3_-x')
+    expect(ringCodeFromQr(' KEJAR:RING:aB3_-x ')).toBe('aB3_-x')
+    expect(hijauQr('aB3_-x')).toBe('KEJAR:HIJAU:aB3_-x')
+    expect(hijauCodeFromQr(' KEJAR:HIJAU:aB3_-x ')).toBe('aB3_-x')
+  })
+  it('a bare or malformed card has no code, but still counts as a card scan', () => {
+    for (const [is, codeOf, p] of [
+      [isRingQr, ringCodeFromQr, 'RING'],
+      [isHijauQr, hijauCodeFromQr, 'HIJAU'],
+    ] as const) {
+      for (const t of [`KEJAR:${p}`, `KEJAR:${p}:`, `KEJAR:${p}:a b`, `KEJAR:${p}:x:y`]) {
+        expect(codeOf(t)).toBeNull()
+        expect(is(t)).toBe(true)
+      }
+      expect(is(`KEJAR:${p}X`)).toBe(false)
+      expect(is('KEJAR:BOMOH:aB3_-x')).toBe(false)
+      expect(is('KEJAR:DATO:aB3_-x')).toBe(false)
+    }
+    expect(isRingQr('KEJAR:HIJAU:aB3_-x')).toBe(false)
+    expect(isHijauQr('KEJAR:RING:aB3_-x')).toBe(false)
+    expect(isDatoQr('KEJAR:RING:aB3_-x')).toBe(false)
+    expect(isBomohQr('KEJAR:HIJAU:aB3_-x')).toBe(false)
   })
 })
 

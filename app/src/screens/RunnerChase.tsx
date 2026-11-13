@@ -3,16 +3,21 @@ import type { BreakJudgement } from '../../shared/catch.js'
 import { RESCUE_HOLD_MS, RESCUE_PING_MS } from '../../shared/penjara.js'
 import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
-import { isBomohQr, isDatoQr, stationFromQr } from '../../shared/ids.js'
+import { penjaraLockedLine } from '../../shared/hijau.js'
+import { isBomohQr, isDatoQr, isHijauQr, isRingQr, stationFromQr } from '../../shared/ids.js'
 import AlertsCard from '../game/AlertsCard'
 import { call } from '../game/api'
 import ChaseLayout from '../game/ChaseLayout'
 import { currentCoords } from '../game/here'
 import CheckinBanner from '../game/CheckinBanner'
+import HijauTakeover, { type TapResult } from '../game/HijauTakeover'
 import { dipFor } from '../game/LuckyDip'
 import PowerUpHand, { claimMessage, stashMessage, type ClaimResult } from '../game/PowerUpHand'
 import { loadSession } from '../game/session'
 import { clock, useServerNow } from '../game/time'
+
+/** A green tap waits at most this long for a fix that's ready, so a last-second tap still lands in time. */
+const TAP_FIX_WAIT_MS = 300
 
 /** The full feed as a list, for screens without the dock (Penjara, the marshal). */
 export function Feed({ view }: { view: View }) {
@@ -74,20 +79,29 @@ function HoldRing({ endsAt, now }: { endsAt: number; now: number }) {
   )
 }
 
-/** The rescuer's phone sends its location every RESCUE_PING_MS while holding: the server judges each fix. */
-function useRescuePings(code: string, holding: boolean) {
+/**
+ * While `active`, this phone asks for a fresh fix every `everyMs` and sends it, even when it's standing still (a still
+ * phone's position watch may report nothing). With `now`, the first one goes straight away.
+ */
+export function useLocationPings(code: string, active: boolean, everyMs: number, now = false) {
   useEffect(() => {
-    if (!holding) return
+    if (!active) return
     const token = loadSession(localStorage, code).token
     if (!token) return
-    const id = setInterval(() => {
-      void currentCoords(RESCUE_PING_MS).then((c) => {
+    const ping = () =>
+      void currentCoords(everyMs).then((c) => {
         if (typeof c.lat !== 'number' || typeof c.lng !== 'number') return
         return call('location', { code, token, ...c }).catch(() => undefined)
       })
-    }, RESCUE_PING_MS)
+    if (now) ping()
+    const id = setInterval(ping, everyMs)
     return () => clearInterval(id)
-  }, [code, holding])
+  }, [code, active, everyMs, now])
+}
+
+/** The rescuer's phone sends its location every RESCUE_PING_MS while holding: the server judges each fix. */
+function useRescuePings(code: string, holding: boolean) {
+  useLocationPings(code, holding, RESCUE_PING_MS)
 }
 
 const tagOf = (view: View) => (view.me.tag_id ? `#${String(view.me.tag_id).padStart(2, '0')}` : view.me.name.toUpperCase())
@@ -123,9 +137,10 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
     if (s.action === 'jailbreak') {
       const b = r as BreakResult
       if (b.ok) return b.rescue === 'joined' ? 'You joined the rescue. Stay close!' : 'Rescue on! Stay close to Penjara for 10 s.'
+      if (b.reason === 'penjara-locked' && 'lockedMs' in b) return penjaraLockedLine(b.lockedMs)
       return BREAK_REJECTIONS[b.reason] ?? 'Nobody freed'
     }
-    if (isDatoQr(text) || isBomohQr(text)) return stashMessage(r as ClaimResult, 'runner')
+    if (isDatoQr(text) || isBomohQr(text) || isRingQr(text) || isHijauQr(text)) return stashMessage(r as ClaimResult, 'runner')
     return claimMessage(r as ClaimResult, stationFromQr(text))
   }, [])
   const deckLeft = view.deckLeft
@@ -134,48 +149,64 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
     [deckLeft],
   )
 
+  // Mak Kau Hijau: one tap of the green pill, sent with my token and where I am (the Kejar see the spot). The tap
+  // never waits on GPS: it takes whatever fix is ready within TAP_FIX_WAIT_MS, else none, and the server uses my
+  // last stored fix. The takeover retries a lost tap.
+  const tapGreen = useCallback(async (): Promise<TapResult> => {
+    const token = loadSession(localStorage, code).token
+    if (!token) return { ok: false, reason: 'no-token' }
+    const here = await Promise.race([
+      currentCoords(TAP_FIX_WAIT_MS),
+      new Promise<Record<string, never>>((resolve) => window.setTimeout(() => resolve({}), TAP_FIX_WAIT_MS)),
+    ])
+    return call<TapResult>('touchGreen', { code, token, ...here })
+  }, [code])
+
   return (
-    <ChaseLayout
-      code={code}
-      view={view}
-      side="runner"
-      title={`DIKEJAR ${tagOf(view)}`}
-      chips={
-        <>
-          {checkin && !banner && (
-            <span className="chip">{`Check in in ${clock(Math.max(0, checkin.alertAt - now))}`}</span>
-          )}
-          {view.chaserNearby && (
-            <span className="chip warn">
-              <i />
-              Kejar within 100 m
-            </span>
-          )}
-        </>
-      }
-      overlay={
-        <>
-          {view.outWarned && (
-            <div role="alert" className="chase-warning">
-              <p style={{ fontWeight: 700 }}>{LUAR_GARISAN_WARN}</p>
-            </div>
-          )}
-          {locationOff && (
-            <div role="alert" className="chase-warning">
-              <p style={{ fontWeight: 700 }}>Location is off, so you'll miss check-ins and be sent to Penjara.</p>
-              <p className="muted">Turn on location for this site in your browser settings.</p>
-            </div>
-          )}
-          {inHold && <HoldRing endsAt={rescue.endsAt} now={holdNow} />}
-          {view.me.role === 'runner' && <AlertsCard code={code} view={view} />}
-          {banner && <CheckinBanner checkin={checkin} now={now} openedByPush={openedByPush} />}
-        </>
-      }
-      slot={<PowerUpHand code={code} view={view} />}
-      scanLabel="Scan"
-      scanClass="scan-runner"
-      describe={describe}
-      momentFor={momentFor}
-    />
+    <>
+      <HijauTakeover view={view} onTap={tapGreen} />
+      <ChaseLayout
+        code={code}
+        view={view}
+        side="runner"
+        title={`DIKEJAR ${tagOf(view)}`}
+        chips={
+          <>
+            {checkin && !banner && (
+              <span className="chip">{`Check in in ${clock(Math.max(0, checkin.alertAt - now))}`}</span>
+            )}
+            {view.chaserNearby && (
+              <span className="chip warn">
+                <i />
+                Kejar within 100 m
+              </span>
+            )}
+          </>
+        }
+        overlay={
+          <>
+            {view.outWarned && (
+              <div role="alert" className="chase-warning">
+                <p style={{ fontWeight: 700 }}>{LUAR_GARISAN_WARN}</p>
+              </div>
+            )}
+            {locationOff && (
+              <div role="alert" className="chase-warning">
+                <p style={{ fontWeight: 700 }}>Location is off, so you'll miss check-ins and be sent to Penjara.</p>
+                <p className="muted">Turn on location for this site in your browser settings.</p>
+              </div>
+            )}
+            {inHold && <HoldRing endsAt={rescue.endsAt} now={holdNow} />}
+            {view.me.role === 'runner' && <AlertsCard code={code} view={view} />}
+            {banner && <CheckinBanner checkin={checkin} now={now} openedByPush={openedByPush} />}
+          </>
+        }
+        slot={<PowerUpHand code={code} view={view} />}
+        scanLabel="Scan"
+        scanClass="scan-runner"
+        describe={describe}
+        momentFor={momentFor}
+      />
+    </>
   )
 }

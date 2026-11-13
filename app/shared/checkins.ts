@@ -1,5 +1,5 @@
 import { BONUS_SEQ_BASE, SCHEDULED_ALERT_LEAD_MS } from './clock.js'
-import type { CheckinMode } from './types.js'
+import type { CheckinMode, GameEvent, Player } from './types.js'
 
 export { SCHEDULED_ALERT_LEAD_MS }
 /** Mat Rempit (Flare) bonus pings keep a 30 s alert, and never count towards auto-jail. */
@@ -21,6 +21,18 @@ export function checkedIn(alertAt: number, revealAt: number, lastAt: number | nu
  */
 export function checkinsSince(chaseStart: number, freedAt: string | null): number {
   return Math.max(chaseStart, freedAt ? Date.parse(freedAt) : -Infinity)
+}
+
+/**
+ * When a runner's check-in count last restarted (the `freedAt` for `checkinsSince`): their last release from
+ * Penjara (`freed_at`), or the end of a Super Ring house arrest that let them go (released, or undone). House
+ * arrest replaces Penjara, so it restarts the count like the auto-jail undo does, but it never sets `freed_at`,
+ * which would play the client's "freed" Penjara moment for someone who never went in.
+ */
+export function countRestartAt(p: Pick<Player, 'id' | 'freed_at'>, events: GameEvent[]): string | null {
+  const ended = events.filter((e) => e.type === 'arrest-ended' && e.target_id === p.id && (e.data.outcome === 'free' || e.data.outcome === 'undone')).at(-1)
+  if (!ended) return p.freed_at
+  return !p.freed_at || Date.parse(ended.at) > Date.parse(p.freed_at) ? ended.at : p.freed_at
 }
 
 /** A check-in that counts: the ping's alert went out at or after `since`, and a location landed in its window. */

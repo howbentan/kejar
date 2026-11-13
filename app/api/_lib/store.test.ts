@@ -597,18 +597,20 @@ describe('MemoryStore.addPosition gap', () => {
 })
 
 describe('MemoryStore secret card sets', () => {
-  it('the first read of a secret card set makes six ready cards: A-C yellow and A-C purple', async () => {
+  it('the first read of a secret card set makes twelve ready cards: A-C yellow, orange, purple and green', async () => {
     const cards = await store.secretCards('org1')
-    expect(cards.map((c) => `${c.legendary}:${c.letter}`).sort()).toEqual(['bomoh:A', 'bomoh:B', 'bomoh:C', 'dato:A', 'dato:B', 'dato:C'])
+    expect(cards.map((c) => `${c.legendary}:${c.letter}`).sort()).toEqual([
+      'bomoh:A', 'bomoh:B', 'bomoh:C', 'dato:A', 'dato:B', 'dato:C', 'hijau:A', 'hijau:B', 'hijau:C', 'ring:A', 'ring:B', 'ring:C',
+    ])
     for (const c of cards) {
       expect(c).toMatchObject({ organisation_id: 'org1', state: 'ready', found_at: null })
       expect(c.code).toMatch(/^[A-Za-z0-9_-]{22}$/)
     }
-    expect(new Set(cards.map((c) => c.code)).size).toBe(6)
-    // A second read finds the same six, and another organisation has its own.
+    expect(new Set(cards.map((c) => c.code)).size).toBe(12)
+    // A second read finds the same twelve, and another organisation has its own.
     expect(await store.secretCards('org1')).toEqual(cards)
     const other = await store.secretCards('org2')
-    expect(other).toHaveLength(6)
+    expect(other).toHaveLength(12)
     expect(other.some((c) => cards.some((x) => x.id === c.id || x.code === c.code))).toBe(false)
   })
 
@@ -641,6 +643,14 @@ describe('MemoryStore secret card sets', () => {
     expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id].sort())
     await store.updateGame(oldLobby2.id, { bomoh_stash: { code: 'd', lat: 3, lng: 4, claimedBy: null, claimedAt: null } })
     expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id, oldLobby2.id].sort())
+    // And for Super Ring's and Mak Kau Hijau's.
+    const oldLobby3 = await store.createGame({ ...(rest as never), code: 'FFF222', organiser_id: b.id, started_at: null })
+    const oldLobby4 = await store.createGame({ ...(rest as never), code: 'GGG222', organiser_id: b.id, started_at: null })
+    await store.updateGame(oldLobby3.id, { ring_stash: { code: 'e', lat: 5, lng: 6, claimedBy: null, claimedAt: null } })
+    await store.updateGame(oldLobby4.id, { hijau_stash: { code: 'f', lat: 7, lng: 8, claimedBy: null, claimedAt: null } })
+    expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual(
+      [g1.id, g2.id, oldLobby.id, oldLobby2.id, oldLobby3.id, oldLobby4.id].sort(),
+    )
   })
 })
 
@@ -894,5 +904,231 @@ describe('MemoryStore new deck cards', () => {
     const rows = await store.players(g.id)
     expect(rows.find((x) => x.id === c.id)!.frozen_until).toBe(iso(T0 + 7 * MIN))
     expect(rows.find((x) => x.id === d.id)!.frozen_until).toBe(iso(T0 + MIN))
+  })
+})
+
+describe('MemoryStore legendaries: Super Ring and Mak Kau Hijau', () => {
+  const stash = (over = {}) => ({ lat: 3.1, lng: 101.6, claimedBy: null, claimedAt: null, ...over })
+  const arrestOf = (over = {}) => ({
+    firedAt: iso(T0), route: 'catch' as const, by: 'c1', center: null, startedAt: null, ringId: 'u1', catchEventId: null, ...over,
+  })
+  const runOf = (over = {}) => ({ startsAt: iso(T0 + 10_000), deadline: iso(T0 + 55_000), ...over })
+
+  it('claimRing hands the claimer a ring card once, and nothing when no stash is dropped', async () => {
+    const g = await startedGame()
+    expect(await store.claimRing(g.id, 'p1')).toBeNull()
+    await store.updateGame(g.id, { ring_stash: stash() })
+    const card = await store.claimRing(g.id, 'p1')
+    expect(card).toMatchObject({ kind: 'ring', player_id: 'p1', game_id: g.id, sealed: false, used_at: null })
+    expect((await store.gameByCode('ABC234'))!.ring_stash).toMatchObject({ claimedBy: 'p1', claimedAt: iso(T0) })
+    expect(await store.claimRing(g.id, 'p2')).toBeNull()
+    expect((await store.powerUps(g.id)).filter((u) => u.kind === 'ring')).toHaveLength(1)
+  })
+
+  it('claimHijau lets one caller win, marks the stash and writes the run', async () => {
+    const g = await startedGame()
+    expect(await store.claimHijau(g.id, 'p1', runOf())).toBe(false)
+    await store.updateGame(g.id, { hijau_stash: stash() })
+    const results = await Promise.all([store.claimHijau(g.id, 'p1', runOf()), store.claimHijau(g.id, 'p2', runOf())])
+    expect(results.filter(Boolean)).toHaveLength(1)
+    const row = (await store.gameByCode('ABC234'))!
+    expect(row.hijau_stash).toMatchObject({ claimedBy: 'p1', claimedAt: iso(T0) })
+    expect(row.hijau).toEqual({
+      claimedBy: 'p1', claimedAt: iso(T0), startsAt: iso(T0 + 10_000), deadline: iso(T0 + 55_000), sentAt: null, settledAt: null, tapped: [], targets: [],
+      fixes: {}, lockedUntil: null,
+    })
+  })
+
+  it('claimHijauPush sets sentAt and the targets once', async () => {
+    const g = await startedGame()
+    expect(await store.claimHijauPush(g.id, iso(T0), ['r1'])).toBe(false) // no run yet
+    await store.updateGame(g.id, { hijau_stash: stash() })
+    await store.claimHijau(g.id, 'p1', runOf())
+    expect(await store.claimHijauPush(g.id, iso(T0 + 11_000), ['r1', 'r2'])).toBe(true)
+    expect(await store.claimHijauPush(g.id, iso(T0 + 12_000), ['r3'])).toBe(false)
+    expect((await store.gameByCode('ABC234'))!.hijau).toMatchObject({ sentAt: iso(T0 + 11_000), targets: ['r1', 'r2'] })
+  })
+
+  it('tapHijau is false once the run has settled, even before the deadline', async () => {
+    const g = await startedGame()
+    await store.updateGame(g.id, { hijau_stash: stash() })
+    await store.claimHijau(g.id, 'p1', runOf())
+    await store.claimHijauSettle(g.id, iso(T0 + 30_000))
+    expect(await store.tapHijau(g.id, 'c1', iso(T0 + 30_000))).toBe(false)
+    expect((await store.gameByCode('ABC234'))!.hijau!.tapped).toEqual([])
+  })
+
+  it('tapHijau counts a player once and only before the deadline', async () => {
+    const g = await startedGame()
+    await store.updateGame(g.id, { hijau_stash: stash() })
+    await store.claimHijau(g.id, 'p1', runOf())
+    expect(await store.tapHijau(g.id, 'c1', iso(T0 + 20_000))).toBe(true)
+    expect(await store.tapHijau(g.id, 'c1', iso(T0 + 21_000))).toBe(false)
+    expect(await store.tapHijau(g.id, 'c2', iso(T0 + 55_000))).toBe(false) // at the deadline
+    expect(await store.tapHijau(g.id, 'c3', iso(T0 + 56_000))).toBe(false) // after it
+    expect(await store.tapHijau(g.id, 'c4', iso(T0 + 54_999))).toBe(true)
+    expect((await store.gameByCode('ABC234'))!.hijau!.tapped).toEqual(['c1', 'c4'])
+  })
+
+  it('tapHijau keeps where the runner tapped, when the tap carries a fix', async () => {
+    const g = await startedGame()
+    await store.updateGame(g.id, { hijau_stash: stash() })
+    await store.claimHijau(g.id, 'p1', runOf())
+    const fix = { lat: 3.2, lng: 101.7, at: iso(T0 + 20_000) }
+    expect(await store.tapHijau(g.id, 'c1', iso(T0 + 20_000), fix)).toBe(true)
+    expect(await store.tapHijau(g.id, 'c2', iso(T0 + 21_000))).toBe(true)
+    // A repeat tap never moves the spot.
+    expect(await store.tapHijau(g.id, 'c1', iso(T0 + 22_000), { lat: 9, lng: 9, at: iso(T0 + 22_000) })).toBe(false)
+    expect((await store.gameByCode('ABC234'))!.hijau).toMatchObject({ tapped: ['c1', 'c2'], fixes: { c1: fix } })
+  })
+
+  it('tapHijau is false when there is no run', async () => {
+    const g = await startedGame()
+    expect(await store.tapHijau(g.id, 'c1', iso(T0))).toBe(false)
+  })
+
+  it('claimHijauSettle returns the run once, then null', async () => {
+    const g = await startedGame()
+    expect(await store.claimHijauSettle(g.id, iso(T0))).toBeNull()
+    await store.updateGame(g.id, { hijau_stash: stash() })
+    await store.claimHijau(g.id, 'p1', runOf())
+    await store.tapHijau(g.id, 'c1', iso(T0 + 20_000))
+    const run = await store.claimHijauSettle(g.id, iso(T0 + 60_000), iso(T0 + 55_000 + 3 * MIN))
+    expect(run).toMatchObject({ claimedBy: 'p1', tapped: ['c1'], settledAt: iso(T0 + 60_000), lockedUntil: iso(T0 + 55_000 + 3 * MIN) })
+    expect((await store.gameByCode('ABC234'))!.hijau!.lockedUntil).toBe(iso(T0 + 55_000 + 3 * MIN))
+    expect(await store.claimHijauSettle(g.id, iso(T0 + 61_000), null)).toBeNull()
+  })
+
+  it('startArrest only works when not arrested and not jailed', async () => {
+    const g = await startedGame()
+    const r = await newPlayer(g.id, 'runner')
+    const jailed = await newPlayer(g.id, 'jailed')
+    await store.updatePlayers([{ id: jailed.id, patch: { jailed: true } }])
+    expect(await store.startArrest(jailed.id, arrestOf())).toBe(false)
+    expect(await store.startArrest(r.id, arrestOf())).toBe(true)
+    expect(await store.startArrest(r.id, arrestOf({ firedAt: iso(T0 + MIN) }))).toBe(false)
+    expect((await store.players(g.id)).find((p) => p.id === r.id)!.arrest).toEqual(arrestOf())
+    expect(await store.startArrest('nobody', arrestOf())).toBe(false)
+  })
+
+  it('updateArrest patches an arrest, and does nothing without one', async () => {
+    const g = await startedGame()
+    const r = await newPlayer(g.id, 'runner')
+    await store.updateArrest(r.id, { startedAt: iso(T0 + MIN) })
+    expect((await store.players(g.id))[0].arrest ?? null).toBeNull()
+    await store.startArrest(r.id, arrestOf())
+    await store.updateArrest(r.id, { center: { lat: 3.1, lng: 101.6 }, startedAt: iso(T0 + MIN) })
+    expect((await store.players(g.id))[0].arrest).toEqual(arrestOf({ center: { lat: 3.1, lng: 101.6 }, startedAt: iso(T0 + MIN) }))
+  })
+
+  it('endArrest clears only a matching arrest, once', async () => {
+    const g = await startedGame()
+    const r = await newPlayer(g.id, 'runner')
+    await store.startArrest(r.id, arrestOf())
+    expect(await store.endArrest(r.id, iso(T0 - MIN))).toBe(false) // stale firedAt
+    expect((await store.players(g.id))[0].arrest).not.toBeNull()
+    const results = await Promise.all([store.endArrest(r.id, iso(T0)), store.endArrest(r.id, iso(T0))])
+    expect(results.filter(Boolean)).toHaveLength(1)
+    expect((await store.players(g.id))[0].arrest).toBeNull()
+  })
+
+  it('endArrest with waiting clears only an arrest that has not started (a no-show never beats an opening fix)', async () => {
+    const g = await startedGame()
+    const r = await newPlayer(g.id, 'runner')
+    await store.startArrest(r.id, arrestOf({ center: null, startedAt: null }))
+    await store.updateArrest(r.id, { center: { lat: 3.1, lng: 101.6 }, startedAt: iso(T0 + 30_000) })
+    expect(await store.endArrest(r.id, iso(T0), { waiting: true })).toBe(false)
+    expect((await store.players(g.id))[0].arrest).not.toBeNull()
+    expect(await store.endArrest(r.id, iso(T0))).toBe(true)
+    await store.startArrest(r.id, arrestOf({ center: null, startedAt: null }))
+    expect(await store.endArrest(r.id, iso(T0), { waiting: true })).toBe(true)
+    expect((await store.players(g.id))[0].arrest).toBeNull()
+  })
+
+  it('stealFrom never takes a Super Ring, just as it never takes Dato Seri', async () => {
+    const g = await startedGame()
+    const r = await newPlayer(g.id, 'runner')
+    await store.addPowerUp({ game_id: g.id, player_id: r.id, kind: 'ring', station: null })
+    await store.addPowerUp({ game_id: g.id, player_id: r.id, kind: 'dato', station: null })
+    expect(await store.stealFrom(g.id, 'runner')).toBeNull()
+    const decoy = await store.addPowerUp({ game_id: g.id, player_id: r.id, kind: 'decoy', station: 1 })
+    expect(await store.stealFrom(g.id, 'runner')).toMatchObject({ kind: 'decoy', powerupId: decoy.id })
+  })
+
+  it('resumeGame moves an arrest that started before the pause later by it', async () => {
+    const g = await startedGame()
+    const a = await newPlayer(g.id, 'a')
+    const b = await newPlayer(g.id, 'b')
+    const c = await newPlayer(g.id, 'c')
+    await store.startArrest(a.id, arrestOf({ firedAt: iso(T0), startedAt: iso(T0 + MIN), center: { lat: 1, lng: 1 } }))
+    await store.startArrest(b.id, arrestOf({ firedAt: iso(T0 + 2.5 * MIN) })) // waiting, fired during the pause
+    await store.startArrest(c.id, arrestOf({ firedAt: iso(T0 + 30_000) })) // waiting, fired before the pause
+    now = T0 + 2 * MIN
+    await store.pauseGame(g.id)
+    now = T0 + 3 * MIN
+    await store.resumeGame(g.id)
+    const rows = await store.players(g.id)
+    expect(rows.find((p) => p.id === a.id)!.arrest!.startedAt).toBe(iso(T0 + 2 * MIN))
+    expect(rows.find((p) => p.id === a.id)!.arrest!.firedAt).toBe(iso(T0)) // not waiting, so it stays
+    // fired during the pause: it counts from the resume
+    expect(rows.find((p) => p.id === b.id)!.arrest!.firedAt).toBe(iso(T0 + 3 * MIN))
+    expect(rows.find((p) => p.id === c.id)!.arrest!.firedAt).toBe(iso(T0 + 30_000 + MIN))
+  })
+
+  it('resumeGame moves a running Mak Kau Hijau window by the pause, and leaves a finished one alone', async () => {
+    const g = await startedGame()
+    await store.updateGame(g.id, { hijau_stash: stash() })
+    await store.claimHijau(g.id, 'p1', { startsAt: iso(T0 + 1 * MIN), deadline: iso(T0 + 3 * MIN) })
+    now = T0 + 2 * MIN
+    await store.pauseGame(g.id)
+    now = T0 + 3 * MIN
+    await store.resumeGame(g.id)
+    const run = (await store.gameByCode('ABC234'))!.hijau!
+    expect(run.startsAt).toBe(iso(T0 + 2 * MIN))
+    expect(run.deadline).toBe(iso(T0 + 4 * MIN))
+    // A window that closed before the next pause is not moved.
+    now = T0 + 5 * MIN
+    await store.pauseGame(g.id)
+    now = T0 + 6 * MIN
+    await store.resumeGame(g.id)
+    expect((await store.gameByCode('ABC234'))!.hijau).toMatchObject({ startsAt: iso(T0 + 2 * MIN), deadline: iso(T0 + 4 * MIN) })
+  })
+
+  it("resumeGame moves Penjara's lock by the pause while it runs, and leaves an expired one alone", async () => {
+    const g = await startedGame()
+    await store.updateGame(g.id, { hijau_stash: stash() })
+    await store.claimHijau(g.id, 'p1', { startsAt: iso(T0), deadline: iso(T0 + MIN) })
+    await store.claimHijauSettle(g.id, iso(T0 + MIN), iso(T0 + 4 * MIN))
+    now = T0 + 2 * MIN
+    await store.pauseGame(g.id)
+    now = T0 + 3 * MIN
+    await store.resumeGame(g.id)
+    expect((await store.gameByCode('ABC234'))!.hijau).toMatchObject({ deadline: iso(T0 + MIN), lockedUntil: iso(T0 + 5 * MIN) })
+    now = T0 + 6 * MIN
+    await store.pauseGame(g.id)
+    now = T0 + 7 * MIN
+    await store.resumeGame(g.id)
+    expect((await store.gameByCode('ABC234'))!.hijau!.lockedUntil).toBe(iso(T0 + 5 * MIN))
+  })
+
+  it('wiping a game clears every arrest centre', async () => {
+    const g = await startedGame()
+    const r = await newPlayer(g.id, 'runner')
+    await store.startArrest(r.id, arrestOf({ center: { lat: 3.123, lng: 101.456 }, startedAt: iso(T0) }))
+    await store.wipeGame(g.id)
+    expect((await store.players(g.id))[0].arrest ?? null).toBeNull()
+    expect(JSON.stringify((store as unknown as { playerRows: unknown[] }).playerRows)).not.toContain('3.123')
+  })
+
+  it("wiping a game clears Mak Kau Hijau's tap spots (runners' exact positions) and keeps the rest of the run", async () => {
+    const g = await startedGame()
+    await store.updateGame(g.id, { hijau_stash: stash() })
+    await store.claimHijau(g.id, 'p1', runOf())
+    await store.tapHijau(g.id, 'c1', iso(T0 + 20_000), { lat: 3.987, lng: 101.654, at: iso(T0 + 20_000) })
+    await store.wipeGame(g.id)
+    const run = (await store.gameByCode('ABC234'))!.hijau!
+    expect(run.fixes).toBeUndefined()
+    expect(run.tapped).toEqual(['c1'])
+    expect(JSON.stringify(run)).not.toContain('3.987')
   })
 })

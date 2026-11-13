@@ -4,7 +4,7 @@ import { MIN, T0 } from '../../shared/fixtures.js'
 import { BONUS_SEQ_BASE } from '../../shared/clock.js'
 import { cardAt, deckFor } from '../../shared/deck.js'
 import { distanceM } from '../../shared/geo.js'
-import { bomohQr, datoQr, JAIL_QR, stationQr, tagQr } from '../../shared/ids.js'
+import { bomohQr, datoQr, hijauQr, JAIL_QR, ringQr, stationQr, tagQr } from '../../shared/ids.js'
 import { seeded } from '../../shared/testing.js'
 import type { PowerUpKind, Role } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
@@ -23,13 +23,22 @@ let pushFails = false
 /** Replies the fake OpenStreetMap services give, in order; an Error is thrown instead. */
 let osmReplies: unknown[]
 let osmCalls: string[]
+/**
+ * Draws the next action's rng hands out before its usual seeded(7) ones, used up as they're drawn. A legendary pick
+ * is create's (and a switch to Full's) first draw, so `[0.9, 0.9]` picks Super Ring and Mak Kau Hijau.
+ */
+let forcedDraws: number[] = []
+const rngOf = () => {
+  const rest = seeded(7)
+  return () => (forcedDraws.length ? forcedDraws.shift()! : rest())
+}
 
 const run = <T = any>(action: ActionName, body: object) =>
   actions[action](
     {
       store,
       now,
-      rng: seeded(7),
+      rng: rngOf(),
       push: async (sub, payload) => {
         if (pushFails) throw new Error('push down')
         pushes.push({ endpoint: sub.endpoint!, payload: JSON.parse(payload) })
@@ -69,6 +78,14 @@ async function createOrganiser() {
   return organiserToken
 }
 
+/**
+ * Retires all three cards of one legendary (Super Ring's by default). A test about running out of one colour does this
+ * to the other legendary of its side, which the app would otherwise switch to (new power-ups design §6.1 fallback).
+ */
+async function noSpare(organiserToken: string, legendary: 'dato' | 'ring' | 'bomoh' | 'hijau' = 'ring') {
+  for (const letter of ['A', 'B', 'C']) await run('retireSecretCard', { organiserToken, legendary, letter })
+}
+
 beforeEach(() => {
   now = T0
   store = new MemoryStore(() => now)
@@ -76,6 +93,7 @@ beforeEach(() => {
   pushFails = false
   osmReplies = []
   osmCalls = []
+  forcedDraws = []
 })
 
 /** Creates a game with Ben (chaser), Aina #07 and Hafiz #03 (runners), all subscribed to push. */
@@ -3850,7 +3868,7 @@ describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
     const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     expect(v.datoStash).toEqual({ ...STASH, claimedBy: null, claimedAt: null })
     expect(v.legendaryZone).toBeNull()
-    expect(v.settings.legendaries).toEqual({ dato: 'stash', bomoh: 'off' })
+    expect(v.settings.legendaries).toEqual({ dato: 'stash', bomoh: 'off', ring: 'off', hijau: 'off' })
     const m = await run<View>('state', { code: g.code, token: g.siti.token })
     expect(m).not.toHaveProperty('datoStash')
     expect(m).not.toHaveProperty('datoCode')
@@ -3867,6 +3885,7 @@ describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
     expect((await store.secretCards(org)).find((c) => c.id === card.id)).toMatchObject({ state: 'retired', found_at: new Date(now).toISOString() })
     // The game ends; its card is still never handed out again.
     await store.claimEnd(g.gameId, 'runners')
+    await noSpare(g.organiserToken)
     for (let k = 0; k < 2; k++) {
       const { code } = await run('create', { arenaId: 'around-me', center: CENTER, settings: { mode: 'full' }, organiserToken: g.organiserToken })
       expect((await store.gameByCode(code))!.dato_stash!.card!.id).not.toBe(card.id)
@@ -3963,6 +3982,7 @@ describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
 
     it("retiring a lobby's card gives it another free card, or leaves it waiting for one when none is free (ruling R9)", async () => {
       const g = await lobby()
+      await noSpare(g.organiserToken)
       const first = (await stash(g))!.card!
       await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })
       expect(await cardAction(g, 'retireSecretCard', 'dato', first.letter)).toEqual({ ok: true })
@@ -4281,6 +4301,7 @@ describe('dropBomoh (mirrors dropDatoSeri above)', () => {
     // create now assigns a free purple card eagerly (ruling R15), same as Dato Seri: three games use up the
     // organisation's three purple cards (A, B, C), each held by its own lobby.
     const first = await readyGame({ mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } })
+    await noSpare(first.organiserToken, 'hijau')
     const fullBomoh = { arenaId: 'around-me', center: CENTER, settings: { mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } }, organiserToken: first.organiserToken }
     for (let k = 0; k < 2; k++) await run('create', fullBomoh)
     const fourth = await run('create', fullBomoh)
@@ -4311,9 +4332,7 @@ describe('Bomoh is threaded through create/start/the organiser poll/setMode, sam
 
   it('with no free card for either legendary, create combines both notices', async () => {
     const organiserToken = await createOrganiser()
-    for (const legendary of ['dato', 'bomoh'] as const) {
-      for (const letter of ['A', 'B', 'C']) await run('retireSecretCard', { organiserToken, legendary, letter })
-    }
+    for (const legendary of ['dato', 'ring', 'bomoh', 'hijau'] as const) await noSpare(organiserToken, legendary)
     const { code, notice } = await run('create', {
       arenaId: 'around-me',
       center: CENTER,
@@ -4328,6 +4347,7 @@ describe('Bomoh is threaded through create/start/the organiser poll/setMode, sam
 
   it('a confirmed-printed purple card is assigned on the organiser poll, same as Dato Seri (ruling R9)', async () => {
     const organiserToken = await createOrganiser()
+    await noSpare(organiserToken, 'hijau')
     for (const letter of ['A', 'B', 'C']) await run('reprintSecretCard', { organiserToken, legendary: 'bomoh', letter })
     const { code, notice } = await run('create', {
       arenaId: 'around-me',
@@ -4348,8 +4368,9 @@ describe('Bomoh is threaded through create/start/the organiser poll/setMode, sam
 
   it("start re-checks an expired lobby's purple card the same way as Dato Seri, and starts with Bomoh off when none is left", async () => {
     const g = await readyGame({ mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } })
+    await noSpare(g.organiserToken, 'hijau')
     now = T0 + 25 * HOUR
-    const fullBomoh = { arenaId: 'around-me', center: CENTER, settings: { mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } }, organiserToken: g.organiserToken }
+    const fullBomoh ={ arenaId: 'around-me', center: CENTER, settings: { mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } }, organiserToken: g.organiserToken }
     // Three fresh games now take all three purple cards, including the old lobby's own (ruling R3: no longer held).
     for (let k = 0; k < 3; k++) await run('create', fullBomoh)
     expect(await run('start', { code: g.code, organiserToken: g.organiserToken })).toEqual({
@@ -4565,12 +4586,12 @@ describe('setup settings and the packing list', () => {
 
   it('lets Bomoh be turned on alongside Dato Seri, now that its cards exist', async () => {
     const { code } = await create({ legendaries: { dato: 'stash', bomoh: 'stash' } })
-    expect((await store.gameByCode(code))!.settings.legendaries).toEqual({ dato: 'stash', bomoh: 'stash' })
+    expect((await store.gameByCode(code))!.settings.legendaries).toEqual({ dato: 'stash', bomoh: 'stash', ring: 'off', hijau: 'off' })
   })
 
   it('stores only the two legendaries, dropping any extra keys a client sends (M6)', async () => {
     const { code } = await create({ legendaries: { dato: 'stash', bomoh: 'off', toyol: 'stash' } })
-    expect((await store.gameByCode(code))!.settings.legendaries).toEqual({ dato: 'stash', bomoh: 'off' })
+    expect((await store.gameByCode(code))!.settings.legendaries).toEqual({ dato: 'stash', bomoh: 'off', ring: 'off', hijau: 'off' })
   })
 
   it('setKit ticks and unticks, storing the label it was ticked under', async () => {
@@ -4683,6 +4704,7 @@ describe('secret card sets', () => {
 
   it('with no free card (Review Focus 1, ruling R9): one in a game, one retired, one printing, the game is made still wanting Dato Seri, with no card and a notice', async () => {
     const organiserToken = await createOrganiser()
+    await noSpare(organiserToken)
     const first = await make(organiserToken)
     const taken = (await cardOf(first.code))!.letter
     const [l2, l3] = ['A', 'B', 'C'].filter((l) => l !== taken)
@@ -4698,6 +4720,7 @@ describe('secret card sets', () => {
 
   it('once the first game ends unfound, its card can be assigned again', async () => {
     const organiserToken = await createOrganiser()
+    await noSpare(organiserToken)
     const codes = []
     for (let k = 0; k < 3; k++) codes.push((await make(organiserToken)).code)
     expect((await make(organiserToken)).notice).toBe(NOTICE)
@@ -4779,17 +4802,19 @@ describe('secret card sets', () => {
 
   it('setMode to Full with no free card keeps Dato Seri wanted (ruling R9) and says so', async () => {
     const organiserToken = await createOrganiser()
+    await noSpare(organiserToken)
     for (const l of ['A', 'B', 'C']) await act(organiserToken, 'retireSecretCard', 'dato', l)
     const { code } = await make(organiserToken, {})
     expect(await run('setMode', { code, organiserToken, mode: 'full' })).toEqual({ ok: true, notice: NOTICE })
-    expect((await gameOf(code)).settings).toMatchObject({ mode: 'full', legendaries: { dato: 'stash', bomoh: 'off' } })
+    expect((await gameOf(code)).settings).toMatchObject({ mode: 'full', legendaries: { dato: 'stash', ring: 'off', bomoh: 'off', hijau: 'off' } })
     expect((await gameOf(code)).dato_stash ?? null).toBeNull()
   })
 
   describe('no free card recovers (ruling R9)', () => {
-    /** A Full lobby made while all three yellow cards wait to be printed. */
+    /** A Full lobby made while all three yellow cards wait to be printed (and no orange one is free to switch to). */
     async function waiting() {
       const organiserToken = await createOrganiser()
+      await noSpare(organiserToken)
       for (const l of ['A', 'B', 'C']) await act(organiserToken, 'reprintSecretCard', 'dato', l)
       const r = await make(organiserToken)
       expect(r.notice).toBe(NOTICE)
@@ -4848,6 +4873,7 @@ describe('secret card sets', () => {
 
     it('start with still no card starts with Dato Seri off and returns the notice', async () => {
       const g = await readyGame({ mode: 'full' })
+      await noSpare(g.organiserToken)
       const held = (await cardOf(g.code))!.letter
       for (const l of ['A', 'B', 'C'].filter((x) => x !== held)) await act(g.organiserToken, 'reprintSecretCard', 'dato', l)
       expect(await act(g.organiserToken, 'retireSecretCard', 'dato', held)).toEqual({ ok: true, notice: NOTICE })
@@ -4860,6 +4886,7 @@ describe('secret card sets', () => {
 
     it('start picks up a card confirmed printed just before', async () => {
       const g = await readyGame({ mode: 'full' })
+      await noSpare(g.organiserToken)
       const held = (await cardOf(g.code))!.letter
       const others = ['A', 'B', 'C'].filter((x) => x !== held)
       for (const l of others) await act(g.organiserToken, 'reprintSecretCard', 'dato', l)
@@ -4870,12 +4897,12 @@ describe('secret card sets', () => {
     })
   })
 
-  it('listSecretCards lists all six without codes, with state, foundAt and inGame', async () => {
+  it('listSecretCards lists all twelve without codes, with state, foundAt and inGame', async () => {
     const organiserToken = await createOrganiser()
     const { code } = await make(organiserToken)
     const card = (await cardOf(code))!
     const list = await run('listSecretCards', { organiserToken })
-    expect(list).toHaveLength(6)
+    expect(list).toHaveLength(12)
     for (const c of list) expect(Object.keys(c).sort()).toEqual(['foundAt', 'inGame', 'legendary', 'letter', 'state'])
     expect(list.find((c: { legendary: string; letter: string }) => c.legendary === 'dato' && c.letter === card.letter)).toEqual({
       legendary: 'dato', letter: card.letter, state: 'ready', foundAt: null, inGame: true,
@@ -4886,6 +4913,7 @@ describe('secret card sets', () => {
 
   it('reprintSecretCard gives a new code and sets printing, which is not free; confirmSecretCardPrinted makes it ready', async () => {
     const organiserToken = await createOrganiser()
+    await noSpare(organiserToken)
     const before = (await yellow(organiserToken)).find((c) => c.letter === 'A')!
     expect(await act(organiserToken, 'reprintSecretCard', 'dato', 'A')).toEqual({ ok: true })
     const after = (await yellow(organiserToken)).find((c) => c.letter === 'A')!
@@ -4997,6 +5025,7 @@ describe('secret card sets', () => {
 
     it("retiring a lobby's purple card gives it another free purple card, or leaves it waiting with Bomoh's own notice (ruling R9)", async () => {
       const g = await bomohLobby()
+      await noSpare(g.organiserToken, 'hijau')
       const first = g.card
       expect(await act(g.organiserToken, 'retireSecretCard', 'bomoh', first.letter)).toEqual({ ok: true })
       const second = await bomohOf(g.code)
@@ -5053,6 +5082,7 @@ describe('secret card sets', () => {
 
     it('a lobby under 24 hours old still holds its card', async () => {
       const organiserToken = await createOrganiser()
+      await noSpare(organiserToken)
       const old = await make(organiserToken)
       now = T0 + 23 * HOUR
       const others = []
@@ -5063,6 +5093,7 @@ describe('secret card sets', () => {
 
     it('an old lobby whose card was taken re-checks on start: another card is gone too, so it starts with Dato Seri off', async () => {
       const g = await readyGame({ mode: 'full' })
+      await noSpare(g.organiserToken)
       now = T0 + 25 * HOUR
       for (let k = 0; k < 3; k++) await make(g.organiserToken)
       expect(await run('start', { code: g.code, organiserToken: g.organiserToken })).toEqual({ startedAt: expect.any(String), notice: NOTICE })
@@ -5108,6 +5139,7 @@ describe('secret card sets', () => {
 
     it('a dropped 25-hour-old lobby keeps its card: another game cannot draw it, and it starts with it', async () => {
       const g = await readyGame({ mode: 'full' })
+      await noSpare(g.organiserToken)
       const card = (await cardOf(g.code))!
       await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...DROP })
       now = T0 + 25 * HOUR
@@ -5147,6 +5179,7 @@ describe('secret card sets', () => {
 
     it('the ghost-card guard with no other card free: the stash goes, and start runs with Dato Seri off and the notice', async () => {
       const g = await readyGame({ mode: 'full' })
+      await noSpare(g.organiserToken)
       const card = (await cardOf(g.code))!
       await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...DROP })
       now = T0 + 25 * HOUR
@@ -5180,6 +5213,7 @@ describe('secret card sets', () => {
 
     it('an old lobby re-checks on setMode and on a drop too', async () => {
       const g = await readyGame({ mode: 'full' })
+      await noSpare(g.organiserToken)
       now = T0 + 25 * HOUR
       for (let k = 0; k < 3; k++) await make(g.organiserToken)
       expect(await run('setMode', { code: g.code, organiserToken: g.organiserToken, mode: 'full' })).toEqual({ ok: true, notice: NOTICE })
@@ -5872,5 +5906,1504 @@ describe('planned start time (home upgrades)', () => {
     const startsAt = new Date(now + 20 * MIN).toISOString()
     await run('setStartTime', { code: g.code, organiserToken: g.organiserToken, startsAt })
     expect(await view(g.code, { token: g.aina.token })).toBe(startsAt)
+  })
+
+  it('setting the planned start never re-picks the legendaries', async () => {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' } })
+    const before = (await store.gameByCode(g.code))!.settings.legendaries
+    expect(before).toEqual({ dato: 'off', ring: 'stash', bomoh: 'off', hijau: 'stash' })
+    await run('setStartTime', { code: g.code, organiserToken: g.organiserToken, startsAt: new Date(now + 20 * MIN).toISOString() })
+    expect((await store.gameByCode(g.code))!.settings.legendaries).toEqual(before)
+  })
+})
+
+describe('one legendary per side, picked by the app (Plan E2 task 2)', () => {
+  const STASH = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const BOTH = { mode: 'full', legendarySides: { runner: 'on', chaser: 'on' } }
+  const orgOf = async (organiserToken: string) => (await store.organiserBySessionTokenHash(hashToken(organiserToken)))!.organisation_id
+  const retireAll = async (organiserToken: string, ...kinds: string[]) => {
+    for (const legendary of kinds) for (const letter of ['A', 'B', 'C']) await run('retireSecretCard', { organiserToken, legendary, letter })
+  }
+  const gameOf = async (code: string) => (await store.gameByCode(code))!
+  const make = (organiserToken: string, settings: object) => run('create', { arenaId: 'around-me', center: CENTER, settings, organiserToken })
+
+  it('settings take the organiser\'s legendarySides and store one picked legendary per side, never the sides themselves', async () => {
+    const organiserToken = await createOrganiser()
+    forcedDraws = [0.1, 0.9]
+    const { code } = await make(organiserToken, BOTH)
+    const s = (await gameOf(code)).settings
+    expect(s.legendaries).toEqual({ dato: 'stash', ring: 'off', bomoh: 'off', hijau: 'stash' })
+    expect(s).not.toHaveProperty('legendarySides')
+    forcedDraws = [0.9]
+    const runnerOnly = await make(organiserToken, { mode: 'full', legendarySides: { runner: 'on', chaser: 'off' } })
+    expect((await gameOf(runnerOnly.code)).settings.legendaries).toEqual({ dato: 'off', ring: 'stash', bomoh: 'off', hijau: 'off' })
+    const none = await make(organiserToken, { mode: 'full', legendarySides: { runner: 'off', chaser: 'off' } })
+    expect((await gameOf(none.code)).settings.legendaries).toEqual({ dato: 'off', ring: 'off', bomoh: 'off', hijau: 'off' })
+  })
+
+  it('the old per-legendary shape is read as sides, so the app still picks', async () => {
+    const organiserToken = await createOrganiser()
+    forcedDraws = [0.9, 0.9]
+    const { code } = await make(organiserToken, { mode: 'full', legendaries: { dato: 'stash', bomoh: 'stash' } })
+    expect((await gameOf(code)).settings.legendaries).toEqual({ dato: 'off', ring: 'stash', bomoh: 'off', hijau: 'stash' })
+  })
+
+  it('refuses sides that are not off or on', async () => {
+    const organiserToken = await createOrganiser()
+    await rejects(make(organiserToken, { mode: 'full', legendarySides: { runner: 'yes', chaser: 'off' } }), 400, 'Legendary')
+    await rejects(make(organiserToken, { mode: 'full', legendarySides: 'both' }), 400, 'Legendary')
+  })
+
+  it('create with both sides on assigns one card per side and names them in the organiser view only', async () => {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame(BOTH)
+    const game = await gameOf(g.code)
+    expect(game.dato_stash ?? null).toBeNull()
+    expect(game.bomoh_stash ?? null).toBeNull()
+    const cards = await store.secretCards(await orgOf(g.organiserToken))
+    const ring = cards.find((c) => c.id === game.ring_stash!.card!.id)!
+    const hijau = cards.find((c) => c.id === game.hijau_stash!.card!.id)!
+    expect(ring).toMatchObject({ legendary: 'ring', state: 'ready' })
+    expect(hijau).toMatchObject({ legendary: 'hijau', state: 'ready' })
+    expect(game.ring_stash).toEqual({ code: ring.code, card: { id: ring.id, letter: ring.letter }, lat: null, lng: null, claimedBy: null, claimedAt: null })
+    const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(v.settings.legendaries).toEqual({ dato: 'off', ring: 'stash', bomoh: 'off', hijau: 'stash' })
+    expect(v.ringCard).toEqual({ letter: ring.letter, code: ring.code })
+    expect(v.hijauCard).toEqual({ letter: hijau.letter, code: hijau.code })
+    expect(v.kit!.items.filter((i) => i.tone).map((i) => i.label)).toEqual([`Orange card ${ring.letter}`, `Green card ${hijau.letter}`])
+    const p = await run<View>('state', { code: g.code, token: g.aina.token })
+    expect(p).not.toHaveProperty('ringCard')
+    expect(p).not.toHaveProperty('hijauCard')
+    expect(p.settings).not.toHaveProperty('legendaries')
+  })
+
+  it('no free orange card falls back to a free yellow one (Review Focus 4)', async () => {
+    const organiserToken = await createOrganiser()
+    await retireAll(organiserToken, 'ring')
+    forcedDraws = [0.9]
+    const r = await make(organiserToken, { mode: 'full', legendarySides: { runner: 'on', chaser: 'off' } })
+    expect(r).not.toHaveProperty('notice')
+    const game = await gameOf(r.code)
+    expect(game.settings.legendaries).toEqual({ dato: 'stash', ring: 'off', bomoh: 'off', hijau: 'off' })
+    expect(game.dato_stash!.card).toEqual({ id: expect.any(String), letter: expect.stringMatching(/^[ABC]$/) })
+    expect(game.ring_stash ?? null).toBeNull()
+  })
+
+  it('no free purple card falls back to a free green one, and the other way round', async () => {
+    const organiserToken = await createOrganiser()
+    await retireAll(organiserToken, 'bomoh')
+    const r = await make(organiserToken, { mode: 'full', legendarySides: { runner: 'off', chaser: 'on' } })
+    expect((await gameOf(r.code)).settings.legendaries).toEqual({ dato: 'off', ring: 'off', bomoh: 'off', hijau: 'stash' })
+    expect((await gameOf(r.code)).hijau_stash!.card).toBeTruthy()
+    const other = await createOrganiser()
+    await retireAll(other, 'hijau')
+    forcedDraws = [0.9]
+    const r2 = await make(other, { mode: 'full', legendarySides: { runner: 'off', chaser: 'on' } })
+    expect((await gameOf(r2.code)).settings.legendaries).toEqual({ dato: 'off', ring: 'off', bomoh: 'stash', hijau: 'off' })
+  })
+
+  it('the fallback also happens when a lobby is given a card later, on the organiser poll', async () => {
+    const organiserToken = await createOrganiser()
+    await retireAll(organiserToken, 'ring', 'dato')
+    forcedDraws = [0.9]
+    const { code, notice } = await make(organiserToken, { mode: 'full', legendarySides: { runner: 'on', chaser: 'off' } })
+    expect(notice).toBe('Reprint an orange card to use Super Ring.')
+    await run('reprintSecretCard', { organiserToken, legendary: 'dato', letter: 'B' })
+    await run('confirmSecretCardPrinted', { organiserToken, legendary: 'dato', letter: 'B' })
+    await run('state', { code, organiserToken })
+    const game = await gameOf(code)
+    expect(game.settings.legendaries).toMatchObject({ dato: 'stash', ring: 'off' })
+    expect(game.dato_stash).toMatchObject({ card: { letter: 'B' }, lat: null, lng: null })
+  })
+
+  it('a lobby whose orange card is retired with no yellow one free starts with Super Ring off, and says so', async () => {
+    forcedDraws = [0.9]
+    const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'off' } })
+    expect((await gameOf(g.code)).ring_stash!.card).toBeTruthy()
+    await retireAll(g.organiserToken, 'dato', 'ring')
+    expect((await gameOf(g.code)).ring_stash ?? null).toBeNull()
+    expect(await run('start', { code: g.code, organiserToken: g.organiserToken })).toEqual({
+      startedAt: expect.any(String),
+      notice: 'Reprint an orange card to use Super Ring.',
+    })
+    expect((await gameOf(g.code)).settings.legendaries.ring).toBe('off')
+  })
+
+  it('neither free: R9 notice, and the picked one stays wanted', async () => {
+    const organiserToken = await createOrganiser()
+    await retireAll(organiserToken, 'dato', 'ring', 'bomoh', 'hijau')
+    forcedDraws = [0.9, 0.9]
+    const r = await make(organiserToken, BOTH)
+    expect(r.notice).toBe('Reprint an orange card to use Super Ring. Reprint a green card to use Mak Kau Hijau.')
+    const game = await gameOf(r.code)
+    expect(game.settings.legendaries).toEqual({ dato: 'off', ring: 'stash', bomoh: 'off', hijau: 'stash' })
+    expect(game.ring_stash ?? null).toBeNull()
+    expect(game.hijau_stash ?? null).toBeNull()
+    await rejects(run('dropRing', { code: r.code, organiserToken, ...STASH }), 409, 'Reprint an orange card to use Super Ring.')
+    await rejects(run('dropHijau', { code: r.code, organiserToken, ...STASH }), 409, 'Reprint a green card to use Mak Kau Hijau.')
+    const v = await run<View>('state', { code: r.code, organiserToken })
+    expect(v.ringCard).toBeNull()
+    expect(v.hijauCard).toBeNull()
+  })
+
+  it('Full → Core → Full re-picks and re-assigns', async () => {
+    const organiserToken = await createOrganiser()
+    const { code } = await make(organiserToken, BOTH)
+    // seeded(7)'s first two draws are low: Dato Seri and Bomoh.
+    let game = await gameOf(code)
+    expect(game.settings.legendaries).toEqual({ dato: 'stash', ring: 'off', bomoh: 'stash', hijau: 'off' })
+    expect(game.dato_stash!.card).toBeTruthy()
+    expect(game.bomoh_stash!.card).toBeTruthy()
+    expect(await run('setMode', { code, organiserToken, mode: 'core' })).toEqual({ ok: true })
+    game = await gameOf(code)
+    for (const s of [game.dato_stash, game.ring_stash, game.bomoh_stash, game.hijau_stash]) expect(s ?? null).toBeNull()
+    forcedDraws = [0.9, 0.9]
+    expect(await run('setMode', { code, organiserToken, mode: 'full' })).toEqual({ ok: true })
+    game = await gameOf(code)
+    expect(game.settings.legendaries).toEqual({ dato: 'off', ring: 'stash', bomoh: 'off', hijau: 'stash' })
+    expect(game.ring_stash!.card).toBeTruthy()
+    expect(game.hijau_stash!.card).toBeTruthy()
+    expect(game.dato_stash ?? null).toBeNull()
+    expect(game.bomoh_stash ?? null).toBeNull()
+    // Full again while already Full keeps the pick.
+    forcedDraws = [0.1, 0.1]
+    await run('setMode', { code, organiserToken, mode: 'full' })
+    expect((await gameOf(code)).settings.legendaries).toEqual({ dato: 'off', ring: 'stash', bomoh: 'off', hijau: 'stash' })
+  })
+
+  it('Core releases a dropped orange or green card and its walk step', async () => {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame(BOTH)
+    await run('dropRing', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('setKit', { code: g.code, organiserToken: g.organiserToken, placed: { id: 'hijau', on: true } })
+    await run('setMode', { code: g.code, organiserToken: g.organiserToken, mode: 'core' })
+    const game = await gameOf(g.code)
+    expect(game.ring_stash ?? null).toBeNull()
+    expect(game.kit?.placed?.hijau).toBeUndefined()
+  })
+
+  it('dropRing and dropHijau mirror dropBomoh: organiser only, Full only, lobby only, moving it keeps the code', async () => {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame(BOTH)
+    for (const [action, field] of [
+      ['dropRing', 'ring_stash'],
+      ['dropHijau', 'hijau_stash'],
+    ] as const) {
+      const { code, card } = (await gameOf(g.code))[field]!
+      expect(await run(action, { code: g.code, organiserToken: g.organiserToken, ...STASH })).toEqual({ ok: true })
+      expect((await gameOf(g.code))[field]).toEqual({ code, card, ...STASH, claimedBy: null, claimedAt: null })
+      const moved = { lat: CENTER.lat - 50 / 111_195, lng: CENTER.lng }
+      await run(action, { code: g.code, organiserToken: g.organiserToken, ...moved })
+      expect((await gameOf(g.code))[field]).toEqual({ code, card, ...moved, claimedBy: null, claimedAt: null })
+      await rejects(run(action, { code: g.code, token: g.aina.token, ...STASH }), 403)
+      await rejects(run(action, { code: g.code, organiserToken: g.organiserToken, lat: CENTER.lat + 0.1, lng: CENTER.lng }), 400, 'inside the play area')
+    }
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    await rejects(run('dropRing', { code: g.code, token: siti.token, ...STASH }), 403)
+    await rejects(run('dropHijau', { code: g.code, token: siti.token, ...STASH }), 403)
+    const core = await readyGame({ mode: 'core' })
+    await rejects(run('dropRing', { code: core.code, organiserToken: core.organiserToken, ...STASH }), 409, 'Full mode')
+    await rejects(run('dropHijau', { code: core.code, organiserToken: core.organiserToken, ...STASH }), 409, 'Full mode')
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    await rejects(run('dropRing', { code: g.code, organiserToken: g.organiserToken, ...STASH }), 409)
+    await rejects(run('dropHijau', { code: g.code, organiserToken: g.organiserToken, ...STASH }), 409)
+  })
+
+  it("a marshal's and a player's view never carry ring or hijau names, codes or spots", async () => {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame(BOTH)
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    const RING_AT = { lat: CENTER.lat + 77 / 111_195, lng: CENTER.lng + 0.00031234 }
+    const HIJAU_AT = { lat: CENTER.lat - 66 / 111_195, lng: CENTER.lng - 0.00041357 }
+    await run('dropRing', { code: g.code, organiserToken: g.organiserToken, ...RING_AT })
+    await run('dropHijau', { code: g.code, organiserToken: g.organiserToken, ...HIJAU_AT })
+    const game = await gameOf(g.code)
+    const secrets = [game.ring_stash!.code!, game.hijau_stash!.code!, String(RING_AT.lat), String(RING_AT.lng), String(HIJAU_AT.lat), String(HIJAU_AT.lng)]
+    const names = ['Super Ring', 'Mak Kau Hijau', 'Orange card', 'Green card', 'ringCard', 'hijauCard', 'ringStash', 'hijauStash', 'ring-card', 'hijau-card', '"hijau"', '"ring"']
+    const check = async (body: object) => {
+      for (const phase of ['lobby', 'chase']) {
+        const v = await run<View>('state', { code: g.code, ...body })
+        // Every view carries the Mak Kau Hijau takeover field (task 5); null says nothing about this game.
+        expect(v.hijau).toBeNull()
+        const text = JSON.stringify(v).replace('"hijau":null', '')
+        for (const s of [...secrets, ...names]) expect(text, `${phase}: ${s}`).not.toContain(s)
+        expect(v.settings).not.toHaveProperty('legendaries')
+        if (phase === 'lobby' && (body as { token?: string }).token === siti.token) {
+          expect(v.kit!.places.map((p) => p.id)).not.toEqual(expect.arrayContaining(['ring']))
+        }
+      }
+    }
+    await check({ token: siti.token })
+    await check({ token: g.aina.token })
+    await check({ token: g.ben.token })
+    const o = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(o.ringStash).toEqual({ ...RING_AT, claimedBy: null, claimedAt: null })
+    expect(o.hijauStash).toEqual({ ...HIJAU_AT, claimedBy: null, claimedAt: null })
+    expect(o.kit!.places.slice(-2).map((p) => p.id)).toEqual(['ring', 'hijau'])
+    expect(o.kit!.placed).toMatchObject({ ring: true, hijau: true })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    for (const body of [{ token: siti.token }, { token: g.aina.token }, { token: g.ben.token }]) {
+      const text = JSON.stringify(await run<View>('state', { code: g.code, ...body })).replace('"hijau":null', '')
+      for (const s of [...secrets, ...names]) expect(text).not.toContain(s)
+    }
+  })
+
+  it('a marshal cannot tick or place the orange or green secret steps', async () => {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame(BOTH)
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    await rejects(run('setKit', { code: g.code, token: siti.token, placed: { id: 'ring', on: true } }), 403)
+    await rejects(run('setKit', { code: g.code, token: siti.token, tick: { id: 'hijau-card', on: true } }), 403)
+  })
+
+  it('the kit page lists all four sets, yellow, orange, purple then green, and every card action takes ring and hijau', async () => {
+    const organiserToken = await createOrganiser()
+    const list = await run('listSecretCards', { organiserToken })
+    expect(list.map((c: { legendary: string; letter: string }) => `${c.legendary}${c.letter}`)).toEqual([
+      'datoA', 'datoB', 'datoC', 'ringA', 'ringB', 'ringC', 'bomohA', 'bomohB', 'bomohC', 'hijauA', 'hijauB', 'hijauC',
+    ])
+    for (const legendary of ['ring', 'hijau']) {
+      const { code } = await run('secretCardCode', { organiserToken, legendary, letter: 'A' })
+      expect(code).toEqual(expect.stringMatching(/^[A-Za-z0-9_-]{22}$/))
+      expect(await run('retireSecretCard', { organiserToken, legendary, letter: 'B' })).toEqual({ ok: true })
+    }
+    forcedDraws = [0.9, 0.9]
+    const { code } = await make(organiserToken, BOTH)
+    const inGame = (await run('listSecretCards', { organiserToken })).filter((c: { inGame: boolean }) => c.inGame)
+    const game = await gameOf(code)
+    expect(inGame.map((c: { legendary: string; letter: string }) => `${c.legendary}${c.letter}`).sort()).toEqual(
+      [`hijau${game.hijau_stash!.card!.letter}`, `ring${game.ring_stash!.card!.letter}`].sort(),
+    )
+  })
+})
+
+describe('Super Ring and Mak Kau Hijau: the hidden stashes (Plan E2 task 3)', () => {
+  const STASH = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const atStash = { lat: STASH.lat, lng: STASH.lng, accuracy_m: 8 }
+
+  /** A chasing Full game with Super Ring and Mak Kau Hijau picked and dropped. Runners: Aina, Chong. Chasers: Ben, Hafiz. */
+  async function chasing() {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' } })
+    const chong = await run('join', { code: g.code, name: 'Chong', accepted: true })
+    await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [g.hafiz.playerId]: 'chaser', [chong.playerId]: 'runner' } })
+    await run('linkTag', { code: g.code, token: chong.token, tagId: 5 })
+    await run('dropRing', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('dropHijau', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    return { ...g, chong, gameId: (await store.gameByCode(g.code))!.id }
+  }
+  const game = async (g: { code: string }) => (await store.gameByCode(g.code))!
+  const scanQr = (g: { code: string }, token: string, qr: string, where: object = atStash) => run('claim', { code: g.code, token, qr, ...where })
+  const ring = async (g: { code: string }, token: string, where: object = atStash) => scanQr(g, token, ringQr((await game(g)).ring_stash!.code!), where)
+  const hijau = async (g: { code: string }, token: string, where: object = atStash) => scanQr(g, token, hijauQr((await game(g)).hijau_stash!.code!), where)
+  const misses = async (g: { gameId: string }) => (await store.events(g.gameId)).filter((e) => e.type === 'stash-miss')
+  const stamp = (t: number) => new Date(t).toISOString()
+
+  it('the first free runner in reach claims Super Ring: an unused ring in the slot, the card retired, the stash claimed', async () => {
+    const g = await chasing()
+    const card = (await game(g)).ring_stash!.card!
+    expect(await ring(g, g.aina.token)).toEqual({ ok: true, kind: 'ring' })
+    expect((await game(g)).ring_stash).toMatchObject({ claimedBy: g.aina.playerId, claimedAt: stamp(now) })
+    const rows = (await store.powerUps(g.gameId)).filter((u) => u.kind === 'ring')
+    expect(rows).toEqual([expect.objectContaining({ player_id: g.aina.playerId, used_at: null })])
+    const org = (await store.organiserBySessionTokenHash(hashToken(g.organiserToken)))!.organisation_id
+    expect((await store.secretCards(org)).find((c) => c.id === card.id)).toMatchObject({ state: 'retired', found_at: stamp(now) })
+    // Already claimed: nobody else gets it.
+    expect(await ring(g, g.chong.token)).toEqual({ ok: false, reason: 'no-stash' })
+  })
+
+  it('two runners at once: exactly one gets Super Ring', async () => {
+    const g = await chasing()
+    const [a, b] = await Promise.all([ring(g, g.aina.token), ring(g, g.chong.token)])
+    expect([a, b].filter((r: { ok: boolean }) => r.ok)).toHaveLength(1)
+    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'ring')).toHaveLength(1)
+  })
+
+  it('a chaser cannot claim Super Ring and a runner cannot claim Mak Kau Hijau; neither is a miss', async () => {
+    const g = await chasing()
+    for (let k = 0; k < 3; k++) {
+      expect(await ring(g, g.ben.token)).toEqual({ ok: false, reason: 'cannot-claim' })
+      expect(await hijau(g, g.aina.token)).toEqual({ ok: false, reason: 'cannot-claim' })
+    }
+    expect(await misses(g)).toHaveLength(0)
+    expect(await ring(g, g.aina.token)).toEqual({ ok: true, kind: 'ring' })
+    expect(await hijau(g, g.ben.token)).toEqual({ ok: true, kind: 'hijau' })
+  })
+
+  it('a full slot refuses Super Ring with hand-full, and it is not a miss', async () => {
+    const g = await chasing()
+    const cloak = await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'cloak', station: 1 })
+    for (let k = 0; k < 3; k++) expect(await ring(g, g.aina.token)).toEqual({ ok: false, reason: 'hand-full' })
+    expect(await misses(g)).toHaveLength(0)
+    await store.updatePowerUp(cloak.id, { taken_at: stamp(now) })
+    expect(await ring(g, g.aina.token)).toEqual({ ok: true, kind: 'ring' })
+  })
+
+  it('a jailed runner cannot claim Super Ring', async () => {
+    const g = await chasing()
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: true } }])
+    expect(await ring(g, g.aina.token)).toEqual({ ok: false, reason: 'cannot-claim' })
+  })
+
+  it('a Luar Garisan player is refused before anything is judged', async () => {
+    const g = await chasing()
+    await store.updatePlayers([
+      { id: g.aina.playerId, patch: { disqualified_at: stamp(now) } },
+      { id: g.ben.playerId, patch: { disqualified_at: stamp(now) } },
+    ])
+    expect(await ring(g, g.aina.token)).toEqual({ ok: false, reason: 'disqualified' })
+    expect(await hijau(g, g.ben.token)).toEqual({ ok: false, reason: 'disqualified' })
+    expect((await game(g)).ring_stash!.claimedBy).toBeNull()
+    expect((await game(g)).hijau_stash!.claimedBy).toBeNull()
+  })
+
+  it('a chaser in reach claims Mak Kau Hijau: games.hijau gets a 20 s window from the claim, the card is retired, no powerups row', async () => {
+    const g = await chasing()
+    const card = (await game(g)).hijau_stash!.card!
+    expect(await hijau(g, g.ben.token)).toEqual({ ok: true, kind: 'hijau' })
+    const after = await game(g)
+    expect(after.hijau_stash).toMatchObject({ claimedBy: g.ben.playerId, claimedAt: stamp(now) })
+    // Starting at the claim, its push goes out with it (task 5).
+    expect(after.hijau).toMatchObject({ claimedBy: g.ben.playerId, claimedAt: stamp(now), startsAt: stamp(now), deadline: stamp(now + 20_000), sentAt: stamp(now), settledAt: null, tapped: [] })
+    const org = (await store.organiserBySessionTokenHash(hashToken(g.organiserToken)))!.organisation_id
+    expect((await store.secretCards(org)).find((c) => c.id === card.id)).toMatchObject({ state: 'retired', found_at: stamp(now) })
+    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'hijau')).toHaveLength(0)
+    expect(await hijau(g, g.hafiz.token)).toEqual({ ok: false, reason: 'no-stash' })
+  })
+
+  it('a frozen chaser cannot claim Mak Kau Hijau, and it is not a miss', async () => {
+    const g = await chasing()
+    await store.updatePlayers([{ id: g.ben.playerId, patch: { frozen_until: stamp(now + 3 * MIN) } }])
+    expect(await hijau(g, g.ben.token)).toEqual({ ok: false, reason: 'frozen', frozenForMs: 3 * MIN })
+    expect(await misses(g)).toHaveLength(0)
+    expect((await game(g)).hijau).toBeFalsy()
+  })
+
+  it('the wrong-scan limit applies to each, tagged with its legendary; one does not lock the other', async () => {
+    const g = await chasing()
+    for (let i = 0; i < STASH_MISS_LIMIT; i++) {
+      expect(await scanQr(g, g.aina.token, ringQr('x'.repeat(22)))).toEqual({ ok: false, reason: 'no-stash' })
+      expect(await scanQr(g, g.ben.token, hijauQr('y'.repeat(22)))).toEqual({ ok: false, reason: 'no-stash' })
+    }
+    const all = await misses(g)
+    expect(all.filter((e) => e.data.legendary === 'ring' && e.actor_id === g.aina.playerId)).toHaveLength(3)
+    expect(all.filter((e) => e.data.legendary === 'hijau' && e.actor_id === g.ben.playerId)).toHaveLength(3)
+    // The right code at the right spot is now ignored for those two, silently and unrecorded.
+    expect(await ring(g, g.aina.token)).toEqual({ ok: false, reason: 'no-stash' })
+    expect(await hijau(g, g.ben.token)).toEqual({ ok: false, reason: 'no-stash' })
+    expect(await misses(g)).toHaveLength(6)
+    // Others still claim.
+    expect(await ring(g, g.chong.token)).toEqual({ ok: true, kind: 'ring' })
+    expect(await hijau(g, g.hafiz.token)).toEqual({ ok: true, kind: 'hijau' })
+  })
+
+  it("a bare or made-up card is a miss and claims nothing; a too-far scan is a miss too", async () => {
+    const g = await chasing()
+    for (const qr of ['KEJAR:RING', ringQr('z'.repeat(22)), 'KEJAR:RING:']) expect(await scanQr(g, g.aina.token, qr)).toEqual({ ok: false, reason: 'no-stash' })
+    expect(await ring(g, g.chong.token, { lat: CENTER.lat, lng: CENTER.lng, accuracy_m: 8 })).toEqual({ ok: false, reason: 'too-far' })
+    expect(await misses(g)).toHaveLength(4)
+    expect((await game(g)).ring_stash!.claimedBy).toBeNull()
+  })
+
+  it('a game that picked Dato Seri and Bomoh never answers a ring or hijau card', async () => {
+    forcedDraws = [0.1, 0.1]
+    const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' } })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    expect(await scanQr(g, g.aina.token, ringQr('x'.repeat(22)))).toEqual({ ok: false, reason: 'no-stash' })
+    expect(await scanQr(g, g.ben.token, hijauQr('x'.repeat(22)))).toEqual({ ok: false, reason: 'no-stash' })
+  })
+
+  it('secret: the feed says only "Something legendary was found." and no view names a legendary', async () => {
+    const g = await chasing()
+    await ring(g, g.aina.token)
+    await hijau(g, g.ben.token)
+    for (const token of [g.hafiz.token, g.chong.token, g.aina.token]) {
+      const v = await run<View>('state', { code: g.code, token })
+      expect(v.feed.filter((f) => f.text === 'Something legendary was found.')).toHaveLength(2)
+      // Mak Kau Hijau announces itself once its 45 s starts (task 5, §6.3); the found line still names nothing.
+      expect(v.feed.filter((f) => !f.text.startsWith('Mak kau hijau!')).map((f) => f.text).join(' ')).not.toMatch(/Ring|Hijau|Mak Kau/i)
+      expect(v.ringZone).toBeNull()
+      expect(v.hijauZone).toBeNull()
+    }
+  })
+
+  it('zones appear to runners and chasers, name nothing, and vanish once claimed', async () => {
+    const g = await chasing()
+    for (const token of [g.aina.token, g.ben.token]) {
+      const v = await run<View>('state', { code: g.code, token })
+      expect(v.ringZone).toMatchObject({ radiusM: expect.any(Number) })
+      expect(v.hijauZone).toMatchObject({ radiusM: expect.any(Number) })
+      expect(v.legendaryZone).toBeNull()
+      expect(v.bomohZone).toBeNull()
+    }
+    await ring(g, g.aina.token)
+    expect((await run<View>('state', { code: g.code, token: g.chong.token })).ringZone).toBeNull()
+    expect((await run<View>('state', { code: g.code, token: g.chong.token })).hijauZone).not.toBeNull()
+    await hijau(g, g.ben.token)
+    expect((await run<View>('state', { code: g.code, token: g.chong.token })).hijauZone).toBeNull()
+  })
+
+  it('Super Ring cannot be used from the slot: it is automatic', async () => {
+    const g = await chasing()
+    await ring(g, g.aina.token)
+    const row = (await store.powerUps(g.gameId)).find((u) => u.kind === 'ring')!
+    expect(await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: row.id })).toEqual({ ok: false, reason: 'automatic' })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === row.id)!.used_at).toBeNull()
+  })
+
+  it('a Core game has no ring or hijau zones', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    const v = await run<View>('state', { code: g.code, token: g.aina.token })
+    expect(v.ringZone).toBeNull()
+    expect(v.hijauZone).toBeNull()
+  })
+})
+
+describe('Super Ring: house arrest instead of Penjara (Plan E2 task 4)', () => {
+  const S = 1000
+  const ARREST = 156 * S
+  const STASH = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const LOCK_LINE = { ok: false, reason: 'ring', name: 'Aina' }
+  type G = Awaited<ReturnType<typeof holding>>
+
+  /**
+   * A chasing Full game where Aina (#07) holds an unused Super Ring. Runners: Aina, Hafiz (#03). Chasers: Ben, Chong.
+   * Siti is a marshal. `now` is left at +7 min.
+   */
+  async function holding(settings: object = {}) {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' }, ...settings })
+    const chong = await run('join', { code: g.code, name: 'Chong', accepted: true })
+    await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [chong.playerId]: 'chaser' } })
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    await run('dropRing', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    const gameId = (await store.gameByCode(g.code))!.id
+    const code = (await store.gameByCode(g.code))!.ring_stash!.code!
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: ringQr(code), ...STASH, accuracy_m: 8 })).toEqual({ ok: true, kind: 'ring' })
+    pushes = []
+    return { ...g, chong, siti, gameId }
+  }
+  /** `chaser` scans a runner's tag at `ms`, the runner having just reported from `runnerM` and the chaser standing at `chaserM`. */
+  async function catchAt(g: G, chaser: 'ben' | 'chong', who: 'aina' | 'hafiz', ms: number, runnerM = 10, chaserM = 0) {
+    now = ms
+    await run('location', { code: g.code, token: g[who].token, ...at(runnerM) })
+    return run('catch', { code: g.code, token: g[chaser].token, tagQr: tagQr(who === 'aina' ? 7 : 3), ...at(chaserM) })
+  }
+  const row = async (g: G, id: string) => (await store.players(g.gameId)).find((p) => p.id === id)!
+  const ringRow = async (g: G) => (await store.powerUps(g.gameId)).find((u) => u.kind === 'ring')!
+  const evs = async (g: G, type: string) => (await store.events(g.gameId)).filter((e) => e.type === type)
+  const notices = (name: string) => pushes.filter((p) => p.endpoint === `https://push/${name}` && (p.payload as any).type === 'notice').map((p) => (p.payload as any).body)
+  const poll = (g: G, ms: number, token?: string) => {
+    now = ms
+    return run<View>('state', token ? { code: g.code, token } : { code: g.code, organiserToken: g.organiserToken })
+  }
+  /** Aina reports from `m` metres every 10 s from `fromMs` to `toMs` (inclusive). */
+  async function stayAt(g: G, fromMs: number, toMs: number, m = 10) {
+    for (let t = fromMs; t <= toMs; t += 10 * S) {
+      now = t
+      await run('location', { code: g.code, token: g.aina.token, ...at(m) })
+    }
+  }
+
+  it('a catch on a Super Ring holder puts them under house arrest, not Penjara', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    expect(await catchAt(g, 'ben', 'aina', t0)).toEqual(LOCK_LINE)
+    const aina = await row(g, g.aina.playerId)
+    expect(aina.jailed).toBe(false)
+    expect(aina.caught_by).toBeNull()
+    const { lat, lng } = at(10)
+    expect(aina.arrest).toMatchObject({ route: 'catch', by: g.ben.playerId, center: { lat, lng }, startedAt: new Date(t0).toISOString(), firedAt: new Date(t0).toISOString() })
+    expect((await ringRow(g)).used_at).toBe(new Date(t0).toISOString())
+    const arrested = await evs(g, 'arrested')
+    expect(arrested).toHaveLength(1)
+    expect(aina.arrest!.catchEventId).toBe(arrested[0].id)
+    expect(await evs(g, 'caught')).toHaveLength(0)
+    expect(await evs(g, 'ring-locked')).toEqual([expect.objectContaining({ actor_id: g.ben.playerId, target_id: g.aina.playerId, data: { firedAt: new Date(t0).toISOString() } })])
+    expect(notices('Aina')).toEqual(['Super Ring! House arrest: stay within 26 m for 2:36.'])
+    // The feed says only that something legendary saved a Dikejar, never the card or who.
+    const hafiz = await poll(g, t0 + S, g.hafiz.token)
+    expect(hafiz.feed.map((f) => f.text)).toContain('Something legendary saved a Dikejar.')
+    expect(hafiz.feed.filter((f) => Date.parse(f.at) >= t0).map((f) => f.text)).toEqual(['Something legendary saved a Dikejar.'])
+    // Her own view carries the circle and the end.
+    const mine = await poll(g, t0 + S, g.aina.token)
+    expect(mine.arrest).toEqual({ endsAt: t0 + ARREST, center: { lat, lng }, openBy: null })
+    expect((await poll(g, t0 + S, g.hafiz.token)).arrest).toBeNull()
+  })
+
+  it("the circle goes on the chaser's fix when the runner's is older than 20 s", async () => {
+    const g = await holding()
+    now = T0 + 8 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(30) })
+    now += 21 * S
+    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7), ...at(0) })
+    const { lat, lng } = at(0)
+    expect((await row(g, g.aina.playerId)).arrest!.center).toEqual({ lat, lng })
+  })
+
+  it('the catching chaser can never catch them again; another chaser can after release', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    await stayAt(g, t0 + 10 * S, t0 + ARREST)
+    await poll(g, t0 + ARREST + S)
+    expect((await row(g, g.aina.playerId)).arrest).toBeNull()
+    expect(await catchAt(g, 'ben', 'aina', t0 + ARREST + 2 * S)).toEqual({ ok: false, reason: 'ring-locked', name: 'Aina' })
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    expect(await catchAt(g, 'chong', 'aina', t0 + ARREST + 5 * S)).toMatchObject({ ok: true })
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: true, caught_by: g.chong.playerId })
+  })
+
+  it('nobody can catch them during house arrest', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    expect(await catchAt(g, 'chong', 'aina', t0 + 10 * S)).toEqual({ ok: false, reason: 'arrest', name: 'Aina' })
+    expect(await catchAt(g, 'ben', 'aina', t0 + 20 * S)).toEqual({ ok: false, reason: 'ring-locked', name: 'Aina' })
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false })
+    // Neither refusal records anything.
+    expect(await evs(g, 'ring-locked')).toHaveLength(1)
+    expect(await evs(g, 'caught')).toHaveLength(0)
+  })
+
+  it("chasers don't see them on the map", async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    await stayAt(g, t0 + 10 * S, T0 + 10 * MIN)
+    // The +10 ping reveals while she is under house arrest: no dot and no "never checked in" note.
+    const v = await poll(g, T0 + 10 * MIN, g.chong.token)
+    expect(v.lastRevealAt).toBe(T0 + 10 * MIN)
+    expect(v.dots.filter((d) => d.id === g.aina.playerId)).toHaveLength(0)
+    expect(v.dots.filter((d) => d.id === g.hafiz.playerId)).toHaveLength(0)
+    expect(v.feed.map((f) => f.text)).toContain('#03 never checked in')
+    expect(v.feed.map((f) => f.text).join(' ')).not.toMatch(/#07/)
+  })
+
+  it("stays inside with Kejar open for 2:36: free, ring spent, and they don't use their freed-once", async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    await stayAt(g, t0 + 10 * S, t0 + ARREST - 5 * S, 15)
+    await poll(g, t0 + ARREST - S)
+    expect((await row(g, g.aina.playerId)).arrest).not.toBeNull()
+    // A poll well after the end still judges on the fix at or before it.
+    await poll(g, t0 + ARREST + 30 * S)
+    const aina = await row(g, g.aina.playerId)
+    expect(aina).toMatchObject({ jailed: false, freed_once: false, arrest: null })
+    expect((await ringRow(g)).used_at).not.toBeNull()
+    expect((await evs(g, 'arrest-ended')).map((e) => e.data)).toEqual([{ outcome: 'free', firedAt: new Date(t0).toISOString() }])
+    expect(notices('Aina')).toContain('Free! Super Ring is spent.')
+    // Spent: the next catch is a plain catch.
+    expect(await catchAt(g, 'chong', 'aina', t0 + ARREST + 40 * S)).toMatchObject({ ok: true })
+  })
+
+  it('steps outside early: Penjara at once', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    await stayAt(g, t0 + 10 * S, t0 + 30 * S)
+    // A rough fix outside doesn't count.
+    now = t0 + 40 * S
+    await run('location', { code: g.code, token: g.aina.token, ...at(80), accuracy_m: 60 })
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    now = t0 + 50 * S
+    await run('location', { code: g.code, token: g.aina.token, ...at(60) })
+    const aina = await row(g, g.aina.playerId)
+    expect(aina).toMatchObject({ jailed: true, caught_by: null, arrest: null, freed_once: false })
+    expect(notices('Aina')).toContain('Bail revoked. To Penjara.')
+    expect((await evs(g, 'arrest-ended')).map((e) => e.data)).toEqual([{ outcome: 'revoked', firedAt: new Date(t0).toISOString() }])
+    expect((await evs(g, 'auto-jailed')).map((e) => e.data)).toEqual([expect.objectContaining({ cause: 'revoked', who: 'Aina #07' })])
+    const v = await poll(g, now + S, g.aina.token)
+    expect(v.jailReason).toBe('bail-revoked')
+    expect(v.arrest).toBeNull()
+    // A marshal can still undo it as a phone problem.
+    const alert = (await poll(g, now + S)).alerts.find((a) => a.kind === 'auto-jail')!
+    expect(alert.text).toBe('Aina #07 sent to Penjara (bail revoked)')
+    now += 2 * S
+    expect(await run('undoAutoJail', { code: g.code, eventId: alert.id, token: g.siti.token })).toEqual({ ok: true })
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, freed_once: false })
+  })
+
+  it('stops sending fixes: Penjara at 2:36 (Review Focus 1)', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    await stayAt(g, t0 + 10 * S, t0 + 30 * S)
+    await poll(g, t0 + ARREST - S)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    await poll(g, t0 + ARREST)
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: true, arrest: null })
+    expect(notices('Aina')).toContain('Bail revoked. To Penjara.')
+    expect((await evs(g, 'arrest-ended')).map((e) => e.data.outcome)).toEqual(['revoked'])
+  })
+
+  it('paused for 1 min during house arrest: release comes 1 min later (Review Focus 2)', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    await stayAt(g, t0 + 10 * S, t0 + 60 * S)
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    // A fix outside while paused changes nothing.
+    now = t0 + 90 * S
+    await run('location', { code: g.code, token: g.aina.token, ...at(80) })
+    expect((await row(g, g.aina.playerId)).arrest).not.toBeNull()
+    now = t0 + 120 * S
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    expect((await row(g, g.aina.playerId)).arrest!.startedAt).toBe(new Date(t0 + MIN).toISOString())
+    expect((await poll(g, t0 + 121 * S, g.aina.token)).arrest!.endsAt).toBe(t0 + MIN + ARREST)
+    await stayAt(g, t0 + 130 * S, t0 + MIN + ARREST - 5 * S)
+    await poll(g, t0 + ARREST + S)
+    expect((await row(g, g.aina.playerId)).arrest).not.toBeNull()
+    await poll(g, t0 + MIN + ARREST)
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, arrest: null })
+    expect(notices('Aina')).toContain('Free! Super Ring is spent.')
+  })
+
+  it('a poll while paused does not judge, and the view holds the end still', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    now = t0 + 60 * S
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    const v = await poll(g, t0 + ARREST + 10 * S, g.aina.token)
+    expect(v.arrest!.endsAt).toBe(t0 + ARREST + ARREST - 50 * S)
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, arrest: expect.anything() })
+  })
+
+  describe('auto-jail with Super Ring', () => {
+    /** Schedule mode: pings reveal at +10 and +15. Hafiz checks in to both; Aina misses both, so +15 would jail her. */
+    async function missedTwo() {
+      const g = await holding({ checkinMode: 'schedule' })
+      for (const m of [10, 15]) {
+        now = T0 + m * MIN - 20 * S
+        await run('location', { code: g.code, token: g.hafiz.token, ...at(30) })
+        await poll(g, T0 + m * MIN)
+      }
+      return g
+    }
+
+    it('push to open Kejar; the first fresh fix starts it there', async () => {
+      const g = await missedTwo()
+      const fired = T0 + 15 * MIN
+      const aina = await row(g, g.aina.playerId)
+      expect(aina.jailed).toBe(false)
+      expect(aina.arrest).toMatchObject({ route: 'auto-jail', by: null, center: null, startedAt: null, catchEventId: null, firedAt: new Date(fired).toISOString() })
+      expect(await evs(g, 'auto-jailed')).toHaveLength(0)
+      expect(await evs(g, 'ring-locked')).toHaveLength(0)
+      expect(await evs(g, 'arrested')).toHaveLength(1)
+      expect(notices('Aina')).toEqual(['Super Ring! Open Kejar within 60 s to start house arrest.'])
+      expect((await poll(g, fired + S, g.aina.token)).arrest).toEqual({ endsAt: null, center: null, openBy: fired + 60 * S })
+      // A rough fix doesn't start it; a usable one does, right there.
+      now = fired + 20 * S
+      await run('location', { code: g.code, token: g.aina.token, ...at(150), accuracy_m: 70 })
+      expect((await row(g, g.aina.playerId)).arrest!.startedAt).toBeNull()
+      now = fired + 30 * S
+      await run('location', { code: g.code, token: g.aina.token, ...at(120) })
+      const { lat, lng } = at(120)
+      expect((await row(g, g.aina.playerId)).arrest).toMatchObject({ center: { lat, lng }, startedAt: new Date(now).toISOString() })
+      expect(notices('Aina').at(-1)).toBe('Super Ring! House arrest: stay within 26 m for 2:36.')
+      // Past the 60 s, a started arrest keeps going.
+      await stayAt(g, fired + 40 * S, fired + 90 * S, 120)
+      await poll(g, fired + 91 * S)
+      expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, arrest: expect.objectContaining({ center: { lat, lng } }) })
+    })
+
+    it('no fix in 60 s means Penjara, and Super Ring is spent', async () => {
+      const g = await missedTwo()
+      const fired = T0 + 15 * MIN
+      await poll(g, fired + 59 * S)
+      expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+      await poll(g, fired + 60 * S)
+      expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: true, caught_by: null, arrest: null })
+      expect((await ringRow(g)).used_at).not.toBeNull()
+      expect((await evs(g, 'auto-jailed')).map((e) => e.data)).toEqual([expect.objectContaining({ cause: 'no-show', who: 'Aina #07' })])
+      // Still the missed check-ins Penjara screen, with the check-ins that sent her.
+      const v = await poll(g, fired + 61 * S, g.aina.token)
+      expect(v.jailReason).toBe('missed-checkins')
+      expect(v.jailCheckins).toEqual([
+        { at: T0 + 10 * MIN, ok: false },
+        { at: T0 + 15 * MIN, ok: false },
+      ])
+    })
+  })
+
+  it('undo kejar on the arrest ends it, lifts the lock and gives Super Ring back', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    await catchAt(g, 'ben', 'aina', t0)
+    const roster = (await poll(g, t0 + 10 * S)).roster
+    const eventId = (await evs(g, 'arrested'))[0].id
+    expect(roster.find((p) => p.id === g.aina.playerId)!.undoKejarId).toBe(eventId)
+    now = t0 + 20 * S
+    expect(await run('undoKejar', { code: g.code, eventId, token: g.siti.token })).toEqual({ ok: true })
+    expect(await run('undoKejar', { code: g.code, eventId, token: g.siti.token })).toEqual({ ok: false, reason: 'not-undoable' })
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, arrest: null })
+    expect((await ringRow(g)).used_at).toBeNull()
+    expect((await evs(g, 'arrest-ended')).map((e) => e.data)).toEqual([{ outcome: 'undone', firedAt: new Date(t0).toISOString() }])
+    expect((await poll(g, t0 + 21 * S)).roster.find((p) => p.id === g.aina.playerId)!.undoKejarId).toBeNull()
+    // The lock is lifted: Ben's next catch fires Super Ring again, rather than being refused.
+    expect(await catchAt(g, 'ben', 'aina', t0 + 30 * S)).toEqual(LOCK_LINE)
+  })
+
+  it('the game ends during house arrest: they count as free (Dikejar win if nobody else is free)', async () => {
+    // A 15-minute chase: hiding to +5, the chase to +20, scheduled pings at +10 and +15.
+    const g = await holding({ lengthMin: 15, checkinMode: 'schedule' })
+    expect(await catchAt(g, 'chong', 'hafiz', T0 + 8 * MIN)).toMatchObject({ ok: true })
+    for (const m of [10, 15]) {
+      now = T0 + m * MIN - 20 * S
+      await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    }
+    expect(await catchAt(g, 'ben', 'aina', T0 + 19 * MIN)).toEqual(LOCK_LINE)
+    expect(await evs(g, 'final-whistle')).toHaveLength(0)
+    const over = await poll(g, T0 + 20 * MIN + S)
+    expect(over.phase).toBe('ended')
+    expect(over.results?.winner).toBe('runners')
+    expect(over.results?.survivors).toEqual([g.aina.playerId])
+    // The results screen gets no stale house arrest.
+    expect((await poll(g, T0 + 20 * MIN + 2 * S, g.aina.token)).arrest).toBeNull()
+  })
+
+  describe('fix round 1', () => {
+    it('release ignores a rough fix in the last 20 s: inside until T-5 s, then a 60 m fix at T-2 s, is free', async () => {
+      const g = await holding()
+      const t0 = T0 + 8 * MIN
+      await catchAt(g, 'ben', 'aina', t0)
+      await stayAt(g, t0 + 10 * S, t0 + ARREST - 5 * S)
+      now = t0 + ARREST - 2 * S
+      await run('location', { code: g.code, token: g.aina.token, ...at(80), accuracy_m: 60 })
+      await poll(g, t0 + ARREST + S)
+      expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, arrest: null })
+      expect((await evs(g, 'arrest-ended')).map((e) => e.data.outcome)).toEqual(['free'])
+    })
+
+    it("a runner's rough fix is not used as the circle's centre", async () => {
+      const g = await holding()
+      now = T0 + 8 * MIN
+      await run('location', { code: g.code, token: g.aina.token, ...at(10), accuracy_m: 150 })
+      await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7), ...at(0) })
+      const { lat, lng } = at(0)
+      expect((await row(g, g.aina.playerId)).arrest!.center).toEqual({ lat, lng })
+    })
+
+    it('release restarts the check-in count: auto-jailed into house arrest, released, then one more miss does not jail', async () => {
+      const g = await holding({ checkinMode: 'schedule' })
+      const hafizIn = async (m: number) => {
+        now = T0 + m * MIN - 20 * S
+        await run('location', { code: g.code, token: g.hafiz.token, ...at(30) })
+        await poll(g, T0 + m * MIN)
+      }
+      await hafizIn(10)
+      await hafizIn(15)
+      const started = T0 + 15 * MIN + 10 * S
+      now = started
+      await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+      await stayAt(g, started + 10 * S, started + ARREST - 5 * S)
+      await poll(g, started + ARREST + S)
+      expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, arrest: null, freed_at: null })
+      // She misses +20: one miss since her release, so she stays free; and her banner says one missed.
+      await hafizIn(20)
+      expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+      expect((await poll(g, T0 + 20 * MIN + S, g.aina.token)).checkin?.missedInRow).toBe(1)
+      // A second miss in a row does.
+      await hafizIn(25)
+      expect((await row(g, g.aina.playerId)).jailed).toBe(true)
+    })
+
+    it('catching the rescuer fails the rescue, even when Super Ring fires', async () => {
+      const g = await holding()
+      await store.updatePlayers([{ id: g.hafiz.playerId, patch: { jailed: true, caught_at: new Date(now).toISOString(), caught_by: g.ben.playerId } }])
+      now = T0 + 8 * MIN
+      expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true, rescue: 'started' })
+      now += 3 * S
+      expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7), ...at(0) })).toEqual(LOCK_LINE)
+      expect((await store.gameByCode(g.code))!.rescue).toBeNull()
+      expect(await evs(g, 'rescue-failed')).toMatchObject([{ actor_id: g.aina.playerId }])
+      now += 10 * S
+      await poll(g, now)
+      expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+    })
+
+    it('the ping count leaves out a runner under house arrest', async () => {
+      const g = await holding()
+      const t0 = T0 + 8 * MIN
+      await catchAt(g, 'ben', 'aina', t0)
+      await stayAt(g, t0 + 10 * S, T0 + 10 * MIN - 5 * S)
+      now = T0 + 10 * MIN - 20 * S
+      await run('location', { code: g.code, token: g.hafiz.token, ...at(30) })
+      const v = await poll(g, T0 + 10 * MIN, g.chong.token)
+      expect((await evs(g, 'ping')).find((e) => e.data.seq === 1)!.data).toMatchObject({ seen: 1, missed: 0 })
+      expect(v.feed.map((f) => f.text)).toContain('Ping: 1 Dikejar seen.')
+    })
+
+    it('a no-show after a pause still keeps the check-ins that sent them', async () => {
+      const g = await holding({ checkinMode: 'schedule' })
+      for (const m of [10, 15]) {
+        now = T0 + m * MIN - 20 * S
+        await run('location', { code: g.code, token: g.hafiz.token, ...at(30) })
+        await poll(g, T0 + m * MIN)
+      }
+      now = T0 + 15 * MIN + 20 * S
+      await run('pause', { code: g.code, organiserToken: g.organiserToken })
+      now = T0 + 16 * MIN + 20 * S
+      await run('resume', { code: g.code, organiserToken: g.organiserToken })
+      expect((await row(g, g.aina.playerId)).arrest!.firedAt).toBe(new Date(T0 + 16 * MIN).toISOString())
+      await poll(g, T0 + 17 * MIN)
+      expect((await row(g, g.aina.playerId)).jailed).toBe(true)
+      const jailing = (await evs(g, 'auto-jailed'))[0]
+      expect(jailing.data).toMatchObject({ cause: 'no-show', checkins: [{ revealAt: T0 + 10 * MIN, ok: false }, { revealAt: T0 + 15 * MIN, ok: false }] })
+    })
+  })
+
+  describe('final review fixes', () => {
+    it('the release check ignores a fix sent during a pause: out during the pause, back in after, is free', async () => {
+      const g = await holding()
+      const t0 = T0 + 8 * MIN
+      await catchAt(g, 'ben', 'aina', t0)
+      await stayAt(g, t0 + 10 * S, t0 + 140 * S)
+      now = t0 + 148 * S
+      await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+      now = t0 + 150 * S
+      await run('pause', { code: g.code, organiserToken: g.organiserToken })
+      // She walks out while paused: stored, but it must not count.
+      now = t0 + 155 * S
+      await run('location', { code: g.code, token: g.aina.token, ...at(80) })
+      now = t0 + 160 * S
+      await run('resume', { code: g.code, organiserToken: g.organiserToken })
+      // The end moved 10 s, to t0 + 166 s: the last 20 s now reach back into the pause.
+      expect((await poll(g, t0 + 161 * S, g.aina.token)).arrest!.endsAt).toBe(t0 + 10 * S + ARREST)
+      // Back in after the resume, just after the end: too late to count, so t0 + 148 s is what she's judged on.
+      now = t0 + 167 * S
+      await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+      await poll(g, t0 + 168 * S)
+      expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, arrest: null })
+      expect((await evs(g, 'arrest-ended')).map((e) => e.data.outcome)).toEqual(['free'])
+    })
+
+    it('Luar Garisan on a fix outside the circle: disqualified and the arrest ends, never Penjara too', async () => {
+      const g = await holding()
+      const t0 = T0 + 8 * MIN
+      expect(await catchAt(g, 'ben', 'aina', t0, 195, 190)).toEqual(LOCK_LINE)
+      now = t0 + 10 * S
+      await run('location', { code: g.code, token: g.aina.token, ...at(225) })
+      expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, out_warned_at: expect.any(String) })
+      // 45 m from the centre: outside the circle as well as the play area, on the fix that disqualifies her.
+      now = t0 + 40 * S
+      await run('location', { code: g.code, token: g.aina.token, ...at(240) })
+      expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, arrest: null, disqualified_at: new Date(now).toISOString() })
+      expect(await evs(g, 'auto-jailed')).toHaveLength(0)
+      expect(notices('Aina')).not.toContain('Bail revoked. To Penjara.')
+      // Not a revoked arrest either: Luar Garisan ended it, as the poll's own Luar Garisan check does (no event).
+      expect(await evs(g, 'arrest-ended')).toHaveLength(0)
+    })
+
+    it('a chasing poll reads the players for house arrests only once Super Ring has been claimed', async () => {
+      forcedDraws = [0.9, 0.9]
+      const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' } })
+      await run('dropRing', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+      await run('start', { code: g.code, organiserToken: g.organiserToken })
+      now = T0 + 7 * MIN
+      await run('state', { code: g.code, organiserToken: g.organiserToken })
+      const reads = async (ms: number) => {
+        const players = store.players
+        let n = 0
+        store.players = (...a: Parameters<typeof players>) => (n++, players.apply(store, a))
+        try {
+          now = ms
+          await run('state', { code: g.code, organiserToken: g.organiserToken })
+        } finally {
+          store.players = players
+        }
+        return n
+      }
+      const unclaimed = await reads(T0 + 7 * MIN + S)
+      const code = (await store.gameByCode(g.code))!.ring_stash!.code!
+      now = T0 + 7 * MIN + 2 * S
+      expect(await run('claim', { code: g.code, token: g.aina.token, qr: ringQr(code), ...STASH, accuracy_m: 8 })).toEqual({ ok: true, kind: 'ring' })
+      expect(await reads(T0 + 7 * MIN + 3 * S)).toBe(unclaimed + 1)
+    })
+
+    it('a catch-route arrest that never started reads as bail revoked, not missed check-ins', async () => {
+      const g = await holding()
+      const fired = T0 + 8 * MIN
+      const ring = await ringRow(g)
+      await store.updatePowerUp(ring.id, { used_at: new Date(fired).toISOString() })
+      const arrest = { firedAt: new Date(fired).toISOString(), route: 'catch' as const, by: g.ben.playerId, center: null, startedAt: null, ringId: ring.id, catchEventId: null }
+      await store.updatePlayers([{ id: g.aina.playerId, patch: { arrest } }])
+      await poll(g, fired + 60 * S)
+      expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: true, arrest: null })
+      expect((await evs(g, 'auto-jailed')).map((e) => e.data)).toEqual([expect.objectContaining({ cause: 'revoked', who: 'Aina #07' })])
+      expect((await poll(g, fired + 61 * S, g.aina.token)).jailReason).toBe('bail-revoked')
+      const feed = (await poll(g, fired + 61 * S, g.hafiz.token)).feed.map((f) => f.text)
+      expect(feed.some((f) => f.includes('missed 2 check-ins'))).toBe(false)
+    })
+  })
+
+  it('Luar Garisan still applies during house arrest', async () => {
+    const g = await holding()
+    const t0 = T0 + 8 * MIN
+    // Caught 5 m inside the edge (the play area reaches 200 m north): the circle pokes outside it.
+    expect(await catchAt(g, 'ben', 'aina', t0, 195, 190)).toEqual(LOCK_LINE)
+    // 25 m outside the play area but inside the circle (26 m + 8 m): warned, then disqualified 30 s later.
+    now = t0 + 10 * S
+    await run('location', { code: g.code, token: g.aina.token, ...at(225) })
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, out_warned_at: expect.any(String) })
+    now = t0 + 40 * S
+    await run('location', { code: g.code, token: g.aina.token, ...at(225) })
+    expect((await row(g, g.aina.playerId)).disqualified_at).toBe(new Date(now).toISOString())
+    expect(await evs(g, 'luar-garisan')).toHaveLength(1)
+    // Out of the round: the house arrest is over and nothing more happens to her.
+    await poll(g, t0 + ARREST + S)
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: false, arrest: null })
+    expect(await evs(g, 'auto-jailed')).toHaveLength(0)
+  })
+})
+
+describe('Mak Kau Hijau (Plan E2 task 5)', () => {
+  const S = 1000
+  const STASH = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const atStash = { ...STASH, accuracy_m: 8 }
+  const PUSH_BODY = 'Mak kau hijau! Tap the green in 20 s or go to Penjara.'
+  type G = Awaited<ReturnType<typeof chasing>>
+
+  /**
+   * A chasing Full game with Super Ring and Mak Kau Hijau dropped. Runners: Aina (#07), Hafiz (#03).
+   * Chasers: Ben, Chong (Chong has no push). Siti is a marshal. `now` is left at +7 min.
+   */
+  async function chasing(settings: object = {}, moreRunners: string[] = []) {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' }, ...settings })
+    const chong = await run('join', { code: g.code, name: 'Chong', accepted: true })
+    await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [chong.playerId]: 'chaser' } })
+    const more: Record<string, { token: string; playerId: string }> = {}
+    for (const [k, name] of moreRunners.entries()) {
+      const r = await run('join', { code: g.code, name, accepted: true })
+      await run('subscribe', { code: g.code, token: r.token, subscription: { endpoint: `https://push/${name}` } })
+      await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [r.playerId]: 'runner' } })
+      await run('linkTag', { code: g.code, token: r.token, tagId: 11 + k })
+      more[name] = r
+    }
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    await run('dropRing', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('dropHijau', { code: g.code, organiserToken: g.organiserToken, ...STASH })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    pushes = []
+    return { ...g, chong, siti, more, gameId: (await store.gameByCode(g.code))!.id }
+  }
+  const game = async (g: G) => (await store.gameByCode(g.code))!
+  const stamp = (t: number) => new Date(t).toISOString()
+  /** A chaser (Ben by default) scans the green card at the stash at `ms`. */
+  const claimAt = async (g: G, ms: number, token = g.ben.token) => {
+    now = ms
+    return run('claim', { code: g.code, token, qr: hijauQr((await game(g)).hijau_stash!.code!), ...atStash })
+  }
+  const poll = (g: G, ms: number, token?: string) => {
+    now = ms
+    return run<View>('state', token ? { code: g.code, token } : { code: g.code, organiserToken: g.organiserToken })
+  }
+  const tap = (g: G, token: string, ms: number) => {
+    now = ms
+    return run('touchGreen', { code: g.code, token })
+  }
+  const row = async (g: G, id: string) => (await store.players(g.gameId)).find((p) => p.id === id)!
+  const evs = async (g: G, type: string) => (await store.events(g.gameId)).filter((e) => e.type === type)
+  const hijauPushes = () => pushes.filter((p) => (p.payload as any).type === 'hijau')
+  const texts = (v: View) => v.feed.map((f) => f.text)
+
+  it("claiming it pushes every free runner once and jails those who don't tap in 20 s", async () => {
+    const g = await chasing()
+    const t = T0 + 7 * MIN
+    expect(await claimAt(g, t)).toEqual({ ok: true, kind: 'hijau' })
+    expect((await game(g)).hijau).toMatchObject({ startsAt: stamp(t), deadline: stamp(t + 20 * S), sentAt: stamp(t), settledAt: null })
+    expect(hijauPushes().map((p) => p.endpoint).sort()).toEqual(['https://push/Aina', 'https://push/Hafiz'])
+    expect(hijauPushes()[0].payload).toMatchObject({ type: 'hijau', code: g.code, deadline: t + 20 * S, body: PUSH_BODY })
+    expect(await evs(g, 'hijau')).toHaveLength(1)
+    await poll(g, t + 5 * S)
+    expect(hijauPushes()).toHaveLength(2)
+
+    const aina = await poll(g, t + 5 * S, g.aina.token)
+    expect(aina.hijau).toEqual({ claimedAt: t, startsAt: t, deadline: t + 20 * S, tapped: false })
+    expect(aina.feed[0]).toMatchObject({ text: 'Mak kau hijau! Tap the green.', act: true })
+    const ben = await poll(g, t + 5 * S, g.ben.token)
+    expect(ben.hijau).toBeNull()
+    expect(ben.feed[0]).toMatchObject({ text: 'Mak kau hijau! Dikejar have 20 s.', act: false })
+    expect(await tap(g, g.ben.token, t + 6 * S)).toEqual({ ok: false, reason: 'not-a-target' })
+
+    expect(await tap(g, g.aina.token, t + 10 * S)).toEqual({ ok: true })
+    // A retry after a bad connection is still fine.
+    expect(await tap(g, g.aina.token, t + 11 * S)).toEqual({ ok: true })
+    expect((await poll(g, t + 12 * S, g.aina.token)).hijau).toMatchObject({ tapped: true })
+    await poll(g, t + 19 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
+
+    await poll(g, t + 20 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    expect(await evs(g, 'auto-jailed')).toEqual([expect.objectContaining({ target_id: g.hafiz.playerId, data: expect.objectContaining({ cause: 'hijau' }) })])
+    expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: false, jailed: 1 }])
+
+    const after = await poll(g, t + 21 * S, g.aina.token)
+    expect(after.hijau).toBeNull()
+    expect(texts(after)).toContain('Safe! You touched green.')
+    expect(texts(after)).toContain('Mak kau hijau: 1 Dikejar to Penjara.')
+    const benAfter = await poll(g, t + 21 * S, g.ben.token)
+    expect(texts(benAfter)).toContain('Mak kau hijau: 1 Dikejar to Penjara.')
+    expect(texts(benAfter).join(' ')).not.toMatch(/check-in|Safe/)
+    // Marshals get the runner's own line, with the undo.
+    const siti = await poll(g, t + 21 * S, g.siti.token)
+    expect(siti.alerts.find((a) => a.kind === 'auto-jail')).toMatchObject({ targetId: g.hafiz.playerId, text: 'Hafiz #03 missed Mak kau hijau, sent to Penjara' })
+  })
+
+  it("a tap after the deadline doesn't count", async () => {
+    const g = await chasing()
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    expect(await tap(g, g.hafiz.token, t + 20 * S)).toEqual({ ok: false, reason: 'too-late' })
+    expect(await tap(g, g.aina.token, t + 25 * S)).toEqual({ ok: false, reason: 'too-late' })
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(true)
+    expect((await game(g)).hijau!.tapped).toEqual([])
+  })
+
+  it('nobody polls until 3 minutes later: judged once, same result', async () => {
+    const g = await chasing()
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    await tap(g, g.aina.token, t + 10 * S)
+    await poll(g, t + 3 * MIN)
+    await poll(g, t + 3 * MIN + S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    expect(await evs(g, 'auto-jailed')).toHaveLength(1)
+    expect(await evs(g, 'hijau-done')).toHaveLength(1)
+    expect(hijauPushes()).toHaveLength(2)
+  })
+
+  it('claimed during a check-in window: starts when it closes', async () => {
+    const g = await chasing()
+    // Ping 1: alert 9:15, reveal 10:00.
+    await claimAt(g, T0 + 9 * MIN + 20 * S)
+    expect((await game(g)).hijau).toMatchObject({ startsAt: stamp(T0 + 10 * MIN), deadline: stamp(T0 + 10 * MIN + 20 * S), sentAt: null })
+    expect(hijauPushes()).toHaveLength(0)
+    expect((await poll(g, T0 + 10 * MIN - S, g.aina.token)).hijau).toBeNull()
+    expect(hijauPushes()).toHaveLength(0)
+    await poll(g, T0 + 10 * MIN)
+    expect(hijauPushes()).toHaveLength(2)
+    expect((await poll(g, T0 + 10 * MIN + S, g.aina.token)).hijau).toMatchObject({ startsAt: T0 + 10 * MIN, deadline: T0 + 10 * MIN + 20 * S })
+  })
+
+  it("claimed while a Mat Rempit window is pending: starts at that window's reveal", async () => {
+    const g = await chasing()
+    const flare = await store.addPowerUp({ game_id: g.gameId, player_id: g.chong.playerId, kind: 'flare', station: 1 })
+    expect(await run('usePowerup', { code: g.code, token: g.chong.token, powerupId: flare.id })).toEqual({ ok: true, kind: 'flare' })
+    await claimAt(g, T0 + 7 * MIN + 10 * S)
+    expect((await game(g)).hijau!.startsAt).toBe(stamp(T0 + 7 * MIN + 30 * S))
+  })
+
+  it('push went out late (first poll 6 s after start): void, nobody jailed', async () => {
+    const g = await chasing()
+    await claimAt(g, T0 + 9 * MIN + 20 * S)
+    const start = T0 + 10 * MIN
+    // Ping 1 reveals at 10:00 with nobody polling; the first poll is 6 s into the 20 s, leaving under 15 s.
+    await poll(g, start + 6 * S)
+    expect((await game(g)).hijau!.sentAt).toBe(stamp(start + 6 * S))
+    expect(await tap(g, g.aina.token, start + 8 * S)).toEqual({ ok: true })
+    await poll(g, start + 20 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: true, jailed: 0 }])
+    expect(texts(await poll(g, start + 21 * S, g.ben.token))).toContain('Mak kau hijau fizzled. The alert went out too late.')
+    // Not even the runner who tapped is told "Safe!": the run never counted.
+    expect(texts(await poll(g, start + 21 * S, g.aina.token)).join(' ')).not.toMatch(/fizzled|to Penjara|Safe/)
+  })
+
+  it('nobody polls inside the 20 s at all: no push went out, so it is void', async () => {
+    const g = await chasing()
+    await claimAt(g, T0 + 9 * MIN + 20 * S)
+    await poll(g, T0 + 11 * MIN)
+    expect(hijauPushes()).toHaveLength(0)
+    expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: true, jailed: 0 }])
+    expect(await evs(g, 'auto-jailed')).toHaveLength(0)
+  })
+
+  it('a runner with push turned off is not immune', async () => {
+    const g = await chasing()
+    await store.updatePlayers([{ id: g.hafiz.playerId, patch: { push: null } }])
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    expect(hijauPushes().map((p) => p.endpoint)).toEqual(['https://push/Aina'])
+    await tap(g, g.aina.token, t + 5 * S)
+    await poll(g, t + 20 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+  })
+
+  it('Super Ring holder who misses gets house arrest instead', async () => {
+    const g = await chasing()
+    const ringCode = (await game(g)).ring_stash!.code!
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: ringQr(ringCode), ...atStash })).toEqual({ ok: true, kind: 'ring' })
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    pushes = []
+    await poll(g, t + 20 * S)
+    const aina = await row(g, g.aina.playerId)
+    expect(aina.jailed).toBe(false)
+    expect(aina.arrest).toMatchObject({ route: 'hijau', by: null, center: null, startedAt: null })
+    expect(pushes.filter((p) => p.endpoint === 'https://push/Aina').map((p) => (p.payload as any).body)).toEqual(['Super Ring! Open Kejar within 60 s to start house arrest.'])
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect((await evs(g, 'auto-jailed')).map((e) => e.target_id)).toEqual([g.hafiz.playerId])
+    expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: false, jailed: 1 }])
+  })
+
+  it('a Super Ring holder who misses it and sends no fix for 60 s goes to Penjara for Mak kau hijau, not missed check-ins', async () => {
+    const g = await chasing()
+    const ringCode = (await game(g)).ring_stash!.code!
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: ringQr(ringCode), ...atStash })).toEqual({ ok: true, kind: 'ring' })
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    await poll(g, t + 20 * S)
+    await poll(g, t + 79 * S)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+    await poll(g, t + 80 * S)
+    expect(await row(g, g.aina.playerId)).toMatchObject({ jailed: true, caught_by: null, arrest: null })
+    const jailing = (await evs(g, 'auto-jailed')).find((e) => e.target_id === g.aina.playerId)!
+    expect(jailing.data).toMatchObject({ cause: 'hijau', who: 'Aina #07' })
+    // Her Penjara screen: Mak kau hijau got her, with no check-in row.
+    const mine = await poll(g, t + 81 * S, g.aina.token)
+    expect(mine.jailReason).toBe('hijau')
+    expect(mine.jailCheckins).toBeNull()
+    // Players: a plain Penjara line that never names the card, and never "missed 2 check-ins".
+    for (const token of [g.aina.token, g.ben.token, g.chong.token]) {
+      const feed = texts(await poll(g, t + 81 * S, token))
+      expect(feed.some((f) => f.includes('missed 2 check-ins'))).toBe(false)
+      expect(feed).toContain('#07 went to Penjara.')
+    }
+    // Marshals: named, as Mak kau hijau, for the undo.
+    const marshal = await poll(g, t + 81 * S, g.siti.token)
+    expect(texts(marshal).some((f) => f.includes('missed 2 check-ins'))).toBe(false)
+    expect(texts(marshal)).toContain('#07 missed Mak kau hijau, sent to Penjara.')
+    expect(marshal.alerts.map((a) => a.text)).toContain('Aina #07 missed Mak kau hijau, sent to Penjara')
+    expect(marshal.alerts.some((a) => a.text.includes('missed 2 check-ins'))).toBe(false)
+  })
+
+  it('Luar Garisan, jailed and arrested runners are left out', async () => {
+    const g = await chasing({}, ['Dan', 'Eve'])
+    const { Dan: dan, Eve: eve } = g.more
+    const arrest = { firedAt: stamp(now), route: 'catch' as const, by: g.ben.playerId, center: STASH, startedAt: stamp(now), ringId: 'r1', catchEventId: null }
+    await store.updatePlayers([
+      { id: dan.playerId, patch: { disqualified_at: stamp(now) } },
+      { id: g.hafiz.playerId, patch: { jailed: true } },
+      { id: g.aina.playerId, patch: { arrest } },
+    ])
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    expect(hijauPushes().map((p) => p.endpoint)).toEqual(['https://push/Eve'])
+    // Only a real target's feed line buzzes.
+    const startLine = async (token: string) => (await poll(g, t + S, token)).feed.find((f) => f.text === 'Mak kau hijau! Tap the green.')
+    expect(await startLine(eve.token)).toMatchObject({ act: true })
+    for (const token of [g.aina.token, g.hafiz.token, dan.token]) expect(await startLine(token)).toMatchObject({ act: false })
+    expect(await tap(g, g.hafiz.token, t + S)).toEqual({ ok: false, reason: 'not-a-target' })
+    expect((await poll(g, t + S, g.aina.token)).hijau).toBeNull()
+    await poll(g, t + 20 * S)
+    expect((await evs(g, 'auto-jailed')).map((e) => e.target_id)).toEqual([eve.playerId])
+    expect((await row(g, g.aina.playerId)).arrest).toEqual(arrest)
+    expect((await row(g, dan.playerId)).jailed).toBe(false)
+  })
+
+  it('Mat Rempit is refused while it runs', async () => {
+    const g = await chasing()
+    const flare = await store.addPowerUp({ game_id: g.gameId, player_id: g.chong.playerId, kind: 'flare', station: 1 })
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    expect(await run('usePowerup', { code: g.code, token: g.chong.token, powerupId: flare.id })).toEqual({ ok: false, reason: 'hijau-running' })
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === flare.id)!.used_at).toBeNull()
+    now = t + 20 * S
+    expect(await run('usePowerup', { code: g.code, token: g.chong.token, powerupId: flare.id })).toEqual({ ok: true, kind: 'flare' })
+  })
+
+  it('paused during the 20 s: the deadline moves by the pause', async () => {
+    const g = await chasing()
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    now = t + 10 * S
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    // A tap while paused counts (as if made at the pause).
+    expect(await tap(g, g.aina.token, t + 30 * S)).toEqual({ ok: true })
+    // The countdown holds still while paused.
+    expect((await poll(g, t + 40 * S, g.hafiz.token)).hijau).toMatchObject({ deadline: t + 50 * S })
+    // Past the old deadline while paused: nobody is judged.
+    await poll(g, t + 60 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
+    now = t + 70 * S
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    expect((await game(g)).hijau!.deadline).toBe(stamp(t + 80 * S))
+    await poll(g, t + 79 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
+    await poll(g, t + 80 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+  })
+
+  it('jails the last free runners: final whistle; Phone problem undo during the 60 s calls it off', async () => {
+    const g = await chasing()
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    await poll(g, t + 20 * S)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(true)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect((await evs(g, 'final-whistle')).map((e) => e.data)).toEqual([{ cause: 'hijau' }])
+    expect(texts(await poll(g, t + 21 * S, g.ben.token))).toContain('No Dikejar left free! Final whistle in 60 s.')
+    const hafizJail = (await evs(g, 'auto-jailed')).find((e) => e.target_id === g.hafiz.playerId)!
+    // Penjara is locked, but the marshal's undo is a safety tool and still works.
+    now = t + 45 * S
+    expect(await run('undoAutoJail', { code: g.code, token: g.siti.token, eventId: hafizJail.id })).toEqual({ ok: true })
+    expect((await game(g)).final_whistle_at).toBeNull()
+    await poll(g, t + 20 * S + 61 * S)
+    expect((await game(g)).ended_at).toBeNull()
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
+  })
+
+  it('too close to the end to run: the card is claimed and settles void at once, with no push', async () => {
+    const g = await chasing({ lengthMin: 15 })
+    const endsAt = (await poll(g, T0 + 7 * MIN)).endsAt!
+    await keepCheckingIn(g, 7, Math.floor((endsAt - T0) / MIN) - 1)
+    expect(await claimAt(g, endsAt - 15 * S)).toEqual({ ok: true, kind: 'hijau' })
+    expect((await game(g)).hijau!.settledAt).toBe(stamp(endsAt - 15 * S))
+    expect(hijauPushes()).toHaveLength(0)
+    expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: true, jailed: 0, ended: true }])
+    expect(await evs(g, 'hijau')).toHaveLength(0)
+    expect((await poll(g, endsAt - 14 * S, g.aina.token)).hijau).toBeNull()
+    // Void: Penjara is not locked.
+    expect((await game(g)).hijau!.lockedUntil ?? null).toBeNull()
+  })
+
+  it('freed by a jailbreak during the 20 s: never pushed, so no takeover and not jailed', async () => {
+    const g = await chasing()
+    await store.updatePlayers([{ id: g.hafiz.playerId, patch: { jailed: true, caught_at: stamp(now), caught_by: g.ben.playerId } }])
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    expect((await game(g)).hijau!.targets).toEqual([g.aina.playerId])
+    await tap(g, g.aina.token, t + 5 * S)
+    now = t + 6 * S
+    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true })
+    await poll(g, t + 17 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
+    expect((await poll(g, t + 18 * S, g.hafiz.token)).hijau).toBeNull()
+    expect(await tap(g, g.hafiz.token, t + 18 * S)).toEqual({ ok: false, reason: 'not-a-target' })
+    await poll(g, t + 20 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
+    expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: false, jailed: 0 }])
+  })
+
+  it('Durian and Ponteng do not save a runner who misses', async () => {
+    const g = await chasing()
+    const shield = await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'shield', station: 1 })
+    const cloak = await store.addPowerUp({ game_id: g.gameId, player_id: g.hafiz.playerId, kind: 'cloak', station: 1 })
+    expect(await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: shield.id })).toEqual({ ok: true, kind: 'shield' })
+    expect(await run('usePowerup', { code: g.code, token: g.hafiz.token, powerupId: cloak.id })).toEqual({ ok: true, kind: 'cloak' })
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    await poll(g, t + 20 * S)
+    expect((await row(g, g.aina.playerId)).jailed).toBe(true)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+    expect((await evs(g, 'shielded'))).toHaveLength(0)
+  })
+
+  it('a runner jailed by Mak Kau Hijau has not used their one freed, and a jailbreak frees them once the lock ends', async () => {
+    const g = await chasing()
+    const t = T0 + 7 * MIN
+    await claimAt(g, t)
+    await tap(g, g.aina.token, t + 5 * S)
+    await poll(g, t + 20 * S)
+    expect(await row(g, g.hafiz.playerId)).toMatchObject({ jailed: true, freed_once: false, caught_by: null })
+    now = t + 20 * S + 3 * MIN
+    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true })
+    await poll(g, t + 30 * S + 3 * MIN)
+    expect(await row(g, g.hafiz.playerId)).toMatchObject({ jailed: false, freed_once: true })
+  })
+
+  describe('tapping reveals you to the Kejar (owner, 2026-11-13)', () => {
+    const tapWith = (g: G, token: string, ms: number, fix: object) => {
+      now = ms
+      return run('touchGreen', { code: g.code, token, ...fix })
+    }
+    const dotOf = (v: View, id: string) => v.dots.find((d) => d.id === id)
+
+    it('every Kejar sees the tapper as an exact dot where they tapped, until the next ping reveal; runners never do', async () => {
+      const g = await chasing()
+      const t = T0 + 7 * MIN
+      await claimAt(g, t)
+      const spot = at(60)
+      expect(await tapWith(g, g.aina.token, t + 5 * S, spot)).toEqual({ ok: true })
+      expect((await game(g)).hijau!.fixes![g.aina.playerId]).toEqual({ lat: spot.lat, lng: spot.lng, at: stamp(t + 5 * S) })
+      for (const token of [g.ben.token, g.chong.token]) {
+        const v = await poll(g, t + 6 * S, token)
+        expect(dotOf(v, g.aina.playerId)).toMatchObject({ kind: 'runner', lat: spot.lat, lng: spot.lng, exact: true, revealedBy: 'hijau', at: stamp(t + 5 * S) })
+        expect(v.dots.some((d) => d.revealedBy === 'hijau' && d.id !== g.aina.playerId)).toBe(false)
+      }
+      // A fellow runner never sees a hijau reveal.
+      expect((await poll(g, t + 6 * S, g.hafiz.token)).dots.some((d) => d.revealedBy === 'hijau')).toBe(false)
+      // Still there after the run settles, until the next ping reveal (ping 1 reveals at 10:00).
+      expect(dotOf(await poll(g, t + 30 * S, g.ben.token), g.aina.playerId)).toMatchObject({ revealedBy: 'hijau' })
+      await keepCheckingIn(g, 9, 10)
+      expect(dotOf(await poll(g, T0 + 10 * MIN + S, g.ben.token), g.aina.playerId)?.revealedBy ?? null).not.toBe('hijau')
+    })
+
+    it('with no fix on the tap it uses their latest fix from the last 20 s; with none, the tap counts but reveals nothing', async () => {
+      const g = await chasing()
+      const t = T0 + 8 * MIN
+      now = t - 60 * S
+      await run('location', { code: g.code, token: g.hafiz.token, ...at(70) })
+      now = t - 10 * S
+      await run('location', { code: g.code, token: g.aina.token, ...at(50) })
+      await claimAt(g, t)
+      expect(await tap(g, g.aina.token, t + 5 * S)).toEqual({ ok: true })
+      expect(await tap(g, g.hafiz.token, t + 5 * S)).toEqual({ ok: true })
+      const hijauRun = (await game(g)).hijau!
+      expect([...hijauRun.tapped].sort()).toEqual([g.aina.playerId, g.hafiz.playerId].sort())
+      expect(hijauRun.fixes![g.aina.playerId]).toEqual({ lat: at(50).lat, lng: at(50).lng, at: stamp(t + 5 * S) })
+      expect(hijauRun.fixes![g.hafiz.playerId]).toBeUndefined()
+      const v = await poll(g, t + 6 * S, g.ben.token)
+      expect(dotOf(v, g.aina.playerId)).toMatchObject({ revealedBy: 'hijau', lat: at(50).lat })
+      expect(dotOf(v, g.hafiz.playerId)?.revealedBy ?? null).not.toBe('hijau')
+    })
+
+    it('a fix too rough to use on the tap falls back to the stored one', async () => {
+      const g = await chasing()
+      const t = T0 + 8 * MIN
+      now = t - 5 * S
+      await run('location', { code: g.code, token: g.aina.token, ...at(50) })
+      await claimAt(g, t)
+      expect(await tapWith(g, g.aina.token, t + 5 * S, { ...at(90), accuracy_m: 80 })).toEqual({ ok: true })
+      expect((await game(g)).hijau!.fixes![g.aina.playerId]).toMatchObject({ lat: at(50).lat })
+    })
+
+    it('a void run (the alert went out late) reveals nobody', async () => {
+      const g = await chasing()
+      await claimAt(g, T0 + 9 * MIN + 20 * S)
+      const start = T0 + 10 * MIN
+      await poll(g, start + 6 * S)
+      expect(await tapWith(g, g.aina.token, start + 8 * S, at(60))).toEqual({ ok: true })
+      expect((await poll(g, start + 9 * S, g.ben.token)).dots.some((d) => d.revealedBy === 'hijau')).toBe(false)
+      expect((await poll(g, start + 21 * S, g.ben.token)).dots.some((d) => d.revealedBy === 'hijau')).toBe(false)
+    })
+  })
+
+  describe('Penjara locked for 3 minutes (owner, 2026-11-13)', () => {
+    const lockedFor = (ms: number) => ({ ok: false, reason: 'penjara-locked', lockedMs: ms })
+
+    it('locks from the deadline: no rescue, no Settle, no reel; it says how long, and opens after 3 min', async () => {
+      const g = await chasing({}, ['Dan'])
+      const dan = g.more.Dan
+      const t = T0 + 7 * MIN
+      const dato = await store.addPowerUp({ game_id: g.gameId, player_id: g.hafiz.playerId, kind: 'dato', station: null })
+      await claimAt(g, t)
+      await tap(g, g.aina.token, t + 5 * S)
+      await tap(g, dan.token, t + 5 * S)
+      await poll(g, t + 20 * S)
+      expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
+      expect((await game(g)).hijau!.lockedUntil).toBe(stamp(t + 20 * S + 3 * MIN))
+
+      now = t + 66 * S
+      expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toEqual(lockedFor(134 * S))
+      expect((await game(g)).rescue ?? null).toBeNull()
+      expect(await run('settle', { code: g.code, token: g.hafiz.token, qr: JAIL_QR, targetIds: [], ...at(10) })).toEqual(lockedFor(134 * S))
+      expect((await store.powerUps(g.gameId)).find((u) => u.id === dato.id)!.used_at).toBeNull()
+      expect(await run('pullReel', { code: g.code, token: g.hafiz.token, ...at(10) })).toEqual(lockedFor(134 * S))
+      expect((await row(g, g.hafiz.playerId)).reel_pulled_at ?? null).toBeNull()
+
+      // Everyone's view carries the lock's end, for the Penjara screen's countdown.
+      expect((await poll(g, t + 66 * S, g.hafiz.token)).penjaraLockedUntil).toBe(t + 20 * S + 3 * MIN)
+      expect((await poll(g, t + 66 * S, g.aina.token)).penjaraLockedUntil).toBe(t + 20 * S + 3 * MIN)
+
+      now = t + 20 * S + 3 * MIN
+      expect((await poll(g, now, g.hafiz.token)).penjaraLockedUntil).toBeNull()
+      expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true, rescue: 'started' })
+    })
+
+    it("a marshal's Undo kejar still works while Penjara is locked", async () => {
+      const g = await chasing({}, ['Dan'])
+      const dan = g.more.Dan
+      const t = T0 + 7 * MIN
+      await claimAt(g, t)
+      await tap(g, g.aina.token, t + 5 * S)
+      await tap(g, dan.token, t + 5 * S)
+      await poll(g, t + 20 * S)
+      expect((await game(g)).hijau!.lockedUntil).toBe(stamp(t + 20 * S + 3 * MIN))
+      // Ben catches Dan (#11) during the lock.
+      now = t + 40 * S
+      await run('location', { code: g.code, token: dan.token, ...at(10) })
+      expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(11), ...at(0) })).toMatchObject({ ok: true })
+      expect((await row(g, dan.playerId)).jailed).toBe(true)
+      const caught = (await evs(g, 'caught')).find((e) => e.target_id === dan.playerId)!
+      now = t + 50 * S
+      expect(await run('undoKejar', { code: g.code, eventId: caught.id, token: g.siti.token })).toEqual({ ok: true })
+      expect(await row(g, dan.playerId)).toMatchObject({ jailed: false, freed_once: false })
+    })
+
+    it('a rescue holding when the 20 s ends cannot succeed', async () => {
+      const g = await chasing({}, ['Dan'])
+      const dan = g.more.Dan
+      await store.updatePlayers([{ id: dan.playerId, patch: { jailed: true, caught_at: stamp(now), caught_by: g.ben.playerId } }])
+      const t = T0 + 7 * MIN
+      await claimAt(g, t)
+      await tap(g, g.aina.token, t + 5 * S)
+      // Aina starts a rescue 15 s in; its 10 s hold ends after the deadline.
+      now = t + 15 * S
+      expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true, rescue: 'started' })
+      now = t + 25 * S
+      await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+      await poll(g, t + 26 * S)
+      expect((await row(g, dan.playerId)).jailed).toBe(true)
+      expect(await evs(g, 'jailbreak')).toHaveLength(0)
+      expect(await evs(g, 'rescue-failed')).toHaveLength(1)
+    })
+
+    it('a void run locks nothing', async () => {
+      const g = await chasing()
+      await store.updatePlayers([{ id: g.hafiz.playerId, patch: { jailed: true, caught_at: stamp(now), caught_by: g.ben.playerId } }])
+      await claimAt(g, T0 + 9 * MIN + 20 * S)
+      await poll(g, T0 + 11 * MIN)
+      expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: true, jailed: 0 }])
+      expect((await game(g)).hijau!.lockedUntil ?? null).toBeNull()
+      now = T0 + 11 * MIN + S
+      expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true })
+    })
+
+    it('pausing freezes the lock, and resume moves it', async () => {
+      const g = await chasing()
+      const t = T0 + 7 * MIN
+      await claimAt(g, t)
+      await tap(g, g.aina.token, t + 5 * S)
+      await poll(g, t + 20 * S)
+      now = t + 80 * S
+      await run('pause', { code: g.code, organiserToken: g.organiserToken })
+      // 2:00 left at the pause, still 2:00 later on.
+      expect((await poll(g, t + 10 * MIN, g.hafiz.token)).penjaraLockedUntil).toBe(t + 10 * MIN + 120 * S)
+      now = t + 10 * MIN
+      await run('resume', { code: g.code, organiserToken: g.organiserToken })
+      expect((await game(g)).hijau!.lockedUntil).toBe(stamp(t + 10 * MIN + 120 * S))
+      now = t + 10 * MIN + 119 * S
+      expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toEqual(lockedFor(S))
+      now = t + 10 * MIN + 120 * S
+      expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true })
+    })
   })
 })

@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import PowerCard from './PowerCard'
 
@@ -32,39 +32,36 @@ describe('PowerCard', () => {
     expect(screen.queryByRole('img', { name: 'Ponteng' })).toBeNull()
   })
 
-  it('Dato Seri has the legendary face with a foil layer; no other card ever does', () => {
+  it('Dato Seri has the legendary face with marker scribbles; no other card ever does', () => {
     const { container } = render(<PowerCard kind="dato" />)
-    expect(screen.getByTestId('foil')).toBeInTheDocument()
+    expect(screen.getByTestId('scribbles')).toBeInTheDocument()
     expect(container.querySelector('.power-card')).toHaveClass('legendary')
     expect(screen.getByText('★ LEGENDARY · ONE PER GAME')).toBeInTheDocument()
     expect(screen.queryByText('POWER-UP')).toBeNull()
     cleanup()
     for (const kind of ['shield', 'cloak', 'flare', 'toyol', 'along', 'grab'] as const) {
       const r = render(<PowerCard kind={kind} />)
-      expect(screen.queryByTestId('foil')).toBeNull()
+      expect(screen.queryByTestId('scribbles')).toBeNull()
       expect(r.container.querySelector('.power-card')).not.toHaveClass('legendary')
       cleanup()
     }
     render(<PowerCard kind="shield" faceDown />)
-    expect(screen.queryByTestId('foil')).toBeNull()
+    expect(screen.queryByTestId('scribbles')).toBeNull()
   })
 
-  it('the foil highlight follows device tilt, and stays still under reduced motion', async () => {
-    render(<PowerCard kind="dato" />)
-    const foil = screen.getByTestId('foil')
-    act(() => {
-      window.dispatchEvent(Object.assign(new Event('deviceorientation'), { gamma: 30, beta: 45 }))
-    })
-    await waitFor(() => expect(foil.style.getPropertyValue('--foil-x')).toBe('83%'))
+  it('Super Ring and Mak Kau Hijau get the legendary face too, in their own colours', () => {
+    const ring = render(<PowerCard kind="ring" big />)
+    expect(ring.container.querySelector('.power-card')).toHaveClass('legendary', 'ring')
+    expect(screen.getByTestId('scribbles')).toBeInTheDocument()
+    expect(screen.getByText('★ LEGENDARY · ONE PER GAME')).toBeInTheDocument()
+    expect(screen.getByText('Super Ring')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Super Ring' })).toBeInTheDocument()
     cleanup()
-    reduce.on = true
-    render(<PowerCard kind="dato" />)
-    const still = screen.getByTestId('foil')
-    act(() => {
-      window.dispatchEvent(Object.assign(new Event('deviceorientation'), { gamma: 30, beta: 45 }))
-    })
-    await new Promise((r) => setTimeout(r, 50))
-    expect(still.style.getPropertyValue('--foil-x')).toBe('')
-    expect(still).toHaveAttribute('data-still', 'true')
+    const hijau = render(<PowerCard kind="hijau" big />)
+    expect(hijau.container.querySelector('.power-card')).toHaveClass('legendary', 'hijau')
+    expect(screen.getByTestId('scribbles')).toBeInTheDocument()
+    expect(screen.getByText('Mak Kau Hijau')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Mak Kau Hijau' })).toBeInTheDocument()
+    expect(hijau.container.querySelector('.power-card')).not.toHaveClass('ring')
   })
 })

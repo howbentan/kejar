@@ -135,6 +135,37 @@ describe('PackList', () => {
     expect(screen.queryByText('Reprint a yellow card to use Dato Seri.')).toBeNull()
   })
 
+  it('an orange or green shortage says so, from the view or the create notice, and those cards show in their colour', () => {
+    const full = { mode: 'full', legendaries: { dato: 'off', ring: 'stash', bomoh: 'off', hijau: 'stash' } }
+    const withCards = (ringCard: unknown, hijauCard: unknown) =>
+      ({ ...view(), settings: full, datoCard: null, bomohCard: null, ringCard, hijauCard }) as unknown as View
+    const { unmount } = render(<PackList code="ABC234" view={withCards(null, null)} refresh={refresh} />)
+    expect(screen.getByText('Reprint an orange card to use Super Ring.')).toBeInTheDocument()
+    expect(screen.getByText('Reprint a green card to use Mak Kau Hijau.')).toBeInTheDocument()
+    expect(screen.queryByText('Reprint a yellow card to use Dato Seri.')).toBeNull()
+    unmount()
+    at('?setup=pack&notice=ring,hijau')
+    const { unmount: u2 } = render(<PackList code="ABC234" view={view()} refresh={refresh} />)
+    expect(screen.getByText('Reprint an orange card to use Super Ring.')).toBeInTheDocument()
+    u2()
+    at('?setup=pack')
+    const coloured = {
+      ...withCards({ letter: 'A', code: 'x' }, { letter: 'B', code: 'y' }),
+      kit: {
+        items: [
+          { id: 'ring-card', group: 'pack', label: 'Orange card A', tone: 'orange', note: '(secret)', ticked: false },
+          { id: 'hijau-card', group: 'pack', label: 'Green card B', tone: 'green', note: '(secret)', ticked: false },
+        ],
+        places: [],
+        placed: {},
+      },
+    } as unknown as View
+    render(<PackList code="ABC234" view={coloured} refresh={refresh} />)
+    expect(screen.getByText('Orange card A').style.color).toBe('var(--ring-2)')
+    expect(screen.getByText('Green card B').style.color).toBe('var(--hijau-2)')
+    expect(screen.queryByText(/Reprint/)).toBeNull()
+  })
+
   it('draws a yellow tick on the yellow card', () => {
     render(<PackList code="ABC234" view={view(['dato-card'])} refresh={refresh} />)
     expect(document.querySelector('.marker path')?.getAttribute('stroke')).toBe('#FFD60A')

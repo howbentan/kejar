@@ -55,6 +55,30 @@ export function bomohCodeFromQr(text: string): string | null {
   return m ? m[1] : null
 }
 
+/** The printed cheese-orange Super Ring card (the runner legendary): the same card rules as the Bomoh card above. */
+export const ringQr = (code: string) => `KEJAR:RING:${code}`
+
+/** Any Super Ring card, this game's or not, including a bare `KEJAR:RING`: all go to the server as a claim. */
+export const isRingQr = (text: string) => /^KEJAR:RING(:|$)/.test(text.trim())
+
+/** The secret code on a Super Ring card, or null for a bare or malformed one. */
+export function ringCodeFromQr(text: string): string | null {
+  const m = /^KEJAR:RING:([A-Za-z0-9_-]{1,64})$/.exec(text.trim())
+  return m ? m[1] : null
+}
+
+/** The printed deep-green Mak Kau Hijau card (the chaser legendary): the same card rules as the Bomoh card above. */
+export const hijauQr = (code: string) => `KEJAR:HIJAU:${code}`
+
+/** Any Mak Kau Hijau card, this game's or not, including a bare `KEJAR:HIJAU`: all go to the server as a claim. */
+export const isHijauQr = (text: string) => /^KEJAR:HIJAU(:|$)/.test(text.trim())
+
+/** The secret code on a Mak Kau Hijau card, or null for a bare or malformed one. */
+export function hijauCodeFromQr(text: string): string | null {
+  const m = /^KEJAR:HIJAU:([A-Za-z0-9_-]{1,64})$/.exec(text.trim())
+  return m ? m[1] : null
+}
+
 export const MAX_STATIONS = 8
 /** Most players one game takes; the lobby refuses more. Armbands #01 to this are always printed. */
 export const MAX_PLAYERS_PER_GAME = 40

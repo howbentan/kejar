@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { penjaraLockedLine } from '../../shared/hijau.js'
 import { JAIL_QR } from '../../shared/ids.js'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
@@ -10,7 +11,7 @@ import { ErrorText } from './ui'
 /** Settle frees the holder plus up to this many others (rules doc §9c). */
 const MAX_PICKS = 2
 
-type SettleResult = { ok: true; freedIds: string[] } | { ok: false; reason: string; targetId?: string }
+type SettleResult = { ok: true; freedIds: string[] } | { ok: false; reason: string; targetId?: string; lockedMs?: number }
 
 const REFUSALS: Record<string, string> = {
   'too-far-from-jail': 'Get within 30 m of Penjara',
@@ -85,7 +86,8 @@ export default function SettlePanel({
       } else if (r.reason === 'target-already-freed') {
         const name = settle.options.find((o) => o.id === r.targetId)?.name ?? 'Someone you picked'
         setError(`${name} has already escaped once. Pick someone else.`)
-      } else setError(REFUSALS[r.reason] ?? 'Nobody freed')
+      } else if (r.reason === 'penjara-locked') setError(penjaraLockedLine(r.lockedMs ?? 0))
+      else setError(REFUSALS[r.reason] ?? 'Nobody freed')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {

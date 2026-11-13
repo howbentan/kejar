@@ -106,6 +106,9 @@ function toAlert(e: GameEvent, details: Map<string, GameEvent>, responding: Map<
     case 'missed':
       return { ...base, kind: 'missed', text: `${s(d.who)} missed 2 check-ins` }
     case 'auto-jailed':
+      // Out of Super Ring's house arrest: undoable the same way if it was a phone problem.
+      if (d.cause === 'revoked') return { ...base, kind: 'auto-jail', targetId: e.target_id, text: `${s(d.who)} sent to Penjara (bail revoked)` }
+      if (d.cause === 'hijau') return { ...base, kind: 'auto-jail', targetId: e.target_id, text: `${s(d.who)} missed Mak kau hijau, sent to Penjara` }
       return { ...base, kind: 'auto-jail', targetId: e.target_id, text: `${s(d.who)} missed 2 check-ins, sent to Penjara` }
     case 'left-start':
       return { ...base, kind: 'left-start', text: `${s(d.name)} left the start early` }

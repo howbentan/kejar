@@ -5,6 +5,7 @@ const created = vi.hoisted(() => ({
   count: 0,
   flights: [] as unknown[],
   fits: [] as unknown[],
+  fitOpts: [] as unknown[],
   load: null as null | (() => void),
   layers: [] as { id: string; source: string }[],
   data: {} as Record<string, unknown>,
@@ -67,8 +68,9 @@ vi.mock('maplibre-gl', () => ({
       flyTo(opts: unknown) {
         created.flights.push(opts)
       }
-      fitBounds(bounds: unknown) {
+      fitBounds(bounds: unknown, opts?: unknown) {
         created.fits.push(bounds)
+        created.fitOpts.push(opts)
       }
     },
   },
@@ -330,6 +332,34 @@ describe('GameMap', () => {
       expect(layer('stash').paint['circle-color']).toBe('#C9A4FF')
       expect(layer('stash').paint['circle-stroke-color']).toBe('#9B5DE5')
     })
+
+    it.each([
+      ['orange', '#FFA94D', '#E8590C'],
+      ['green', '#3FA86B', '#1B6B3F'],
+    ] as const)("Super Ring's and Mak Kau Hijau's stash pins are %s", (tone, main, deep) => {
+      created.layers = []
+      created.data = {}
+      render(<GameMap arena={arena} dots={[]} stash={{ lat: 3.03, lng: 101.03 }} stashTone={tone} />)
+      act(() => created.load!())
+      expect(layer('stash').paint['circle-color']).toBe(main)
+      expect(layer('stash').paint['circle-stroke-color']).toBe(deep)
+    })
+
+    it('walk pins carry their tone, and the pin colours have a case for each of the four', () => {
+      created.layers = []
+      created.data = {}
+      const pins = [
+        { id: 'ring', lat: 3.1, lng: 101.1, label: '?', tone: 'orange' as const },
+        { id: 'hijau', lat: 3.2, lng: 101.2, label: '?', tone: 'green' as const },
+      ]
+      render(<GameMap arena={arena} dots={[]} pins={pins} />)
+      act(() => created.load!())
+      expect(created.data.pins).toMatchObject({
+        features: [{ properties: { orange: true, green: false, yellow: false, purple: false } }, { properties: { green: true, orange: false } }],
+      })
+      const colours = JSON.stringify(layer('pins').paint['circle-color'])
+      for (const hex of ['#FFD60A', '#FFA94D', '#C9A4FF', '#3FA86B']) expect(colours).toContain(hex)
+    })
   })
 
   describe("Dato Seri's hint zone", () => {
@@ -450,6 +480,115 @@ describe('GameMap', () => {
       expect(ring.paint['circle-stroke-color']).toBe('#C9A4FF')
       expect(layer('reveal-ring').filter).toEqual(['==', ['get', 'revealedBy'], 'focus'])
       expect(created.data.points).toMatchObject({ features: [{ properties: { revealedBy: 'bomoh' } }, { properties: { revealedBy: 'focus' } }] })
+    })
+
+    it('draws a green ring only around dots revealed by tapping green in Mak Kau Hijau', () => {
+      created.layers = []
+      created.data = {}
+      const dots = [
+        { id: 'r1', kind: 'runner' as const, lat: 3.1, lng: 101.1, at: '', revealedBy: 'hijau' as const },
+        { id: 'r2', kind: 'runner' as const, lat: 3.3, lng: 101.3, at: '', revealedBy: 'bomoh' as const },
+      ]
+      render(<GameMap arena={arena} dots={dots} />)
+      created.load!()
+      const ids = created.layers.map((l) => l.id)
+      expect(ids.indexOf('hijau-reveal-ring')).toBeGreaterThan(ids.indexOf('points'))
+      const ring = layer('hijau-reveal-ring')
+      expect(ring.filter).toEqual(['==', ['get', 'revealedBy'], 'hijau'])
+      expect(ring.paint['circle-stroke-color']).toBe('#3FA86B')
+      expect(layer('bomoh-reveal-ring').filter).toEqual(['==', ['get', 'revealedBy'], 'bomoh'])
+    })
+  })
+
+  describe("Super Ring's and Mak Kau Hijau's hint zones (Plan E2)", () => {
+    const ringZone = { lat: 3.4, lng: 101.4, radiusM: 140 }
+    const hijauZone = { lat: 3.5, lng: 101.5, radiusM: 160 }
+    const layer = (id: string) => created.layers.find((l) => l.id === id) as unknown as { paint: Record<string, unknown> }
+
+    it('draws an orange and a green dashed circle, each with an unlabelled ? marker', () => {
+      created.layers = []
+      created.data = {}
+      created.markers = []
+      render(<GameMap arena={arena} dots={[]} ringZone={ringZone} hijauZone={hijauZone} />)
+      act(() => created.load!())
+      expect(layer('ring-legendary-line').paint['line-color']).toBe('#FFA94D')
+      expect(layer('hijau-legendary-line').paint['line-color']).toBe('#3FA86B')
+      for (const id of ['ring-legendary-line', 'hijau-legendary-line']) expect(layer(id).paint['line-dasharray']).toBeTruthy()
+      for (const id of ['ring-legendary-fill', 'ring-legendary-line', 'hijau-legendary-fill', 'hijau-legendary-line'])
+        expect(JSON.stringify(layer(id).paint)).not.toMatch(/C6FF3D|FFD60A|C9A4FF/i)
+      expect(created.data['ring-legendary']).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
+      expect(created.data['hijau-legendary']).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
+      const ring = created.markers.find((m) => m.lngLat?.[0] === 101.4)!
+      const hijau = created.markers.find((m) => m.lngLat?.[0] === 101.5)!
+      expect(ring.el.className).toContain('ring-marker')
+      expect(hijau.el.className).toContain('hijau-marker')
+      for (const mk of [ring, hijau]) {
+        expect(mk.el.textContent).toBe('?')
+        expect(mk.el.getAttribute('title')).toBeNull()
+      }
+      const said = JSON.stringify(created.data['ring-legendary']) + JSON.stringify(created.data['hijau-legendary'])
+      expect(said).not.toMatch(/ring|hijau|super|legendary/i)
+    })
+
+    it('follows the props and removes the markers when they go', () => {
+      created.layers = []
+      created.data = {}
+      created.markers = []
+      const { rerender } = render(<GameMap arena={arena} dots={[]} />)
+      act(() => created.load!())
+      expect(created.data['ring-legendary']).toMatchObject({ features: [] })
+      expect(created.data['hijau-legendary']).toMatchObject({ features: [] })
+      rerender(<GameMap arena={arena} dots={[]} ringZone={ringZone} hijauZone={hijauZone} />)
+      expect(created.data['hijau-legendary']).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
+      rerender(<GameMap arena={arena} dots={[]} />)
+      expect(created.data['ring-legendary']).toMatchObject({ features: [] })
+      expect(created.markers.every((m) => m.removed)).toBe(true)
+    })
+  })
+
+  describe("the house-arrest circle (Super Ring)", () => {
+    const layer = (id: string) => created.layers.find((l) => l.id === id) as unknown as { paint: Record<string, unknown> }
+
+    it('draws a solid orange 26 m circle and frames the camera on it', () => {
+      created.layers = []
+      created.data = {}
+      created.fits = []
+      created.fitOpts = []
+      render(<GameMap arena={arena} dots={[]} circle={{ lat: 3.1, lng: 101.1, radiusM: 26 }} />)
+      act(() => created.load!())
+      expect(layer('house-line').paint['line-color']).toBe('#FFA94D')
+      expect(layer('house-line').paint['line-dasharray']).toBeUndefined()
+      expect(created.data.house).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
+      expect(created.fits.length).toBeGreaterThan(0)
+    })
+
+    it('frames the 26 m circle close: up to zoom 19, a little past the circle edge', () => {
+      created.fits = []
+      created.fitOpts = []
+      render(<GameMap arena={arena} dots={[]} circle={{ lat: 3.1, lng: 101.1, radiusM: 26 }} />)
+      act(() => created.load!())
+      expect(created.fitOpts.at(-1)).toMatchObject({ maxZoom: 19 })
+      const [[w, s], [e, n]] = created.fits.at(-1) as [[number, number], [number, number]]
+      // About 1.3 × 26 m each way from the centre: the circle fills most of the frame.
+      const halfM = ((n - s) / 2) * 111_320
+      expect(halfM).toBeGreaterThan(26)
+      expect(halfM).toBeLessThan(40)
+      expect((w + e) / 2).toBeCloseTo(101.1, 6)
+    })
+
+    it("other maps keep the street-level cap", () => {
+      created.fitOpts = []
+      render(<GameMap arena={arena} dots={[]} fit={[{ lat: 3.1, lng: 101.1 }, { lat: 3.11, lng: 101.11 }]} />)
+      act(() => created.load!())
+      expect(created.fitOpts.at(-1)).toMatchObject({ maxZoom: 17 })
+    })
+
+    it('draws nothing without a circle', () => {
+      created.layers = []
+      created.data = {}
+      render(<GameMap arena={arena} dots={[]} />)
+      act(() => created.load!())
+      expect(created.data.house).toMatchObject({ features: [] })
     })
   })
 })

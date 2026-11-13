@@ -1,10 +1,11 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
+import type { LegendaryKind } from '../../shared/types.js'
 import { call } from '../game/api'
 import { loadOrganiserSession } from '../game/organiserSession'
 import { printCardUrl } from '../game/printLinks'
 import { ErrorText, Screen } from '../game/ui'
 
-type Legendary = 'dato' | 'bomoh'
+type Legendary = LegendaryKind
 interface KitCard {
   legendary: Legendary
   letter: string
@@ -23,7 +24,9 @@ const dayMonth = (iso: string) => {
   const d = new Date(iso)
   return `${d.getDate()} ${MONTHS[d.getMonth()]}`
 }
-const cardName = (c: KitCard) => `${c.legendary === 'dato' ? 'Yellow' : 'Purple'} ${c.letter}`
+const COLOUR_NAME: Record<Legendary, string> = { dato: 'Yellow', ring: 'Orange', bomoh: 'Purple', hijau: 'Green' }
+const COLOUR_VAR: Record<Legendary, string> = { dato: 'var(--legendary-2)', ring: 'var(--ring-2)', bomoh: 'var(--bomoh-2)', hijau: 'var(--hijau-2)' }
+const cardName = (c: KitCard) => `${COLOUR_NAME[c.legendary]} ${c.letter}`
 const keyOf = (c: KitCard) => `${c.legendary}${c.letter}`
 const openSheet = () => window.open('/print/tags', '_blank')
 
@@ -118,7 +121,7 @@ export default function YourKit() {
       <div>
         {(cards ?? []).map((c) => {
           const k = keyOf(c)
-          const colour = c.legendary === 'dato' ? 'var(--legendary-2)' : 'var(--bomoh-2)'
+          const colour = COLOUR_VAR[c.legendary]
           const retire = c.inGame ? null : (
             <>
               {' · '}

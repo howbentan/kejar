@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New legendaries mockups</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root { --volt: #C6FF3D; --ink: #0A0A0B; --paper: #F5F5F3; --dim: rgba(245,245,243,.55);
+    --y1: #FFF27A; --y2: #FFD60A; --y3: #F5B800; --yink: #1A1400;
+    --r1: #FFE0B8; --r2: #FFA94D; --r3: #E8590C; --rink: #3A1A00;
+    --h1: #CDEFD8; --h2: #3FA86B; --h3: #1B6B3F; --hink: #06240F; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #050505; color: var(--paper); font-family: 'Geist', system-ui, sans-serif; }
+  header, section { max-width: 1180px; margin: 0 auto; padding: 18px 20px 8px; }
+  header { padding-top: 32px; }
+  header h1 { font-size: 34px; letter-spacing: -0.04em; margin: 0 0 6px; }
+  header h1 span { color: var(--volt); }
+  header p, section > p { opacity: .7; max-width: 780px; line-height: 1.45; margin: 4px 0 14px; font-size: 14px; }
+  section > h2 { font-size: 20px; letter-spacing: -0.03em; margin: 18px 0 4px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 28px 20px; padding-bottom: 30px; }
+  .cell h3 { font-size: 15px; margin: 12px 4px 4px; letter-spacing: -0.02em; }
+  .cell p.note { font-size: 12.5px; opacity: .65; margin: 0 4px; line-height: 1.4; }
+
+  .phone { width: 290px; height: 600px; border-radius: 34px; background: var(--ink); border: 2px solid #2a2a2a; position: relative; overflow: hidden; margin: 0 auto; }
+  .pad { position: absolute; inset: 0; padding: 18px 15px 15px; display: flex; flex-direction: column; gap: 10px; }
+  .eb { font: 500 9.5px 'Geist Mono', monospace; letter-spacing: .2em; color: var(--dim); margin: 0; }
+  h4 { margin: 0; font-size: 25px; font-weight: 800; letter-spacing: -0.05em; line-height: 1.05; }
+  .muted { font-size: 12.5px; opacity: .7; margin: 0; line-height: 1.4; }
+
+  /* Mak Kau Hijau takeover: deep green fills the screen, one huge button. */
+  .hijau { position: absolute; inset: 0; background: var(--h3); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 22px; text-align: center; }
+  .hijau .eb { color: var(--h1); }
+  .hijau h4 { font-size: 40px; }
+  .hijau .count { font: 700 44px 'Geist Mono', monospace; letter-spacing: -0.04em; color: var(--h1); }
+  .green-btn { width: 210px; height: 210px; border-radius: 50%; border: 6px solid #fff; background: radial-gradient(circle at 35% 30%, #6FD394, var(--h2) 60%, #2E8B57); color: var(--hink); font: 800 24px 'Geist', sans-serif; letter-spacing: -0.03em; box-shadow: 0 0 0 10px rgba(205,239,216,.18), 0 10px 0 #0E4A2A; }
+  .hijau.safe .green-btn { background: var(--h1); }
+
+  /* House arrest */
+  .count-big { font: 700 64px 'Geist Mono', monospace; letter-spacing: -0.05em; color: var(--r2); line-height: 1; }
+  .count-big.wait { font-size: 48px; }
+  .map { position: relative; height: 230px; border-radius: 16px; overflow: hidden; background: #141815; border: 1px solid #222; flex: none; }
+  .map svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .chip { display: inline-flex; align-self: flex-start; gap: 6px; align-items: center; border: 1.5px solid var(--r2); color: var(--r2); border-radius: 999px; padding: 5px 10px; font: 500 10px 'Geist Mono', monospace; letter-spacing: .1em; }
+  .free { font-size: 30px; }
+  .free span { color: var(--r2); }
+
+  /* Cards */
+  .cards { display: flex; flex-wrap: wrap; gap: 26px; align-items: flex-end; padding: 8px 4px 24px; }
+  .cards figure { margin: 0; text-align: center; }
+  .cards figcaption { font-size: 12px; opacity: .65; margin-top: 8px; }
+  .pc { position: relative; width: 150px; height: 234px; border-radius: 16px; border: 3px solid; padding: 12px 10px; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
+  .pc::before { content: ''; position: absolute; inset: 4px; border: 1px solid rgba(0,0,0,.3); border-radius: 12px; z-index: 2; }
+  .pc .eye { font: 600 9px 'Geist Mono', monospace; letter-spacing: .08em; text-align: center; line-height: 1.25; position: relative; z-index: 2; }
+  .pc .art { width: 116px; height: 116px; margin-top: 8px; border-radius: 50%; display: grid; place-items: center; background: rgba(0,0,0,.1); position: relative; z-index: 2; }
+  .pc b { margin-top: auto; font-size: 20px; font-weight: 800; letter-spacing: -0.04em; position: relative; z-index: 2; white-space: nowrap; }
+  .pc span.fx { font-size: 11.5px; line-height: 1.25; text-align: center; opacity: .85; min-height: 30px; margin-top: 2px; position: relative; z-index: 2; }
+  .foil { position: absolute; inset: 0; z-index: 1; mix-blend-mode: soft-light; opacity: .85;
+    background: radial-gradient(circle at 50% 30%, rgba(255,255,255,.95), transparent 45%), linear-gradient(115deg, rgba(255,90,200,.5), rgba(90,220,255,.5) 35%, rgba(255,255,120,.5) 65%, rgba(190,120,255,.5)); }
+  .pc.dato { background: linear-gradient(155deg, var(--y1), var(--y2) 55%, var(--y3)); border-color: var(--y3); color: var(--yink); box-shadow: 0 0 18px rgba(255,214,10,.6); }
+  .pc.ring { background: linear-gradient(155deg, var(--r1), var(--r2) 55%, var(--r3)); border-color: var(--r3); color: var(--rink); box-shadow: 0 0 18px rgba(255,169,77,.65); }
+  .pc.hijau { background: linear-gradient(155deg, var(--h1), var(--h2) 55%, var(--h3)); border-color: var(--h3); color: var(--hink); box-shadow: 0 0 18px rgba(63,168,107,.7); }
+  .slot { display: flex; align-items: center; justify-content: space-between; gap: 6px; height: 56px; width: 300px; padding: 0 12px; border-radius: 14px; border: 1.5px solid var(--r3);
+    background: linear-gradient(155deg, var(--r1), var(--r2) 55%, var(--r3)); color: var(--rink); box-shadow: 0 0 12px rgba(255,169,77,.5); font-size: 11px; }
+  .slot b { font-size: 14px; display: block; }
+  .slot small { font: 500 8px 'Geist Mono', monospace; letter-spacing: .1em; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <filter id="wob" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="7"/><feDisplacementMap in="SourceGraphic" scale="3.2"/></filter>
+    <filter id="stk" x="-25%" y="-25%" width="150%" height="150%"><feMorphology in="SourceAlpha" operator="dilate" radius="4.5" result="d"/><feFlood flood-color="#F5F5F3"/><feComposite in2="d" operator="in" result="w"/><feOffset in="w" dy="3.5" result="o"/><feFlood flood-color="#000" flood-opacity=".55"/><feComposite in2="o" operator="in" result="sh"/><feMerge><feMergeNode in="sh"/><feMergeNode in="w"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <g id="art-ring">
+      <path d="M40 36 a24 24 0 1 0 48 0 a24 24 0 1 0 -48 0 Z M55 36 a9 9 0 1 1 18 0 a9 9 0 1 1 -18 0 Z" fill="#FFB52E" fill-rule="evenodd" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M46 26 Q52 15 64 14" fill="none" stroke="#FFE08A" stroke-width="4" stroke-linecap="round"/>
+      <path d="M86 42 Q82 54 70 58" fill="none" stroke="#F08C1E" stroke-width="5" stroke-linecap="round"/>
+      <path d="M59 76 a17 17 0 1 0 34 0 a17 17 0 1 0 -34 0 Z M70 76 a6 6 0 1 1 12 0 a6 6 0 1 1 -12 0 Z" fill="#FFB52E" fill-rule="evenodd" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M64 70 Q68 62 76 62" fill="none" stroke="#FFE08A" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M91 80 Q87 90 78 92" fill="none" stroke="#F08C1E" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M11 62 a27 27 0 1 0 54 0 a27 27 0 1 0 -54 0 Z M28 62 a10 10 0 1 1 20 0 a10 10 0 1 1 -20 0 Z" fill="#FFB52E" fill-rule="evenodd" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M18 52 Q24 38 40 37" fill="none" stroke="#FFE08A" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M62 72 Q54 88 36 88" fill="none" stroke="#F08C1E" stroke-width="5.5" stroke-linecap="round"/>
+      <g fill="#E8590C"><circle cx="22" cy="68" r="1.8"/><circle cx="30" cy="48" r="1.5"/><circle cx="54" cy="56" r="1.8"/><circle cx="46" cy="78" r="1.5"/><circle cx="57" cy="68" r="1.3"/><circle cx="70" cy="26" r="1.6"/><circle cx="80" cy="34" r="1.4"/><circle cx="50" cy="42" r="1.3"/><circle cx="84" cy="72" r="1.5"/><circle cx="72" cy="86" r="1.4"/></g>
+      <path d="M18 97 l5 -3 l3 4 l-5 2 Z M84 100 l4 -3 l3 3 l-4 2 Z" fill="#FFB52E" stroke="#141414" stroke-width="2" stroke-linejoin="round"/>
+      <g fill="#FFA94D"><circle cx="31" cy="100" r="1.4"/><circle cx="72" cy="101" r="1.2"/><circle cx="95" cy="95" r="1.3"/></g>
+      <path d="M12 16 L14 21 L19 23 L14 25 L12 30 L10 25 L5 23 L10 21 Z" fill="#FFE0B8" stroke="#141414" stroke-width="2" stroke-linejoin="round"/>
+    </g>
+    <g id="art-hijau">
+      <path d="M33 65 Q26 74 17 76" fill="none" stroke="#141414" stroke-width="9" stroke-linecap="round"/>
+      <path d="M33 65 Q26 74 17 76" fill="none" stroke="#2E8B57" stroke-width="5" stroke-linecap="round"/>
+      <path d="M30 62 Q30 22 84 12 Q86 58 46 70 Q36 72 30 62 Z" fill="#3FA86B"/>
+      <path d="M84 12 Q86 58 46 70 Q70 50 84 12 Z" fill="#2E8B57"/>
+      <path d="M36 54 Q38 34 62 22" fill="none" stroke="#8FD6A6" stroke-width="3" stroke-linecap="round"/>
+      <path d="M34 64 Q58 42 80 16" fill="none" stroke="#1B6B3F" stroke-width="2.6" stroke-linecap="round"/>
+      <path d="M45 54 Q42 46 44 38 M55 45 Q54 37 58 30 M65 36 Q66 30 70 24 M47 53 Q56 56 63 55 M57 44 Q66 46 73 43" fill="none" stroke="#1B6B3F" stroke-width="2" stroke-linecap="round"/>
+      <path d="M30 62 Q30 22 84 12 Q86 58 46 70 Q36 72 30 62 Z" fill="none" stroke="#141414" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+      <path d="M55 55 l-6 -4 M59 51 l-2 -7 M53 60 l-7 0" fill="none" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round"/>
+      <g transform="translate(62 59) rotate(40) scale(.85)">
+        <rect x="0" y="-5" width="28" height="10" rx="5" fill="#F2C29B" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+        <rect x="2.5" y="-2.5" width="6" height="5" rx="2" fill="#FFE3CF"/>
+        <rect x="20" y="-8" width="27" height="26" rx="9" fill="#F2C29B" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M24 -2 Q32 -9 41 -3" fill="none" stroke="#141414" stroke-width="2.4" stroke-linecap="round"/>
+        <path d="M29 5 h12 M29 11 h12" fill="none" stroke="#141414" stroke-width="2.2" stroke-linecap="round"/>
+        <rect x="45" y="-7" width="12" height="27" rx="3" fill="#E63946" stroke="#141414" stroke-width="3" stroke-linejoin="round"/>
+      </g>
+      <path d="M14 16 L16 21 L21 23 L16 25 L14 30 L12 25 L7 23 L12 21 Z" fill="#CDEFD8" stroke="#141414" stroke-width="2" stroke-linejoin="round"/>
+    </g>
+  </defs>
+</svg>
+
+<header>
+  <h1>New legendaries<span>.</span></h1>
+  <p>Plan E2 task 6. Mak Kau Hijau's takeover, Super Ring's house arrest (running, waiting, released) and the two legendary card faces. Built to match in <code>HijauTakeover.tsx</code>, <code>HouseArrest.tsx</code> and <code>PowerCard.tsx</code>.</p>
+</header>
+
+<section>
+  <h2>Mak Kau Hijau takeover</h2>
+  <p>Deep green fills the runner's chase screen (like the marshal SOS fills lime). One huge button and the shared 45 s countdown. A tap calls <code>touchGreen</code> once; the button waits while it's in flight.</p>
+  <div class="grid">
+    <div class="cell">
+      <div class="phone"><div class="hijau">
+        <p class="eb">MAK KAU HIJAU</p>
+        <h4>Mak kau hijau!</h4>
+        <div class="count">0:38</div>
+        <button class="green-btn">Tap the green</button>
+        <p class="muted">Tap the green in 45 s or go to Penjara.</p>
+      </div></div>
+      <h3>Takeover</h3>
+      <p class="note">Shows from <code>startsAt</code> until the tap lands. Buzzes once on arrival.</p>
+    </div>
+    <div class="cell">
+      <div class="phone"><div class="hijau safe">
+        <p class="eb">MAK KAU HIJAU</p>
+        <h4>Safe!</h4>
+        <button class="green-btn" disabled>✓</button>
+        <p class="muted" style="font-size:15px;opacity:1">Safe! You touched green.</p>
+      </div></div>
+      <h3>Tapped</h3>
+      <p class="note">Shown for 2 s, then back to the chase. A too-late tap shows nothing new: Penjara follows on the next poll.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Super Ring house arrest</h2>
+  <p>Replaces the chase screen while <code>view.arrest</code> is set. The 26 m circle in cheese orange, the runner's own dot, the countdown (held still while paused). Keeps the screen awake and sends a fresh fix every few seconds.</p>
+  <div class="grid">
+    <div class="cell">
+      <div class="phone"><div class="pad">
+        <p class="eb">HOUSE ARREST</p>
+        <div class="count-big">2:11</div>
+        <h4 style="font-size:20px">House arrest: stay within 26 m for 2:36.</h4>
+        <div class="map"><svg viewBox="0 0 260 230">
+          <path d="M0 60 L260 40 M30 0 L80 230 M150 0 L190 230 M0 170 L260 190" stroke="#262b27" stroke-width="10"/>
+          <circle cx="130" cy="115" r="62" fill="rgba(255,169,77,.14)" stroke="#FFA94D" stroke-width="2.5"/>
+          <circle cx="142" cy="104" r="10" fill="rgba(245,245,243,.35)"/><circle cx="142" cy="104" r="6" fill="#F5F5F3" stroke="#0A0A0B" stroke-width="1.5"/>
+        </svg></div>
+        <span class="chip">26 M · STAY INSIDE</span>
+        <p class="muted">Keep Kejar open.</p>
+      </div></div>
+      <h3>Running</h3>
+      <p class="note">Leaving early, or no fresh fix inside at the end: Penjara (<em>Bail revoked. To Penjara.</em>).</p>
+    </div>
+    <div class="cell">
+      <div class="phone"><div class="pad">
+        <p class="eb">HOUSE ARREST</p>
+        <h4>Open Kejar to start house arrest</h4>
+        <div class="count-big wait">48 s</div>
+        <p class="muted">Finding you. Your 26 m circle starts where you stand.</p>
+        <p class="muted">Keep Kejar open.</p>
+      </div></div>
+      <h3>Waiting (after auto-jail or Mak Kau Hijau)</h3>
+      <p class="note">60 s to send a fresh fix. None: Penjara, Super Ring is spent.</p>
+    </div>
+    <div class="cell">
+      <div class="phone"><div class="pad" style="justify-content:center">
+        <p class="eb">SUPER RING</p>
+        <h4 class="free">Free! Super Ring is spent<span>.</span></h4>
+        <p class="muted">Back to the chase.</p>
+      </div></div>
+      <h3>Released</h3>
+      <p class="note">Shown for a moment, then the chase screen.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Legendary card faces</h2>
+  <p>Same structure as Dato Seri: gradient face, foil, glow, sticker art. Super Ring is a cheese ring snack (no bag, no lettering). Mak Kau Hijau is a leaf and a playground pointing hand.</p>
+  <div class="cards">
+    <figure><div class="pc dato"><span class="foil"></span><span class="eye">★ LEGENDARY · ONE PER GAME</span><span class="art"><svg viewBox="-8 -6 116 116" width="104" height="104"><circle cx="50" cy="52" r="34" fill="#FFD60A" stroke="#141414" stroke-width="3"/></svg></span><b>Dato Seri</b><span class="fx">Free yourself and 2 more at Penjara</span></div><figcaption>Dato Seri (today, for scale)</figcaption></figure>
+    <figure><div class="pc ring"><span class="foil"></span><span class="eye">★ LEGENDARY · ONE PER GAME</span><span class="art"><svg viewBox="-8 -6 116 116" width="104" height="104"><g filter="url(#stk)"><g filter="url(#wob)" transform="rotate(-4 50 55)"><use href="#art-ring"/></g></g></svg></span><b>Super Ring</b><span class="fx">Next time you'd go to Penjara: house arrest instead</span></div><figcaption>Super Ring · cheese orange</figcaption></figure>
+    <figure><div class="pc hijau"><span class="foil"></span><span class="eye">★ LEGENDARY · ONE PER GAME</span><span class="art"><svg viewBox="-8 -6 116 116" width="104" height="104"><g filter="url(#stk)"><g filter="url(#wob)" transform="rotate(-4 50 55)"><use href="#art-hijau"/></g></g></svg></span><b>Mak Kau Hijau</b><span class="fx">Dikejar must tap green in 45 s</span></div><figcaption>Mak Kau Hijau · deep green</figcaption></figure>
+  </div>
+  <div class="cards">
+    <figure><div class="slot"><svg viewBox="-8 -6 116 116" width="40" height="40"><g filter="url(#stk)"><g filter="url(#wob)"><use href="#art-ring"/></g></g></svg><span style="flex:1"><b>Super Ring</b>Super Ring is on</span><small>ON · WAITING</small></div><figcaption>A held Super Ring in the slot: no Use button</figcaption></figure>
+  </div>
+</section>
+</body>
+</html>

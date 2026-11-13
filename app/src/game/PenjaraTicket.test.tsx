@@ -17,7 +17,18 @@ describe('PenjaraTicket', () => {
     )
     expect(screen.getByText('2:52')).toBeInTheDocument()
     expect(screen.getByText('190 M')).toBeInTheDocument()
-    expect(screen.getByText('BELUM BAYAR')).toBeInTheDocument()
+    expect(screen.getByText('NOT PAID, WALK TO THE GATE')).toBeInTheDocument()
+  })
+
+  it('reads in plain English: entry ticket, gate, in at, distance to gate, keep this ticket, with no Malay echoes', () => {
+    const { container } = render(
+      <PenjaraTicket playerId="r1" variant={{ kind: 'catch', caughtBy: 'Ben', caughtAtMs: null }} distanceM={null} outForGood={false} settled={false} />,
+    )
+    for (const text of ['kejar. plaza tol', 'ENTRY TICKET', 'GATE', 'PENJARA', 'IN AT', 'DISTANCE TO GATE', 'STATUS', '*** KEEP THIS TICKET TO EXIT ***']) {
+      expect(screen.getByText(text)).toBeInTheDocument()
+    }
+    expect(container.querySelector('.toll-ticket-echo')).toBeNull()
+    expect(container.textContent).not.toMatch(/TIKET|MASUK|GERBANG|JARAK|SIMPAN|BELUM|entry ticket|keep this ticket to exit/)
   })
 
   it('shows a dash before a GPS fix, not a blank or broken field', () => {
@@ -33,8 +44,8 @@ describe('PenjaraTicket', () => {
 
   it('a player jailed for good gets a terminal status, not a false "walk to the gate"', () => {
     render(<PenjaraTicket playerId="r1" variant={{ kind: 'catch', caughtBy: 'Ben', caughtAtMs: null }} distanceM={null} outForGood={true} settled={false} />)
-    expect(screen.getByText('HABIS · TIADA KELUARAN')).toBeInTheDocument()
-    expect(screen.queryByText('BELUM BAYAR')).toBeNull()
+    expect(screen.getByText('NO EXIT THIS ROUND')).toBeInTheDocument()
+    expect(screen.queryByText('NOT PAID, WALK TO THE GATE')).toBeNull()
   })
 
   it('shows the SETTLE stamp and flips STATUS to FREE once settled', () => {
@@ -49,5 +60,17 @@ describe('PenjaraTicket', () => {
     unmount()
     render(<PenjaraTicket playerId="same-id" variant={{ kind: 'auto', lastSeenMs: null }} distanceM={null} outForGood={false} settled={false} />)
     expect(screen.getByText(/^\d+$/).textContent).toBe(first)
+  })
+  it('Mak Kau Hijau and bail-revoked tickets say why, and show when they went in instead of a last check-in', () => {
+    const { unmount } = render(<PenjaraTicket playerId="r1" variant={{ kind: 'hijau', caughtAtMs: null }} distanceM={120} outForGood={false} settled={false} />)
+    expect(screen.getByText("DIDN'T TOUCH GREEN")).toBeInTheDocument()
+    expect(screen.getByText('IN AT')).toBeInTheDocument()
+    expect(screen.getByText('120 M')).toBeInTheDocument()
+    expect(screen.queryByText('LAST SEEN')).toBeNull()
+    expect(screen.queryByText('SESSION TIMED OUT')).toBeNull()
+    unmount()
+    render(<PenjaraTicket playerId="r1" variant={{ kind: 'bail-revoked', caughtAtMs: null }} distanceM={null} outForGood={false} settled={false} />)
+    expect(screen.getByText('LEFT HOUSE ARREST')).toBeInTheDocument()
+    expect(screen.queryByText('SESSION TIMED OUT')).toBeNull()
   })
 })

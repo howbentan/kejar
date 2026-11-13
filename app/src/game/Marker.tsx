@@ -203,7 +203,7 @@ function boxOf(mark: Mark, parent: HTMLElement | null): Box {
  * and wayfinding only. Never put it on SOS, marshal, pause, removal or report screens. Yellow is for claiming Dato
  * Seri only, the one time the marker is ever yellow (motion design §7).
  */
-export default function Marker({ marks, colour = 'lime', delayMs = 0 }: { marks: Mark[]; colour?: 'lime' | 'black' | 'yellow'; delayMs?: number }) {
+export default function Marker({ marks, colour = 'lime', delayMs = 0 }: { marks: Mark[]; colour?: 'lime' | 'black' | 'yellow' | 'white'; delayMs?: number }) {
   const reduce = useReducedMotion()
   const svg = useRef<SVGSVGElement>(null)
   const [paths, setPaths] = useState<string[]>([])
@@ -220,7 +220,7 @@ export default function Marker({ marks, colour = 'lime', delayMs = 0 }: { marks:
 
   const stroke = Math.min(MARK_STROKE_MS, MOMENT_MAX_MS / Math.max(1, marks.length)) / 1000
   // Yellow mirrors tokens.css --legendary-2.
-  const colourHex = colour === 'lime' ? '#C6FF3D' : colour === 'yellow' ? '#FFD60A' : '#0A0A0B'
+  const colourHex = colour === 'lime' ? '#C6FF3D' : colour === 'yellow' ? '#FFD60A' : colour === 'white' ? '#F5F5F3' : '#0A0A0B'
 
   return (
     <svg ref={svg} className="marker" aria-hidden="true" data-drawn={reduce ? 'now' : 'animated'} filter={`url(#${wob})`}>

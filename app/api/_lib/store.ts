@@ -1,6 +1,6 @@
 import { LUAR_GARISAN_GRACE_MS } from '../../shared/alerts.js'
 import type { ArenaDraft } from '../../shared/arenaDraft.js'
-import type { Arena, Game, GameEvent, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard } from '../../shared/types.js'
+import type { Arena, Arrest, Game, GameEvent, HijauFix, HijauRun, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard } from '../../shared/types.js'
 import { newDatoCode } from './secrets.js'
 
 export type GameRow = Game & { organiser_id: string; host_push?: PushSubscriptionJSON | null }
@@ -81,7 +81,7 @@ export interface GameStore {
    * after `createdAfter` (ISO), so abandoned lobbies drop out and the list stays small.
    */
   unfinishedGames(organisationId: string, createdAfter: string): Promise<GameRow[]>
-  /** The organisation's six secret cards, A-C yellow and A-C purple; missing ones are made `ready`, with fresh codes, on first read. */
+  /** The organisation's twelve secret cards, A-C each of yellow, orange, purple and green; missing ones are made `ready`, with fresh codes, on first read. */
   secretCards(organisationId: string): Promise<SecretCard[]>
   setSecretCard(id: string, patch: Partial<Pick<SecretCard, 'code' | 'state' | 'found_at'>>): Promise<void>
   addPlayer(p: Omit<PlayerRow, 'id'>): Promise<Player>
@@ -138,6 +138,8 @@ export interface GameStore {
    * Bounded by players × times, so it stays small however long the game runs.
    */
   latestPositions(gameId: string, atIsos: string[]): Promise<Record<string, Position[]>>
+  /** One player's fixes from `fromIso` to `toIso` inclusive, oldest first. Keep the window short (Super Ring's release). */
+  playerPositions(gameId: string, playerId: string, fromIso: string, toIso: string): Promise<Position[]>
   addPings(pings: Ping[]): Promise<void>
   pings(gameId: string): Promise<Ping[]>
   /** Sets the flag only if it was false; true for the first caller. */
@@ -188,6 +190,34 @@ export interface GameStore {
    * already claimed.
    */
   claimBomoh(gameId: string, playerId: string, at: Date): Promise<boolean>
+  /** Super Ring's hidden stash: mirrors `claimDato`, but the card kind is 'ring'. Null if nothing was dropped or it's claimed. */
+  claimRing(gameId: string, playerId: string): Promise<PowerUp | null>
+  /**
+   * Mak Kau Hijau: atomically, if the green stash is dropped and unclaimed, marks it claimed by this player and
+   * writes `games.hijau` (nothing sent or settled yet, nobody tapped). True only for the one caller who wins.
+   */
+  claimHijau(gameId: string, playerId: string, run: Pick<HijauRun, 'startsAt' | 'deadline'>): Promise<boolean>
+  /** Sets `hijau.sentAt` and `hijau.targets` (who the push goes to) together, once; true for the first caller. */
+  claimHijauPush(gameId: string, atIso: string, targets: string[]): Promise<boolean>
+  /**
+   * Adds the player to `hijau.tapped` only if the run hasn't settled, `atIso` is before the deadline and they aren't in
+   * it yet, keeping `fix` (where they tapped) in `hijau.fixes` in the same step when there is one.
+   */
+  tapHijau(gameId: string, playerId: string, atIso: string, fix?: HijauFix | null): Promise<boolean>
+  /**
+   * Sets `hijau.settledAt` and `hijau.lockedUntil` (Penjara's lock, null for a void run) once and returns the run;
+   * null if there's no run or it already settled.
+   */
+  claimHijauSettle(gameId: string, atIso: string, lockedUntilIso: string | null): Promise<HijauRun | null>
+  /** Starts a runner's house arrest only if they have none and aren't jailed; true for the one caller who wins. */
+  startArrest(playerId: string, arrest: Arrest): Promise<boolean>
+  /** Merges a patch into the runner's arrest; nothing happens without one. */
+  updateArrest(playerId: string, patch: Partial<Arrest>): Promise<void>
+  /**
+   * Clears the runner's arrest only if its `firedAt` is still `firedAt` (and, with `waiting`, only while it hasn't
+   * started, so a no-show never beats an opening fix); true for the one caller who wins.
+   */
+  endArrest(playerId: string, firedAt: string, opts?: { waiting?: boolean }): Promise<boolean>
   /**
    * Cheese Ais: freezes a chaser until `untilIso`, only if they aren't frozen now (frozen_until null or not after
    * the store clock). True for the one caller that wins.
@@ -363,6 +393,13 @@ export class MemoryStore implements GameStore {
     this.marshalInviteRows = this.marshalInviteRows.filter((r) => r.game_id !== id)
     // A Tuch and Ga gate's position is a chaser's exact position.
     for (const u of this.powerUpRows) if (u.game_id === id) u.spot = null
+    // A house arrest's centre is a runner's position.
+    for (const p of this.playerRows) if (p.game_id === id) p.arrest = null
+    // Mak Kau Hijau's tap spots are runners' exact positions (fair-play §1.8): the rest of the run stays.
+    if (g.hijau?.fixes) {
+      const { fixes: _fixes, ...rest } = g.hijau
+      g.hijau = rest
+    }
     const mine = this.playerRows
       .filter((p) => p.game_id === id)
       .sort((a, b) => Date.parse(a.accepted_at) - Date.parse(b.accepted_at) || this.playerRows.indexOf(a) - this.playerRows.indexOf(b))
@@ -430,12 +467,14 @@ export class MemoryStore implements GameStore {
             !g.created_at ||
             g.created_at > createdAfter ||
             typeof g.dato_stash?.lat === 'number' ||
-            typeof g.bomoh_stash?.lat === 'number'),
+            typeof g.bomoh_stash?.lat === 'number' ||
+            typeof g.ring_stash?.lat === 'number' ||
+            typeof g.hijau_stash?.lat === 'number'),
       )
       .map((g) => ({ ...g }))
   }
   async secretCards(organisationId: string) {
-    for (const legendary of ['dato', 'bomoh'] as const) {
+    for (const legendary of ['dato', 'ring', 'bomoh', 'hijau'] as const) {
       for (const letter of ['A', 'B', 'C'] as const) {
         const has = this.secretCardRows.some((c) => c.organisation_id === organisationId && c.legendary === legendary && c.letter === letter)
         if (!has) {
@@ -574,6 +613,12 @@ export class MemoryStore implements GameStore {
     for (const list of Object.values(out)) list.sort((a, b) => a.at.localeCompare(b.at))
     return out
   }
+  async playerPositions(gameId: string, playerId: string, fromIso: string, toIso: string) {
+    return this.locs
+      .filter((l) => l.game_id === gameId && l.player_id === playerId && l.at >= fromIso && l.at <= toIso)
+      .map((l) => ({ lat: l.lat, lng: l.lng, accuracy_m: l.accuracy_m, at: l.at }))
+      .sort((a, b) => a.at.localeCompare(b.at))
+  }
   /** Bulk read for tests only — the game must never depend on reading every row. */
   async positions(gameId: string, sinceIso: string) {
     const out: Record<string, Position[]> = {}
@@ -649,7 +694,7 @@ export class MemoryStore implements GameStore {
   async stealFrom(gameId: string, side: 'runner' | 'chaser', rng: () => number = Math.random): Promise<StolenCard | null> {
     const pick = <T,>(xs: T[]): T => xs[Math.min(xs.length - 1, Math.floor(rng() * xs.length))]
     const stealable = (u: PowerUp) =>
-      u.game_id === gameId && !u.used_at && !u.consumed_at && !u.taken_at && !u.sealed && u.kind !== 'dato' // Dato Seri is immune
+      u.game_id === gameId && !u.used_at && !u.consumed_at && !u.taken_at && !u.sealed && u.kind !== 'dato' && u.kind !== 'ring' // Dato Seri and Super Ring are immune
     const owners = this.playerRows
       .filter((p) => p.game_id === gameId && p.role === side && !p.removed_at && !p.disqualified_at && !(side === 'runner' && p.jailed))
       .filter((p) => this.powerUpRows.some((u) => u.player_id === p.id && stealable(u)))
@@ -730,6 +775,85 @@ export class MemoryStore implements GameStore {
     g.bomoh_stash = { ...g.bomoh_stash, claimedBy: playerId, claimedAt: at.toISOString() }
     return true
   }
+  async claimRing(gameId: string, playerId: string) {
+    const g = this.games.find((x) => x.id === gameId)
+    // Not dropped yet (no spot), or already claimed: nothing to take.
+    if (!g?.ring_stash || typeof g.ring_stash.lat !== 'number' || g.ring_stash.claimedBy !== null) return null
+    // A fresh object: gameByCode hands out shallow copies that share the old one.
+    g.ring_stash = { ...g.ring_stash, claimedBy: playerId, claimedAt: this.nowIso() }
+    const row: PowerUp = {
+      id: this.id('u'),
+      game_id: gameId,
+      player_id: playerId,
+      kind: 'ring',
+      station: null,
+      claimed_at: this.nowIso(),
+      used_at: null,
+      consumed_at: null,
+      sealed: false,
+      taken_at: null,
+      offer: null,
+      twin_of: null,
+      spot: null,
+    }
+    this.powerUpRows.push(row)
+    return { ...row }
+  }
+  async claimHijau(gameId: string, playerId: string, run: Pick<HijauRun, 'startsAt' | 'deadline'>) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g?.hijau_stash || typeof g.hijau_stash.lat !== 'number' || g.hijau_stash.claimedBy !== null) return false
+    g.hijau_stash = { ...g.hijau_stash, claimedBy: playerId, claimedAt: this.nowIso() }
+    g.hijau = {
+      claimedBy: playerId,
+      claimedAt: this.nowIso(),
+      startsAt: run.startsAt,
+      deadline: run.deadline,
+      sentAt: null,
+      settledAt: null,
+      tapped: [],
+      targets: [],
+      fixes: {},
+      lockedUntil: null,
+    }
+    return true
+  }
+  async claimHijauPush(gameId: string, atIso: string, targets: string[]) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g?.hijau || g.hijau.sentAt) return false
+    g.hijau = { ...g.hijau, sentAt: atIso, targets: [...targets] }
+    return true
+  }
+  async tapHijau(gameId: string, playerId: string, atIso: string, fix?: HijauFix | null) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g?.hijau || g.hijau.settledAt || g.hijau.tapped.includes(playerId) || !(Date.parse(atIso) < Date.parse(g.hijau.deadline))) return false
+    const fixes = fix ? { ...(g.hijau.fixes ?? {}), [playerId]: { ...fix } } : (g.hijau.fixes ?? {})
+    g.hijau = { ...g.hijau, tapped: [...g.hijau.tapped, playerId], fixes }
+    return true
+  }
+  async claimHijauSettle(gameId: string, atIso: string, lockedUntilIso: string | null) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g?.hijau || g.hijau.settledAt) return null
+    g.hijau = { ...g.hijau, settledAt: atIso, lockedUntil: lockedUntilIso }
+    return { ...g.hijau, tapped: [...g.hijau.tapped], targets: [...(g.hijau.targets ?? [])], fixes: { ...(g.hijau.fixes ?? {}) } }
+  }
+  async startArrest(playerId: string, arrest: Arrest) {
+    const p = this.playerRows.find((x) => x.id === playerId)
+    if (!p || p.arrest || p.jailed) return false
+    p.arrest = { ...arrest }
+    return true
+  }
+  async updateArrest(playerId: string, patch: Partial<Arrest>) {
+    const p = this.playerRows.find((x) => x.id === playerId)
+    // A fresh object: players() hands out shallow copies that share the old one.
+    if (p?.arrest) p.arrest = { ...p.arrest, ...patch }
+  }
+  async endArrest(playerId: string, firedAt: string, opts: { waiting?: boolean } = {}) {
+    const p = this.playerRows.find((x) => x.id === playerId)
+    if (!p?.arrest || p.arrest.firedAt !== firedAt) return false
+    if (opts.waiting && p.arrest.startedAt) return false
+    p.arrest = null
+    return true
+  }
   async freezeChaser(chaserId: string, untilIso: string) {
     const p = this.playerRows.find((x) => x.id === chaserId)
     if (!p) return false
@@ -793,6 +917,21 @@ export class MemoryStore implements GameStore {
     if (g.rescue) {
       const started = Date.parse(g.rescue.startedAt)
       g.rescue = { ...g.rescue, startedAt: new Date(started + this.clock() - Math.max(started, pausedAt)).toISOString() }
+    }
+    // A house arrest's clock freezes the same way: it counts from when it started (or, while waiting for the runner to
+    // open Kejar, from when it fired), so the time it had already run is kept.
+    const held = (t: string) => new Date(Date.parse(t) + this.clock() - Math.max(Date.parse(t), pausedAt)).toISOString()
+    for (const p of this.playerRows) {
+      if (p.game_id !== gameId || !p.arrest) continue
+      p.arrest = p.arrest.startedAt ? { ...p.arrest, startedAt: held(p.arrest.startedAt) } : { ...p.arrest, firedAt: held(p.arrest.firedAt) }
+    }
+    // A Mak Kau Hijau window that hasn't closed waits out the pause whole (one that already closed is left alone).
+    if (g.hijau && Date.parse(g.hijau.deadline) > pausedAt) {
+      g.hijau = { ...g.hijau, startsAt: shift(g.hijau.startsAt), deadline: shift(g.hijau.deadline) }
+    }
+    // Penjara's lock after it is held still too, while it runs (an expired one is left alone).
+    if (g.hijau?.lockedUntil && Date.parse(g.hijau.lockedUntil) > pausedAt) {
+      g.hijau = { ...g.hijau, lockedUntil: shift(g.hijau.lockedUntil) }
     }
     // A running freeze (Cheese Ais) waits out the pause too.
     for (const p of this.playerRows) {

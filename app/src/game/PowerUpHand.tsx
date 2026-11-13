@@ -9,7 +9,6 @@ import { clock, useServerNow } from './time'
 import { INFO } from './powerInfo'
 import FreezePicker from './FreezePicker'
 import GrabChooser from './GrabChooser'
-import { Foil } from './PowerCard'
 import Sticker from './Sticker'
 import { ErrorText } from './ui'
 
@@ -17,7 +16,7 @@ import { ErrorText } from './ui'
  * What a successful claim can hand back: a deck card, Dato Seri, or Bomoh. Bomoh is never a `PowerUpKind` (he works on
  * claim and never sits in a hand), so every place that names a claimed kind has to handle him on purpose.
  */
-export type ClaimedKind = PowerUpKind | 'bomoh'
+export type ClaimedKind = PowerUpKind | 'bomoh' | 'hijau'
 export type ClaimResult = ({ ok: true; kind: ClaimedKind; double?: boolean } | Exclude<ClaimJudgement, { ok: true }>)
 type UseResult =
   | { ok: true; kind: PowerUpKind; offer?: PowerUpKind[]; name?: string; wasted?: true }
@@ -53,9 +52,15 @@ const USE_REJECTIONS: Record<string, string> = {
 /** A chaser claiming Bomoh: what it does, since there's no card or reveal for it. */
 export const BOMOH_FOUND = 'Bomoh found! Every Dikejar shows up for Kejar at the next 2 pings.'
 
+/** A runner claiming Super Ring: what it does, since it sits unused in the slot until it steps in. */
+export const RING_FOUND = "Super Ring! Next time you'd go to Penjara, it's house arrest instead."
+
+/** A chaser claiming Mak Kau Hijau: the runners are told separately. */
+export const HIJAU_FOUND = 'Mak kau hijau! Dikejar have 20 s.'
+
 /** A card that arrived doubled (a Nasi Lemak KFC combo) says so; Bomoh never does. */
 const claimedLine = (kind: ClaimedKind, double?: boolean) =>
-  kind === 'bomoh' ? BOMOH_FOUND : double ? `Combo! ${INFO[kind].name} x2.` : `Got ${INFO[kind].name} ✓`
+  kind === 'bomoh' ? BOMOH_FOUND : kind === 'hijau' ? HIJAU_FOUND : kind === 'ring' ? RING_FOUND : double ? `Combo! ${INFO[kind].name} x2.` : `Got ${INFO[kind].name} ✓`
 
 const frozenLine = (ms: number | undefined) => `Brain freeze! Wait ${clock(ms ?? 0)}.`
 
@@ -202,13 +207,31 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 500, damping: 18 }}
               >
-                <Foil />
                 <Sticker kind="dato" size={40} tilt={-4} />
                 <span>
                   <b>{INFO.dato.name}</b>
                   <span>{INFO.dato.used}</span>
                 </span>
                 <small className="slot-deck">★ LEGENDARY</small>
+              </m.div>
+            )
+          }
+          // Super Ring switches on at claim and waits for the next time they'd go to Penjara: nothing to use.
+          if (u.kind === 'ring') {
+            return (
+              <m.div
+                key={u.id}
+                className="slot legendary ring"
+                initial={{ y: -16, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 18 }}
+              >
+                <Sticker kind="ring" size={40} tilt={-4} />
+                <span>
+                  <b>{INFO.ring.name}</b>
+                  <span>{INFO.ring.used}</span>
+                </span>
+                <small className="slot-deck">ON · WAITING</small>
               </m.div>
             )
           }

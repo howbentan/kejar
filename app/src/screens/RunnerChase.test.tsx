@@ -13,8 +13,8 @@ vi.mock('../game/Map', () => ({
     return <div data-testid="map" />
   },
 }))
-const here = vi.hoisted(() => ({ coords: {} as Record<string, number> }))
-vi.mock('../game/here', () => ({ currentCoords: async () => here.coords }))
+const here = vi.hoisted(() => ({ coords: {} as Record<string, number>, pending: null as null | Promise<Record<string, number>> }))
+vi.mock('../game/here', () => ({ currentCoords: () => here.pending ?? Promise.resolve(here.coords) }))
 vi.mock('../game/Scanner', () => ({
   default: ({ onResult }: { onResult: (t: string) => void }) => (
     <button type="button" onClick={() => onResult(scanned.text)}>
@@ -46,6 +46,44 @@ async function scan(text: string) {
   fireEvent.click(screen.getByRole('button', { name: 'Scan' }))
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'fake camera' })))
 }
+
+describe('RunnerChase: Mak Kau Hijau and the new hint zones (Plan E2)', () => {
+  it('takes over the screen and a tap sends touchGreen with my token and where I am', async () => {
+    call.mockResolvedValue({ ok: true })
+    here.coords = { lat: 3.1, lng: 101.6, accuracy_m: 9 }
+    render(<RunnerChase code="ABC234" view={testView({ hijau: { claimedAt: 90_000, startsAt: 90_000, deadline: 110_000, tapped: false } })} />)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Tap the green' })))
+    expect(call).toHaveBeenCalledTimes(1)
+    expect(call).toHaveBeenCalledWith('touchGreen', { code: 'ABC234', token: 't1', lat: 3.1, lng: 101.6, accuracy_m: 9 })
+    expect(screen.getByText('You touched green. The Kejar can see where you tapped.')).toBeInTheDocument()
+    here.coords = {}
+  })
+
+  it("a tap never waits on a slow GPS: it goes out within 300 ms with no fix, and the server uses the stored one", async () => {
+    vi.useFakeTimers({ now: 5_000_000 })
+    try {
+      call.mockResolvedValue({ ok: true })
+      here.pending = new Promise(() => {}) // the phone never answers
+      render(<RunnerChase code="ABC234" view={testView({ hijau: { claimedAt: 90_000, startsAt: 90_000, deadline: 110_000, tapped: false } })} />)
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Tap the green' })))
+      await act(async () => vi.advanceTimersByTime(299))
+      expect(call).not.toHaveBeenCalled()
+      await act(async () => vi.advanceTimersByTime(1))
+      expect(call).toHaveBeenCalledTimes(1)
+      expect(call).toHaveBeenCalledWith('touchGreen', { code: 'ABC234', token: 't1' })
+    } finally {
+      here.pending = null
+      vi.useRealTimers()
+    }
+  })
+
+  it('passes the orange and green hint zones to the map', () => {
+    const ringZone = { lat: 3.1, lng: 101.1, radiusM: 150 }
+    const hijauZone = { lat: 3.2, lng: 101.2, radiusM: 120 }
+    render(<RunnerChase code="ABC234" view={testView({ ringZone, hijauZone })} />)
+    expect(mapProps.last).toMatchObject({ ringZone, hijauZone })
+  })
+})
 
 describe('RunnerChase', () => {
   it('never asks for a wake lock', () => {

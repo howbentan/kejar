@@ -136,6 +136,46 @@ describe('Settle at Penjara (jail design §4b, §4d)', () => {
     await scan('KEJAR:JAIL')
     expect(screen.getByText('Get within 30 m of Penjara')).toBeInTheDocument()
   })
+
+  it('locked after Mak Kau Hijau: says how long is left', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'penjara-locked', lockedMs: 134_000 })
+    render(<Jail code="ABC234" view={holder()} />)
+    await scan('KEJAR:JAIL')
+    expect(screen.getByText('Penjara is locked for 2:14.')).toBeInTheDocument()
+  })
+})
+
+describe('Penjara locked after Mak Kau Hijau (owner, 2026-11-13)', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('shows Penjara locked with a mono countdown while it lasts, then goes', () => {
+    vi.useFakeTimers({ now: 5_000_000 })
+    // testView's clock is at 100 000 ms: 2:14 left.
+    const { rerender } = render(<Jail code="ABC234" view={{ ...caught(60_000), penjaraLockedUntil: 234_000 }} />)
+    const lock = screen.getByRole('status', { name: 'Penjara locked' })
+    expect(lock).toHaveTextContent('Penjara locked · 2:14')
+    expect(lock.querySelector('.mono')).toHaveTextContent('2:14')
+    // Readable: the dark lock pill, not the lime pill-on.
+    expect(lock).toHaveClass('penjara-lock')
+    expect(lock).not.toHaveClass('pill-on')
+    act(() => vi.advanceTimersByTime(4_000))
+    expect(lock).toHaveTextContent('Penjara locked · 2:10')
+    rerender(<Jail code="ABC234" view={{ ...caught(60_000), penjaraLockedUntil: null }} />)
+    expect(screen.queryByRole('status', { name: 'Penjara locked' })).toBeNull()
+  })
+
+  it('holds still while paused', () => {
+    vi.useFakeTimers({ now: 5_000_000 })
+    render(<Jail code="ABC234" view={{ ...caught(60_000), paused: true, penjaraLockedUntil: 234_000 }} />)
+    act(() => vi.advanceTimersByTime(4_000))
+    expect(screen.getByRole('status', { name: 'Penjara locked' })).toHaveTextContent('2:14')
+  })
+
+  it('shows on the auto-jailed screen too', () => {
+    const view = testView({ jailReason: 'hijau', penjaraLockedUntil: 160_000 })
+    render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true, caught_at: new Date(40_000).toISOString() } }} />)
+    expect(screen.getByRole('status', { name: 'Penjara locked' })).toHaveTextContent('Penjara locked · 1:00')
+  })
 })
 
 describe('Jail', () => {
@@ -180,6 +220,29 @@ describe('Jail', () => {
     const lines = ['Your phone went ponteng, bro.', 'Signal hilang, bossku?', 'Kena check in lah, boss.', 'Phone in your pocket too deep.']
     expect(lines.some((l) => screen.queryByText(l))).toBe(true)
     expect(screen.getByRole('button', { name: 'Phone died or no buzz? Tell a marshal →' })).toBeInTheDocument()
+  })
+
+  it('Mak Kau Hijau: says it got you, with no check-ins list', () => {
+    const view = testView({ caughtBy: null, jailReason: 'hijau', jailCheckins: null })
+    const { container } = render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true } }} />)
+    expect(screen.getByText('PENJARA · AUTO')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Mak kau hijau got you.' })).toBeInTheDocument()
+    expect(screen.queryByText(/Missed two/)).toBeNull()
+    expect(container.querySelector('.checkin-row')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Phone died or no buzz? Tell a marshal →' })).toBeInTheDocument()
+  })
+
+  it('a fresh Mak Kau Hijau jailing drops the bars with its own plate', () => {
+    const view = testView({ caughtBy: null, jailReason: 'hijau' })
+    render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true, caught_at: new Date(97_000).toISOString() } }} />)
+    expect(screen.getByText('MAK KAU HIJAU')).toBeInTheDocument()
+  })
+
+  it("Super Ring's bail revoked: its own line, not Caught", () => {
+    const view = testView({ caughtBy: null, jailReason: 'bail-revoked' })
+    render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true } }} />)
+    expect(screen.getByRole('heading', { name: 'Bail revoked. To Penjara.' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Caught/ })).toBeNull()
   })
 
   it('a fresh auto-jail drops the bars with 2× MISSED', () => {

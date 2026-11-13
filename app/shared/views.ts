@@ -1,15 +1,17 @@
-import { alertLeadFor, checkedIn, checkinsSince, countedCheckIn, fairlyWarned } from './checkins.js'
+import { alertLeadFor, checkedIn, checkinsSince, countedCheckIn, countRestartAt, fairlyWarned } from './checkins.js'
 import { alertsFrom, type Alert, type ReportReason } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
 import { distanceM, fuzz, hash, offset } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
-import { isTicked, kitOf, packItems, placeItems, type KitItem, type PlaceItem, type SecretLetters } from './kit.js'
+import { isTicked, kitOf, packItems, placeItems, SECRET_PLACE_IDS, type KitItem, type PlaceItem, type SecretLetters } from './kit.js'
 import { MOMENT_WINDOW_MS } from './moments.js'
 import { reelPulledThisStay, RESCUE_HOLD_MS } from './penjara.js'
-import { isOut, undoableCatchId } from './players.js'
+import { isOut, undoableArrestId, undoableCatchId } from './players.js'
+import { ARREST_OPEN_MS, arrestEndsAt } from './arrest.js'
+import { hijauCounts, hijauTargets, penjaraLockLeft } from './hijau.js'
 import { POWER_NAME } from './powerNames.js'
 import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, shieldArmedAt, slotBusy, TOLL_RADIUS_M } from './powerups.js'
-import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
+import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type LegendaryKind, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
 
 /** Spec §4.5–4.6 constants. */
 export const FUZZ_RADIUS_M = 15
@@ -31,10 +33,13 @@ export interface MapDot {
   label?: string
   fuzzy?: boolean
   missed?: boolean
-  /** Shown at the true spot because of a chaser's Focus or Bomoh's team-wide reveal. */
+  /** Shown at the true spot because of a chaser's Focus, Bomoh's team-wide reveal, a toll gate or a green tap. */
   exact?: true
-  /** Exact specifically because of Pak Guard's Focus or Bomoh's reveal; null for every other dot. */
-  revealedBy: 'focus' | 'bomoh' | 'toll' | null
+  /**
+   * Exact specifically because of Pak Guard's Focus, Bomoh's reveal, Tuch and Ga's gate, or tapping green in Mak Kau
+   * Hijau (`hijau`: at the tapped spot, until the next ping reveal); null for every other dot.
+   */
+  revealedBy: 'focus' | 'bomoh' | 'toll' | 'hijau' | null
   at: string
   /**
    * Set only for a runner just caught or auto-jailed, within the slide-off window (`MOMENT_WINDOW_MS` of
@@ -60,7 +65,8 @@ export interface RosterEntry {
   pushOn?: boolean
   /**
    * The catch `Undo kejar` would undo (fair-play §1.4): this runner's latest catch while it still holds them, in
-   * the chase. Sent only in the organiser's and marshals' rosters; null when there is nothing to undo.
+   * the chase, or the `arrested` event of a live house arrest a catch fired (Super Ring). Sent only in the
+   * organiser's and marshals' rosters; null when there is nothing to undo.
    */
   undoKejarId?: string | null
 }
@@ -113,8 +119,28 @@ export interface View {
   caughtBy: string | null
   /** Luar Garisan: I've been warned for being outside the play area and have not yet come back or been disqualified. */
   outWarned: boolean
-  /** Why I'm in Penjara: caught by a chaser, or auto-jailed for missing two check-ins. */
-  jailReason: 'caught' | 'missed-checkins' | null
+  /**
+   * Why I'm in Penjara: caught by a chaser, auto-jailed for missing two check-ins, or sent from Super Ring's house
+   * arrest (`bail-revoked`: a fix outside the circle, or no fresh fix inside it at the end), or by Mak Kau Hijau
+   * (`hijau`: didn't tap green in time).
+   */
+  jailReason: 'caught' | 'missed-checkins' | 'bail-revoked' | 'hijau' | null
+  /**
+   * My Super Ring house arrest, while it lasts (null otherwise): when it ends (held still while paused), the
+   * circle's centre, and while it waits for me to open Kejar, the deadline to start it (both others null then).
+   */
+  arrest: { endsAt: number | null; center: LatLng | null; openBy: number | null } | null
+  /**
+   * Mak Kau Hijau's takeover (new power-ups §6.3): for a runner who must tap green, from its start until it
+   * settles; the deadline is held still while paused. Null for everyone else (chasers get a feed line).
+   * `claimedAt` names the run and never moves (a resume shifts `startsAt` and `deadline`).
+   */
+  hijau: { claimedAt: number; startsAt: number; deadline: number; tapped: boolean } | null
+  /**
+   * Penjara is locked for 3 minutes after a Mak Kau Hijau that counted (owner, 2026-11-13): when it opens again, held
+   * still while paused (count from `now` then, like `hijau`). Null when it isn't locked, and outside the chase.
+   */
+  penjaraLockedUntil: number | null
   /** My running Durian's end time; null for effects that wait for the next ping (motion design §7b). */
   activeEndsAt: number | null
   /** A chaser holding Mat Rempit while the team waits: when it unlocks (power-ups design §5a). */
@@ -161,6 +187,10 @@ export interface View {
    * `legendaryZone`, seeded independently so the two zones never land at the same offset.
    */
   bomohZone: { lat: number; lng: number; radiusM: number } | null
+  /** Super Ring's hint zone (Plan E2): same shape and rules as `legendaryZone`, seeded apart. No name. */
+  ringZone: { lat: number; lng: number; radiusM: number } | null
+  /** Mak Kau Hijau's hint zone (Plan E2): same shape and rules as `bomohZone`, seeded apart. No name. */
+  hijauZone: { lat: number; lng: number; radiusM: number } | null
   /**
    * What Settle could do, for a jailed runner holding an unused Dato Seri (jail design §4b, §4d); null for
    * everyone else. `options` are the other runners in Penjara; those who already used their one escape are
@@ -205,6 +235,14 @@ export interface View {
    */
   bomohStash?: PlacedStash | null
   bomohCard?: { letter: string; code: string } | null
+  /**
+   * The organiser only: Super Ring's and Mak Kau Hijau's stashes and cards, the same shape and secrecy as Bomoh's.
+   * Left out of players' and marshals' views entirely.
+   */
+  ringStash?: PlacedStash | null
+  ringCard?: { letter: string; code: string } | null
+  hijauStash?: PlacedStash | null
+  hijauCard?: { letter: string; code: string } | null
   /**
    * The organiser's and marshals' packing list. The yellow card and its place are in the organiser's own view
    * only (rules doc §9b); players never get this field.
@@ -418,6 +456,21 @@ function tollGatesFor(i: ViewInput): LatLng[] {
     .map((u) => u.spot as LatLng)
 }
 
+/**
+ * Mak Kau Hijau's tap reveal (owner, 2026-11-13): where each runner tapped green, while the run counts (not void),
+ * keyed by player id. A spot lasts until the next ping reveal after the tap (`since`: the last reveal so far).
+ */
+function hijauSpots(i: ViewInput, since: number | null): Map<string, { lat: number; lng: number; at: string }> {
+  const run = i.game.hijau
+  const spots = new Map<string, { lat: number; lng: number; at: string }>()
+  // Void runs reveal nobody: a late (or no) push, or one settled with no lock (late, or after the whistle).
+  if (!run || !hijauCounts(run) || (run.settledAt && !run.lockedUntil)) return spots
+  for (const [id, fix] of Object.entries(run.fixes ?? {})) {
+    if (since === null || Date.parse(fix.at) > since) spots.set(id, fix)
+  }
+  return spots
+}
+
 function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: string }[] } {
   const dots: MapDot[] = []
   const notes: { at: string; text: string }[] = []
@@ -429,7 +482,19 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
   }
   const revealed = revealedPings(i.pings)
   const last = revealed[revealed.length - 1]
-  if (!last) return { dots, notes }
+  const tapped = hijauSpots(i, last ? Date.parse(last.reveal_at) : null)
+  // A tapper the Kejar can see: free, still in the round and not under house arrest (hidden like any runner then).
+  const tapDot = (p: Player): MapDot | null => {
+    const spot = tapped.get(p.id)
+    return spot && !p.jailed && !isOut(p) && !p.arrest ? { ...dotFor(p, { ...spot, accuracy_m: 0 }, 'runner'), exact: true, revealedBy: 'hijau' } : null
+  }
+  if (!last) {
+    for (const p of i.players) {
+      const dot = p.role === 'runner' ? tapDot(p) : null
+      if (dot) dots.push(dot)
+    }
+    return { dots, notes }
+  }
   const revealAt = Date.parse(last.reveal_at)
   const alertAt =
     last.seq >= BONUS_SEQ_BASE
@@ -464,8 +529,15 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
       if (sliding) dots.push(sliding)
       continue
     }
-    // Luar Garisan: out of the round, so neither a target on the map nor a "never checked in" note.
-    if (isOut(p)) continue
+    // Luar Garisan: out of the round, so neither a target on the map nor a "never checked in" note. Super Ring's
+    // house arrest hides the runner the same way, so nobody can wait outside the circle.
+    if (isOut(p) || p.arrest) continue
+    // Tapped green since the last ping: shown exactly where they tapped, whatever the ping showed.
+    const tapDotNow = tapDot(p)
+    if (tapDotNow) {
+      dots.push(tapDotNow)
+      continue
+    }
     const at = latestAtOrBefore(i.positions[p.id], revealAt)
     // A cloaked runner must look exactly like one who never checked in.
     if (!at || cloaked.has(p.id)) {
@@ -569,8 +641,8 @@ function myLastAt(i: Pick<ViewInput, 'me' | 'positions'>): (t: number) => number
 }
 
 /** Check-ins only count from the chase start or my last release, whichever is later (checkins design §4.4). */
-function sinceRelease(i: Pick<ViewInput, 'game' | 'me' | 'now'>): number {
-  return checkinsSince(chaseStartOf(i.game, i.now)!, i.me.freed_at)
+function sinceRelease(i: Pick<ViewInput, 'game' | 'me' | 'now' | 'events'>): number {
+  return checkinsSince(chaseStartOf(i.game, i.now)!, countRestartAt(i.me, i.events))
 }
 
 export type SnapshotInput = Pick<ViewInput, 'game' | 'me' | 'positions' | 'events' | 'now'>
@@ -671,6 +743,18 @@ function bomohZoneFor(i: ViewInput, phase: Phase): View['bomohZone'] {
   return { lat: c.lat, lng: c.lng, radiusM: LEGENDARY_ZONE_M }
 }
 
+/** A legendary's hint zone: the stash moved 30-80% of the radius in a direction seeded by the secret seed and `suffix`. */
+function stashZoneFor(i: ViewInput, phase: Phase, stash: Game['dato_stash'], suffix: string): View['ringZone'] {
+  const s = placedStash(stash)
+  if (i.game.settings.mode !== 'full' || phase !== 'chasing' || !s || s.claimedBy !== null) return null
+  if (i.me.role !== 'runner' && i.me.role !== 'chaser') return null
+  const h = hash(`${secretSeed(i.game)}:${suffix}`)
+  const angle = ((h & 0xffff) / 0x10000) * 2 * Math.PI
+  const dist = (0.3 + ((h >>> 16) / 0x10000) * 0.5) * LEGENDARY_ZONE_M
+  const c = offset({ lat: s.lat, lng: s.lng }, dist, angle)
+  return { lat: c.lat, lng: c.lng, radiusM: LEGENDARY_ZONE_M }
+}
+
 /** The Settle picker's choices, the same eligibility `judgeSettle` applies. */
 function settleFor(i: ViewInput, phase: Phase): View['settle'] {
   if (phase !== 'chasing' || i.game.paused_at || i.me.role !== 'runner' || !i.me.jailed) return null
@@ -725,7 +809,47 @@ function jailReasonFor(i: ViewInput): View['jailReason'] {
   const latest = i.events
     .filter((e) => (e.type === 'caught' || e.type === 'auto-jailed') && e.target_id === i.me.id)
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0]
-  return latest?.type === 'auto-jailed' ? 'missed-checkins' : 'caught'
+  if (latest?.type !== 'auto-jailed') return 'caught'
+  if (latest.data.cause === 'revoked') return 'bail-revoked'
+  return latest.data.cause === 'hijau' ? 'hijau' : 'missed-checkins'
+}
+
+/** My house arrest for my own screen (see `View.arrest`). While paused, both deadlines move with the clock. */
+function arrestFor(i: ViewInput): View['arrest'] {
+  const a = i.me.arrest
+  // Once the game is over a leftover arrest means nothing (they counted as free): no stale circle on the results.
+  if (!a || i.me.role !== 'runner' || phaseAt(i.game, i.now).phase === 'ended') return null
+  const since = a.startedAt ?? a.firedAt
+  const frozen = i.game.paused_at ? Math.max(0, i.now - Math.max(Date.parse(i.game.paused_at), Date.parse(since))) : 0
+  const endsAt = arrestEndsAt(a)
+  return {
+    endsAt: endsAt === null ? null : endsAt + frozen,
+    center: a.center,
+    openBy: a.startedAt ? null : Date.parse(a.firedAt) + ARREST_OPEN_MS + frozen,
+  }
+}
+
+/** I must tap green: the push went to me, and I'm still free, not Luar Garisan and not under house arrest. */
+function hijauTargetMe(i: Pick<ViewInput, 'game' | 'me'>): boolean {
+  return !!i.game.hijau?.targets?.includes(i.me.id) && hijauTargets([i.me]).length > 0
+}
+
+/** When Penjara opens again after Mak Kau Hijau (see `View.penjaraLockedUntil`). */
+function penjaraLockedUntilFor(i: ViewInput, phase: Phase): number | null {
+  if (phase !== 'chasing') return null
+  const left = penjaraLockLeft(i.game, i.now)
+  return left > 0 ? i.now + left : null
+}
+
+/** My Mak Kau Hijau takeover (see `View.hijau`). */
+function hijauFor(i: ViewInput, phase: Phase): View['hijau'] {
+  const run = i.game.hijau
+  if (!run || run.settledAt || phase !== 'chasing' || !hijauTargetMe(i)) return null
+  const startsAt = Date.parse(run.startsAt)
+  if (i.now < startsAt) return null
+  const frozen = i.game.paused_at ? Math.max(0, i.now - Math.max(Date.parse(i.game.paused_at), startsAt)) : 0
+  // `claimedAt` never moves (a resume shifts `startsAt` and `deadline`): it names the run for the phone.
+  return { claimedAt: Date.parse(run.claimedAt), startsAt, deadline: Date.parse(run.deadline) + frozen, tapped: run.tapped.includes(i.me.id) }
 }
 
 interface FeedContext {
@@ -733,13 +857,17 @@ interface FeedContext {
   side: 'runner' | 'chaser' | null
   freeNow: number
   jailedNow: number
+  /** I tapped green in this game's Mak Kau Hijau. */
+  tappedGreen: boolean
+  /** I must tap green right now (see `hijauTargetMe`). */
+  hijauTarget: boolean
 }
 
 type Line = Omit<FeedItem, 'at'>
 const plain = (text: string): Line => ({ text, means: null, act: false, label: null })
 
 /** The two-part lines (motion §8.2). Runner power-up uses never appear, so nothing secret leaks. */
-function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Line | null {
+function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Line | Line[] | null {
   const actor = e.actor_id ? byId.get(e.actor_id) : undefined
   const target = e.target_id ? byId.get(e.target_id) : undefined
   const tag = target ? tagLabel(target) : 'A Dikejar'
@@ -835,13 +963,36 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
         `${n} more Dikejar ${n === 1 ? 'is' : 'are'} loose near Penjara.`,
       )
     }
-    case 'auto-jailed':
+    case 'arrested':
+      // Never the card's name or the runner's (rules doc §9b).
+      return plain('Something legendary saved a Dikejar.')
+    case 'auto-jailed': {
+      // Out of Super Ring's house arrest: never says why, so the card stays a secret.
+      const revoked = two(`${tag} went to Penjara.`, 'PENJARA', `${ctx.freeNow} Dikejar still free.`, `One less to find. ${tag} is in Penjara.`)
+      if (e.data.cause === 'revoked') return revoked
+      // Mak Kau Hijau: players get its one count line (`hijau-done`); marshals see who, for the undo. A Super Ring
+      // holder it sent to house arrest who never opened Kejar comes later, outside that count: players get the plain
+      // Penjara line, so the card stays a secret.
+      if (e.data.cause === 'hijau') return ctx.side === null ? plain(`${tag} missed Mak kau hijau, sent to Penjara.`) : e.data.arrest === true ? revoked : null
       return two(
         `${tag} missed 2 check-ins in a row.`,
         '2×',
         `${tag} went to Penjara. Check in when your phone buzzes, or you're next.`,
         `One less to find. ${tag} is in Penjara.`,
       )
+    }
+    case 'hijau':
+      // Only a runner who must tap gets the buzz; jailed, arrested or Luar Garisan runners just read it.
+      if (ctx.side === 'runner') return { ...plain('Mak kau hijau! Tap the green.'), act: ctx.hijauTarget }
+      return plain('Mak kau hijau! Dikejar have 20 s.')
+    case 'hijau-done': {
+      // Too close to the end to run: nothing happened, so nothing to explain beyond the found card.
+      if (e.data.ended === true) return null
+      // Void: it never counted, so nobody is told "Safe!" either.
+      if (e.data.void === true) return ctx.side === 'runner' ? null : plain('Mak kau hijau fizzled. The alert went out too late.')
+      const safe = ctx.side === 'runner' && ctx.tappedGreen ? [plain('Safe! You touched green.')] : []
+      return [plain(`Mak kau hijau: ${Number(e.data.jailed ?? 0)} Dikejar to Penjara.`), ...safe]
+    }
     case 'luar-garisan':
       // For everyone. The warning (`out-warned`) stays private to the player, so it has no line.
       return actor ? plain(`${tagLabel(actor)} is Luar Garisan, out of this round.`) : null
@@ -897,14 +1048,20 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
     case 'auto-jail-undone':
       return target ? `${tagLabel(target)} is back in the game (marshal)` : 'A runner is back in the game (marshal)'
     case 'kejar-undone':
+      // An undone house arrest names nobody: the feed never said who Super Ring saved.
+      if (e.data.arrest === true) return 'A marshal undid a kejar.'
       // The runner's name only, never the tag number (fair-play §1.4).
       return `A marshal undid a kejar. ${target?.name ?? 'A Dikejar'} is back in.`
     case 'final-whistle':
       // A removal or Luar Garisan put the last runner out without a catch; older events carry no cause (a catch).
-      return e.data.cause === 'removed' || e.data.cause === 'luar-garisan'
+      return e.data.cause === 'removed' || e.data.cause === 'luar-garisan' || e.data.cause === 'hijau'
         ? 'No Dikejar left free! Final whistle in 60 s.'
         : 'Last Dikejar caught! Final whistle in 60 s.'
+    case 'arrested':
+      return 'Something legendary saved a Dikejar.'
     case 'auto-jailed':
+      if (e.data.cause === 'revoked') return target ? `${tagLabel(target)} sent to Penjara` : 'A runner was sent to Penjara'
+      if (e.data.cause === 'hijau') return target ? `${tagLabel(target)} missed Mak kau hijau, sent to Penjara` : 'A runner missed Mak kau hijau, sent to Penjara'
       return target ? `${tagLabel(target)} missed 2 check-ins, sent to Penjara` : 'A runner missed 2 check-ins, sent to Penjara'
     default:
       return null
@@ -915,7 +1072,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, arrest: null, hijau: null, penjaraLockedUntil: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, ringZone: null, hijauZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, ringStash: undefined, ringCard: undefined, hijauStash: undefined, hijauCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
   }
   return v
 }
@@ -954,12 +1111,14 @@ function fullView(i: ViewInput): View {
     side: i.me.role === 'runner' || i.me.role === 'chaser' ? i.me.role : null,
     freeNow: runnersNow.filter((p) => !isOut(p)).length,
     jailedNow: runnersNow.filter((p) => p.jailed).length,
+    tappedGreen: !!i.game.hijau?.tapped.includes(i.me.id),
+    hijauTarget: hijauTargetMe(i),
   }
   // Newest first; events recorded in the same millisecond keep their recorded order (later first).
   const feed = [
     ...i.events.flatMap((e) => {
       const line = feedLine(e, byId, feedContext)
-      return line ? [{ at: e.at, ...line }] : []
+      return (Array.isArray(line) ? line : line ? [line] : []).map((l) => ({ at: e.at, ...l }))
     }),
     ...[...notes, ...snapshotLines(i, phase, endsAt)].map((n) => ({ ...n, means: null, act: false, label: null })),
   ]
@@ -990,6 +1149,9 @@ function fullView(i: ViewInput): View {
     chaserNearby,
     caughtBy: i.me.jailed && i.me.caught_by ? (byId.get(i.me.caught_by)?.name ?? null) : null,
     jailReason: jailReasonFor(i),
+    arrest: arrestFor(i),
+    hijau: hijauFor(i, phase),
+    penjaraLockedUntil: penjaraLockedUntilFor(i, phase),
     outWarned: !!i.me.out_warned_at && !i.me.disqualified_at,
     activeEndsAt: (() => {
       const shield = activeShield(i.powerUps, i.me.id, i.now)
@@ -1025,7 +1187,7 @@ function fullView(i: ViewInput): View {
           caught_at: p.caught_at,
           freed_once: p.freed_once,
           ...(organiser || role === 'marshal'
-            ? { pushOn: !!p.push, undoKejarId: phase === 'chasing' && p.role === 'runner' ? undoableCatchId(p, i.events) : null }
+            ? { pushOn: !!p.push, undoKejarId: phase === 'chasing' && p.role === 'runner' ? (undoableCatchId(p, i.events) ?? undoableArrestId(p)) : null }
             : {}),
         }))
       : [],
@@ -1037,11 +1199,13 @@ function fullView(i: ViewInput): View {
     shieldActive: activeShield(i.powerUps, i.me.id, i.now) !== null,
     deckLeft: deckLeftFor(i),
     activePowerUp: (() => {
-      const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now)
+      const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now, i.me)
       return busy?.running ? busy.kind : null
     })(),
     legendaryZone: legendaryZoneFor(i, phase),
     bomohZone: bomohZoneFor(i, phase),
+    ringZone: stashZoneFor(i, phase, i.game.ring_stash, 'ring-legendary-zone'),
+    hijauZone: stashZoneFor(i, phase, i.game.hijau_stash, 'hijau-legendary-zone'),
     settle: settleFor(i, phase),
     rescue: rescueFor(i, phase),
     fiveLeft: Boolean(i.game.five_warned_at),
@@ -1053,7 +1217,16 @@ function fullView(i: ViewInput): View {
     // The stash and the card go only to the organiser, who prints and hides it (ruling R15). Marshals are the
     // helper, and never see either (rules doc §9b).
     ...(organiser
-      ? { datoStash: placedStash(i.game.dato_stash), datoCard: datoCardOf(i), bomohStash: placedStash(i.game.bomoh_stash), bomohCard: bomohCardOf(i) }
+      ? {
+          datoStash: placedStash(i.game.dato_stash),
+          datoCard: datoCardOf(i),
+          bomohStash: placedStash(i.game.bomoh_stash),
+          bomohCard: bomohCardOf(i),
+          ringStash: placedStash(i.game.ring_stash),
+          ringCard: cardOf(i.game.ring_stash),
+          hijauStash: placedStash(i.game.hijau_stash),
+          hijauCard: cardOf(i.game.hijau_stash),
+        }
       : {}),
     // The packing list: marshals get the shared items, and only the organiser's own view adds the secret ones.
     ...(role === 'marshal' ? { kit: kitFor(i) } : {}),
@@ -1089,6 +1262,11 @@ function bomohCardOf(i: ViewInput): { letter: string; code: string } | null {
   return s?.card && s.code ? { letter: s.card.letter, code: s.code } : null
 }
 
+/** The organiser's card for any legendary's stash: its letter and the code it claims with. */
+function cardOf(s: Game['bomoh_stash']): { letter: string; code: string } | null {
+  return s?.card && s.code ? { letter: s.card.letter, code: s.code } : null
+}
+
 function withoutLegendaries(s: Settings): Omit<Settings, 'legendaries'> {
   const { legendaries: _hidden, ...rest } = s
   return rest
@@ -1100,9 +1278,10 @@ function kitFor(i: ViewInput): KitView {
   const kit = kitOf(i.game)
   const places = placeItems(i.game, organiser, letters)
   // The secret step is placed only when the stash is really dropped, never from the saved flag alone (ruling R8).
-  const placed = Object.fromEntries(Object.entries(kit.placed).filter(([id]) => id !== 'dato' && id !== 'bomoh' && places.some((p) => p.id === id)))
-  if (places.some((p) => p.id === 'dato') && placedStash(i.game.dato_stash)) placed.dato = true
-  if (places.some((p) => p.id === 'bomoh') && placedStash(i.game.bomoh_stash)) placed.bomoh = true
+  const secret = (id: string): id is LegendaryKind => (SECRET_PLACE_IDS as string[]).includes(id)
+  const placed = Object.fromEntries(Object.entries(kit.placed).filter(([id]) => !secret(id) && places.some((p) => p.id === id)))
+  const stashes: Record<LegendaryKind, Game['dato_stash']> = { dato: i.game.dato_stash, ring: i.game.ring_stash, bomoh: i.game.bomoh_stash, hijau: i.game.hijau_stash }
+  for (const p of places) if (secret(p.id) && placedStash(stashes[p.id])) placed[p.id] = true
   return {
     items: packItems(i.game, letters).map((item) => ({ ...item, ticked: isTicked(i.game, item) })),
     placed,

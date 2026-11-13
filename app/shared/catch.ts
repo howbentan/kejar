@@ -39,7 +39,13 @@ export type CatchJudgement =
         | 'already-out'
         | 'durian-locked'
         | 'durian-head-start'
-      /** The runner's name, on the Durian refusals (added by the catch action). */
+        /** Super Ring fired on this catch: house arrest instead of Penjara, and this chaser is locked off (catch action). */
+        | 'ring'
+        /** This chaser's catch once fired the runner's Super Ring: locked off them for the game. */
+        | 'ring-locked'
+        /** The runner is under house arrest: nobody can catch them right now. */
+        | 'arrest'
+      /** The runner's name, on the Durian and Super Ring refusals (added by the catch action). */
       name?: string
     }
 
@@ -56,6 +62,8 @@ export function judgeCatch(i: {
   now: number
   /** Every Durian block this game, from the `shielded` events. */
   shieldings: { chaserId: string; runnerId: string; at: number }[]
+  /** Every chaser locked off a runner by Super Ring, from the `ring-locked` events (minus any undone). */
+  ringLocks?: { chaserId: string; runnerId: string }[]
 }): CatchJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (i.chaser.role !== 'chaser') return { ok: false, reason: 'not-a-chaser' }
@@ -69,6 +77,10 @@ export function judgeCatch(i: {
   const stings = i.shieldings.filter((s) => s.runnerId === runner.id)
   if (stings.some((s) => s.chaserId === i.chaser.id)) return { ok: false, reason: 'durian-locked' }
   if (stings.some((s) => i.now - s.at < DURIAN_HEAD_START_MS)) return { ok: false, reason: 'durian-head-start' }
+  // Super Ring, like Durian: the chaser whose catch fired it is off this runner for the game, and nobody catches
+  // a runner under house arrest.
+  if ((i.ringLocks ?? []).some((l) => l.runnerId === runner.id && l.chaserId === i.chaser.id)) return { ok: false, reason: 'ring-locked' }
+  if (runner.arrest) return { ok: false, reason: 'arrest' }
 
   const age = (p: Position) => i.now - Date.parse(p.at)
   if (!i.chaserPos || age(i.chaserPos) > CHASER_FRESH_MS) return { ok: false, reason: 'no-location' }
@@ -92,9 +104,13 @@ export function plausibleLimitM(chaserPos: Position, runnerPos: Position, now: n
   return PLAUSIBLE_BASE_M + slack(chaserPos) + slack(runnerPos) + (RUNNER_SPEED_MPS * Math.min(age, PLAUSIBLE_MAX_AGE_MS)) / 1000
 }
 
+/** Penjara is locked after Mak Kau Hijau (owner, 2026-11-13): `lockedMs` is how long it stays locked. */
+export type LockedRefusal = { ok: false; reason: 'penjara-locked'; lockedMs: number }
+
 export type BreakJudgement =
   | { ok: true; freedIds: string[] }
   | { ok: false; reason: 'not-chasing' | 'not-a-free-runner' | 'too-far-from-jail' | 'nobody-to-free' }
+  | LockedRefusal
 
 export function judgeJailbreak(i: {
   phase: Phase
@@ -103,9 +119,13 @@ export function judgeJailbreak(i: {
   runnerPos: Position | null
   jail: LatLng
   now: number
+  /** How long Penjara stays locked after Mak Kau Hijau (`penjaraLockLeft`); 0 or absent when it isn't. */
+  lockedMs?: number
 }): BreakJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
-  if (i.runner.role !== 'runner' || isOut(i.runner)) return { ok: false, reason: 'not-a-free-runner' }
+  // Under house arrest they can't be caught, so they mustn't hold a rescue nobody could stop (new power-ups §6.2).
+  if (i.runner.role !== 'runner' || isOut(i.runner) || i.runner.arrest) return { ok: false, reason: 'not-a-free-runner' }
+  if (i.lockedMs && i.lockedMs > 0) return { ok: false, reason: 'penjara-locked', lockedMs: i.lockedMs }
   if (!atJail(i.runnerPos, i.jail, i.now)) return { ok: false, reason: 'too-far-from-jail' }
   const freedIds = i.players.filter((p) => p.role === 'runner' && p.jailed && !p.freed_once).map((p) => p.id)
   if (freedIds.length === 0) return { ok: false, reason: 'nobody-to-free' }
@@ -122,6 +142,7 @@ export const SETTLE_MAX_TARGETS = 2
 
 export type SettleJudgement =
   | { ok: true; freedIds: string[] }
+  | LockedRefusal
   | {
       ok: false
       reason:
@@ -153,10 +174,13 @@ export function judgeSettle(i: {
   jail: LatLng
   targetIds: string[]
   now: number
+  /** As for `judgeJailbreak`: Penjara locked after Mak Kau Hijau. */
+  lockedMs?: number
 }): SettleJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (i.holder.role !== 'runner' || !i.holder.jailed) return { ok: false, reason: 'not-jailed' }
   if (!i.holdsDato) return { ok: false, reason: 'no-dato' }
+  if (i.lockedMs && i.lockedMs > 0) return { ok: false, reason: 'penjara-locked', lockedMs: i.lockedMs }
   if (!atJail(i.holderPos, i.jail, i.now)) return { ok: false, reason: 'too-far-from-jail' }
   if (i.targetIds.length > SETTLE_MAX_TARGETS) return { ok: false, reason: 'too-many-targets' }
   const seen = new Set<string>([i.holder.id])

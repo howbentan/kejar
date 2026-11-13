@@ -400,6 +400,11 @@ describe('jail reason', () => {
     const v = view(jailedHafiz, { players: [chaser, aina, jailedHafiz, wei, siti], events: [event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2' })] })
     expect(v.jailReason).toBe('missed-checkins')
   })
+  it("says hijau when Mak Kau Hijau sent me, with no check-ins list", () => {
+    const v = view(jailedHafiz, { players: [chaser, aina, jailedHafiz, wei, siti], events: [event('auto-jailed', T0 + 15 * MIN, { target_id: 'r2', data: { cause: 'hijau' } })] })
+    expect(v.jailReason).toBe('hijau')
+    expect(v.jailCheckins).toBeNull()
+  })
   it('says caught when a chaser caught me', () => {
     const caught = { ...hafiz, jailed: true, caught_by: 'c1' }
     const v = view(caught, { players: [chaser, aina, caught, wei, siti], events: [event('caught', T0 + 12 * MIN, { actor_id: 'c1', target_id: 'r2' })] })
@@ -1135,7 +1140,7 @@ describe('the packing list in organiser and marshal views', () => {
   describe("Bomoh's walk step (R8: placed only once the card is really dropped)", () => {
     const bomohGame = (over: object = {}, placed: Record<string, boolean> = {}) =>
       game({
-        settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash' } },
+        settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash', ring: 'off', hijau: 'off' } },
         arena: { ...game().arena, stations: [{ lat: 3.001, lng: 101.001 }] },
         kit: { ticks: {}, placed: { 'station-1': true, ...placed } },
         ...over,
@@ -1232,5 +1237,132 @@ describe('how to play: briefing view', () => {
   })
   it('tells the organiser it has not started yet', () => {
     expect(v(organiserMe, { game: lobby(false) }).briefing).toMatchObject({ started: false, ready: 0 })
+  })
+})
+
+describe("Mak Kau Hijau's takeover view", () => {
+  it('carries claimedAt, which names the run even after a resume shifted startsAt and deadline', () => {
+    const run = {
+      claimedBy: 'c1',
+      claimedAt: iso(NOW - 60_000),
+      // As after a pause and resume: both moved later, claimedAt didn't.
+      startsAt: iso(NOW - 10_000),
+      deadline: iso(NOW + 35_000),
+      sentAt: iso(NOW - 10_000),
+      settledAt: null,
+      tapped: [],
+      targets: [aina.id],
+    }
+    expect(view(aina, { game: game({ hijau: run }) }).hijau).toEqual({ claimedAt: NOW - 60_000, startsAt: NOW - 10_000, deadline: NOW + 35_000, tapped: false })
+  })
+})
+
+describe("Mak Kau Hijau's tap reveal and Penjara's lock (owner, 2026-11-13)", () => {
+  const TAP = { lat: 3.0011, lng: 101.0011 }
+  const tappedAt = T0 + 15.5 * MIN
+  const run = (over = {}) => ({
+    claimedBy: 'c1',
+    claimedAt: iso(T0 + 15.2 * MIN),
+    startsAt: iso(T0 + 15.2 * MIN),
+    deadline: iso(T0 + 15.2 * MIN + 20_000),
+    sentAt: iso(T0 + 15.2 * MIN),
+    settledAt: iso(T0 + 15.2 * MIN + 20_000),
+    tapped: ['r1'],
+    targets: ['r1', 'r2'],
+    fixes: { r1: { ...TAP, at: iso(tappedAt) } },
+    lockedUntil: iso(T0 + 15.2 * MIN + 20_000 + 3 * MIN),
+    ...over,
+  })
+
+  it('a Kejar sees a tapper exactly where they tapped, ringed for Mak Kau Hijau', () => {
+    const dot = view(chaser, { game: game({ hijau: run() }) }).dots.find((d) => d.id === 'r1')!
+    expect(dot).toMatchObject({ kind: 'runner', lat: TAP.lat, lng: TAP.lng, exact: true, revealedBy: 'hijau', at: iso(tappedAt), label: '#07' })
+    expect(dot.fuzzy).toBeUndefined()
+  })
+
+  it('shows even before the first ping reveal', () => {
+    const early = { ...run(), settledAt: null, lockedUntil: null }
+    const v = view(chaser, { game: game({ hijau: early }), pings: [], now: tappedAt + 1_000 })
+    expect(v.dots.find((d) => d.id === 'r1')).toMatchObject({ revealedBy: 'hijau', lat: TAP.lat })
+  })
+
+  it('the next ping reveal replaces it', () => {
+    const v = view(chaser, { game: game({ hijau: run() }), pings: [...pings, ping(3, T0 + 20 * MIN)], now: T0 + 21 * MIN })
+    expect(v.dots.find((d) => d.id === 'r1')!.revealedBy).toBeNull()
+  })
+
+  it('a void run, a jailed tapper or one under house arrest shows nothing', () => {
+    const voidRun = run({ lockedUntil: null })
+    expect(view(chaser, { game: game({ hijau: voidRun }) }).dots.find((d) => d.id === 'r1')!.revealedBy).toBeNull()
+    const late = run({ sentAt: iso(T0 + 15.2 * MIN + 6_000), settledAt: null, lockedUntil: null })
+    expect(view(chaser, { game: game({ hijau: late }) }).dots.find((d) => d.id === 'r1')!.revealedBy).toBeNull()
+    const jailed = { ...aina, jailed: true }
+    expect(view(chaser, { game: game({ hijau: run() }), players: [chaser, jailed, hafiz, wei, siti] }).dots.find((d) => d.id === 'r1')).toBeUndefined()
+    const arrest = { firedAt: iso(T0), route: 'hijau' as const, by: null, center: null, startedAt: null, ringId: 'u1', catchEventId: null }
+    expect(view(chaser, { game: game({ hijau: run() }), players: [chaser, { ...aina, arrest }, hafiz, wei, siti] }).dots.find((d) => d.id === 'r1')).toBeUndefined()
+  })
+
+  it('runners never see it', () => {
+    expect(view(hafiz, { game: game({ hijau: run() }) }).dots.some((d) => d.revealedBy === 'hijau')).toBe(false)
+  })
+
+  it("carries when Penjara's lock ends while it runs, frozen while paused", () => {
+    const lockEnd = T0 + 15.2 * MIN + 20_000 + 3 * MIN
+    expect(view(hafiz, { game: game({ hijau: run() }) }).penjaraLockedUntil).toBe(lockEnd)
+    expect(view(hafiz, { game: game({ hijau: run() }), now: lockEnd }).penjaraLockedUntil).toBeNull()
+    expect(view(hafiz, { game: game({ hijau: run({ lockedUntil: null }) }) }).penjaraLockedUntil).toBeNull()
+    expect(view(hafiz).penjaraLockedUntil).toBeNull()
+    const paused = game({ hijau: run(), paused_at: iso(NOW) })
+    expect(view(hafiz, { game: paused, now: NOW + 5 * MIN }).penjaraLockedUntil).toBe(NOW + 5 * MIN + (lockEnd - NOW))
+  })
+})
+
+describe("Super Ring's and Mak Kau Hijau's hint zones (Plan E2)", () => {
+  const stash = { lat: 3.004, lng: 101.004, claimedBy: null, claimedAt: null }
+  const claimed = { ...stash, claimedBy: 'r2', claimedAt: iso(NOW) }
+  const full = (over: Partial<ReturnType<typeof game>> = {}) =>
+    game({ id: 'g1', settings: { ...DEFAULT_SETTINGS, mode: 'full' }, ring_stash: stash, hijau_stash: stash, ...over })
+
+  it('each is a 100 to 200 m zone with its stash well inside, distinct from the others', () => {
+    const v = view(aina, { game: full({ dato_stash: stash, bomoh_stash: stash }) })
+    for (const z of [v.ringZone, v.hijauZone]) {
+      expect(z).not.toBeNull()
+      expect(z!.radiusM).toBe(LEGENDARY_ZONE_M)
+      const d = distanceM(z!, stash)
+      expect(d).toBeGreaterThanOrEqual(0.3 * LEGENDARY_ZONE_M - 0.5)
+      expect(d).toBeLessThanOrEqual(0.8 * LEGENDARY_ZONE_M + 0.5)
+    }
+    const all = [v.legendaryZone, v.bomohZone, v.ringZone, v.hijauZone].map((z) => JSON.stringify(z))
+    expect(new Set(all).size).toBe(4)
+  })
+
+  it('is placed with the secret seed, and carries no name', () => {
+    const zone = (deck_seed: string) => view(aina, { game: full({ deck_seed }) }).ringZone
+    expect(zone('one')).not.toEqual(zone('two'))
+    expect(zone('one')).toEqual(zone('one'))
+    expect(Object.keys(view(aina, { game: full() }).ringZone!).sort()).toEqual(['lat', 'lng', 'radiusM'])
+  })
+
+  it('runners and chasers see both; the organiser and a marshal see neither', () => {
+    const z = view(aina, { game: full() })
+    expect(view(chaser, { game: full() }).ringZone).toEqual(z.ringZone)
+    expect(view(chaser, { game: full() }).hijauZone).toEqual(z.hijauZone)
+    for (const me of [organiserMe, siti]) {
+      const v = view(me, { game: full() })
+      expect(v.ringZone).toBeNull()
+      expect(v.hijauZone).toBeNull()
+    }
+    expect(view(organiserMe, { game: full() }).ringStash).toEqual(stash)
+  })
+
+  it('is gone once claimed, undropped, outside the chase or in Core', () => {
+    expect(view(aina, { game: full({ ring_stash: claimed, hijau_stash: claimed }) }).ringZone).toBeNull()
+    expect(view(aina, { game: full({ ring_stash: claimed, hijau_stash: claimed }) }).hijauZone).toBeNull()
+    const undropped = { lat: null, lng: null, claimedBy: null, claimedAt: null }
+    expect(view(aina, { game: full({ ring_stash: undropped, hijau_stash: undropped }) }).ringZone).toBeNull()
+    expect(view(aina, { game: full(), now: T0 + 2 * MIN }).hijauZone).toBeNull()
+    const core = full({ settings: { ...DEFAULT_SETTINGS, mode: 'core' } })
+    expect(view(aina, { game: core }).ringZone).toBeNull()
+    expect(view(aina, { game: core }).hijauZone).toBeNull()
   })
 })

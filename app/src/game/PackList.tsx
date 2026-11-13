@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { LEGENDARY_KINDS } from '../../shared/legendaries.js'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
 import Marker from './Marker'
@@ -9,9 +10,18 @@ import { noticeLegendaries, REPRINT_LINE, waitingForCard, type Legendary } from 
 
 type Item = NonNullable<View['kit']>['items'][number]
 
+/** A secret card's line in its own colour (the organiser's list only ever has these). */
+const TONE_COLOUR: Record<NonNullable<Item['tone']>, string> = {
+  yellow: 'var(--legendary-2)',
+  orange: 'var(--ring-2)',
+  purple: 'var(--bomoh-2)',
+  green: 'var(--hijau-2)',
+}
+
 function Row({ item, done, code, onTap }: { item: Item; done: boolean; code: string; onTap?: () => void }) {
   const box = useRef<HTMLDivElement>(null)
   const yellow = item.tone === 'yellow'
+  const toneColour = item.tone ? TONE_COLOUR[item.tone] : null
   return (
     <div
       role="checkbox"
@@ -37,7 +47,7 @@ function Row({ item, done, code, onTap }: { item: Item; done: boolean; code: str
         style={{ width: 19, height: 19, borderRadius: 5, border: `1.5px solid ${done ? 'var(--volt)' : '#555'}`, flex: 'none', marginTop: 1 }}
       />
       <div style={{ opacity: done ? 0.5 : 1 }}>
-        <span style={yellow ? { color: 'var(--legendary-2)', fontWeight: 700 } : undefined}>{item.label}</span>
+        <span style={toneColour ? { color: toneColour, fontWeight: 700 } : undefined}>{item.label}</span>
         {item.note && (
           <small style={{ display: item.group === 'day' ? 'block' : 'inline', marginLeft: item.group === 'day' ? 0 : 4, opacity: 0.6, fontSize: 10.5 }}>
             {item.note}
@@ -92,7 +102,7 @@ export default function PackList({ code, view, refresh, compact = false }: { cod
     ? []
     : view.datoCard === undefined
       ? noticeLegendaries(window.location.search)
-      : (['dato', 'bomoh'] as const).filter((l) => waitingForCard(view, l))
+      : LEGENDARY_KINDS.filter((l) => waitingForCard(view, l))
 
   async function tap(item: Item) {
     // No organiser session on this phone: the rows are read-only.

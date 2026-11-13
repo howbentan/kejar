@@ -161,3 +161,28 @@ describe('service worker notices', () => {
     expect(self.registration.showNotification).toHaveBeenCalledWith('T', expect.objectContaining({ data: { url: '/g/ABC234' } }))
   })
 })
+
+describe('service worker Mak Kau Hijau push', () => {
+  it('shows the title and body, and tapping it opens the game', async () => {
+    const { self, listeners } = loadWorker([])
+    const pending: Promise<unknown>[] = []
+    listeners.push({
+      data: {
+        json: () => ({ type: 'hijau', code: 'ABC234', deadline: '2026-11-12T10:00:20.000Z', title: 'Mak kau hijau!', body: 'Mak kau hijau! Tap the green in 20 s or go to Penjara.' }),
+      },
+      waitUntil: (p: Promise<unknown>) => pending.push(p),
+    })
+    await Promise.all(pending)
+    expect(self.registration.showNotification).toHaveBeenCalledWith(
+      'Mak kau hijau!',
+      expect.objectContaining({
+        body: 'Mak kau hijau! Tap the green in 20 s or go to Penjara.',
+        tag: 'kejar-hijau',
+        requireInteraction: true,
+        data: { url: '/g/ABC234' },
+      }),
+    )
+    await click(listeners, '/g/ABC234')
+    expect(self.clients.openWindow).toHaveBeenCalledWith('/g/ABC234')
+  })
+})

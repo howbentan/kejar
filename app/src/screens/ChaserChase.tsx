@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import type { CatchJudgement } from '../../shared/catch.js'
-import { isBomohQr, isDatoQr, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
+import { isBomohQr, isDatoQr, isHijauQr, isRingQr, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
 import CatchMoment from '../game/CatchMoment'
@@ -21,6 +21,9 @@ const REJECTIONS: Record<string, string> = {
   shielded: "Durian! You can't catch {name} again this game. Hand the tag back.",
   'durian-locked': "Durian! You can't catch {name} again this game.",
   'durian-head-start': 'Durian! {name} gets a 15 s head start.',
+  ring: "Super Ring! You can't catch {name} again this game. Hand the tag back.",
+  'ring-locked': "Super Ring! You can't catch {name} again this game.",
+  arrest: "House arrest. Can't catch them right now.",
   paused: 'Game is paused',
   disqualified: "You're Luar Garisan lah, so that catch doesn't count.",
   'already-out': 'Aiyo, that runner is already out of this round.',
@@ -56,7 +59,7 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
     (s: { action: string }, text: string, r: unknown) =>
       s.action === 'catch'
         ? catchMessage(text, r as CatchJudgement)
-        : isDatoQr(text) || isBomohQr(text)
+        : isDatoQr(text) || isBomohQr(text) || isRingQr(text) || isHijauQr(text)
           ? stashMessage(r as ClaimResult, 'chaser')
           : claimMessage(r as ClaimResult, stationFromQr(text)),
     [],

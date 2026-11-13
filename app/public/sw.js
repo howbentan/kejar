@@ -1,5 +1,5 @@
 // Kejar service worker: check-in alerts for runners, safety alerts for marshals.
-// Push payload: { "type": "checkin" | "alert", "code": string, ... }
+// Push payload: { "type": "checkin" | "alert" | "notice" | "hijau", "code": string, ... }
 
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()))
@@ -71,6 +71,21 @@ self.addEventListener('push', (event) => {
         badge: '/icon-192.png',
         // A notice may carry its own deep link (a caught runner's dispute link); only a path on this site is trusted.
         data: { url: sameSiteUrl(data.url) || '/g/' + data.code },
+      }),
+    )
+    return
+  }
+  if (data.type === 'hijau' && data.code) {
+    // Mak Kau Hijau: tap the green in 45 s. Opening the game shows the takeover with its button.
+    event.waitUntil(
+      self.registration.showNotification(String(data.title || 'Mak kau hijau!'), {
+        body: String(data.body || ''),
+        tag: 'kejar-hijau',
+        renotify: true,
+        requireInteraction: true,
+        icon: '/icon-192.png',
+        badge: '/icon-192.png',
+        data: { url: `/g/${data.code}` },
       }),
     )
     return

@@ -90,6 +90,8 @@ export default function ChaseLayout(props: {
           height="100%"
           legendaryZone={view.legendaryZone}
           bomohZone={view.bomohZone}
+          ringZone={view.ringZone}
+          hijauZone={view.hijauZone}
           snapshot={view.chaserSnapshot}
           tollGates={view.tollGates}
           ripple={view.lastRevealAt ? { at: view.lastRevealAt, origin: rippleOrigin(view.dots, view.arena) } : null}

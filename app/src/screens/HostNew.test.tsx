@@ -271,43 +271,45 @@ describe('HostNew step 3, how long', () => {
     await waitFor(() => createdWith({ settings: expect.objectContaining({ playersBand: 40 }) }))
   })
 
-  it('Full shows the legendary cards: Dato Seri on a hidden stash, Bomoh off by default', async () => {
+  it('Full shows one legendary setting per side: Dikejar on and Kejar off by default, and the app picks which', async () => {
     render(<HostNew />)
     await toStep3('Full')
     expect(screen.getByText('LEGENDARY CARDS · SECRET FROM PLAYERS')).toBeInTheDocument()
-    expect(screen.getByText('FOR DIKEJAR · YELLOW')).toBeInTheDocument()
-    expect(screen.getByText('FOR KEJAR · PURPLE')).toBeInTheDocument()
-    expect(screen.getByText("A hidden QR card. The runner who finds it can free themselves and 2 more from Penjara. You'll hide it during the walk.")).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Dato Seri: On' })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByRole('radio', { name: 'Bomoh: On' })).toBeEnabled()
-    expect(screen.getByRole('radio', { name: 'Bomoh: Off' })).toHaveAttribute('aria-checked', 'true')
-    createGame()
-    await waitFor(() =>
-      createdWith({ settings: expect.objectContaining({ mode: 'full', legendaries: { dato: 'stash', bomoh: 'off' } }) }),
-    )
+    expect(screen.getByText('Dikejar legendary')).toBeInTheDocument()
+    expect(screen.getByText('Kejar legendary')).toBeInTheDocument()
+    expect(screen.getByText("The app secretly picks which one. You'll see which card to hide.")).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Dikejar legendary: On' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'Kejar legendary: Off' })).toHaveAttribute('aria-checked', 'true')
+    // No per-legendary switch any more.
+    expect(screen.queryByRole('radio', { name: /Dato Seri|Bomoh/ })).toBeNull()
+    expect(document.body.textContent).not.toMatch(/—/)
   })
 
-  it('Dato Seri can be turned off', async () => {
+  it('each side row shows both legendaries it could be', async () => {
     render(<HostNew />)
     await toStep3('Full')
-    fireEvent.click(screen.getByRole('radio', { name: 'Dato Seri: Off' }))
-    createGame()
-    await waitFor(() => createdWith({ settings: expect.objectContaining({ legendaries: { dato: 'off', bomoh: 'off' } }) }))
+    const row = (title: string) => screen.getByText(title).closest('[data-side]') as HTMLElement
+    expect(within(row('Dikejar legendary')).getAllByRole('img').map((i) => i.getAttribute('aria-label'))).toEqual(['Dato Seri', 'Super Ring'])
+    expect(within(row('Kejar legendary')).getAllByRole('img').map((i) => i.getAttribute('aria-label'))).toEqual(['Bomoh', 'Mak Kau Hijau'])
   })
 
-  it('Bomoh can be turned on as a hidden stash, with its copy and no build badge', async () => {
+  it('sends legendarySides', async () => {
     render(<HostNew />)
     await toStep3('Full')
-    expect(screen.queryByText('NOT BUILT YET')).not.toBeInTheDocument()
-    expect(
-      screen.getByText("A hidden QR card. The chaser who finds it shows every runner to Kejar for 2 pings. You'll hide it during the walk."),
-    ).toBeInTheDocument()
-    const stash = screen.getByRole('radio', { name: 'Bomoh: On' })
-    expect(stash).toBeEnabled()
-    fireEvent.click(stash)
-    expect(stash).toHaveAttribute('aria-checked', 'true')
     createGame()
-    await waitFor(() => createdWith({ settings: expect.objectContaining({ legendaries: { dato: 'stash', bomoh: 'stash' } }) }))
+    await waitFor(() => createdWith({ settings: expect.objectContaining({ mode: 'full', legendarySides: { runner: 'on', chaser: 'off' } }) }))
+    expect(createCalls()[0][1].settings).not.toHaveProperty('legendaries')
+  })
+
+  it('each side can be switched, and what is sent follows', async () => {
+    render(<HostNew />)
+    await toStep3('Full')
+    fireEvent.click(screen.getByRole('radio', { name: 'Dikejar legendary: Off' }))
+    const kejar = screen.getByRole('radio', { name: 'Kejar legendary: On' })
+    fireEvent.click(kejar)
+    expect(kejar).toHaveAttribute('aria-checked', 'true')
+    createGame()
+    await waitFor(() => createdWith({ settings: expect.objectContaining({ legendarySides: { runner: 'off', chaser: 'on' } }) }))
   })
 
   it('the chaser-snapshot switch is Full only, off by default, and can be turned on', async () => {
@@ -455,7 +457,7 @@ describe('HostNew creating', () => {
     await toStep3('Full')
     fireEvent.click(screen.getByRole('radio', { name: 'Length: Long' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Expected players: 21–30' }))
-    fireEvent.click(screen.getByRole('radio', { name: 'Dato Seri: Off' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Dikejar legendary: Off' }))
     back()
     expect(screen.getByRole('radio', { name: 'Game: Full' })).toHaveAttribute('aria-checked', 'true')
     back()
@@ -465,12 +467,12 @@ describe('HostNew creating', () => {
     next()
     expect(screen.getByRole('radio', { name: 'Length: Long' })).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByRole('radio', { name: 'Expected players: 21–30' })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByRole('radio', { name: 'Dato Seri: Off' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'Dikejar legendary: Off' })).toHaveAttribute('aria-checked', 'true')
     createGame()
     await waitFor(() =>
       createdWith({
         savedArenaId: 'ar3',
-        settings: expect.objectContaining({ mode: 'full', lengthMin: 60, playersBand: 30, legendaries: { dato: 'off', bomoh: 'off' } }),
+        settings: expect.objectContaining({ mode: 'full', lengthMin: 60, playersBand: 30, legendarySides: { runner: 'off', chaser: 'off' } }),
       }),
     )
   })

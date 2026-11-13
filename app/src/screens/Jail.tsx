@@ -12,13 +12,13 @@ import Stamp from '../game/Stamp'
 import { WalkGuide } from '../game/WalkGuide'
 import { shouldPlay } from '../game/moments'
 import GameMap from '../game/Map'
-import { wallClock } from '../game/time'
+import { clock, useServerNow, wallClock } from '../game/time'
 import { Screen } from '../game/ui'
 import { Feed } from './RunnerChase'
 
 // Gentler than the catch lines: an auto-jail may not be the runner's fault (motion design §5a).
 const MISSED_LINES = ['Your phone went ponteng, bro.', 'Signal hilang, bossku?', 'Kena check in lah, boss.', 'Phone in your pocket too deep.']
-const lineFor = (id: string) => MISSED_LINES[[...id].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 0) % MISSED_LINES.length]
+const lineFor = (id: string, lines = MISSED_LINES) => lines[[...id].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 0) % lines.length]
 
 /** The check-ins it was judged on, as clock times; the marker strikes out the misses (motion design §5a). */
 function CheckinRow({ checkins }: { checkins: { at: number; ok: boolean }[] }) {
@@ -36,13 +36,46 @@ function CheckinRow({ checkins }: { checkins: { at: number; ok: boolean }[] }) {
   )
 }
 
+/**
+ * `Penjara locked · 2:14` after a Mak Kau Hijau that counted (owner, 2026-11-13): no rescue, Settle or reel until it
+ * runs out. Held still while paused, so it counts from the server's moment then.
+ */
+function PenjaraLock({ view }: { view: View }) {
+  const ticking = useServerNow(view.now)
+  const until = view.penjaraLockedUntil
+  if (until === null) return null
+  const left = until - (view.paused ? view.now : ticking)
+  if (left <= 0) return null
+  return (
+    <div role="status" aria-label="Penjara locked" className="penjara-lock">
+      Penjara locked · <span className="mono">{clock(left)}</span>
+    </div>
+  )
+}
+
 /** Dato Seri's holder in Penjara: Settle sits here, on the Penjara screen, where the Penjara code gets scanned. */
 function Settle({ code, view, onSettled }: { code: string; view: View; onSettled?: () => void }) {
   return view.settle ? <SettlePanel code={code} meId={view.me.id} settle={view.settle} onSettled={onSettled} /> : null
 }
 
-/** Sent to Penjara for missing two check-ins in a row: says why, and points to a marshal for a phone fault. */
-function AutoJailed({ code, view }: { code: string; view: View }) {
+/** The auto-jailed variants: missed check-ins, Mak Kau Hijau's missed tap, or Super Ring's bail revoked. */
+type AutoReason = 'missed-checkins' | 'hijau' | 'bail-revoked'
+
+const HIJAU_LINES = ['Should have touched green, bossku.', 'Hijau where, bro?', 'Mak kau hijau no joke one.']
+const REVOKED_LINES = ['Should have stayed home, boss.', 'Out of the circle, bro.']
+
+const AUTO: Record<AutoReason, { plate: string; title: string; lines: string[] }> = {
+  'missed-checkins': { plate: '2× MISSED', title: 'Missed two check-ins', lines: MISSED_LINES },
+  hijau: { plate: 'MAK KAU HIJAU', title: 'Mak kau hijau got you', lines: HIJAU_LINES },
+  'bail-revoked': { plate: 'BAIL REVOKED', title: 'Bail revoked. To Penjara', lines: REVOKED_LINES },
+}
+
+/**
+ * Sent to Penjara without a catch: says why, and points to a marshal for a phone fault. Missed check-ins also show
+ * the check-ins it was judged on; Mak Kau Hijau and a revoked house arrest have none to show.
+ */
+function AutoJailed({ code, view, reason = 'missed-checkins' }: { code: string; view: View; reason?: AutoReason }) {
+  const copy = AUTO[reason]
   const [playing, setPlaying] = useState(() => shouldPlay('auto', view.me.caught_at, view.now, sessionStorage))
   const [distanceM, setDistanceM] = useState<number | null>(null)
   const [localSettled, setLocalSettled] = useState(false)
@@ -50,7 +83,7 @@ function AutoJailed({ code, view }: { code: string; view: View }) {
   useEffect(() => {
     if (playing) navigator.vibrate?.([300, 100, 300])
   }, [playing])
-  if (playing) return <PenjaraArrival plate={<div className="stamp stamp-plate">2× MISSED</div>} onDone={() => setPlaying(false)} />
+  if (playing) return <PenjaraArrival plate={<div className="stamp stamp-plate">{copy.plate}</div>} onDone={() => setPlaying(false)} />
 
   // Not jailed any more but GameScreen is still showing this screen: Settle just freed them (self-scanned or
   // one of the up to 2 others picked alongside the holder), and the SETTLE stamp is why it's still up.
@@ -65,22 +98,32 @@ function AutoJailed({ code, view }: { code: string; view: View }) {
       <h1 className="jail-title">
         {outForGood ? (
           "That's the game for you."
-        ) : (
+        ) : reason === 'missed-checkins' ? (
           <>
             Missed two <span style={{ whiteSpace: 'nowrap' }}>
               check-ins<span style={{ color: 'var(--volt)' }}>.</span>
             </span>
           </>
+        ) : (
+          <>
+            {copy.title}
+            <span style={{ color: 'var(--volt)' }}>.</span>
+          </>
         )}
       </h1>
       <p className="muted">
-        {outForGood ? 'You were already freed once, so you stay in Penjara until the end. Watch the chase from here.' : lineFor(view.me.id)}
+        {outForGood ? 'You were already freed once, so you stay in Penjara until the end. Watch the chase from here.' : lineFor(view.me.id, copy.lines)}
       </p>
-      {view.jailCheckins && view.jailCheckins.length > 0 && <CheckinRow checkins={view.jailCheckins} />}
+      {reason === 'missed-checkins' && view.jailCheckins && view.jailCheckins.length > 0 && <CheckinRow checkins={view.jailCheckins} />}
+      {view.me.jailed && <PenjaraLock view={view} />}
       {view.me.jailed && !view.me.freed_once && <RescueBanner view={view} />}
       <PenjaraTicket
         playerId={view.me.id}
-        variant={{ kind: 'auto', lastSeenMs: lastOk?.at ?? null }}
+        variant={
+          reason === 'hijau' || reason === 'bail-revoked'
+            ? { kind: reason, caughtAtMs: view.me.caught_at ? Date.parse(view.me.caught_at) : null }
+            : { kind: 'auto', lastSeenMs: lastOk?.at ?? null }
+        }
         distanceM={distanceM}
         outForGood={outForGood}
         settled={settled}
@@ -184,6 +227,7 @@ function Caught({ code, view }: { code: string; view: View }) {
           ? 'You’ve already been broken out once, so you stay in Penjara this time.'
           : 'A free runner can still break you out, but only once. A marshal will give your tag back.'}
       </p>
+      {view.me.jailed && <PenjaraLock view={view} />}
       {view.me.jailed && !view.me.freed_once && <RescueBanner view={view} />}
       <PenjaraTicket
         playerId={view.me.id}
@@ -207,6 +251,6 @@ export default function Jail({ code, view }: { code: string; view: View }) {
   const lastReason = useRef<View['jailReason']>(view.jailReason)
   if (view.jailReason) lastReason.current = view.jailReason
   const reason = view.me.jailed ? view.jailReason : lastReason.current
-  if (reason === 'missed-checkins') return <AutoJailed code={code} view={view} />
+  if (reason === 'missed-checkins' || reason === 'hijau' || reason === 'bail-revoked') return <AutoJailed code={code} view={view} reason={reason} />
   return <Caught code={code} view={view} />
 }

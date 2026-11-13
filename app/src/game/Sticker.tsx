@@ -1,7 +1,7 @@
 import * as m from 'motion/react-m'
 import { useId } from 'react'
 import { INFO } from './powerInfo'
-import { ART, type StickerKind } from './stickerArt'
+import { ART, EXTRA_NAME, type StickerKind } from './stickerArt'
 
 /**
  * A power-up's doodle sticker (motion design §7, power-ups design §5c): hand-drawn wobble, a thick white
@@ -15,7 +15,7 @@ export default function Sticker({ kind, size = 92, tilt = 0, wiggle = false }: {
   return (
     <m.svg
       role="img"
-      aria-label={kind === 'bomoh' ? 'Bomoh' : INFO[kind].name}
+      aria-label={kind === 'bomoh' || kind === 'hijau' ? EXTRA_NAME[kind] : INFO[kind].name}
       viewBox="-8 -6 116 116"
       width={size}
       height={size}

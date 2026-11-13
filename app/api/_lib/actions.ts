@@ -14,20 +14,23 @@ import {
   type ReportReason,
   type SosReason,
 } from '../../shared/alerts.js'
-import { autoJailDue, checkinsSince, countedCheckIn, fairlyWarned } from '../../shared/checkins.js'
+import { autoJailDue, checkinsSince, countedCheckIn, countRestartAt, fairlyWarned } from '../../shared/checkins.js'
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
-import { isOut, undoableCatchId } from '../../shared/players.js'
+import { isOut, undoableArrestId, undoableCatchId } from '../../shared/players.js'
+import { ARREST_FIX_FRESH_MS, ARREST_OPEN_MS, arrestEndsAt, insideArrest, releaseVerdict, usableFix } from '../../shared/arrest.js'
 import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
-import { bomohCodeFromQr, datoCodeFromQr, isBomohQr, isDatoQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
-import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS, TOLL_FRESH_MS } from '../../shared/powerups.js'
-import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict } from '../../shared/penjara.js'
+import { HIJAU_FIX_FRESH_MS, HIJAU_MS, hijauCounts, hijauLockEnd, hijauStartsAt, hijauTargets, penjaraLockLeft } from '../../shared/hijau.js'
+import { bomohCodeFromQr, datoCodeFromQr, hijauCodeFromQr, isBomohQr, isDatoQr, isHijauQr, isRingQr, ringCodeFromQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
+import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, judgeHijauClaim, judgeRingClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS, TOLL_FRESH_MS } from '../../shared/powerups.js'
+import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict, sentDuringPause } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
+import { fallbackFor, LEGENDARY_KINDS, pickLegendaries, sidesOf, type SideSwitch } from '../../shared/legendaries.js'
 import { validateTeams } from '../../shared/teams.js'
-import { DEFAULT_SETTINGS, type Arena, type BomohStash, type DatoStash, type Game, type LatLng, type Player, type Position, type PowerUp, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
+import { DEFAULT_SETTINGS, type Arena, type Arrest, type BomohStash, type DatoStash, type Game, type HijauFix, type LatLng, type LegendaryKind, type Player, type Position, type PowerUp, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
 import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
 import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
@@ -159,24 +162,32 @@ async function marshalName(ctx: Ctx, game: GameRow, body: Body, marshal: Player 
   return marshal ? marshal.name : (await requireOrganiser(ctx, game, body)).name
 }
 
-/** The card letters of the secret sets assigned to this game: Dato Seri's yellow and Bomoh's purple, when assigned. */
+/** The card letters of the secret sets assigned to this game, one per legendary that holds a card. */
 function secretLettersFor(game: Game): SecretLetters {
   const letters: SecretLetters = {}
-  if (game.dato_stash?.card?.letter) letters.dato = game.dato_stash.card.letter
-  if (game.bomoh_stash?.card?.letter) letters.bomoh = game.bomoh_stash.card.letter
+  for (const kind of LEGENDARY_KINDS) {
+    const letter = stashOf(game, kind)?.card?.letter
+    if (letter) letters[kind] = letter
+  }
   return letters
 }
 
-// ---- Secret card sets: each organisation's reusable A-C yellow and A-C purple cards ----
-
-/** Which legendary a card-lifecycle function acts on: Dato Seri's yellow cards, or Bomoh's purple ones. */
-type LegendaryKind = 'dato' | 'bomoh'
+// ---- Secret card sets: each organisation's reusable A-C yellow, orange, purple and green cards ----
 
 /** What `create` and `setMode` say when every yellow card is retired, waiting to be printed or in another game. */
 export const NO_FREE_CARD_NOTICE = 'Reprint a yellow card to use Dato Seri.'
 /** The same, for Bomoh's purple cards. */
 export const NO_FREE_BOMOH_CARD_NOTICE = 'Reprint a purple card to use Bomoh.'
-const NO_FREE_NOTICE: Record<LegendaryKind, string> = { dato: NO_FREE_CARD_NOTICE, bomoh: NO_FREE_BOMOH_CARD_NOTICE }
+/** The same, for Super Ring's cheese-orange cards. */
+export const NO_FREE_RING_CARD_NOTICE = 'Reprint an orange card to use Super Ring.'
+/** The same, for Mak Kau Hijau's deep-green cards. */
+export const NO_FREE_HIJAU_CARD_NOTICE = 'Reprint a green card to use Mak Kau Hijau.'
+const NO_FREE_NOTICE: Record<LegendaryKind, string> = {
+  dato: NO_FREE_CARD_NOTICE,
+  ring: NO_FREE_RING_CARD_NOTICE,
+  bomoh: NO_FREE_BOMOH_CARD_NOTICE,
+  hijau: NO_FREE_HIJAU_CARD_NOTICE,
+}
 /** Stash scans that don't claim before a player's later stash scans are all ignored (Review Focus 2). */
 export const STASH_MISS_LIMIT = 3
 const NO_STASH = { ok: false, reason: 'no-stash' } as const
@@ -217,12 +228,15 @@ function expiredLobby(g: Game, now: number): boolean {
 
 /** The stash a game holds for one legendary, by its own field (`dato_stash` or `bomoh_stash`). */
 function stashOf(g: Game, legendary: LegendaryKind): DatoStash | BomohStash | null | undefined {
+  if (legendary === 'ring') return g.ring_stash
+  if (legendary === 'hijau') return g.hijau_stash
   return legendary === 'dato' ? g.dato_stash : g.bomoh_stash
 }
 
 /** Writes (or clears, with `null`) a legendary's stash onto a game, into its own field. */
 function writeStash(ctx: Ctx, gameId: string, legendary: LegendaryKind, stash: DatoStash | BomohStash | null): Promise<void> {
-  return ctx.store.updateGame(gameId, legendary === 'dato' ? { dato_stash: stash } : { bomoh_stash: stash })
+  const field = { dato: 'dato_stash', bomoh: 'bomoh_stash', ring: 'ring_stash', hijau: 'hijau_stash' }[legendary] as const
+  return ctx.store.updateGame(gameId, { [field]: stash })
 }
 
 /**
@@ -281,20 +295,48 @@ const wantsCard = (g: Game, legendary: LegendaryKind) =>
   !g.started_at && g.settings.mode === 'full' && g.settings.legendaries?.[legendary] === 'stash' && !stashOf(g, legendary)
 
 /**
- * Gives a lobby with no card a free card of that legendary, not yet dropped (it has to be printed and hidden).
- * With none free the lobby keeps wanting it and tries again later (ruling R9); returns the notice while it has none.
+ * A free card for the picked legendary, or else for the other one of its side (new power-ups design §6.1: the app
+ * picks which legendary, so it can switch to the one that has a card). Null with neither free.
  */
-async function assignFreeCard(ctx: Ctx, gameId: string, organisationId: string, legendary: LegendaryKind): Promise<string | null> {
-  const card = await freeCard(ctx, organisationId, legendary, gameId)
-  if (!card) return NO_FREE_NOTICE[legendary]
-  await writeStash(ctx, gameId, legendary, stashOn(card))
+async function cardOrFallback(
+  ctx: Ctx,
+  organisationId: string,
+  legendary: LegendaryKind,
+  exceptGameId?: string,
+): Promise<{ kind: LegendaryKind; card: SecretCard } | null> {
+  const card = await freeCard(ctx, organisationId, legendary, exceptGameId)
+  if (card) return { kind: legendary, card }
+  const sibling = fallbackFor(legendary)
+  const spare = await freeCard(ctx, organisationId, sibling, exceptGameId)
+  return spare ? { kind: sibling, card: spare } : null
+}
+
+/** A game's legendaries with the picked one switched to its fallback. */
+const switchedTo = (l: Settings['legendaries'], from: LegendaryKind, to: LegendaryKind): Settings['legendaries'] => ({ ...l, [from]: 'off', [to]: 'stash' })
+
+/**
+ * Gives a lobby with no card a free card of that legendary, not yet dropped (it has to be printed and hidden). With
+ * none free but one free for the other legendary of its side, the setting switches to that one and it gets that card.
+ * With neither free the lobby keeps wanting the picked one and tries again later (ruling R9); returns the notice
+ * while it has none.
+ */
+async function assignFreeCard(ctx: Ctx, game: GameRow, organisationId: string, legendary: LegendaryKind): Promise<string | null> {
+  const sibling = fallbackFor(legendary)
+  const got = await cardOrFallback(ctx, organisationId, legendary, game.id)
+  // A sibling that somehow already holds a card is never given a second one.
+  if (!got || (got.kind === sibling && stashOf(game, sibling))) return NO_FREE_NOTICE[legendary]
+  if (got.kind === sibling) {
+    const settings = { ...game.settings, legendaries: switchedTo({ ...DEFAULT_SETTINGS.legendaries, ...game.settings.legendaries }, legendary, sibling) }
+    await ctx.store.updateGame(game.id, { settings })
+  }
+  await writeStash(ctx, game.id, got.kind, stashOn(got.card))
   return null
 }
 
 /** A lobby gives up its card (retired, or no longer its own) and takes a free one, or waits for one (ruling R9). */
 async function reassignCard(ctx: Ctx, game: GameRow, organisationId: string, legendary: LegendaryKind): Promise<string | null> {
   await releaseCard(ctx, game, legendary)
-  return assignFreeCard(ctx, game.id, organisationId, legendary)
+  return assignFreeCard(ctx, game, organisationId, legendary)
 }
 
 /**
@@ -327,10 +369,22 @@ async function settleLobbyCard(ctx: Ctx, game: GameRow, organisationId: string, 
   if (game.started_at) return { game, notice: null }
   await recheckExpiredLobby(ctx, game, organisationId, legendary)
   let fresh = (await ctx.store.gameByCode(game.code)) ?? game
-  if (wantsCard(fresh, legendary) && !(await assignFreeCard(ctx, fresh.id, organisationId, legendary))) {
+  if (wantsCard(fresh, legendary) && !(await assignFreeCard(ctx, fresh, organisationId, legendary))) {
     fresh = (await ctx.store.gameByCode(game.code)) ?? fresh
   }
   return { game: fresh, notice: wantsCard(fresh, legendary) ? NO_FREE_NOTICE[legendary] : null }
+}
+
+/** `settleLobbyCard` for every legendary in turn, each on the game as the one before left it; the notices in order. */
+async function settleAllLobbyCards(ctx: Ctx, game: GameRow, organisationId: string): Promise<{ game: GameRow; notices: string[] }> {
+  let fresh = game
+  const notices: string[] = []
+  for (const kind of LEGENDARY_KINDS) {
+    const settled = await settleLobbyCard(ctx, fresh, organisationId, kind)
+    fresh = settled.game
+    if (settled.notice) notices.push(settled.notice)
+  }
+  return { game: fresh, notices }
 }
 
 /** The cheap test the organiser's poll runs before paying for a re-check: an expired lobby's undropped card, or no card yet. */
@@ -344,7 +398,7 @@ async function requireSecretCard(ctx: Ctx, body: Body): Promise<{ card: SecretCa
   const organiser = await requireAnyOrganiser(ctx, body)
   const legendary = str(body.legendary)
   const letter = str(body.letter)
-  if ((legendary !== 'dato' && legendary !== 'bomoh') || !['A', 'B', 'C'].includes(letter)) throw new ActionError(400, 'Unknown card')
+  if (!(LEGENDARY_KINDS as readonly string[]).includes(legendary) || !['A', 'B', 'C'].includes(letter)) throw new ActionError(400, 'Unknown card')
   const card = (await ctx.store.secretCards(organiser.organisation_id)).find((c) => c.legendary === legendary && c.letter === letter)
   if (!card) throw new ActionError(404, 'Unknown card')
   return { card, organisationId: organiser.organisation_id }
@@ -353,11 +407,10 @@ async function requireSecretCard(ctx: Ctx, body: Body): Promise<{ card: SecretCa
 /** The organiser's card set, never with codes: which are ready, retired or printing, when found, and which are in a game. */
 const listSecretCards: Action = async (ctx, body) => {
   const organiser = await requireAnyOrganiser(ctx, body)
-  const busy = new Map<string, GameRow>([
-    ...(await cardHolders(ctx, organiser.organisation_id, 'dato')),
-    ...(await cardHolders(ctx, organiser.organisation_id, 'bomoh')),
-  ])
-  const order = (c: SecretCard) => `${c.legendary === 'dato' ? 0 : 1}${c.letter}`
+  const busy = new Map<string, GameRow>()
+  for (const kind of LEGENDARY_KINDS) for (const [id, g] of await cardHolders(ctx, organiser.organisation_id, kind)) busy.set(id, g)
+  // Yellow, orange, purple, green: each side's pair together.
+  const order = (c: SecretCard) => `${LEGENDARY_KINDS.indexOf(c.legendary)}${c.letter}`
   return (await ctx.store.secretCards(organiser.organisation_id))
     .sort((a, b) => order(a).localeCompare(order(b)))
     .map((c) => ({ legendary: c.legendary, letter: c.letter, state: c.state, foundAt: c.found_at, inGame: busy.has(c.id) }))
@@ -440,8 +493,42 @@ function requireLobby(game: Game, now: number) {
   if (phaseAt(game, now).phase !== 'lobby') throw new ActionError(409, 'Game already started')
 }
 
-function settingsFrom(input: unknown): Settings {
-  const s = { ...DEFAULT_SETTINGS, ...(typeof input === 'object' && input ? input : {}) } as Settings
+const LEGENDARY_ERROR = 'Legendary cards must be off or on'
+
+/**
+ * The legendaries a request asks for. With `pick` (create, and a switch to Full) the organiser's sides decide and the
+ * app picks one legendary per side (new power-ups design §6.1): `legendarySides` from HostNew, or an older request's
+ * per-legendary `legendaries` read as sides. Without it (a game's own stored settings) the stored pick is kept.
+ */
+function legendariesFrom(input: object, pick?: () => number): Settings['legendaries'] {
+  const { legendaries: givenRaw, legendarySides } = input as { legendaries?: unknown; legendarySides?: unknown }
+  const given = givenRaw ?? {}
+  if (typeof given !== 'object' || given === null || Array.isArray(given)) throw new ActionError(400, LEGENDARY_ERROR)
+  const merged = { ...DEFAULT_SETTINGS.legendaries, ...given } as Record<string, unknown>
+  for (const kind of LEGENDARY_KINDS) {
+    if (merged[kind] !== 'off' && merged[kind] !== 'stash') throw new ActionError(400, LEGENDARY_ERROR)
+  }
+  // Only the four known keys are stored, so nothing else a client sends ends up in the game's settings.
+  const stored = Object.fromEntries(LEGENDARY_KINDS.map((k) => [k, merged[k]])) as Settings['legendaries']
+  if (!pick) return stored
+  let sides: SideSwitch
+  if (legendarySides !== undefined) {
+    const s = legendarySides as Partial<SideSwitch> | null
+    const ok = (v: unknown) => v === 'off' || v === 'on'
+    if (typeof s !== 'object' || s === null || !ok(s.runner) || !ok(s.chaser)) throw new ActionError(400, LEGENDARY_ERROR)
+    sides = { runner: s.runner!, chaser: s.chaser! }
+  } else {
+    sides = sidesOf(stored)
+  }
+  return pickLegendaries(sides, pick)
+}
+
+function settingsFrom(input: unknown, pick?: () => number): Settings {
+  const given = typeof input === 'object' && input ? input : {}
+  // The legendaries first: create's pick is the request's first random draw.
+  const legendaries = legendariesFrom(given, pick)
+  const { legendarySides: _sides, ...rest } = given as { legendarySides?: unknown }
+  const s = { ...DEFAULT_SETTINGS, ...rest } as Settings
   const inRange = (v: number, lo: number, hi: number) => Number.isInteger(v) && v >= lo && v <= hi
   if (!inRange(s.lengthMin, 15, 90)) throw new ActionError(400, 'Game length must be 15–90 minutes')
   if (!inRange(s.hideMin, 1, 15)) throw new ActionError(400, 'Hide time must be 1–15 minutes')
@@ -453,15 +540,7 @@ function settingsFrom(input: unknown): Settings {
   // The check-in switch is a Full-mode extra: always off in Core (rules §3).
   if (s.mode === 'core') s.chaserSnapshot = false
   if (![20, 30, 40].includes(s.playersBand)) throw new ActionError(400, 'Expected players must be 20, 30 or 40')
-  const given = (typeof input === 'object' && input ? (input as { legendaries?: unknown }).legendaries : undefined) ?? {}
-  if (typeof given !== 'object' || Array.isArray(given)) throw new ActionError(400, 'Legendary cards must be off or on a hidden stash')
-  const legendaries = { ...DEFAULT_SETTINGS.legendaries, ...given } as Settings['legendaries']
-  for (const v of [legendaries.dato, legendaries.bomoh]) {
-    if (v !== 'off' && v !== 'stash') throw new ActionError(400, 'Legendary cards must be off or on a hidden stash')
-  }
-  // Bomoh is accepted as sent now that he's built end to end: his own purple cards, claim, reveal and lobby toggle.
-  // Only the two known keys are stored, so nothing else a client sends ends up in the game's settings.
-  s.legendaries = { dato: legendaries.dato, bomoh: legendaries.bomoh }
+  s.legendaries = legendaries
   // The planned start only survives as a real time; anything else a client sends is dropped.
   s.startsAt = typeof s.startsAt === 'string' && Number.isFinite(Date.parse(s.startsAt)) ? s.startsAt : null
   return s
@@ -555,6 +634,12 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
   let pingRows = await store.pings(game.id)
   const work = dueWork(game, pingRows, now)
   let whistleNow = false
+  // Super Ring's house arrests are judged lazily, on any poll (there's no server tick); never while paused. Only a
+  // claimed Super Ring can put anyone under house arrest, so until then this skips the players read.
+  const arrestsPossible = !!game.ring_stash?.claimedBy
+  if (arrestsPossible && phase === 'chasing' && !game.paused_at && !game.ended_at && (await settleArrests(ctx, game))) whistleNow = true
+  // Mak Kau Hijau's push and judging, likewise lazy; a pause holds both (resume moves its times).
+  if (game.hijau && !game.hijau.settledAt && !game.paused_at && (await stepHijau(ctx, game))) whistleNow = true
   // Scheduled pings come from the clock; bonus (Flare) pings carry their own times.
   const times = new Map<number, { revealAt: number }>([
     ...pingTimes(game, now).map((t) => [t.seq, t] as const),
@@ -578,7 +663,9 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     if (!(await store.claimPing(game.id, seq, 'revealed'))) continue
     const revealAt = times.get(seq)?.revealAt ?? now
     const positions = await store.latestPositions(game.id, [iso(revealAt)])
-    const free = (await store.players(game.id)).filter((p) => p.role === 'runner' && !isOut(p))
+    // A runner under house arrest is left out entirely: hidden from chasers, so not in the seen/missed counts
+    // either (comparing counts with dots would give them away), and judged by the circle, not check-ins.
+    const free = (await store.players(game.id)).filter((p) => p.role === 'runner' && !isOut(p) && !p.arrest)
     // Cloaked runners don't count as seen, so the feed can't give them away.
     const prevRevealAt = Math.max(
       chaseStartOf(game, now) ?? 0,
@@ -590,8 +677,10 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
         .map((u) => u.player_id),
     )
     const seen = free.filter((p) => !cloaked.has(p.id) && (positions[p.id] ?? []).length > 0).length
-    // The count starts fresh at each runner's own last release (checkins design §4.4).
-    const sinceFor = (p: Player) => checkinsSince(chaseStartOf(game, now)!, p.freed_at)
+    // The count starts fresh at each runner's own last release (checkins design §4.4), from Penjara or from house
+    // arrest (one events read per claimed reveal).
+    const events = (await store.events(game.id)).filter((e) => e.type === 'arrest-ended')
+    const sinceFor = (p: Player) => checkinsSince(chaseStartOf(game, now)!, countRestartAt(p, events))
     // With the chaser-snapshot switch on, a scheduled reveal records who checked in (a location inside its
     // 45 s window, counted under the same release rule as auto-jail), so a runner's view can find the last
     // window they checked into without loading every reveal's positions (checkins design §5.4).
@@ -626,12 +715,15 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
           return { alertAt: t.alertAt, revealAt: t.revealAt, lastAt: at ? Date.parse(at.at) : null }
         })
         const pings = judged.slice(-2)
-        // Two missed scheduled check-ins in a row: sent to Penjara like a catch, with no chaser.
-        if (autoJailDue(pings, since) && (await store.catchRunner(p.id, null))) {
+        // Two missed scheduled check-ins in a row: sent to Penjara like a catch, with no chaser (or house arrest,
+        // with Super Ring; its `arrested` event keeps the check-ins in case they never open Kejar).
+        if (autoJailDue(pings, since)) {
           const checkins = judged
             .filter((t) => t.alertAt >= since)
             .map((t) => ({ revealAt: t.revealAt, ok: countedCheckIn(t.alertAt, t.revealAt, t.lastAt, since) }))
-          await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: p.id, data: { who: who(p), seq, checkins } })
+          if ((await jailOrArrest(ctx, game, p, null, 'auto-jail', { seq, checkins })) === 'jailed') {
+            await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: p.id, data: { who: who(p), seq, checkins } })
+          }
         }
       }
       // Auto-jailing the last free runner blows the final whistle, the same as a catch.
@@ -667,8 +759,10 @@ async function settleRescue(ctx: Ctx, game: Game, phase = phaseAt(game, ctx.now)
   if (!fix && rescuer) {
     fixes = (await store.latestPositions(game.id, [iso(Math.min(now, startedAt + RESCUE_HOLD_MS))]))[r.by] ?? []
   }
-  // A removed rescuer has left the game: the same as being caught.
-  const verdict = rescuer ? rescueVerdict({ rescue: { by: r.by, startedAt }, rescuer, fixes, jail: game.arena.jail, now, pauses: game.pauses, pausedAt: game.paused_at }) : 'failed'
+  // A removed rescuer has left the game: the same as being caught. A hold that ends with Penjara locked after Mak
+  // Kau Hijau can't free anyone either.
+  const judged = rescuer ? rescueVerdict({ rescue: { by: r.by, startedAt }, rescuer, fixes, jail: game.arena.jail, now, pauses: game.pauses, pausedAt: game.paused_at }) : 'failed'
+  const verdict = judged !== 'holding' && penjaraLockLeft(game, Math.min(now, startedAt + RESCUE_HOLD_MS)) > 0 ? 'failed' : judged
   if (verdict === 'holding' || !(await store.endRescue(game.id, r.startedAt))) return
   if (verdict === 'failed') {
     await store.addEvent({ game_id: game.id, type: 'rescue-failed', actor_id: r.by, target_id: null, data: {} })
@@ -682,7 +776,7 @@ async function settleRescue(ctx: Ctx, game: Game, phase = phaseAt(game, ctx.now)
 }
 
 /** What put the last free Dikejar out: it picks the feed line (views.ts). */
-type WhistleCause = 'catch' | 'auto-jail' | 'removed' | 'luar-garisan'
+type WhistleCause = 'catch' | 'auto-jail' | 'removed' | 'luar-garisan' | 'hijau'
 
 /**
  * Everyone is out (fair-play §1.4): instead of ending at once, the final whistle starts, and the end is held for
@@ -730,6 +824,210 @@ async function finish(ctx: Ctx, game: Game) {
   }
 }
 
+/** Super Ring's messages to the runner (new power-ups §6.2). */
+const ARREST_STARTED = 'Super Ring! House arrest: stay within 26 m for 2:36.'
+const ARREST_OPEN = 'Super Ring! Open Kejar within 60 s to start house arrest.'
+const ARREST_FREE = 'Free! Super Ring is spent.'
+const BAIL_REVOKED = 'Bail revoked. To Penjara.'
+
+/** A private notice to one player; a push that can't be delivered never fails the action. */
+async function notify(ctx: Ctx, game: Game, p: Player, title: string, body: string) {
+  try {
+    await pushTo(ctx, [p], { type: 'notice', code: game.code, title, body })
+  } catch {
+    // Their own screen still shows it on the next poll.
+  }
+}
+
+/**
+ * The one way into Penjara (new power-ups §6.2): every route (a catch, auto-jail, later Mak Kau Hijau) goes
+ * through here. A runner holding an unused Super Ring gets house arrest instead: on a catch it starts at once,
+ * centred on their fix if it's at most 20 s old (else the chaser's), and locks that chaser off them; on any other
+ * route it waits for them to open Kejar. `data` goes on the `arrested` event. Returns null when neither happened:
+ * already jailed, or a concurrent call is firing their Super Ring right now.
+ */
+async function jailOrArrest(
+  ctx: Ctx,
+  game: Game,
+  runner: Player,
+  by: Player | null,
+  route: Arrest['route'],
+  data: Record<string, unknown> = {},
+): Promise<'jailed' | 'arrested' | null> {
+  const { store, now } = ctx
+  const ring = (await store.powerUps(game.id)).find((u) => u.player_id === runner.id && u.kind === 'ring' && u.used_at === null && !u.taken_at)
+  if (!ring) return (await store.catchRunner(runner.id, by?.id ?? null)) ? 'jailed' : null
+  // Someone else's call won the card a moment ago: it is firing there, so this one does nothing.
+  if (!(await store.markUsed(ring.id))) return null
+  const firedAt = iso(now)
+  let center: LatLng | null = null
+  if (route === 'catch') {
+    const positions = await store.latestPositions(game.id, [firedAt])
+    const theirs = latest(positions[runner.id])
+    const chaser = by ? latest(positions[by.id]) : null
+    // The runner's own fix if it's fresh and usable, else the chaser's usable fix. Final fallback: the chaser's fix
+    // whatever its accuracy (the catch scan just stored it, so the tag was ripped right there), then the runner's.
+    const usable = (f: Position | null) => !!f && usableFix(f)
+    const pick =
+      theirs && usable(theirs) && now - Date.parse(theirs.at) <= ARREST_FIX_FRESH_MS ? theirs : usable(chaser) ? chaser : (chaser ?? theirs)
+    center = pick ? { lat: pick.lat, lng: pick.lng } : null
+  }
+  const arrest: Arrest = { firedAt, route, by: by?.id ?? null, center, startedAt: center ? firedAt : null, ringId: ring.id, catchEventId: null }
+  if (!(await store.startArrest(runner.id, arrest))) {
+    // Jailed by a racing call first: the card was never spent.
+    await store.updatePowerUp(ring.id, { used_at: null })
+    return null
+  }
+  // No actor: the feed line never says who, or which card.
+  const fired = await store.addEvent({ game_id: game.id, type: 'arrested', actor_id: null, target_id: runner.id, data: { route, firedAt, ...data } })
+  await store.updateArrest(runner.id, route === 'catch' && by ? { eventId: fired.id, catchEventId: fired.id } : { eventId: fired.id })
+  if (route === 'catch' && by) {
+    await store.addEvent({ game_id: game.id, type: 'ring-locked', actor_id: by.id, target_id: runner.id, data: { firedAt } })
+  }
+  await notify(ctx, game, runner, 'House arrest', center ? ARREST_STARTED : ARREST_OPEN)
+  return 'arrested'
+}
+
+/**
+ * Ends a house arrest in Penjara: a fix outside the circle, no fresh fix inside at the end (`revoked`), or no fix
+ * at all within 60 s of a waiting one (`no-show`). The runner goes in with no chaser, under an `auto-jailed` event,
+ * so the Penjara screens and a marshal's phone-problem undo work as for auto-jail. A no-show reads as what sent
+ * them: missed check-ins (cause `no-show`, keeping the check-ins in `data`), Mak Kau Hijau (cause `hijau`, with
+ * `arrest` so players' feed stays quiet about the card), or a catch (cause `revoked`, bail revoked). A no-show only
+ * ends an arrest still waiting, so it never beats an opening fix. True when that put the last free runner out.
+ */
+async function arrestToPenjara(ctx: Ctx, game: Game, runner: Player, a: Arrest, why: 'revoked' | 'no-show', data: Record<string, unknown> = {}): Promise<boolean> {
+  const { store } = ctx
+  if (!(await store.endArrest(runner.id, a.firedAt, { waiting: why === 'no-show' }))) return false
+  const cause = why === 'revoked' || a.route === 'catch' ? 'revoked' : a.route === 'hijau' ? 'hijau' : 'no-show'
+  const extra = cause === 'hijau' ? { arrest: true } : cause === 'no-show' ? data : {}
+  if (await store.catchRunner(runner.id, null)) {
+    if (why === 'revoked') await notify(ctx, game, runner, 'Penjara', BAIL_REVOKED)
+    await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: runner.id, data: { who: who(runner), cause, ...extra } })
+  }
+  await store.addEvent({ game_id: game.id, type: 'arrest-ended', actor_id: null, target_id: runner.id, data: { outcome: 'revoked', firedAt: a.firedAt } })
+  return allOutCheck(ctx, game, 'auto-jail')
+}
+
+/**
+ * Judges every house arrest that is due (the caller skips paused games): a waiting one with no fix 60 s after it
+ * fired goes to Penjara; a started one at its end is judged on the runner's latest fix at or before the end, so a
+ * late poll never changes the outcome. A Luar Garisan runner's arrest just ends. True if a final whistle is pending.
+ */
+async function settleArrests(ctx: Ctx, game: Game): Promise<boolean> {
+  const { store, now } = ctx
+  let allOut = false
+  for (const p of (await store.players(game.id)).filter((r) => r.role === 'runner' && r.arrest && !r.jailed)) {
+    const a = p.arrest!
+    if (p.disqualified_at) {
+      await store.endArrest(p.id, a.firedAt)
+      continue
+    }
+    const endsAt = arrestEndsAt(a)
+    if (endsAt === null) {
+      if (now < Date.parse(a.firedAt) + ARREST_OPEN_MS) continue
+      // By id: a resume moves a waiting arrest's `firedAt`, so it no longer matches the event's.
+      const fired = a.eventId ? (await store.events(game.id)).find((e) => e.id === a.eventId) : undefined
+      const kept = fired && Array.isArray(fired.data.checkins) ? { seq: fired.data.seq, checkins: fired.data.checkins } : {}
+      if (await arrestToPenjara(ctx, game, p, a, 'no-show', kept)) allOut = true
+      continue
+    }
+    if (now < endsAt) continue
+    // The latest usable fix in the last 20 s up to the end: a rough fix is ignored, never a revoke on its own. A
+    // resume moves the end, so that window can reach back into a pause: a fix sent then counts for nothing.
+    const recent = await store.playerPositions(game.id, p.id, iso(endsAt - ARREST_FIX_FRESH_MS), iso(endsAt))
+    const fix = [...recent].reverse().find((f) => usableFix(f) && !sentDuringPause(Date.parse(f.at), game.pauses, game.paused_at)) ?? null
+    if (releaseVerdict(a, fix) === 'revoked') {
+      if (await arrestToPenjara(ctx, game, p, a, 'revoked')) allOut = true
+    } else if (await store.endArrest(p.id, a.firedAt)) {
+      // Free, and it doesn't use their one freed: they never went in.
+      await notify(ctx, game, p, 'Free!', ARREST_FREE)
+      await store.addEvent({ game_id: game.id, type: 'arrest-ended', actor_id: null, target_id: p.id, data: { outcome: 'free', firedAt: a.firedAt } })
+    }
+  }
+  return allOut
+}
+
+/** Mak Kau Hijau's push (new power-ups §6.3). */
+const HIJAU_PUSH = 'Mak kau hijau! Tap the green in 20 s or go to Penjara.'
+
+/**
+ * Moves an unsettled Mak Kau Hijau along (the caller skips paused games). From `startsAt`, the first call sends
+ * the one batch push and records its time; from the deadline, the first call settles it once. It is void (nobody
+ * jailed, revealed or locked in) when the push went out under 15 s before the deadline or never, and silently when
+ * the deadline fell after the game's end. Otherwise every target who didn't tap goes to Penjara (or house arrest,
+ * with Super Ring) under an `auto-jailed` event, so the marshals' undo works, and Penjara is locked for 3 minutes
+ * from the deadline (`lockedUntil`, stored with the settle). True if a final whistle is pending.
+ */
+async function stepHijau(ctx: Ctx, game: Game): Promise<boolean> {
+  const { store, now } = ctx
+  const run = game.hijau!
+  const deadline = Date.parse(run.deadline)
+  if (now < Date.parse(run.startsAt)) return false
+  if (now < deadline) {
+    if (run.sentAt || game.ended_at) return false
+    // Who gets the push is recorded with its time: only they can tap, see the takeover or be jailed by this run.
+    const targets = hijauTargets(await store.players(game.id))
+    if (!(await store.claimHijauPush(game.id, iso(now), targets.map((p) => p.id)))) return false
+    await store.addEvent({ game_id: game.id, type: 'hijau', actor_id: null, target_id: null, data: { deadline } })
+    try {
+      await pushTo(ctx, targets, { type: 'hijau', code: game.code, deadline, title: 'Mak kau hijau!', body: HIJAU_PUSH })
+    } catch {
+      // The takeover still shows to anyone with Kejar open, and the batch time is what counts.
+    }
+    return false
+  }
+  // The whistle went first (an early end, or the clock ran out before the deadline): it judges nobody.
+  const ended = !!game.ended_at || phaseAt(game, deadline).phase === 'ended'
+  const lockedUntil = !ended && hijauCounts(run) ? iso(hijauLockEnd(game, now)) : null
+  const settled = await store.claimHijauSettle(game.id, iso(now), lockedUntil)
+  if (!settled) return false
+  const done = (data: Record<string, unknown>) => store.addEvent({ game_id: game.id, type: 'hijau-done', actor_id: null, target_id: null, data })
+  if (ended) {
+    await done({ void: true, jailed: 0, ended: true })
+    return false
+  }
+  if (!lockedUntil) {
+    await done({ void: true, jailed: 0 })
+    return false
+  }
+  let jailed = 0
+  // Only runners the push went to who are still eligible: one freed (or released) since never got this run's warning.
+  const pushedTo = new Set(settled.targets ?? [])
+  for (const p of hijauTargets(await store.players(game.id)).filter((r) => pushedTo.has(r.id) && !settled.tapped.includes(r.id))) {
+    if ((await jailOrArrest(ctx, game, p, null, 'hijau')) !== 'jailed') continue
+    jailed++
+    await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: p.id, data: { who: who(p), cause: 'hijau' } })
+  }
+  await done({ void: false, jailed })
+  return allOutCheck(ctx, game, 'hijau')
+}
+
+/**
+ * A fix from a runner under house arrest (the caller skips paused games and anything but the chase). A rough fix
+ * counts for nothing. The first usable fix starts a waiting arrest right there, if it lands within 60 s; once
+ * started, a usable fix outside the circle before the end sends them to Penjara at once. A runner who is Luar
+ * Garisan (perhaps from this very fix) is out of the round: the arrest just ends, as `settleArrests` does.
+ */
+async function arrestFix(ctx: Ctx, game: Game, me: Player, fix: Position) {
+  const a = me.arrest
+  if (!a) return
+  if (me.disqualified_at) {
+    await ctx.store.endArrest(me.id, a.firedAt)
+    return
+  }
+  if (!usableFix(fix)) return
+  if (!a.startedAt) {
+    if (ctx.now >= Date.parse(a.firedAt) + ARREST_OPEN_MS) return
+    await ctx.store.updateArrest(me.id, { center: { lat: fix.lat, lng: fix.lng }, startedAt: iso(ctx.now) })
+    await notify(ctx, game, me, 'House arrest', ARREST_STARTED)
+    return
+  }
+  // After the end, only the fix at or before it counts, which a poll judges.
+  if (ctx.now >= arrestEndsAt(a)! || insideArrest(a, fix)) return
+  await arrestToPenjara(ctx, game, me, a, 'revoked')
+}
+
 const create: Action = async (ctx, body) => {
   const organiser = await requireAnyOrganiser(ctx, body)
   let arena: Arena
@@ -766,23 +1064,24 @@ const create: Action = async (ctx, body) => {
     throw new ActionError(400, 'Unknown arena')
   }
   // A new game has no planned start yet; the organiser sets one in the lobby (setStartTime).
-  const settings = { ...settingsFrom(body.settings), startsAt: null }
-  // Full with Dato Seri on: a free yellow card now, so the organiser can print it before hiding it (ruling R15).
-  // With none free, the game still gets made (Review Focus 1). It keeps wanting Dato Seri and tries again later (R9).
-  let stash: DatoStash | null = null
-  let noFreeCard = false
-  if (settings.mode === 'full' && settings.legendaries.dato === 'stash') {
-    const card = await freeCard(ctx, organiser.organisation_id, 'dato')
-    if (card) stash = stashOn(card)
-    else noFreeCard = true
-  }
-  // The same for Bomoh's purple cards, independently of Dato Seri's.
-  let bomohStash: BomohStash | null = null
-  let noFreeBomohCard = false
-  if (settings.mode === 'full' && settings.legendaries.bomoh === 'stash') {
-    const card = await freeCard(ctx, organiser.organisation_id, 'bomoh')
-    if (card) bomohStash = stashOn(card)
-    else noFreeBomohCard = true
+  // The app picks one legendary per side here (new power-ups design §6.1), before anything else draws from rng.
+  const settings = { ...settingsFrom(body.settings, ctx.rng), startsAt: null }
+  // Full with a legendary picked: a free card of its colour now, so the organiser can print it before hiding it
+  // (ruling R15). With none free but one free for the other legendary of that side, the game switches to that one.
+  // With neither, the game still gets made (Review Focus 1); it keeps wanting the picked one and tries again later (R9).
+  const stashes: Partial<Record<LegendaryKind, DatoStash>> = {}
+  const notices: string[] = []
+  if (settings.mode === 'full') {
+    for (const kind of LEGENDARY_KINDS) {
+      if (settings.legendaries[kind] !== 'stash' || stashes[kind]) continue
+      const got = await cardOrFallback(ctx, organiser.organisation_id, kind)
+      if (!got) {
+        notices.push(NO_FREE_NOTICE[kind])
+        continue
+      }
+      if (got.kind !== kind) settings.legendaries = switchedTo(settings.legendaries, kind, got.kind)
+      stashes[got.kind] = stashOn(got.card)
+    }
   }
   let code = newGameCode(ctx.rng)
   while (await ctx.store.gameByCode(code)) code = newGameCode(ctx.rng)
@@ -801,13 +1100,12 @@ const create: Action = async (ctx, body) => {
     wiped_at: null,
     briefed_at: null,
     organiser_id: organiser.id,
-    ...(stash ? { dato_stash: stash } : {}),
-    ...(bomohStash ? { bomoh_stash: bomohStash } : {}),
+    ...(stashes.dato ? { dato_stash: stashes.dato } : {}),
+    ...(stashes.ring ? { ring_stash: stashes.ring } : {}),
+    ...(stashes.bomoh ? { bomoh_stash: stashes.bomoh } : {}),
+    ...(stashes.hijau ? { hijau_stash: stashes.hijau } : {}),
   })
   await wipeExpired(ctx)
-  const notices = [noFreeCard ? NO_FREE_CARD_NOTICE : null, noFreeBomohCard ? NO_FREE_BOMOH_CARD_NOTICE : null].filter(
-    (n): n is string => n !== null,
-  )
   return notices.length ? { code, notice: notices.join(' ') } : { code }
 }
 
@@ -888,16 +1186,12 @@ const start: Action = async (ctx, body) => {
   if (problems.length) throw new ActionError(409, problems.join(' · '))
   // A lobby left over a day re-checks its card, and one with no card tries once more (rulings R3, R9). Still none:
   // the game starts with that legendary off, and the organiser is told.
-  const datoSettled = await settleLobbyCard(ctx, game, organiser.organisation_id, 'dato')
-  const bomohSettled = await settleLobbyCard(ctx, datoSettled.game, organiser.organisation_id, 'bomoh')
-  const settled = bomohSettled.game
-  const notices = [datoSettled.notice, bomohSettled.notice].filter((n): n is string => n !== null)
+  const { game: settled, notices } = await settleAllLobbyCards(ctx, game, organiser.organisation_id)
   const startedAt = iso(ctx.now)
   const started = { ...game, started_at: startedAt }
   const count = (role: Role) => Object.values(roles).filter((r) => r === role).length
   const offLegendaries: Partial<Settings['legendaries']> = {}
-  if (wantsCard(settled, 'dato')) offLegendaries.dato = 'off'
-  if (wantsCard(settled, 'bomoh')) offLegendaries.bomoh = 'off'
+  for (const kind of LEGENDARY_KINDS) if (wantsCard(settled, kind)) offLegendaries[kind] = 'off'
   await ctx.store.updateGame(game.id, {
     ...(Object.keys(offLegendaries).length
       ? { settings: { ...settled.settings, legendaries: { ...settled.settings.legendaries, ...offLegendaries } } }
@@ -965,12 +1259,14 @@ const state: Action = async (ctx, body) => {
     }
   }
   // The organiser's own poll only (ruling R9): an expired lobby re-checks its card, so the print link never shows a
-  // card another game holds, and a lobby with no card tries for one. Either legendary's. Player polls never pay for this.
-  if (me.id === 'host' && (needsRecheck(game, ctx.now, 'dato') || needsRecheck(game, ctx.now, 'bomoh'))) {
+  // card another game holds, and a lobby with no card tries for one. Any legendary's. Player polls never pay for this.
+  if (me.id === 'host' && LEGENDARY_KINDS.some((k) => needsRecheck(game, ctx.now, k))) {
     const org = (await ctx.store.organiserById((game as GameRow).organiser_id))?.organisation_id
     if (org) {
-      if (needsRecheck(game, ctx.now, 'dato')) await settleLobbyCard(ctx, game as GameRow, org, 'dato')
-      if (needsRecheck(game, ctx.now, 'bomoh')) await settleLobbyCard(ctx, game as GameRow, org, 'bomoh')
+      let fresh = game as GameRow
+      for (const kind of LEGENDARY_KINDS) {
+        if (needsRecheck(fresh, ctx.now, kind)) fresh = (await settleLobbyCard(ctx, fresh, org, kind)).game
+      }
     }
   }
   await advance(ctx, game)
@@ -1027,6 +1323,11 @@ const location: Action = async (ctx, body) => {
     }
   }
   await checkWhere(ctx, game, me, { lat, lng }, accuracy)
+  // Super Ring's house arrest freezes with the game, like Luar Garisan. Luar Garisan above still applies to it, so
+  // they're read again: this same fix may just have disqualified them.
+  if (me.arrest && !game.paused_at && phaseAt(game, ctx.now).phase === 'chasing') {
+    await arrestFix(ctx, game, await requirePlayer(ctx, game, body), { ...fix, at: iso(ctx.now) })
+  }
   // Each fix is judged as it lands, so a step outside and back between two polls still counts (rules §9a).
   if (rescuing) await settleRescue(ctx, game, undefined, { ...fix, at: iso(ctx.now) })
   return { ok: true }
@@ -1114,9 +1415,15 @@ const catchAction: Action = async (ctx, body) => {
   const tagId = tagIdFromQr(str(body.tagQr))
   const runner = players.find((p) => p.role === 'runner' && p.tag_id === tagId)
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
-  const shieldings = (await ctx.store.events(game.id))
+  const events = await ctx.store.events(game.id)
+  const shieldings = events
     .filter((e) => e.type === 'shielded' && e.actor_id && e.target_id)
     .map((e) => ({ chaserId: e.actor_id as string, runnerId: e.target_id as string, at: Date.parse(e.at) }))
+  // Super Ring's locks, minus any whose house arrest a marshal undid (Undo kejar: the catch never happened).
+  const undone = new Set(events.filter((e) => e.type === 'arrest-ended' && e.data.outcome === 'undone').map((e) => `${e.target_id}|${str(e.data.firedAt)}`))
+  const ringLocks = events
+    .filter((e) => e.type === 'ring-locked' && e.actor_id && e.target_id && !undone.has(`${e.target_id}|${str(e.data.firedAt)}`))
+    .map((e) => ({ chaserId: e.actor_id as string, runnerId: e.target_id as string }))
   const verdict = judgeCatch({
     phase: phaseAt(fresh, ctx.now).phase,
     chaser: players.find((p) => p.id === me.id) ?? me,
@@ -1126,10 +1433,12 @@ const catchAction: Action = async (ctx, body) => {
     runnerPos: runner ? latest(positions[runner.id]) : null,
     now: ctx.now,
     shieldings,
+    ringLocks,
   })
   if (!verdict.ok) {
-    // The Durian refusals name the runner so the chaser knows who is off limits.
-    return runner && (verdict.reason === 'durian-locked' || verdict.reason === 'durian-head-start') ? { ...verdict, name: runner.name } : verdict
+    // The Durian and Super Ring refusals name the runner so the chaser knows who is off limits.
+    const named: string[] = ['durian-locked', 'durian-head-start', 'ring-locked', 'arrest']
+    return runner && named.includes(verdict.reason) ? { ...verdict, name: runner.name } : verdict
   }
   // A switched-on Shield absorbs one otherwise-valid catch.
   const shield = activeShield(await ctx.store.powerUps(game.id), verdict.runnerId, ctx.now)
@@ -1138,7 +1447,20 @@ const catchAction: Action = async (ctx, body) => {
     await ctx.store.addEvent({ game_id: game.id, type: 'shielded', actor_id: me.id, target_id: verdict.runnerId, data: {} })
     return { ok: false, reason: 'shielded', name: runner?.name }
   }
-  if (!(await ctx.store.catchRunner(verdict.runnerId, me.id))) return { ok: false, reason: 'already-caught' }
+  const sent = runner ? await jailOrArrest(ctx, fresh, runner, players.find((p) => p.id === me.id) ?? me, 'catch') : null
+  if (sent === null) return { ok: false, reason: 'already-caught' }
+  // Catching the rescuer fails a live rescue: nobody gets out, even with a joiner still close (rules §9a). Super
+  // Ring saving the rescuer from Penjara doesn't save the rescue.
+  const failRescue = async () => {
+    if (fresh.rescue?.by === verdict.runnerId && (await ctx.store.endRescue(game.id, fresh.rescue.startedAt))) {
+      await ctx.store.addEvent({ game_id: game.id, type: 'rescue-failed', actor_id: verdict.runnerId, target_id: null, data: {} })
+    }
+  }
+  // Super Ring fired: house arrest, not a catch, and this chaser hands the tag back for good.
+  if (sent === 'arrested') {
+    await failRescue()
+    return { ok: false, reason: 'ring', name: runner!.name }
+  }
   await ctx.store.addEvent({
     game_id: game.id,
     type: 'caught',
@@ -1146,10 +1468,7 @@ const catchAction: Action = async (ctx, body) => {
     target_id: verdict.runnerId,
     data: { flagged: verdict.flagged, who: tagLabelOf(players, verdict.runnerId), chaser: me.name, ...(verdict.flagged ? { farFromLast: true } : {}) },
   })
-  // Catching the rescuer fails a live rescue: nobody gets out, even with a joiner still close (rules §9a).
-  if (fresh.rescue?.by === verdict.runnerId && (await ctx.store.endRescue(game.id, fresh.rescue.startedAt))) {
-    await ctx.store.addEvent({ game_id: game.id, type: 'rescue-failed', actor_id: verdict.runnerId, target_id: null, data: {} })
-  }
+  await failRescue()
   // The last free runner caught: the final whistle, not the end (fair-play §1.4).
   await allOutCheck(ctx, fresh)
   const caught = players.find((p) => p.id === verdict.runnerId)
@@ -1190,6 +1509,7 @@ const jailbreak: Action = async (ctx, body) => {
     runnerPos: latest(positions[me.id]),
     jail: game.arena.jail,
     now: ctx.now,
+    lockedMs: penjaraLockLeft(fresh, ctx.now),
   })
   if (!verdict.ok) return verdict
   // The scan starts the 10-second hold instead of freeing at once (rules §9a); `advance` settles it.
@@ -1223,6 +1543,9 @@ const pullReel: Action = async (ctx, body) => {
   const current = (await ctx.store.players(game.id)).find((p) => p.id === me.id)
   if (!current || current.role !== 'runner' || !current.jailed) return { ok: false, reason: 'not-jailed' }
   if (reelPulledThisStay(current)) return { ok: false, reason: 'already-pulled' }
+  // Locked after Mak Kau Hijau: no free slot for anyone, so the pull waits (it isn't spent).
+  const lockedMs = penjaraLockLeft(fresh, ctx.now)
+  if (lockedMs > 0) return { ok: false, reason: 'penjara-locked', lockedMs }
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   if (!atJail(latest(positions[me.id]), game.arena.jail, ctx.now)) return { ok: false, reason: 'too-far-from-jail' }
   if (!(await ctx.store.pullReel(me.id, iso(ctx.now)))) return { ok: false, reason: 'already-pulled' }
@@ -1270,6 +1593,7 @@ const settle: Action = async (ctx, body) => {
     jail: game.arena.jail,
     targetIds,
     now: ctx.now,
+    lockedMs: penjaraLockLeft(fresh, ctx.now),
   })
   if (!verdict.ok) return verdict
   if (!(await ctx.store.markUsed(dato!.id))) return { ok: false, reason: 'already-used' }
@@ -1472,6 +1796,8 @@ const claim: Action = async (ctx, body) => {
     return claimDato(ctx, fresh as GameRow, me, code)
   }
   if (isBomohQr(qr)) return claimBomoh(ctx, fresh as GameRow, me, bomohCodeFromQr(qr))
+  if (isRingQr(qr)) return claimRing(ctx, fresh as GameRow, me, ringCodeFromQr(qr))
+  if (isHijauQr(qr)) return claimHijau(ctx, fresh as GameRow, me, hijauCodeFromQr(qr))
   const station = stationFromQr(str(body.qr))
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeClaim({
@@ -1609,6 +1935,120 @@ async function claimBomoh(ctx: Ctx, game: GameRow, me: Player, scanned: string |
 }
 
 /**
+ * Scanning Super Ring's hidden stash: exactly Dato Seri's flow and refusals (`claimDato`), with its own wrong-scan
+ * count. The store puts an unused `ring` row in the runner's slot; it is used automatically later, never from the
+ * slot. The feed only ever says `Something legendary was found.`
+ */
+async function claimRing(ctx: Ctx, game: GameRow, me: Player, scanned: string | null) {
+  const miss = await stashMisses(ctx, game, me, 'ring')
+  if (!miss) return NO_STASH
+  const secret = game.settings.mode === 'full' ? (game.ring_stash?.code ?? null) : null
+  if (!scanned || !secret || hashToken(scanned) !== hashToken(secret)) return miss(NO_STASH)
+  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
+  const verdict = judgeRingClaim({
+    phase: phaseAt(game, ctx.now).phase,
+    me,
+    stash: game.ring_stash,
+    myPos: latest(positions[me.id]),
+    powerUps: await ctx.store.powerUps(game.id),
+    pings: await ctx.store.pings(game.id),
+    now: ctx.now,
+  })
+  if (!verdict.ok) return verdict.reason === 'no-stash' || verdict.reason === 'too-far' ? miss(verdict) : verdict
+  // Losing the race to another runner isn't a miss.
+  if (!(await ctx.store.claimRing(game.id, me.id))) return NO_STASH
+  if (game.ring_stash?.card) await ctx.store.setSecretCard(game.ring_stash.card.id, { state: 'retired', found_at: iso(ctx.now) })
+  await ctx.store.addEvent({ game_id: game.id, type: 'legendary', actor_id: me.id, target_id: null, data: {} })
+  return { ok: true, kind: 'ring' }
+}
+
+/**
+ * Scanning Mak Kau Hijau's hidden stash: exactly Bomoh's flow and refusals (`claimBomoh`, plus the frozen
+ * refusal from `judgeHijauClaim`), with its own wrong-scan count. The store marks the stash claimed and writes
+ * `games.hijau` in one step. The 45 s starts clear of every check-in window, scheduled or Mat Rempit (§6.3);
+ * starting now, its push goes out at once. One that can't finish before the whistle is claimed and settled void.
+ */
+async function claimHijau(ctx: Ctx, game: GameRow, me: Player, scanned: string | null) {
+  const miss = await stashMisses(ctx, game, me, 'hijau')
+  if (!miss) return NO_STASH
+  const secret = game.settings.mode === 'full' ? (game.hijau_stash?.code ?? null) : null
+  if (!scanned || !secret || hashToken(scanned) !== hashToken(secret)) return miss(NO_STASH)
+  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
+  const verdict = judgeHijauClaim({
+    phase: phaseAt(game, ctx.now).phase,
+    me,
+    stash: game.hijau_stash,
+    myPos: latest(positions[me.id]),
+    now: ctx.now,
+  })
+  if (!verdict.ok) return verdict.reason === 'no-stash' || verdict.reason === 'too-far' ? miss(verdict) : verdict
+  const windows = [
+    ...pingTimes(game, ctx.now),
+    ...(await ctx.store.pings(game.id))
+      .filter((p) => p.seq >= BONUS_SEQ_BASE && !p.revealed)
+      .map((p) => ({ alertAt: Date.parse(p.alert_at), revealAt: Date.parse(p.reveal_at) })),
+  ]
+  const startsAt = hijauStartsAt(ctx.now, windows)
+  const run = { startsAt: iso(startsAt), deadline: iso(startsAt + HIJAU_MS) }
+  // Losing the race to another chaser isn't a miss.
+  if (!(await ctx.store.claimHijau(game.id, me.id, run))) return NO_STASH
+  if (game.hijau_stash?.card) await ctx.store.setSecretCard(game.hijau_stash.card.id, { state: 'retired', found_at: iso(ctx.now) })
+  await ctx.store.addEvent({ game_id: game.id, type: 'legendary', actor_id: me.id, target_id: null, data: {} })
+  const endsAt = phaseAt(game, ctx.now).endsAt
+  if (endsAt !== null && startsAt + HIJAU_MS > endsAt) {
+    // It can't run to its deadline before the whistle: the card is spent and does nothing.
+    if (await ctx.store.claimHijauSettle(game.id, iso(ctx.now), null)) {
+      await ctx.store.addEvent({ game_id: game.id, type: 'hijau-done', actor_id: null, target_id: null, data: { void: true, jailed: 0, ended: true } })
+    }
+  } else if (startsAt <= ctx.now) {
+    // Starting now: the push goes out with the claim instead of waiting for the next poll.
+    const fresh = await ctx.store.gameByCode(game.code)
+    if (fresh?.hijau && !fresh.hijau.settledAt) await stepHijau(ctx, fresh)
+  }
+  return { ok: true, kind: 'hijau' }
+}
+
+/**
+ * A runner taps green during Mak Kau Hijau (§6.3). Judged by server time against the one shared deadline: a tap
+ * that lands at or after it is `too-late`. A tap while paused counts as made at the pause (the 20 s is held
+ * still, and resume moves the deadline). A repeat tap (a retry on a bad connection) is fine. The tap reveals the
+ * runner to the Kejar where they tapped (`tapFix`); a tap with no usable fix still counts.
+ */
+const touchGreen: Action = async (ctx, body) => {
+  const loaded = await loadGame(ctx, body)
+  await requirePlayer(ctx, loaded, body)
+  await advance(ctx, loaded)
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  const run = game.hijau
+  if (!run || ctx.now < Date.parse(run.startsAt)) return { ok: false, reason: 'not-running' }
+  if (run.tapped.includes(me.id)) return { ok: true }
+  const at = game.paused_at ? Math.min(ctx.now, Date.parse(game.paused_at)) : ctx.now
+  if (run.settledAt || at >= Date.parse(run.deadline)) return { ok: false, reason: 'too-late' }
+  if (!(run.targets ?? []).includes(me.id) || !hijauTargets([me]).length) return { ok: false, reason: 'not-a-target' }
+  if (await ctx.store.tapHijau(game.id, me.id, iso(at), await tapFix(ctx, game, me, body, at))) return { ok: true }
+  // Lost to the deadline, or a racing tap of their own already landed.
+  const after = (await loadGame(ctx, body)).hijau
+  return after?.tapped.includes(me.id) ? { ok: true } : { ok: false, reason: 'too-late' }
+}
+
+/**
+ * Where a runner tapped green, for the Kejar's map: the fix sent with the tap if it's usable (50 m or better), else
+ * their latest stored fix from the 20 s before the tap if that's usable, else none. Stamped with the tap's time, so
+ * the next ping reveal after the tap replaces it.
+ */
+async function tapFix(ctx: Ctx, game: Game, me: Player, body: Body, at: number): Promise<HijauFix | null> {
+  const { lat, lng, accuracy_m } = body as { lat?: unknown; lng?: unknown; accuracy_m?: unknown }
+  if (typeof lat === 'number' && typeof lng === 'number' && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+    const accuracy = cleanAccuracy(accuracy_m)
+    if (accuracy !== null && usableFix({ lat, lng, accuracy_m: accuracy, at: iso(at) })) return { lat, lng, at: iso(at) }
+  }
+  const stored = latest((await ctx.store.latestPositions(game.id, [iso(at)]))[me.id])
+  if (!stored || at - Date.parse(stored.at) > HIJAU_FIX_FRESH_MS || !usableFix(stored)) return null
+  return { lat: stored.lat, lng: stored.lng, at: iso(at) }
+}
+
+/**
  * The organiser hides the printed Dato Seri card and saves the spot (jail design §4b). Organiser only: marshals are
  * the helper, and never learn where it is. Full mode only. Dropping again before the start moves it; once the
  * game starts it stays put.
@@ -1654,6 +2094,32 @@ const dropBomoh: Action = async (ctx, body) => {
   return { ok: true }
 }
 
+/**
+ * The organiser hides the printed Super Ring or Mak Kau Hijau card and saves the spot, mirroring `dropBomoh` above:
+ * organiser only (marshals never learn where it is), Full mode only, lobby only, and dropping again moves it.
+ */
+function dropLegendary(legendary: 'ring' | 'hijau', name: string): Action {
+  return async (ctx, body) => {
+    const loaded = await loadGame(ctx, body)
+    const organiser = await requireOrganiser(ctx, loaded, body)
+    if (loaded.settings.mode !== 'full') throw new ActionError(409, `${name} is in Full mode only`)
+    requireLobby(loaded, ctx.now)
+    // An old lobby re-checks its card first, and one with none tries for one (rulings R3, R9).
+    const { game } = await settleLobbyCard(ctx, loaded, organiser.organisation_id, legendary)
+    const held = stashOf(game, legendary)
+    // No card (this legendary wasn't picked, or none is free yet): there's nothing to drop.
+    if (!held) throw new ActionError(409, NO_FREE_NOTICE[legendary])
+    const at = coordsOf(body)
+    if (!at) throw new ActionError(400, 'Invalid location')
+    if (!inPlayArea(at, game.arena)) throw new ActionError(400, 'Drop it inside the play area')
+    // Moving it keeps the code and the card, so the card already printed still works.
+    await writeStash(ctx, game.id, legendary, { ...held, code: held.code ?? newDatoCode(), lat: at.lat, lng: at.lng, claimedBy: null, claimedAt: null })
+    return { ok: true }
+  }
+}
+const dropRing = dropLegendary('ring', 'Super Ring')
+const dropHijau = dropLegendary('hijau', 'Mak Kau Hijau')
+
 const usePowerup: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
@@ -1679,11 +2145,15 @@ const usePowerup: Action = async (ctx, body) => {
   if (runningEffect(all, me.id, pings, ctx.now) !== null) return { ok: false, reason: 'effect-running' }
   // Dato Seri is only ever used through Settle, at Penjara (jail design §4b).
   if (u.kind === 'dato') return { ok: false, reason: 'settle-at-penjara' }
+  // Super Ring is never used from the slot: it steps in by itself when its holder would go to Penjara.
+  if (u.kind === 'ring') return { ok: false, reason: 'automatic' }
   // A Flare's reveal must land before the whistle.
   if (u.kind === 'flare' && (endsAt ?? 0) - ctx.now < ALERT_LEAD_MS) return { ok: false, reason: 'too-late' }
 
   // Mat Rempit: one at a time, team-wide, then a 3-minute wait (power-ups §5a). A refusal isn't spent.
   if (u.kind === 'flare') {
+    // No new check-in window may open inside Mak Kau Hijau's 45 s (§6.3): refused from its claim until it settles.
+    if (fresh.hijau && !fresh.hijau.settledAt) return { ok: false, reason: 'hijau-running' }
     const blocked = flareBlocked(pings, ctx.now)
     if (blocked) return { ok: false, ...blocked }
   }
@@ -2014,14 +2484,28 @@ const undoKejar: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const eventId = str(body.eventId)
   const events = await ctx.store.events(game.id)
-  const catching = events.find((e) => e.id === eventId && e.type === 'caught')
+  const catching = events.find((e) => e.id === eventId && (e.type === 'caught' || (e.type === 'arrested' && e.data.route === 'catch')))
   const target = catching && (await ctx.store.players(game.id)).find((p) => p.id === catching.target_id)
-  const undoable = !!target && phaseAt(game, ctx.now).phase === 'chasing' && undoableCatchId(target, events) === eventId
-  // Atomic, so two marshals tapping at once (or a racing release) free the runner only once.
-  if (!undoable || !(await ctx.store.releaseCaught(target.id, catching.actor_id!, iso(ctx.now)))) {
-    return { ok: false, reason: 'not-undoable' }
+  const chasing = phaseAt(game, ctx.now).phase === 'chasing'
+  if (catching?.type === 'arrested') {
+    // A catch that fired Super Ring (new power-ups §6.2): ends the live house arrest, lifts that chaser's lock (the
+    // reader skips locks whose arrest ended 'undone') and gives the card back, still switched on.
+    const a = target?.arrest
+    if (!target || !a || !chasing || undoableArrestId(target) !== eventId || !(await ctx.store.endArrest(target.id, a.firedAt))) {
+      return { ok: false, reason: 'not-undoable' }
+    }
+    await ctx.store.updatePowerUp(a.ringId, { used_at: null })
+    await ctx.store.addEvent({ game_id: game.id, type: 'arrest-ended', actor_id: marshal?.id ?? null, target_id: target.id, data: { outcome: 'undone', firedAt: a.firedAt } })
+  } else {
+    const undoable = !!target && chasing && undoableCatchId(target, events) === eventId
+    // Atomic, so two marshals tapping at once (or a racing release) free the runner only once.
+    if (!undoable || !(await ctx.store.releaseCaught(target.id, catching.actor_id!, iso(ctx.now)))) {
+      return { ok: false, reason: 'not-undoable' }
+    }
   }
-  await ctx.store.addEvent({ game_id: game.id, type: 'kejar-undone', actor_id: marshal?.id ?? null, target_id: target.id, data: { eventId, who: who(target) } })
+  // An undone house arrest's line names nobody: the feed never said who Super Ring saved.
+  const arrest = catching.type === 'arrested' ? { arrest: true } : {}
+  await ctx.store.addEvent({ game_id: game.id, type: 'kejar-undone', actor_id: marshal?.id ?? null, target_id: target.id, data: { eventId, who: who(target), ...arrest } })
   const name = await marshalName(ctx, game, body, marshal)
   await ctx.store.addEvent({ game_id: game.id, type: 'handled', actor_id: marshal?.id ?? null, target_id: null, data: { eventId, name } })
   await ctx.store.addSafetyRecord({
@@ -2264,16 +2748,18 @@ const setMode: Action = async (ctx, body) => {
   const loaded = await loadGame(ctx, body)
   const organiser = await requireOrganiser(ctx, loaded, body)
   requireLobby(loaded, ctx.now)
-  const settings = settingsFrom({ ...loaded.settings, mode: body.mode })
+  // Switching to Full re-picks each side's legendary (new power-ups design §6.1), as Core let go of every card.
+  const toFull = body.mode === 'full' && loaded.settings.mode !== 'full'
+  const settings = settingsFrom({ ...loaded.settings, mode: body.mode }, toFull ? ctx.rng : undefined)
   await ctx.store.updateGame(loaded.id, { settings })
   if (settings.mode !== 'full') {
-    await releaseCard(ctx, loaded, 'dato')
-    await releaseCard(ctx, loaded, 'bomoh')
+    for (const kind of LEGENDARY_KINDS) await releaseCard(ctx, loaded, kind)
     return { ok: true }
   }
-  const dato = await settleLobbyCard(ctx, { ...loaded, settings }, organiser.organisation_id, 'dato')
-  const bomoh = await settleLobbyCard(ctx, dato.game, organiser.organisation_id, 'bomoh')
-  const notices = [dato.notice, bomoh.notice].filter((n): n is string => n !== null)
+  // A card the old pick still holds (a game left in Full from before Core released it) goes before the new pick's.
+  if (toFull) for (const kind of LEGENDARY_KINDS) if (settings.legendaries[kind] !== 'stash') await releaseCard(ctx, loaded, kind)
+  const fresh = (await ctx.store.gameByCode(loaded.code)) ?? { ...loaded, settings }
+  const { notices } = await settleAllLobbyCards(ctx, fresh, organiser.organisation_id)
   return notices.length ? { ok: true, notice: notices.join(' ') } : { ok: true }
 }
 
@@ -2317,8 +2803,11 @@ export const actions = {
   claim,
   usePowerup,
   grabPick,
+  touchGreen,
   dropDatoSeri,
   dropBomoh,
+  dropRing,
+  dropHijau,
   listSecretCards,
   retireSecretCard,
   reprintSecretCard,

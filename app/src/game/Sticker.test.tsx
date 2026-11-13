@@ -16,6 +16,22 @@ describe('Sticker', () => {
     expect(screen.getByRole('img', { name: 'Mat Rempit' })).toBeInTheDocument()
   })
 
+  it('Super Ring and Mak Kau Hijau have drawings in the doodle style, with no lettering', () => {
+    const { container } = render(
+      <>
+        <Sticker kind="ring" />
+        <Sticker kind="hijau" />
+      </>,
+    )
+    expect(screen.getByRole('img', { name: 'Super Ring' })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Mak Kau Hijau' })).toBeInTheDocument()
+    for (const svg of container.querySelectorAll('svg')) {
+      expect(svg.querySelectorAll('path, rect, circle, ellipse').length).toBeGreaterThan(5)
+      expect(svg.querySelector('[stroke="#141414"]')).not.toBeNull()
+      expect(svg.querySelector('text')).toBeNull()
+    }
+  })
+
   it('gives every sticker its own filter ids', () => {
     const { container } = render(
       <>

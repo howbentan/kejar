@@ -13,6 +13,20 @@ const far = pos(3.0008, 101.0, NOW - 5_000) // ~89 m: beyond 50 m plus both GPS 
 
 const base = { phase: 'chasing' as const, chaser: ben, tagId: 7, players, chaserPos: here, runnerPos: near, now: NOW, shieldings: [] as { chaserId: string; runnerId: string; at: number }[] }
 
+describe('judgeCatch and Super Ring', () => {
+  const arrest = { firedAt: new Date(NOW).toISOString(), route: 'catch' as const, by: 'c1', center: { lat: 3.0, lng: 101.0 }, startedAt: new Date(NOW).toISOString(), ringId: 'u1', catchEventId: 'e1' }
+  it('the locked chaser is refused for that runner forever, but not for another', () => {
+    const ringLocks = [{ chaserId: 'c1', runnerId: 'r1' }]
+    expect(judgeCatch({ ...base, ringLocks })).toEqual({ ok: false, reason: 'ring-locked' })
+    expect(judgeCatch({ ...base, now: NOW + 30 * MIN, chaserPos: pos(3.0, 101.0, NOW + 30 * MIN - 5_000), runnerPos: null, ringLocks })).toEqual({ ok: false, reason: 'ring-locked' })
+    expect(judgeCatch({ ...base, tagId: 3, ringLocks })).toMatchObject({ ok: true, runnerId: 'r2' })
+  })
+  it('nobody can catch a runner under house arrest', () => {
+    const held = [ben, { ...aina, arrest }, hafiz]
+    expect(judgeCatch({ ...base, players: held })).toEqual({ ok: false, reason: 'arrest' })
+  })
+})
+
 describe('judgeCatch and Durian', () => {
   const stung = { chaserId: 'c1', runnerId: 'r1', at: NOW - 1_000 }
   it('the stung chaser is locked off that runner at +1 s and at +30 min', () => {
@@ -129,6 +143,10 @@ describe('judgeJailbreak', () => {
   })
   it('only while chasing', () => {
     expect(judgeJailbreak({ ...input, phase: 'ended' })).toEqual({ ok: false, reason: 'not-chasing' })
+  })
+  it('a runner under house arrest cannot break out others (they cannot be caught, so no uncatchable rescue)', () => {
+    const arrest = { firedAt: new Date(NOW).toISOString(), route: 'catch' as const, by: 'c1', center: { lat: 3.0, lng: 101.0 }, startedAt: new Date(NOW).toISOString(), ringId: 'u1', catchEventId: 'e1' }
+    expect(judgeJailbreak({ ...input, runner: { ...aina, arrest } })).toEqual({ ok: false, reason: 'not-a-free-runner' })
   })
 })
 

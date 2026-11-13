@@ -6,11 +6,12 @@ vi.mock('../game/api', () => ({ call, ApiError: class extends Error {} }))
 
 import YourKit from './YourKit'
 
-type Card = { legendary: 'dato' | 'bomoh'; letter: string; state: string; foundAt: string | null; inGame: boolean }
+type Kind = 'dato' | 'ring' | 'bomoh' | 'hijau'
+type Card = { legendary: Kind; letter: string; state: string; foundAt: string | null; inGame: boolean }
 const set = (over: Record<string, Partial<Card>> = {}): Card[] =>
-  ['dato', 'bomoh'].flatMap((legendary) =>
+  ['dato', 'ring', 'bomoh', 'hijau'].flatMap((legendary) =>
     ['A', 'B', 'C'].map((letter) => ({
-      legendary: legendary as 'dato' | 'bomoh',
+      legendary: legendary as Kind,
       letter,
       state: 'ready',
       foundAt: null,
@@ -64,12 +65,25 @@ describe('YourKit', () => {
     expect(open).toHaveBeenCalledWith('/print/tags', '_blank')
   })
 
-  it('lists the six secret cards', async () => {
+  it('lists the four secret sets: yellow, orange, purple and green, A to C each, in that order', async () => {
     render(<YourKit />)
     expect(await screen.findByText('Yellow A')).toBeTruthy()
     expect(screen.getByText('SECRET CARDS · FULL MODE')).toBeTruthy()
-    for (const n of ['Yellow B', 'Yellow C', 'Purple A', 'Purple B', 'Purple C']) expect(screen.getByText(n)).toBeTruthy()
+    const names = screen.getAllByTestId('card-row').map((r) => r.querySelector('b')!.textContent)
+    expect(names).toEqual(['Yellow', 'Orange', 'Purple', 'Green'].flatMap((c) => ['A', 'B', 'C'].map((l) => `${c} ${l}`)))
     expect(call).toHaveBeenCalledWith('listSecretCards', { organiserToken: 'ot1' })
+  })
+
+  it.each([
+    ['Orange B', 'ring', 'var(--ring-2)'],
+    ['Green C', 'hijau', 'var(--hijau-2)'],
+  ])('%s prints through its own print link, in its own colour', async (name, legendary, colour) => {
+    render(<YourKit />)
+    await screen.findByText(name)
+    expect((screen.getByText(name) as HTMLElement).style.color).toBe(colour)
+    fireEvent.click(within(row(name)).getByRole('button', { name: 'PRINT' }))
+    await waitFor(() => expect(tab.location.href).toBe(`/print/card#${legendary}/CODE123`))
+    expect(call).toHaveBeenCalledWith('secretCardCode', { organiserToken: 'ot1', legendary, letter: name.slice(-1) })
   })
 
   it('a ready card prints through its code, and can be retired', async () => {
