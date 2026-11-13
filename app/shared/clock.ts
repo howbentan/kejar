@@ -1,10 +1,23 @@
-import type { Game, Phase, Ping } from './types.js'
+import type { EndgameKind, Game, Phase, Ping } from './types.js'
 
 export const MINUTE_MS = 60_000
 /** Bonus pings (Mat Rempit/Flare) keep a 30 s alert lead. */
 export const ALERT_LEAD_MS = 30_000
 /** Check-ins design §4.2: scheduled pings alert 45 s before they reveal, so a late push still leaves time to check in. */
 export const SCHEDULED_ALERT_LEAD_MS = 45_000
+
+/**
+ * How long before the end each endgame is revealed (endgame design §6.3, §7.1). Banjir Kilat is never rolled.
+ * Kept here, not in endgame.ts, so `pingTimes` can read Bomba's times without an import cycle; endgame.ts re-exports.
+ */
+export const ENDGAME_LEFT_MS: Record<Exclude<EndgameKind, 'banjir'>, number> = {
+  bomba: 10 * MINUTE_MS,
+  hebat: 10 * MINUTE_MS,
+  pkp: 5 * MINUTE_MS,
+}
+
+/** Bomba's pings, in minutes left. The last one is the last call. */
+export const BOMBA_LEFT_MIN = [8, 6, 5, 4, 3, 2, 1] as const
 
 /**
  * Maps a schedule time (as if the game had never been paused) to wall time: each pause that began
@@ -62,16 +75,29 @@ export function chaseStartOf(game: Game, now?: number): number | null {
   return game.started_at ? bounds(game, now).hideEnd : null
 }
 
-export function pingTimes(game: Game, now?: number): { seq: number; alertAt: number; revealAt: number }[] {
+export type PingTime = { seq: number; alertAt: number; revealAt: number; lastCall?: true }
+
+/**
+ * The scheduled pings. With Bomba, the normal pings stop at the 10-minute mark (one whose alert comes before it
+ * stays) and Bomba's take over at 8, 6, 5, 4, 3, 2 and 1 minutes left, the last being the last call. Everything is
+ * laid out on the pause-free clock first, then mapped to wall time, so a pause moves Bomba's times like any other.
+ */
+export function pingTimes(game: Game, now?: number): PingTime[] {
   if (!game.started_at) return []
   const { hideEnd, end } = nominal(game)
+  const bomba = game.endgame?.kind === 'bomba'
+  const mark = bomba ? end - ENDGAME_LEFT_MS.bomba : end
   const step = game.settings.pingMin * MINUTE_MS
-  const out: { seq: number; alertAt: number; revealAt: number }[] = []
-  for (let seq = 1, t = hideEnd + step; t < end; seq++, t += step) {
-    // The alert is placed on the wall clock on its own, so a pause after it moves only the reveal.
-    out.push({ seq, alertAt: toWall(game, t - SCHEDULED_ALERT_LEAD_MS, now), revealAt: toWall(game, t, now) })
-  }
-  return out
+  const nominalTimes: { t: number; lastCall?: true }[] = []
+  for (let t = hideEnd + step; t < end && t - SCHEDULED_ALERT_LEAD_MS < mark; t += step) nominalTimes.push({ t })
+  if (bomba) for (const m of BOMBA_LEFT_MIN) nominalTimes.push(m === 1 ? { t: end - m * MINUTE_MS, lastCall: true } : { t: end - m * MINUTE_MS })
+  // The alert is placed on the wall clock on its own, so a pause after it moves only the reveal.
+  return nominalTimes.map(({ t, lastCall }, k) => ({
+    seq: k + 1,
+    alertAt: toWall(game, t - SCHEDULED_ALERT_LEAD_MS, now),
+    revealAt: toWall(game, t, now),
+    ...(lastCall ? { lastCall } : {}),
+  }))
 }
 
 /** Ping rows at or above this seq are bonus pings (Flare), not part of the schedule. */

@@ -1,17 +1,10 @@
 import { countRestartAt } from './checkins.js'
-import { MINUTE_MS, phaseAt } from './clock.js'
+import { ENDGAME_LEFT_MS, phaseAt } from './clock.js'
 import { isOut } from './players.js'
 import type { EndgameKind, Game, GameEvent, Player, Settings } from './types.js'
 
-/** How long before the end each endgame is revealed (endgame design §6.3, §7.1). Banjir Kilat is never rolled. */
-export const ENDGAME_LEFT_MS: Record<Exclude<EndgameKind, 'banjir'>, number> = {
-  bomba: 10 * MINUTE_MS,
-  hebat: 10 * MINUTE_MS,
-  pkp: 5 * MINUTE_MS,
-}
-
-/** Bomba's pings, in minutes left. The last one is the last call. */
-export const BOMBA_LEFT_MIN = [8, 6, 5, 4, 3, 2, 1] as const
+/** Bomba's times live in clock.ts so `pingTimes` can read them without an import cycle. */
+export { BOMBA_LEFT_MIN, ENDGAME_LEFT_MS } from './clock.js'
 
 type Switches = NonNullable<Settings['endgames']>
 

@@ -331,6 +331,23 @@ describe('check-in state', () => {
   })
 })
 
+describe('the endgame stays secret until its reveal (Review Focus 5)', () => {
+  const bomba = { kind: 'bomba' as const, revealedAt: null, wanted: null, bountyAt: null }
+  const secretBits = (v: ReturnType<typeof viewFor>) => ({ nextRevealAt: v.nextRevealAt, nextAlertAt: v.nextAlertAt, checkin: v.checkin, feed: v.feed })
+  const same = (base: ReturnType<typeof game>, now: number) =>
+    expect(secretBits(view(aina, { game: { ...base, endgame: bomba }, now }))).toEqual(secretBits(view(aina, { game: { ...base, endgame: null }, now })))
+
+  it("a runner's view of an unrevealed Bomba game matches a game with no endgame, at 12 minutes left", () => {
+    same(g, T0 + 38 * MIN)
+  })
+  it('still matches where Bomba drops a normal ping (pings every 3 min, 11:30 left)', () => {
+    same(game({ settings: { ...g.settings, pingMin: 3 } }), T0 + 38.5 * MIN)
+  })
+  it('still matches past the mark when nobody has polled the reveal yet', () => {
+    same(g, T0 + 41 * MIN)
+  })
+})
+
 describe('deck and slot', () => {
   it("shows how many cards are left in my side's deck", () => {
     const v = view(aina, { game: { ...g, runner_sets: 1, runner_draws: 2 } })

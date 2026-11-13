@@ -50,6 +50,42 @@ describe('pingTimes', () => {
   })
 })
 
+describe("pingTimes with Bomba (endgame design §6.3)", () => {
+  const bomba = { kind: 'bomba' as const, revealedAt: null, wanted: null, bountyAt: null }
+  const END = T0 + 50 * MIN
+  const left = (min: number) => END - min * MIN
+  const closed = (fromMs: number, toMs: number) => ({ from: iso(fromMs), to: iso(toMs) })
+
+  it('keeps the normal pings up to the 10-minute mark, then pings at 8, 6, 5, 4, 3, 2 and the last call at 1', () => {
+    const t = pingTimes(game({ endgame: bomba }))
+    // The 10-minute ping stays: its alert at 10:45 left comes before the mark.
+    expect(t.map((p) => p.revealAt)).toEqual([40, 35, 30, 25, 20, 15, 10, 8, 6, 5, 4, 3, 2, 1].map(left))
+    expect(t.map((p) => p.seq)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])
+    expect(t.every((p) => p.alertAt === p.revealAt - SCHEDULED_ALERT_LEAD_MS)).toBe(true)
+    expect(t.filter((p) => p.lastCall)).toEqual([{ seq: 14, alertAt: left(1) - SCHEDULED_ALERT_LEAD_MS, revealAt: left(1), lastCall: true }])
+  })
+  it('drops every normal ping that alerts after the 10-minute mark', () => {
+    const t = pingTimes(game({ endgame: bomba, settings: { ...game().settings, pingMin: 3 } }))
+    const normal = t.slice(0, t.length - 7)
+    expect(normal.every((p) => p.alertAt < left(10))).toBe(true)
+    // Pings at 42, 39, ..., 12 left; the one at 9 left (alert 9:45) is gone.
+    expect(normal.at(-1)!.revealAt).toBe(left(12))
+    expect(t.slice(-7).map((p) => p.revealAt)).toEqual([8, 6, 5, 4, 3, 2, 1].map(left))
+    expect(t.slice(-7)[0]!.seq).toBe(normal.at(-1)!.seq + 1)
+  })
+  it('a pause moves every Bomba time later by its length', () => {
+    const paused = pingTimes(game({ endgame: bomba, pauses: [closed(left(20), left(20) + 2 * MIN)] }))
+    expect(paused.slice(-7).map((p) => p.revealAt)).toEqual([8, 6, 5, 4, 3, 2, 1].map((m) => left(m) + 2 * MIN))
+    expect(paused.slice(-7).map((p) => p.alertAt)).toEqual([8, 6, 5, 4, 3, 2, 1].map((m) => left(m) + 2 * MIN - SCHEDULED_ALERT_LEAD_MS))
+  })
+  it('PKP and Hang Hebat keep the normal schedule', () => {
+    for (const kind of ['pkp', 'hebat'] as const) {
+      expect(pingTimes(game({ endgame: { ...bomba, kind } }))).toEqual(pingTimes(game({ endgame: null })))
+    }
+    expect(pingTimes(game({ endgame: null }))).toEqual(pingTimes(g))
+  })
+})
+
 describe('dueWork', () => {
   it('has nothing to do in the lobby', () => {
     expect(dueWork(game({ started_at: null }), [], T0)).toEqual({ alert: [], reveal: [], end: false })

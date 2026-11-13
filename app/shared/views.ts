@@ -1,6 +1,7 @@
 import { alertLeadFor, checkedIn, checkinsSince, countedCheckIn, countRestartAt, fairlyWarned } from './checkins.js'
 import { alertsFrom, type Alert, type ReportReason } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
+import { maskEndgame } from './endgame.js'
 import { distanceM, fuzz, hash, offset } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { isTicked, kitOf, packItems, placeItems, SECRET_PLACE_IDS, type KitItem, type PlaceItem, type SecretLetters } from './kit.js'
@@ -1077,7 +1078,10 @@ export function viewFor(i: ViewInput): View {
   return v
 }
 
-function fullView(i: ViewInput): View {
+function fullView(input: ViewInput): View {
+  // The endgame stays hidden from every view, the organiser's too, until it is revealed: every helper below reads
+  // this masked game, so no ping time, banner or feed line can give it away early.
+  const i: ViewInput = { ...input, game: maskEndgame(input.game) }
   const { phase, endsAt } = phaseAt(i.game, i.now)
   const byId = new Map(i.players.map((p) => [p.id, p]))
   const role = i.me.role
