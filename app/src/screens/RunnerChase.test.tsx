@@ -55,7 +55,7 @@ describe('RunnerChase: Mak Kau Hijau and the new hint zones (Plan E2)', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Tap the green' })))
     expect(call).toHaveBeenCalledTimes(1)
     expect(call).toHaveBeenCalledWith('touchGreen', { code: 'ABC234', token: 't1', lat: 3.1, lng: 101.6, accuracy_m: 9 })
-    expect(screen.getByText('Safe! You touched green. The Kejar can see where you tapped.')).toBeInTheDocument()
+    expect(screen.getByText('You touched green. The Kejar can see where you tapped.')).toBeInTheDocument()
     here.coords = {}
   })
 

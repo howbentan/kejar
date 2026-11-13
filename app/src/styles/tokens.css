@@ -370,10 +370,7 @@ select.input option { background: #141614; color: var(--white); }
 }
 .hijau-pill:active:not(:disabled) { transform: translateY(2px); }
 .hijau-pill:disabled { cursor: default; opacity: 0.6; }
-.hijau-tick {
-  appearance: none; width: min(64vw, 240px); aspect-ratio: 1; border-radius: 50%; border: 6px solid var(--black);
-  background: var(--hijau-1); display: grid; place-items: center;
-}
+.hijau-stamp { padding: 30px 20px; }
 .hijau-safe-line { margin: 0; font-size: 16px; font-weight: 700; max-width: 300px; }
 
 /* Penjara locked after Mak Kau Hijau: a dark pill with a deep-green edge and the countdown in green mono. */
@@ -702,4 +699,3 @@ select.input option { background: #141614; color: var(--white); }
 /* "Mak Kau Hijau" is the longest name: a size smaller so it stays on one line and the effect line fits. */
 .power-card.legendary.hijau .pc-name { font-size: 11px; white-space: nowrap; }
 .power-card.big.legendary.hijau .pc-name { font-size: 18px; }
-.bold-tick { width: 64%; height: 64%; overflow: visible; }

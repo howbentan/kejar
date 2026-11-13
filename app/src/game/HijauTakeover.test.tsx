@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { testView } from '../screens/testView'
 import HijauTakeover, { SAFE_MS } from './HijauTakeover'
 
-const SAFE_LINE = 'Safe! You touched green. The Kejar can see where you tapped.'
+const SAFE_LINE = 'You touched green. The Kejar can see where you tapped.'
 
 // Fake timers and a fixed Date.now for every test: the countdown ticks off `useServerNow`'s 1 s interval, so a slow
 // run on real timers could shift the value under an assertion.
@@ -65,7 +65,8 @@ describe('HijauTakeover (new power-ups §6.3, tap screen A)', () => {
     await act(async () => resolve({ ok: true }))
     expect(screen.getByText(SAFE_LINE)).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'safe!' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Tapped' })).toBeDisabled()
+    expect(screen.getByText('safe!', { selector: '.stamp' })).toBeInTheDocument()
+    expect(screen.queryByRole('button')).toBeNull()
     // The next poll says tapped: the Safe line still stays up for its moment.
     rerender(<HijauTakeover view={running({ tapped: true })} onTap={onTap} />)
     expect(screen.getByText(SAFE_LINE)).toBeInTheDocument()

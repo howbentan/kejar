@@ -1,7 +1,7 @@
 import Marker from './Marker'
 import Sticker from './Sticker'
+import Stamp from './Stamp'
 import * as m from 'motion/react-m'
-import { useReducedMotion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { HIJAU_MS } from '../../shared/hijau.js'
 import type { View } from '../../shared/views.js'
@@ -55,7 +55,7 @@ export default function HijauTakeover({ view, onTap }: { view: View; onTap: () =
   nowRef.current = now
   const button = useRef<HTMLButtonElement>(null)
   const title = useRef<HTMLHeadingElement>(null)
-  const safeTitle = useRef<HTMLHeadingElement>(null)
+  const safeTitle = useRef<HTMLDivElement>(null)
 
   // Hidden once tapped, by the server's word or by this phone's own `ok` (a slow poll may still say not tapped).
   const showing = !!run && !run.tapped && safeRun !== run.claimedAt && now >= run.startsAt
@@ -98,15 +98,13 @@ export default function HijauTakeover({ view, onTap }: { view: View; onTap: () =
     return (
       <div className="hijau-takeover" role="alertdialog" aria-modal="true" aria-label="Mak kau hijau!">
         <p className="eyebrow">MAK KAU HIJAU · LEGENDARY</p>
-        <h1 ref={safeTitle} className="hijau-title">
-          safe!
-        </h1>
-        <button type="button" className="hijau-tick" disabled aria-label="Tapped">
-          <BoldTick />
-        </button>
+        {/* The same stamp as the catch's dikejar! moment, on the good side (owner's pick). */}
+        <div ref={safeTitle} className="catch-stamp hijau-stamp" role="heading" aria-level={1} aria-label="safe!">
+          <Stamp text="safe!" plate />
+        </div>
         <Marker marks={[{ shape: 'stars', target: safeTitle }]} colour="black" delayMs={300} />
         <p role="status" className="hijau-safe-line">
-          Safe! You touched green. The Kejar can see where you tapped.
+          You touched green. The Kejar can see where you tapped.
         </p>
       </div>
     )
@@ -150,29 +148,5 @@ export default function HijauTakeover({ view, onTap }: { view: View; onTap: () =
         delayMs={150}
       />
     </m.div>
-  )
-}
-
-/**
- * The owner's hand-drawn tick, traced from their sketch: a short, slightly wobbly down-stroke and a long sweep up,
- * thick black marker with round ends. Draws itself in once; still under reduced motion.
- */
-function BoldTick() {
-  const reduce = useReducedMotion()
-  const d = 'M142 222 C156 262 166 290 186 326 C206 362 228 412 252 464 C300 408 356 338 410 264 C466 186 524 104 584 22'
-  return (
-    <svg className="bold-tick" viewBox="100 0 520 500" aria-hidden="true">
-      <m.path
-        d={d}
-        fill="none"
-        stroke="#0A0A0B"
-        strokeWidth={50}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        initial={reduce ? false : { pathLength: 0 }}
-        animate={{ pathLength: 1 }}
-        transition={reduce ? { duration: 0 } : { duration: 0.45, ease: 'easeOut' }}
-      />
-    </svg>
   )
 }
