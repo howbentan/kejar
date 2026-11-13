@@ -24,6 +24,7 @@ const REFUSALS: Record<string, string> = {
   'not-chasing': 'Settle works during the chase',
   paused: 'Game is paused',
   disqualified: "You're Luar Garisan, so you can't free anyone this round.",
+  'penjara-closed': 'Penjara is closed (PKP)',
 }
 
 /** "You", "You and Hafiz", "You, Hafiz and Wei". */
@@ -40,11 +41,14 @@ export default function SettlePanel({
   code,
   meId,
   settle,
+  closed = false,
   onSettled,
 }: {
   code: string
   meId: string
   settle: NonNullable<View['settle']>
+  /** PKP has closed Penjara (endgame design §9.1): Settle frees nobody, so it can't be scanned. */
+  closed?: boolean
   /** Fires once, only when this scan frees the holder themselves (not when it only frees others picked alongside them). */
   onSettled?: () => void
 }) {
@@ -124,8 +128,9 @@ export default function SettlePanel({
         <p className="muted">Nobody else is in Penjara.</p>
       )}
       <p className="muted" style={{ fontSize: 12 }}>{`${picked.length} of ${MAX_PICKS} picked`}</p>
+      {closed && !done && <p className="muted">Penjara is closed (PKP)</p>}
       {!done && (
-        <button type="button" className="btn btn-legendary" disabled={!ready || busy} onClick={() => setScanning(true)}>
+        <button type="button" className="btn btn-legendary" disabled={!ready || busy || closed} onClick={() => setScanning(true)}>
           Scan Penjara to settle
         </button>
       )}

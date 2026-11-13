@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, type ReactNode } from 'react'
 import { useReducedMotion } from 'motion/react'
 import type { SceneId } from '../../../shared/howToPlay.js'
 import type { PowerUpKind } from '../../../shared/types.js'
+import EndgameLogo from '../EndgameLogo'
 import Sticker from '../Sticker'
 
 /**
@@ -140,6 +141,9 @@ const MARKUP = {
       <path d="M130 88 h10 v10 h-10z M160 88 h10 v10 h-10z M130 106 h10 v10 h-10z M148 110 h6 M160 106 h10" ${T}/>
       ${fig(84, 182, 'phone', { band: true, phone: true })}<path d="M96 150 C108 140 116 124 122 112" stroke-dasharray="4 6"/>
       ${burst(150, 102, 34, 44, 9, 0.2)}`,
+  // The endgame: one big question mark, drawn over the four logos (the scene puts them behind it), never naming one.
+  mystery: `<path d="M76 76 C74 46 92 34 108 34 C128 34 140 48 138 66 C136 84 112 88 108 104 L106 126" class="w thick mystery"/>
+      <circle cx="106" cy="152" r="7" ${F}/>${burst(106, 92, 70, 80, 10, 0.3)}`,
 }
 
 const SCENE_MARKUP: Record<SceneId, keyof typeof MARKUP> = {
@@ -156,8 +160,7 @@ const SCENE_MARKUP: Record<SceneId, keyof typeof MARKUP> = {
   snapshot: 'snap',
   'stop-rescue': 'stop',
   'chaser-powerups': 'station',
-  // Placeholder until Task 8 draws the endgame scene.
-  endgame: 'station',
+  endgame: 'mystery',
 }
 
 /** Turn a scene's markup into shapes, once per scene. */
@@ -231,6 +234,16 @@ export function Scene({ id, stickers }: { id: SceneId; stickers?: PowerUpKind[] 
 
   return (
     <div data-scene={id} data-stickers={stickers?.join(',')} style={{ position: 'relative', width: 220, height: 220 }}>
+      {/* The four endgame logos, small and faded behind the question mark: something's coming, but not which. */}
+      {id === 'endgame' && (
+        <div className="kd-endgames" aria-hidden="true">
+          {(['bomba', 'hebat', 'pkp', 'banjir'] as const).map((k, i) => (
+            <span key={k}>
+              <EndgameLogo kind={k} size={56} tilt={i % 2 ? 6 : -6} />
+            </span>
+          ))}
+        </div>
+      )}
       <svg className="kd-doodle" viewBox="0 0 210 210" width={220} height={220} aria-hidden="true" filter={`url(#${fid})`} style={{ overflow: 'visible' }}>
         <defs>
           <filter id={fid} x="-10%" y="-10%" width="120%" height="120%">

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import EndgameTakeover from '../game/EndgameTakeover'
 import { loadOrganiserSession } from '../game/organiserSession'
 import { shouldPlay } from '../game/moments'
 import { loadSession } from '../game/session'
@@ -90,7 +91,15 @@ export default function GameScreen({ code }: { code: string }) {
   if (!current || entering) return <GameLoading code={code} error={error} leaving={!!current} onLeft={() => setEntering(false)} />
   if (current.me.removed_at) return <Removed />
   if (current.phase === 'lobby') return <Lobby code={code} view={current} refresh={refresh} />
-  if (current.me.role === 'marshal') return <MarshalLive code={code} view={current} refresh={refresh} />
+  // The endgame's reveal goes over every chase screen, marshals' too (endgame design §6.4); never over the results.
+  const takeover = current.phase === 'chasing' && current.endgame ? <EndgameTakeover code={code} view={current} /> : null
+  if (current.me.role === 'marshal')
+    return (
+      <>
+        <MarshalLive code={code} view={current} refresh={refresh} />
+        {takeover}
+      </>
+    )
   if (current.phase === 'ended') return <Results code={code} view={current} isHost={current.me.id === 'host'} />
 
   // Runners and chasers: their screen, with the Help and SOS icon in the same corner on every one.
@@ -105,6 +114,7 @@ export default function GameScreen({ code }: { code: string }) {
   return (
     <>
       {screen}
+      {takeover}
       <SosIcon code={code} view={current} />
     </>
   )

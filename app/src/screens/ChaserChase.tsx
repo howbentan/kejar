@@ -5,6 +5,7 @@ import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
 import CatchMoment from '../game/CatchMoment'
 import ChaseLayout from '../game/ChaseLayout'
+import { EndgameStatus } from '../game/EndgameChip'
 import { dipFor } from '../game/LuckyDip'
 import PowerUpHand, { claimMessage, stashMessage, type ClaimResult } from '../game/PowerUpHand'
 import { clock, useServerNow } from '../game/time'
@@ -83,6 +84,7 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
       title={`KEJAR · ${view.me.name.toUpperCase()}`}
       chips={
         <>
+          <EndgameStatus view={view} />
           {chip && <span className="chip mono">{chip}</span>}
           {/* From a scheduled alert until that ping reveals (checkins design §5.4); it says what, never how long. */}
           {view.snapshotted && <span className="chip snap">SNAPSHOT TAKEN</span>}

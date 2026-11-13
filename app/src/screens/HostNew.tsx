@@ -7,6 +7,7 @@ import { call } from '../game/api'
 import { loadOrganiserSession } from '../game/organiserSession'
 import PlaceMap from '../game/PlaceMap'
 import SetupSteps from '../game/SetupSteps'
+import EndgameLogo, { ENDGAME_COPY } from '../game/EndgameLogo'
 import Sticker from '../game/Sticker'
 import type { StickerKind } from '../game/stickerArt'
 import { ErrorText, Pills, Screen } from '../game/ui'
@@ -167,6 +168,41 @@ function Legendary(props: { side: 'runner' | 'chaser'; title: ReactNode; seg: Re
   )
 }
 
+type Switches = NonNullable<Settings['endgames']>
+
+/**
+ * One endgame's switch (endgame design §6.1): its logo and name in its colour, and an Off / On choice. Banjir Kilat
+ * isn't built yet, so its row says "Coming soon" and stays off.
+ */
+function EndgameRow(props: { kind: keyof Switches; value: 'on' | 'off'; onChange: (v: 'on' | 'off') => void }) {
+  const copy = ENDGAME_COPY[props.kind]
+  const soon = props.kind === 'banjir'
+  return (
+    <div
+      data-endgame={props.kind}
+      style={{ borderRadius: 14, padding: '8px 11px', border: '1.5px solid rgba(245,245,243,.18)', display: 'flex', alignItems: 'center', gap: 10, opacity: soon ? 0.6 : 1 }}
+    >
+      <EndgameLogo kind={props.kind} size={36} tilt={-4} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <b style={{ fontSize: 15, color: copy.colour }}>{copy.name}</b>
+        {soon && <small style={{ display: 'block', font: '500 9px var(--mono)', letterSpacing: '0.12em' }}>Coming soon</small>}
+      </div>
+      <div style={{ width: 132, flex: 'none' }}>
+        <Seg<'off' | 'on'>
+          label={copy.name}
+          value={props.value}
+          options={[
+            { value: 'off', text: 'Off' },
+            { value: 'on', text: 'On', disabled: soon },
+          ]}
+          onChange={props.onChange}
+          on={{ background: copy.colour, color: copy.ink }}
+        />
+      </div>
+    </div>
+  )
+}
+
 export default function HostNew() {
   // All the wizard's state lives here, so going Back loses nothing.
   const [step, setStep] = useState<1 | 2 | 3>(1)
@@ -195,6 +231,7 @@ export default function HostNew() {
   // Set the moment Create game is pressed, so a quick double tap can't make two games.
   const creating = useRef(false)
   const set = (patch: Partial<Settings>) => setSettings((s) => ({ ...s, ...patch }))
+  const endgames: Switches = settings.endgames ?? { bomba: 'off', hebat: 'off', pkp: 'off', banjir: 'off' }
   const organiser = loadOrganiserSession(localStorage)
   const organiserToken = organiser?.organiserToken
   const chosen = parks?.find((p) => p.id === chosenId) ?? null
@@ -662,9 +699,18 @@ export default function HostNew() {
                 />
               </div>
             </>
-          ) : (
-            <p className="muted">No extra settings in Core.</p>
-          )}
+          ) : null}
+
+          {label('ENDGAME · SECRET FROM PLAYERS')}
+          {/* Core only ever rolls Bomba, so only its switch shows there (endgame design §6.1). */}
+          {(settings.mode === 'full' ? (['bomba', 'hebat', 'pkp', 'banjir'] as const) : (['bomba'] as const)).map((kind) => (
+            <EndgameRow key={kind} kind={kind} value={endgames[kind]} onChange={(v) => set({ endgames: { ...endgames, [kind]: v } as Switches })} />
+          ))}
+          <p className="muted" style={{ fontSize: 12 }}>
+            {settings.mode === 'full'
+              ? "The app secretly picks one that's on. Even you find out when it happens."
+              : 'At 10 minutes left, Bomba speeds up the pings. Players find out when it happens.'}
+          </p>
 
           <ErrorText>{error}</ErrorText>
           {buttons(

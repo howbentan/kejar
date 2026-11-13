@@ -237,3 +237,37 @@ describe('Super Ring house arrest routing (new power-ups §6.2)', () => {
     expect(screen.getByRole('heading', { name: 'Bail revoked. To Penjara.' })).toBeInTheDocument()
   })
 })
+
+describe('GameScreen: the endgame takeover (endgame design §6.4)', () => {
+  const bomba = { kind: 'bomba' as const, revealedAt: 90_000, wanted: null, bountyCaught: false }
+  const base = testView()
+  it.each([
+    ['the runner chase', testView({ endgame: bomba })],
+    ['the chaser chase', testView({ endgame: bomba, me: { ...base.me, id: 'c1', role: 'chaser', tag_id: null } })],
+    ['Penjara', testView({ endgame: bomba, me: { ...base.me, jailed: true } })],
+    ['house arrest', testView({ endgame: bomba, arrest: { endsAt: 160_000, center: { lat: 3, lng: 101 }, openBy: null } })],
+    ['the marshal', testView({ endgame: bomba, me: { ...base.me, id: 'm1', role: 'marshal', tag_id: null } })],
+  ])('goes over %s', (_, v) => {
+    state.view = v
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByRole('alertdialog', { name: 'bomba!' })).toBeInTheDocument()
+  })
+
+  it('not on the results screen', () => {
+    state.view = testView({
+      phase: 'ended',
+      endgame: bomba,
+      results: { winner: 'runners', survivors: [], longestSurvivor: null, mostCatches: null, jailbreakHero: null },
+    })
+    render(<GameScreen code="ABC234" />)
+    expect(screen.queryByRole('alertdialog', { name: 'bomba!' })).toBeNull()
+  })
+
+  it('the chase screen carries the chip once it is revealed', () => {
+    localStorage.setItem('kejar:endgame-seen:ABC234', '1')
+    state.view = testView({ endgame: bomba })
+    render(<GameScreen code="ABC234" />)
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    expect(screen.getByRole('button', { name: /Bomba/ })).toBeInTheDocument()
+  })
+})

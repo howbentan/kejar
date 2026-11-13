@@ -178,6 +178,42 @@ describe('GameMap', () => {
     expect(created.data.points).toMatchObject({ features: [{ properties: { revealedBy: 'focus' } }] })
   })
 
+  it("Bomba's last call draws like an exact dot, with a red ring", () => {
+    created.layers = []
+    created.data = {}
+    const dots = [{ id: 'r1', kind: 'runner' as const, lat: 3.1, lng: 101.1, at: '', revealedBy: 'lastcall' as const }]
+    render(<GameMap arena={arena} dots={dots} />)
+    created.load!()
+    const ids = created.layers.map((l) => l.id)
+    expect(ids.indexOf('lastcall-reveal-ring')).toBeGreaterThan(ids.indexOf('points'))
+    const ring = created.layers.find((l) => l.id === 'lastcall-reveal-ring') as unknown as { filter: unknown; paint: Record<string, unknown> }
+    expect(ring.filter).toEqual(['==', ['get', 'revealedBy'], 'lastcall'])
+    expect(ring.paint['circle-stroke-color']).toBe('#E63946')
+    expect(created.data.points).toMatchObject({ features: [{ properties: { revealedBy: 'lastcall' } }] })
+  })
+
+  it("Hang Hebat's wanted runner gets a cream ring and a poster pin, as a circle or as a dot", () => {
+    created.layers = []
+    created.data = {}
+    const dots = [
+      { id: 'r1', kind: 'runner' as const, lat: 3.1, lng: 101.1, at: '', revealedBy: null, fuzzy: true, wanted: true as const },
+      { id: 'r2', kind: 'runner' as const, lat: 3.2, lng: 101.2, at: '', revealedBy: null, fuzzy: true },
+    ]
+    const { rerender } = render(<GameMap arena={arena} dots={dots} />)
+    created.load!()
+    const ids = created.layers.map((l) => l.id)
+    expect(ids).toEqual(expect.arrayContaining(['wanted-fuzzy-ring', 'wanted-ring', 'wanted-pin', 'wanted-pin-label']))
+    const ring = created.layers.find((l) => l.id === 'wanted-fuzzy-ring') as unknown as { filter: unknown; paint: Record<string, unknown> }
+    expect(ring.filter).toEqual(['get', 'wanted'])
+    expect(ring.paint['line-color']).toBe('#F1E3C3')
+    expect(created.data.fuzzy).toMatchObject({ features: [{ properties: { wanted: true } }, { properties: { wanted: false } }] })
+    expect(created.data.wanted).toMatchObject({ features: [{ geometry: { coordinates: [101.1, 3.1] } }] })
+    rerender(<GameMap arena={arena} dots={[{ ...dots[0], fuzzy: false }]} />)
+    expect(created.data.points).toMatchObject({ features: [{ properties: { wanted: true } }] })
+    rerender(<GameMap arena={arena} dots={[dots[1]]} />)
+    expect(created.data.wanted).toMatchObject({ features: [] })
+  })
+
   it('draws a toll gate pin from tollGates, in its own layer above the players, and follows the prop', () => {
     created.layers = []
     created.data = {}

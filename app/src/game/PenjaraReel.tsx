@@ -42,6 +42,7 @@ const REFUSALS: Record<string, string> = {
   'not-chasing': 'The reel works during the chase.',
   paused: 'Game is paused',
   disqualified: "You're Luar Garisan, so the reel is closed to you.",
+  'penjara-closed': 'Penjara is closed (PKP)',
 }
 
 /** The ten slots: one lime (none once the escape is used), the rest black. */
@@ -57,11 +58,14 @@ export default function PenjaraReel({
   code,
   freedOnce,
   reel,
+  closed = false,
 }: {
   code: string
   /** The escape is used: the reel is all black. */
   freedOnce: boolean
   reel: NonNullable<View['reel']>
+  /** PKP has closed Penjara (endgame design §9.1): the reel is greyed out and the lever can't be pulled. */
+  closed?: boolean
 }) {
   const reduce = useReducedMotion()
   const [phase, setPhase] = useState<Phase>(reel.pulled ? 'landed' : 'idle')
@@ -79,6 +83,8 @@ export default function PenjaraReel({
   const swallowClick = useRef(false)
   const stop = useRef<(() => void) | null>(null)
   const spent = phase !== 'idle'
+  // Closed works like spent: nothing to pull (the server says penjara-closed anyway).
+  const locked = spent || closed
   // Frozen at mount: a free pull sets freed_once on the next poll, which must not repaint the winning card black.
   const [wasFreedOnce] = useState(freedOnce)
   const slots = slotsFor(wasFreedOnce)
@@ -144,7 +150,7 @@ export default function PenjaraReel({
   }
 
   async function pull() {
-    if (busy || spent) return
+    if (busy || locked) return
     setBusy(true)
     setError('')
     setTapDown(true)
@@ -177,7 +183,7 @@ export default function PenjaraReel({
   }
 
   const down = (e: ReactPointerEvent<HTMLButtonElement>) => {
-    if (busy || spent) return
+    if (busy || locked) return
     drag.current = { startY: e.clientY, moved: false }
     e.currentTarget.setPointerCapture?.(e.pointerId)
   }
@@ -215,7 +221,7 @@ export default function PenjaraReel({
   }
 
   return (
-    <div className={`reel-machine${shake ? ' shake' : ''}`}>
+    <div className={`reel-machine${shake ? ' shake' : ''}${closed ? ' closed' : ''}`}>
       <div className="reel-top">
         <p className="eyebrow">PENJARA</p>
         <button type="button" className="reel-mute" onClick={toggleMute}>
@@ -237,7 +243,7 @@ export default function PenjaraReel({
         type="button"
         className={`reel-lever${spent ? ' spent' : ''}`}
         aria-label="Pull the lever"
-        disabled={busy || spent}
+        disabled={busy || locked}
         onPointerDown={down}
         onPointerMove={move}
         onPointerUp={up}
@@ -256,7 +262,7 @@ export default function PenjaraReel({
           </i>
         </span>
       </button>
-      <p className="reel-hint">{spent ? 'ONE PULL PER STAY' : 'PULL THE LEVER DOWN ↓'}</p>
+      <p className="reel-hint">{closed && !spent ? 'PENJARA IS CLOSED (PKP)' : spent ? 'ONE PULL PER STAY' : 'PULL THE LEVER DOWN ↓'}</p>
       {phase === 'landed' && result === 'black' && (
         <div role="status" className="reel-out">
           <p>Not this time. Wait for a rescue.</p>

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { View } from '../../shared/views.js'
 import { call } from '../game/api'
 import { credentials } from '../game/auth'
+import { EndgameStatus } from '../game/EndgameChip'
 import GameMap from '../game/Map'
 import MarshalTools from '../game/MarshalTools'
 import PingRipple from '../game/PingRipple'
@@ -54,6 +55,11 @@ export default function MarshalLive({ code, view, refresh }: { code: string; vie
           {view.counts.chasers} Kejar
         </span>
       </div>
+      {view.endgame && (
+        <div style={{ display: 'flex' }}>
+          <EndgameStatus view={view} />
+        </div>
+      )}
       <RescueBanner view={view} />
       <PingRipple role="marshal" lastRevealAt={view.lastRevealAt} now={now} />
       <GameMap arena={view.arena} dots={view.dots} stations={view.stations} pins={pins} height={340} />

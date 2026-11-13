@@ -53,6 +53,16 @@ export type { SecretTone }
 const toneColours = (tone: SecretTone) =>
   tone === 'purple' ? legendaryPurple() : tone === 'orange' ? legendaryOrange() : tone === 'green' ? legendaryGreen() : legendaryYellow()
 
+/**
+ * The endgames' map colours (endgame design §6.4, §7.4, §8.3): Bomba's red for the last call, Hang Hebat's poster cream
+ * and brown for the wanted runner. Read from tokens.css --bomba, --hebat and --hebat-ink; the fallbacks must change with them.
+ */
+function endgameColours() {
+  const css = typeof document === 'undefined' ? null : getComputedStyle(document.documentElement)
+  const token = (name: string, fallback: string) => css?.getPropertyValue(name).trim() || fallback
+  return { bomba: token('--bomba', '#E63946'), hebat: token('--hebat', '#F1E3C3'), hebatInk: token('--hebat-ink', '#3A2410') }
+}
+
 type Feature = GeoFeature<Geometry, Record<string, unknown>>
 const collection = (features: Feature[]): FeatureCollection => ({ type: 'FeatureCollection', features })
 
@@ -64,23 +74,26 @@ function ring(points: { lat: number; lng: number }[]): number[][] {
 function dotFeatures(dots: MapDot[], origin: LatLng | null = null) {
   const fuzzy: Feature[] = []
   const points: Feature[] = []
+  // Hang Hebat's poster pin sits on the wanted runner's circle or dot, whichever it is.
+  const wanted: Feature[] = []
   for (const d of dots) {
+    if (d.wanted) wanted.push({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [d.lng, d.lat] } })
     if (d.fuzzy) {
       fuzzy.push({
         type: 'Feature',
         // `dist` lets the ping ripple reveal each circle as its wave passes (motion design §8.1).
-        properties: { missed: !!d.missed, label: d.label ?? '', dist: origin ? distanceM(d, origin) : 0 },
+        properties: { missed: !!d.missed, label: d.label ?? '', dist: origin ? distanceM(d, origin) : 0, wanted: !!d.wanted },
         geometry: { type: 'Polygon', coordinates: [ring(circlePolygon(d, FUZZ_RADIUS_M))] },
       })
     } else {
       points.push({
         type: 'Feature',
-        properties: { kind: d.kind, label: d.label ?? '', revealedBy: d.revealedBy },
+        properties: { kind: d.kind, label: d.label ?? '', revealedBy: d.revealedBy, wanted: !!d.wanted },
         geometry: { type: 'Point', coordinates: [d.lng, d.lat] },
       })
     }
   }
-  return { fuzzy: collection(fuzzy), points: collection(points) }
+  return { fuzzy: collection(fuzzy), points: collection(points), wanted: collection(wanted) }
 }
 
 /** The game map: arena boundary, jail, and role dots (spec §9 colour + shape rules). */
@@ -493,9 +506,11 @@ export default function GameMap({
         layout: { 'text-field': ['get', 'n'], 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
         paint: { 'text-color': VOLT },
       })
-      const { fuzzy, points } = dotFeatures(latest.current)
+      const { fuzzy, points, wanted } = dotFeatures(latest.current)
       m.addSource('fuzzy', { type: 'geojson', data: fuzzy })
       m.addSource('points', { type: 'geojson', data: points })
+      m.addSource('wanted', { type: 'geojson', data: wanted })
+      const eg = endgameColours()
       m.addLayer({ id: 'fuzzy-fill', type: 'fill', source: 'fuzzy', paint: { 'fill-color': WHITE, 'fill-opacity': 0.12 } })
       m.addLayer({
         id: 'fuzzy-line',
@@ -558,6 +573,48 @@ export default function GameMap({
           'circle-stroke-color': legendaryGreen().main,
           'circle-stroke-width': 2,
         },
+      })
+      // Bomba's last call: every free runner shows exactly, so an exact dot with a thin red ring.
+      m.addLayer({
+        id: 'lastcall-reveal-ring',
+        type: 'circle',
+        source: 'points',
+        filter: ['==', ['get', 'revealedBy'], 'lastcall'],
+        paint: {
+          'circle-radius': 11,
+          'circle-color': 'rgba(0,0,0,0)',
+          'circle-stroke-color': eg.bomba,
+          'circle-stroke-width': 2,
+        },
+      })
+      // Hang Hebat's wanted runner: a thick cream ring round their ping circle, or round their dot when exact.
+      m.addLayer({
+        id: 'wanted-fuzzy-ring',
+        type: 'line',
+        source: 'fuzzy',
+        filter: ['get', 'wanted'],
+        paint: { 'line-color': eg.hebat, 'line-width': 3 },
+      })
+      m.addLayer({
+        id: 'wanted-ring',
+        type: 'circle',
+        source: 'points',
+        filter: ['get', 'wanted'],
+        paint: { 'circle-radius': 13, 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': eg.hebat, 'circle-stroke-width': 3 },
+      })
+      // ...and a small poster pin over it, so the Kejar know which one is the bounty (endgame design §8.3).
+      m.addLayer({
+        id: 'wanted-pin',
+        type: 'circle',
+        source: 'wanted',
+        paint: { 'circle-radius': 7, 'circle-color': eg.hebat, 'circle-stroke-color': eg.hebatInk, 'circle-stroke-width': 2, 'circle-translate': [0, -18] },
+      })
+      m.addLayer({
+        id: 'wanted-pin-label',
+        type: 'symbol',
+        source: 'wanted',
+        layout: { 'text-field': 'WANTED', 'text-font': ['Noto Sans Regular'], 'text-size': 9, 'text-offset': [0, -3.2], 'text-allow-overlap': true },
+        paint: { 'text-color': eg.hebatInk, 'text-halo-color': eg.hebat, 'text-halo-width': 2 },
       })
       // Tuch and Ga's reveal: a soft lime halo (Pak Guard's is a thin ring), so the two never look alike.
       m.addLayer({
@@ -731,9 +788,10 @@ export default function GameMap({
       const { dots: display, active } = slideTracker.current!.apply(dots, arena.jail, Date.now())
       latest.current = display
       // Keep each circle's distance from the last ripple, so a poll mid-wave doesn't reveal them all at once.
-      const { fuzzy, points } = dotFeatures(display, ripple?.origin ?? null)
+      const { fuzzy, points, wanted } = dotFeatures(display, ripple?.origin ?? null)
       ;(mp.getSource('fuzzy') as GeoJSONSource | undefined)?.setData(fuzzy)
       ;(mp.getSource('points') as GeoJSONSource | undefined)?.setData(points)
+      ;(mp.getSource('wanted') as GeoJSONSource | undefined)?.setData(wanted)
       // A just-jailed runner's dot is mid-slide: keep redrawing every frame until it either finishes or is
       // dropped (undone, or the window's over), instead of waiting for the next poll.
       if (active) frame = requestAnimationFrame(paint)
@@ -767,7 +825,13 @@ export default function GameMap({
     const maxM = Math.max(...corners.map(([x, y]) => distanceM(ripple.origin, mp.unproject([x, y]))))
     setRings({ x: o.x, y: o.y, r: maxPx, key: ripple.at })
     ;(mp.getSource('fuzzy') as GeoJSONSource | undefined)?.setData(dotFeatures(latest.current, ripple.origin).fuzzy)
-    const base: Record<string, unknown> = { 'fuzzy-fill': null, 'fuzzy-line': ['!', ['get', 'missed']], 'fuzzy-missed': ['get', 'missed'], labels: null }
+    const base: Record<string, unknown> = {
+      'fuzzy-fill': null,
+      'fuzzy-line': ['!', ['get', 'missed']],
+      'fuzzy-missed': ['get', 'missed'],
+      'wanted-fuzzy-ring': ['get', 'wanted'],
+      labels: null,
+    }
     const start = performance.now()
     let frame = 0
     const step = () => {

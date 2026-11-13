@@ -53,9 +53,21 @@ function PenjaraLock({ view }: { view: View }) {
   )
 }
 
+/** PKP is on (endgame design §9.1): Penjara is closed for good, so no rescue, reel or Settle until the end. */
+const pkpClosed = (view: View) => view.endgame?.kind === 'pkp'
+
+function PenjaraClosed({ view }: { view: View }) {
+  if (!pkpClosed(view)) return null
+  return (
+    <div role="status" className="penjara-closed">
+      Penjara is closed (PKP)
+    </div>
+  )
+}
+
 /** Dato Seri's holder in Penjara: Settle sits here, on the Penjara screen, where the Penjara code gets scanned. */
 function Settle({ code, view, onSettled }: { code: string; view: View; onSettled?: () => void }) {
-  return view.settle ? <SettlePanel code={code} meId={view.me.id} settle={view.settle} onSettled={onSettled} /> : null
+  return view.settle ? <SettlePanel code={code} meId={view.me.id} settle={view.settle} closed={pkpClosed(view)} onSettled={onSettled} /> : null
 }
 
 /** The auto-jailed variants: missed check-ins, Mak Kau Hijau's missed tap, or Super Ring's bail revoked. */
@@ -115,6 +127,7 @@ function AutoJailed({ code, view, reason = 'missed-checkins' }: { code: string; 
         {outForGood ? 'You were already freed once, so you stay in Penjara until the end. Watch the chase from here.' : lineFor(view.me.id, copy.lines)}
       </p>
       {reason === 'missed-checkins' && view.jailCheckins && view.jailCheckins.length > 0 && <CheckinRow checkins={view.jailCheckins} />}
+      {view.me.jailed && <PenjaraClosed view={view} />}
       {view.me.jailed && <PenjaraLock view={view} />}
       {view.me.jailed && !view.me.freed_once && <RescueBanner view={view} />}
       <PenjaraTicket
@@ -134,7 +147,7 @@ function AutoJailed({ code, view, reason = 'missed-checkins' }: { code: string; 
         <WalkThenWatch code={code} view={view} spectate />
       ) : view.me.jailed || holding ? (
         <>
-          <p className="muted">A free runner can still break you out, but only once.</p>
+          {!pkpClosed(view) && <p className="muted">A free runner can still break you out, but only once.</p>}
           <WalkThenWatch code={code} view={view} onDistance={setDistanceM} />
         </>
       ) : null}
@@ -178,7 +191,7 @@ function WalkThenWatch({
   return (
     <>
       {!arrived && <WalkGuide jail={view.arena.jail} arena={spectate ? undefined : view.arena} onArrived={onArrived} onLost={onLost} onDistance={onDistance} />}
-      {arrived && reel && <PenjaraReel code={code} freedOnce={view.me.freed_once} reel={reel} />}
+      {arrived && reel && <PenjaraReel code={code} freedOnce={view.me.freed_once} reel={reel} closed={pkpClosed(view)} />}
       {/* No GPS fix (none, denied, or none in 10 s): the spectator view, with the Penjara pin on it. */}
       {arrived || lost || spectate || !navigator.geolocation ? (
         <>
@@ -225,8 +238,11 @@ function Caught({ code, view }: { code: string; view: View }) {
       <p className="muted">
         {view.me.freed_once && view.me.jailed
           ? 'You’ve already been broken out once, so you stay in Penjara this time.'
-          : 'A free runner can still break you out, but only once. A marshal will give your tag back.'}
+          : pkpClosed(view) && view.me.jailed
+            ? 'Nobody gets out now, so you stay in Penjara till the whistle. A marshal will give your tag back.'
+            : 'A free runner can still break you out, but only once. A marshal will give your tag back.'}
       </p>
+      {view.me.jailed && <PenjaraClosed view={view} />}
       {view.me.jailed && <PenjaraLock view={view} />}
       {view.me.jailed && !view.me.freed_once && <RescueBanner view={view} />}
       <PenjaraTicket

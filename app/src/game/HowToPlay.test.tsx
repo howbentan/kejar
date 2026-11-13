@@ -46,6 +46,17 @@ describe('HowToPlay', () => {
     expect(p.onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('the endgame card shows the four logos, small, behind a question mark, and names none of them', () => {
+    setup({ endgame: true })
+    for (let i = 0; i < 7; i++) fireEvent.click(screen.getByRole('button', { name: 'Next card' }))
+    expect(screen.getByRole('heading')).toHaveTextContent('Endgame.')
+    const scene = document.querySelector('[data-scene="endgame"]') as HTMLElement
+    expect(scene.querySelectorAll('[data-endgame-logo]')).toHaveLength(4)
+    expect(scene.querySelector('[data-endgame-logo]')?.closest('[aria-hidden="true"]')).not.toBeNull()
+    expect(scene.querySelector('.kd-mystery')).not.toBeNull()
+    expect(screen.queryByRole('img', { name: /Bomba|Hang Hebat|PKP|Banjir/ })).toBeNull()
+  })
+
   it('calls onOpened once', () => {
     const p = setup()
     fireEvent.click(screen.getByRole('button', { name: 'Next card' }))

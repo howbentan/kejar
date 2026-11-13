@@ -225,7 +225,6 @@ describe('HostNew step 3, how long', () => {
     await toStep3()
     expect(screen.getByText('NEW GAME · STEP 3 OF 5')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'How long?' })).toBeInTheDocument()
-    expect(screen.getByText('No extra settings in Core.')).toBeInTheDocument()
     expect(screen.queryByText(/LEGENDARY CARDS/)).toBeNull()
     expect(screen.queryByRole('radio', { name: /Dikejar can see Kejar at check-in/ })).toBeNull()
     createGame()
@@ -334,6 +333,33 @@ describe('HostNew step 3, how long', () => {
     next()
     createGame()
     await waitFor(() => createdWith({ settings: expect.objectContaining({ mode: 'core', chaserSnapshot: false }) }))
+  })
+
+  it('Core shows only Bomba under the endgame, on by default, and sends it switched off', async () => {
+    render(<HostNew />)
+    await toStep3()
+    expect(screen.getByText('ENDGAME · SECRET FROM PLAYERS')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Bomba: On' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.queryByRole('radio', { name: /Hang Hebat|PKP|Banjir Kilat/ })).toBeNull()
+    fireEvent.click(screen.getByRole('radio', { name: 'Bomba: Off' }))
+    createGame()
+    await waitFor(() =>
+      createdWith({ settings: expect.objectContaining({ mode: 'core', endgames: { bomba: 'off', hebat: 'on', pkp: 'on', banjir: 'off' } }) }),
+    )
+  })
+
+  it('Full shows the endgame block after the legendaries, with Banjir Kilat coming soon', async () => {
+    render(<HostNew />)
+    await toStep3('Full')
+    const text = document.body.textContent ?? ''
+    expect(text.indexOf('ENDGAME · SECRET FROM PLAYERS')).toBeGreaterThan(text.indexOf('Kejar legendary'))
+    for (const name of ['Bomba', 'Hang Hebat', 'PKP']) expect(screen.getByRole('radio', { name: `${name}: On` })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'Banjir Kilat: On' })).toBeDisabled()
+    expect(screen.getByRole('radio', { name: 'Banjir Kilat: Off' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText('Coming soon')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('radio', { name: 'PKP: Off' }))
+    createGame()
+    await waitFor(() => createdWith({ settings: expect.objectContaining({ endgames: { bomba: 'on', hebat: 'on', pkp: 'off', banjir: 'off' } }) }))
   })
 
   it('has Back and Create game, and no Next', async () => {

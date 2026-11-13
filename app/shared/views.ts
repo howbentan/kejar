@@ -168,9 +168,10 @@ export interface View {
   snapshotted: boolean
   /**
    * The endgame once it is revealed (null before, on every role, and for a Hang Hebat with nobody wanted). Jailed
-   * runners get it live too: the takeover is a game event every player needs. `label` is the wanted runner's tag.
+   * runners get it live too: the takeover is a game event every player needs. `label` is the wanted runner's tag and
+   * `name` their name, both public from the reveal (the feed line names them too), for the wanted poster.
    */
-  endgame: { kind: EndgameKind; revealedAt: number; wanted: { id: string; label: string } | null; bountyCaught: boolean } | null
+  endgame: { kind: EndgameKind; revealedAt: number; wanted: { id: string; label: string; name: string } | null; bountyCaught: boolean } | null
   feed: FeedItem[]
   counts: { runnersFree: number; runnersJailed: number; runnersLuarGarisan: number; chasers: number }
   /** Everyone in the game: shown in the lobby and to marshals; empty for players mid-game. */
@@ -1278,11 +1279,11 @@ function fullView(input: ViewInput): View {
 function endgameFor(i: ViewInput, byId: Map<string, Player>): View['endgame'] {
   const e = i.game.endgame
   if (!e || !revealed(i.game)) return null
-  let wanted: { id: string; label: string } | null = null
+  let wanted: { id: string; label: string; name: string } | null = null
   if (e.kind === 'hebat') {
     const w = e.wanted ? byId.get(e.wanted) : undefined
     if (!w) return null
-    wanted = { id: w.id, label: tagLabel(w) }
+    wanted = { id: w.id, label: tagLabel(w), name: w.name }
   }
   return { kind: e.kind, revealedAt: Date.parse(e.revealedAt!), wanted, bountyCaught: !!e.bountyAt }
 }

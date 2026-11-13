@@ -360,3 +360,51 @@ describe('a rescue at Penjara (rules §9a)', () => {
     expect(screen.queryByText(/breaking you out/)).toBeNull()
   })
 })
+
+describe('Jail under PKP (endgame design §9.1)', () => {
+  const pkp = { kind: 'pkp' as const, revealedAt: 90_000, wanted: null, bountyCaught: false }
+  let arrive: (p: unknown) => void = () => {}
+  beforeEach(() => {
+    call.mockReset()
+    localStorage.setItem('kejar.game.ABC234', JSON.stringify({ token: 't1' }))
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: { watchPosition: (ok: (p: unknown) => void) => ((arrive = ok), 1), clearWatch: () => {} },
+    })
+  })
+  afterEach(() => {
+    localStorage.clear()
+    Object.defineProperty(navigator, 'geolocation', { configurable: true, value: undefined })
+  })
+
+  it('says Penjara is closed, and the reel is greyed out', () => {
+    render(<Jail code="ABC234" view={{ ...caught(60_000), endgame: pkp, reel: { pulled: false, result: null } }} />)
+    expect(screen.getByText('Penjara is closed (PKP)')).toBeInTheDocument()
+    act(() => arrive({ coords: { latitude: 3, longitude: 101 } }))
+    expect(screen.getByRole('button', { name: 'Pull the lever' })).toBeDisabled()
+  })
+
+  it('a pull the server turns down as penjara-closed says so', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'penjara-closed' })
+    // Revealed after this screen's last poll: the reel is still live until the next one.
+    render(<Jail code="ABC234" view={{ ...caught(60_000), reel: { pulled: false, result: null } }} />)
+    act(() => arrive({ coords: { latitude: 3, longitude: 101 } }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Pull the lever' })))
+    expect(await screen.findByText('Penjara is closed (PKP)')).toBeInTheDocument()
+  })
+
+  it("Settle shows the closed copy and can't be scanned", () => {
+    render(<Jail code="ABC234" view={{ ...caught(60_000), endgame: pkp, settle: { canFreeSelf: true, options: [] } }} />)
+    expect(screen.getByRole('button', { name: 'Scan Penjara to settle' })).toBeDisabled()
+    expect(screen.getAllByText('Penjara is closed (PKP)')).toHaveLength(2)
+  })
+
+  it('a Settle the server turns down as penjara-closed says so', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'penjara-closed' })
+    scanned.text = 'KEJAR:JAIL'
+    render(<Jail code="ABC234" view={{ ...caught(60_000), settle: { canFreeSelf: true, options: [] } }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Scan Penjara to settle' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'fake camera' })))
+    expect(await screen.findByText('Penjara is closed (PKP)')).toBeInTheDocument()
+  })
+})

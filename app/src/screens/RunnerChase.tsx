@@ -10,6 +10,7 @@ import { call } from '../game/api'
 import ChaseLayout from '../game/ChaseLayout'
 import { currentCoords } from '../game/here'
 import CheckinBanner from '../game/CheckinBanner'
+import { EndgameStatus } from '../game/EndgameChip'
 import HijauTakeover, { type TapResult } from '../game/HijauTakeover'
 import { dipFor } from '../game/LuckyDip'
 import PowerUpHand, { claimMessage, stashMessage, type ClaimResult } from '../game/PowerUpHand'
@@ -46,6 +47,7 @@ const BREAK_REJECTIONS: Record<string, string> = {
   paused: 'Game is paused',
   disqualified: "You're Luar Garisan, so you can't free anyone this round.",
   'try-again': 'Scan Penjara again',
+  'penjara-closed': 'Penjara is closed (PKP)',
 }
 
 /** What a Penjara scan answers: a rescue started or joined (rules §9a), or why not. */
@@ -172,6 +174,7 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
         title={`DIKEJAR ${tagOf(view)}`}
         chips={
           <>
+            <EndgameStatus view={view} />
             {checkin && !banner && (
               <span className="chip">{`Check in in ${clock(Math.max(0, checkin.alertAt - now))}`}</span>
             )}

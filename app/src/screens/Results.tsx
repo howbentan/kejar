@@ -1,7 +1,17 @@
 import type { View } from '../../shared/views.js'
+import { ENDGAME_COPY } from '../game/EndgameLogo'
 import { clock } from '../game/time'
 import { Screen, Wordmark } from '../game/ui'
 import PostGameFeedback from './PostGameFeedback'
+
+/** The endgame the game had, in its colour (endgame design §6.4); for Hang Hebat, whether the bounty was caught. */
+function EndgameLine({ view }: { view: View }) {
+  const e = view.endgame
+  if (!e) return null
+  const copy = ENDGAME_COPY[e.kind]
+  const text = e.kind === 'hebat' ? `Endgame: Hang Hebat. The bounty ${e.bountyCaught ? 'was caught' : 'got away'}.` : `Endgame: ${copy.name}.`
+  return <p style={{ color: copy.colour, fontWeight: 700 }}>{text}</p>
+}
 
 /** "Game over", who won, and the awards card. Shared with MarshalLive, where marshals and the organiser see it post-game. */
 export function ResultsSummary({ view }: { view: View }) {
@@ -26,6 +36,7 @@ export function ResultsSummary({ view }: { view: View }) {
           {r.survivors.length} Dikejar still free at the whistle.
         </p>
       )}
+      <EndgameLine view={view} />
       {awards.length > 0 && (
         <div className="card">
           {awards.map((a) => (

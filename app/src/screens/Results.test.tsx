@@ -53,3 +53,27 @@ describe('Results', () => {
     expect(screen.getByRole('button', { name: 'Report a player' })).toBeInTheDocument()
   })
 })
+
+describe('Results: the endgame (endgame design §6.4)', () => {
+  const ended = (endgame: ReturnType<typeof testView>['endgame'], winner: 'runners' | 'chasers') =>
+    testView({ phase: 'ended', roster, endgame, results: { winner, survivors: [], longestSurvivor: null, mostCatches: null, jailbreakHero: null } })
+
+  it('names the endgame in its colour', () => {
+    render(<Results code="ABC234" view={ended({ kind: 'bomba', revealedAt: 1, wanted: null, bountyCaught: false }, 'runners')} isHost={false} />)
+    expect(screen.getByText('Endgame: Bomba.')).toHaveStyle({ color: 'var(--bomba)' })
+  })
+
+  it('Hang Hebat says whether the bounty was caught', () => {
+    const wanted = { id: 'r1', label: '#07', name: 'Aina' }
+    const { unmount } = render(<Results code="ABC234" view={ended({ kind: 'hebat', revealedAt: 1, wanted, bountyCaught: true }, 'chasers')} isHost={false} />)
+    expect(screen.getByText('Endgame: Hang Hebat. The bounty was caught.')).toBeInTheDocument()
+    unmount()
+    render(<Results code="ABC234" view={ended({ kind: 'hebat', revealedAt: 1, wanted, bountyCaught: false }, 'runners')} isHost={false} />)
+    expect(screen.getByText('Endgame: Hang Hebat. The bounty got away.')).toBeInTheDocument()
+  })
+
+  it('no line for a game with no endgame', () => {
+    render(<Results code="ABC234" view={ended(null, 'runners')} isHost={false} />)
+    expect(screen.queryByText(/Endgame:/)).toBeNull()
+  })
+})

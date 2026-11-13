@@ -24,6 +24,13 @@
   --hijau-2: #3FA86B;
   --hijau-3: #1B6B3F;
   --hijau-ink: #06240F;
+  /* The endgames' own colours (endgame design §6.4), kept clear of the legendaries' yellow, orange, purple and green.
+     Map.tsx reads --bomba, --hebat and --hebat-ink for MapLibre, with these values as its fallbacks. */
+  --bomba: #E63946;
+  --hebat: #F1E3C3;
+  --hebat-ink: #3A2410;
+  --pkp: #FF5FA2;
+  --banjir: #3D8BFD;
   --black: #0A0A0B;
   --white: #F5F5F3;
   --dim: rgba(245, 245, 243, 0.55);
@@ -372,6 +379,65 @@ select.input option { background: #141614; color: var(--white); }
 .hijau-pill:disabled { cursor: default; opacity: 0.6; }
 .hijau-stamp { padding: 30px 20px; }
 .hijau-safe-line { margin: 0; font-size: 16px; font-weight: 700; max-width: 300px; }
+
+/* The endgame's reveal (endgame design §6.4): the Mak Kau Hijau takeover's shape, flat in the endgame's own colour
+   (set inline from ENDGAME_COPY), a black rule card and one black pill. */
+.endgame-takeover {
+  position: fixed; inset: 0; z-index: 57; overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  padding: 28px 20px calc(28px + env(safe-area-inset-bottom)); text-align: center;
+}
+.endgame-takeover > .eyebrow { color: inherit; opacity: 0.7; }
+.endgame-title { margin: 0; font: 800 48px var(--font); letter-spacing: -0.06em; line-height: 1; }
+.endgame-panel {
+  width: 100%; max-width: 420px; box-sizing: border-box; background: var(--black); color: var(--white); border-radius: 16px;
+  padding: 14px 16px; display: grid; gap: 6px; text-align: left;
+}
+.endgame-panel b { font-size: 15px; }
+.endgame-panel span { font-size: 13px; color: var(--dim); }
+.endgame-pill {
+  appearance: none; cursor: pointer; border: 0; border-radius: 999px; padding: 16px 22px; width: 100%; max-width: 420px;
+  background: var(--black); font: 800 18px var(--font); letter-spacing: -0.03em;
+}
+.endgame-pill:active { transform: translateY(2px); }
+/* The chip on the status row: tappable, though the row itself lets taps through to the map. */
+.chip.endgame-chip { pointer-events: auto; cursor: pointer; color: var(--white); border-width: 1.5px; padding-left: 4px; gap: 6px; }
+.chip.endgame-chip svg { flex: none; }
+.chip.endgame-chip b { font: 700 11px var(--font); }
+.chip.endgame-chip span { color: var(--dim); }
+/* What the chip opens: the rule card or the wanted poster, over a dimmed screen. */
+.endgame-sheet {
+  position: fixed; inset: 0; z-index: 56; background: rgba(10, 10, 11, 0.86); overflow-y: auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px 16px;
+}
+.endgame-card {
+  width: 100%; max-width: 360px; box-sizing: border-box; background: var(--black); border: 1.5px solid; border-radius: 20px;
+  padding: 18px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
+}
+.endgame-card-title { margin: 0; font: 800 36px var(--font); letter-spacing: -0.06em; line-height: 1; }
+.endgame-card .endgame-panel { background: #161618; }
+/* Hang Hebat's wanted poster: poster cream and brown ink, a little crooked, a hard shadow. */
+.wanted-poster {
+  position: relative; width: 100%; max-width: 300px; box-sizing: border-box; background: var(--hebat); color: var(--hebat-ink);
+  border-radius: 6px; padding: 18px 18px 16px; transform: rotate(-2deg); box-shadow: 0 6px 0 rgba(0, 0, 0, 0.5); text-align: center;
+}
+.wanted-poster p { margin: 0; }
+.wanted-big { font: 800 40px var(--font); letter-spacing: 0.04em; }
+.wanted-sub { margin-bottom: 10px !important; font: 600 11px var(--mono); letter-spacing: 0.2em; }
+.wanted-logo { display: flex; justify-content: center; margin: 6px 0; }
+.wanted-name { margin-top: 8px !important; font: 800 26px var(--font); }
+.wanted-line { font-size: 13px; }
+.wanted-reward { margin-top: 10px !important; font: 700 12px var(--mono); letter-spacing: 0.1em; }
+.wanted-caught { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; }
+/* Penjara closed under PKP: a dark pill with a pink edge, like the Mak Kau Hijau lock. */
+.penjara-closed {
+  align-self: flex-start; display: inline-flex; padding: 7px 14px; border-radius: 999px;
+  background: var(--black); border: 1.5px solid var(--pkp); color: var(--white); font: 600 13px var(--font);
+}
+.reel-machine.closed .reel-win, .reel-machine.closed .reel-lever { filter: grayscale(1); opacity: 0.4; }
+/* The endgame scene in how to play: the four logos, small and faded, behind a big question mark. */
+.kd-endgames { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(2, 64px); place-content: center; gap: 18px 34px; opacity: 0.4; }
+.kd-endgames > span { display: inline-flex; justify-content: center; }
 
 /* Penjara locked after Mak Kau Hijau: a dark pill with a deep-green edge and the countdown in green mono. */
 .penjara-lock {
