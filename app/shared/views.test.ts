@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { event, game, iso, MIN, ping, player, pos, T0 } from './fixtures.js'
 import { distanceM } from './geo.js'
-import { DEFAULT_SETTINGS, type Player, type Position, type PowerUp } from './types.js'
-import { BONUS_SEQ_BASE, SCHEDULED_ALERT_LEAD_MS } from './clock.js'
+import { DEFAULT_SETTINGS, type Game, type GameEvent, type Player, type Position, type PowerUp } from './types.js'
+import { BONUS_SEQ_BASE, pingTimes, SCHEDULED_ALERT_LEAD_MS } from './clock.js'
 import { CHASER_SNAPSHOT_FUZZ_M, LEGENDARY_ZONE_M, viewFor } from './views.js'
 
 const g = game()
@@ -1381,5 +1381,105 @@ describe("Super Ring's and Mak Kau Hijau's hint zones (Plan E2)", () => {
     const core = full({ settings: { ...DEFAULT_SETTINGS, mode: 'core' } })
     expect(view(aina, { game: core }).ringZone).toBeNull()
     expect(view(aina, { game: core }).hijauZone).toBeNull()
+  })
+})
+
+describe('what views carry once an endgame is revealed (Plan E3)', () => {
+  const endgameGame = (kind: 'bomba' | 'hebat' | 'pkp', over: Partial<NonNullable<Game['endgame']>> = {}) =>
+    game({ endgame: { kind, revealedAt: iso(T0 + 40 * MIN), wanted: null, bountyAt: null, ...over } })
+  const hebat = endgameGame('hebat', { wanted: 'r1' })
+  const everyone = [chaser, aina, hafiz, wei, siti]
+
+  it('is null at 10:01 left and set after the reveal, for a runner, a chaser, a marshal and the organiser', () => {
+    const before = { game: game({ endgame: { kind: 'bomba', revealedAt: null, wanted: null, bountyAt: null } }), now: T0 + 39.9 * MIN }
+    const after = { game: endgameGame('bomba'), now: T0 + 40.5 * MIN }
+    for (const me of [aina, chaser, siti, organiserMe]) {
+      expect(view(me, before).endgame).toBeNull()
+      expect(view(me, after).endgame).toEqual({ kind: 'bomba', revealedAt: T0 + 40 * MIN, wanted: null, bountyCaught: false })
+    }
+  })
+
+  it('carries the wanted runner and the bounty for a jailed runner too, and is null for a Hang Hebat with nobody wanted', () => {
+    const jailed = { ...hafiz, jailed: true }
+    const v = view(jailed, { game: endgameGame('hebat', { wanted: 'r1', bountyAt: iso(T0 + 42 * MIN) }), now: T0 + 43 * MIN })
+    expect(v.endgame).toMatchObject({ kind: 'hebat', wanted: { id: 'r1', label: '#07' }, bountyCaught: true })
+    expect(view(aina, { game: endgameGame('hebat'), now: T0 + 43 * MIN }).endgame).toBeNull()
+  })
+
+  it('a removed player gets none of it', () => {
+    expect(view({ ...aina, removed_at: iso(T0 + 41 * MIN) }, { game: endgameGame('bomba'), now: T0 + 42 * MIN }).endgame).toBeNull()
+  })
+
+  it("flags the wanted runner's dot for a chaser, a marshal and a spectator, and not for a free runner", () => {
+    const now = T0 + 41 * MIN
+    const spectator = { ...hafiz, jailed: true }
+    const roster = everyone.map((p) => (p.id === 'r2' ? spectator : p))
+    const wantedIn = (me: Player) => view(me, { game: hebat, now, players: roster }).dots.filter((d) => d.wanted).map((d) => d.id)
+    expect(wantedIn(chaser)).toEqual(['r1'])
+    expect(wantedIn(siti)).toEqual(['r1'])
+    expect(wantedIn(spectator)).toEqual(['r1'])
+    expect(wantedIn(wei)).toEqual([])
+    expect(view(chaser, { game: endgameGame('hebat'), now }).dots.some((d) => d.wanted)).toBe(false)
+  })
+
+  describe('the last call', () => {
+    const bomba = endgameGame('bomba')
+    const times = pingTimes(bomba)
+    const call = times.find((t) => t.lastCall)!
+    const lastPings = times.map((t) => ping(t.seq, t.revealAt))
+    const used = (kind: PowerUp['kind'], playerId: string, at: number): PowerUp => ({
+      id: `u-${kind}`, game_id: 'g1', player_id: playerId, kind, station: 1, claimed_at: iso(at - MIN), used_at: iso(at), consumed_at: null, sealed: false, taken_at: null, offer: null, twin_of: null, spot: null,
+    })
+    const at = { game: bomba, pings: lastPings, now: call.revealAt + 5_000 }
+    const spots = { ...positions, r1: [pos(A.lat, A.lng, call.revealAt - MIN)], r2: [pos(3.003, 101.003, call.revealAt - MIN)] }
+
+    it('shows a cloaked runner exactly, as lastcall', () => {
+      const v = view(chaser, { ...at, positions: spots, powerUps: [used('cloak', 'r1', call.revealAt - 0.5 * MIN)] })
+      expect(v.dots.find((d) => d.id === 'r1')).toMatchObject({ lat: A.lat, lng: A.lng, exact: true, revealedBy: 'lastcall' })
+      expect(v.dots.find((d) => d.id === 'r2')).toMatchObject({ exact: true, revealedBy: 'lastcall' })
+    })
+    it('still hides a runner under house arrest', () => {
+      const arrest = { firedAt: iso(T0), route: 'hijau' as const, by: null, center: null, startedAt: null, ringId: 'u1', catchEventId: null }
+      const v = view(chaser, { ...at, positions: spots, players: [chaser, { ...aina, arrest }, hafiz, wei, siti] })
+      expect(v.dots.find((d) => d.id === 'r1')).toBeUndefined()
+    })
+    it('keeps a Gostan decoy moving the dot, exact', () => {
+      const v = view(chaser, { ...at, positions: spots, powerUps: [used('decoy', 'r1', call.revealAt - 0.5 * MIN)] })
+      const dot = v.dots.find((d) => d.id === 'r1')!
+      expect(dot).toMatchObject({ exact: true, revealedBy: 'lastcall' })
+      expect(distanceM(dot, A)).toBeGreaterThan(1)
+    })
+    it('is plain fuzz at the ping before it', () => {
+      const earlier = times[times.length - 2]!
+      const v = view(chaser, { game: bomba, pings: lastPings.slice(0, -1), now: earlier.revealAt + 5_000, positions: { ...spots, r1: [pos(A.lat, A.lng, earlier.revealAt - MIN)] } })
+      expect(v.dots.find((d) => d.id === 'r1')).toMatchObject({ fuzzy: true, revealedBy: null })
+    })
+  })
+
+  describe('feed lines', () => {
+    const lines = (me: Player, events: GameEvent[], over: Partial<Parameters<typeof viewFor>[0]> = {}) => view(me, { events, now: T0 + 44 * MIN, ...over }).feed.map((f) => f.text)
+    it('says which endgame, for everyone', () => {
+      for (const me of [aina, chaser]) {
+        expect(lines(me, [event('endgame', T0 + 40 * MIN, { data: { kind: 'bomba' } })])).toContain('Endgame: Bomba.')
+        expect(lines(me, [event('endgame', T0 + 40 * MIN, { data: { kind: 'pkp' } })])).toContain('Endgame: PKP.')
+        expect(lines(me, [event('endgame', T0 + 40 * MIN, { target_id: 'r1', data: { kind: 'hebat', wanted: 'r1', who: '#07 Aina' } })])).toContain('Endgame: Hang Hebat. #07 Aina is wanted.')
+      }
+    })
+    it('says who is now wanted', () => {
+      expect(lines(chaser, [event('wanted', T0 + 42 * MIN, { target_id: 'r2', data: { who: '#12 Ravi' } })])).toContain('#12 Ravi is now wanted.')
+    })
+    it('calls the last call', () => {
+      const e = event('ping', T0 + 49 * MIN, { data: { seen: 2, missed: 0, lastCall: true } })
+      for (const me of [aina, chaser]) expect(lines(me, [e], { now: T0 + 49.5 * MIN })).toContain('Last call!')
+    })
+    it('words a Hang Hebat bounty whistle its own way', () => {
+      expect(lines(chaser, [event('final-whistle', T0 + 44 * MIN, { data: { cause: 'bounty' } })])).toContain('Hang Hebat caught! Final whistle in 60 s.')
+    })
+    it('drops the separate 5-left line in a revealed PKP game, but not otherwise', () => {
+      const five = event('five-left', T0 + 45 * MIN)
+      expect(lines(aina, [five], { game: endgameGame('pkp') })).not.toContain('5 minutes left!')
+      expect(lines(aina, [five], { game: endgameGame('bomba') })).toContain('5 minutes left!')
+      expect(lines(aina, [five])).toContain('5 minutes left!')
+    })
   })
 })

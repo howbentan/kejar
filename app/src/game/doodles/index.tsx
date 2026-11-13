@@ -156,6 +156,8 @@ const SCENE_MARKUP: Record<SceneId, keyof typeof MARKUP> = {
   snapshot: 'snap',
   'stop-rescue': 'stop',
   'chaser-powerups': 'station',
+  // Placeholder until Task 8 draws the endgame scene.
+  endgame: 'station',
 }
 
 /** Turn a scene's markup into shapes, once per scene. */

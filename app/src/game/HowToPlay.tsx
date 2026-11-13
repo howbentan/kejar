@@ -19,14 +19,16 @@ export interface HowToPlayProps {
   side: 'runner' | 'chaser'
   mode: 'core' | 'full'
   snapshot: boolean
+  /** Any endgame switch is on: the last card shows. */
+  endgame?: boolean
   onClose: () => void
   onReady?: () => void
   onOpened?: () => void
 }
 
 /** The how-to-play story: full-screen cards, tap right for next and left for back, 7 s per card. */
-export default function HowToPlay({ side, mode, snapshot, onClose, onReady, onOpened }: HowToPlayProps) {
-  const cards = useMemo(() => cardsFor(side, mode, snapshot), [side, mode, snapshot])
+export default function HowToPlay({ side, mode, snapshot, endgame = false, onClose, onReady, onOpened }: HowToPlayProps) {
+  const cards = useMemo(() => cardsFor(side, mode, snapshot, endgame), [side, mode, snapshot, endgame])
   const stickers = useMemo(() => stickersFor(side, mode), [side, mode])
   const [i, setI] = useState(0)
   const reduce = useReducedMotion()

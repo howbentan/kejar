@@ -25,6 +25,15 @@ describe('how to play cards', () => {
     expect(on[3]).toBe('They can see you too')
   })
 
+  it('adds the endgame card at the end of both decks only when asked', () => {
+    for (const side of ['runner', 'chaser'] as const) {
+      expect(cardsFor(side, 'core', false).some((c) => c.scene === 'endgame')).toBe(false)
+      const on = cardsFor(side, 'core', false, true)
+      expect(on.at(-1)).toEqual({ scene: 'endgame', headline: 'Endgame', line: "Near the end, <b>something changes</b>. You'll find out when it happens." })
+      expect(on).toHaveLength(cardsFor(side, 'core', false).length + 1)
+    }
+  })
+
   it('never names the legendaries and has no em-dashes', () => {
     for (const side of ['runner', 'chaser'] as const)
       for (const mode of ['core', 'full'] as const)

@@ -1,7 +1,7 @@
 import { alertLeadFor, checkedIn, checkinsSince, countedCheckIn, countRestartAt, fairlyWarned } from './checkins.js'
 import { alertsFrom, type Alert, type ReportReason } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
-import { maskEndgame } from './endgame.js'
+import { hebatLive, maskEndgame, revealed } from './endgame.js'
 import { distanceM, fuzz, hash, offset } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { isTicked, kitOf, packItems, placeItems, SECRET_PLACE_IDS, type KitItem, type PlaceItem, type SecretLetters } from './kit.js'
@@ -12,7 +12,7 @@ import { ARREST_OPEN_MS, arrestEndsAt } from './arrest.js'
 import { hijauCounts, hijauTargets, penjaraLockLeft } from './hijau.js'
 import { POWER_NAME } from './powerNames.js'
 import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, shieldArmedAt, slotBusy, TOLL_RADIUS_M } from './powerups.js'
-import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type LegendaryKind, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
+import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type LegendaryKind, type EndgameKind, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
 
 /** Spec §4.5–4.6 constants. */
 export const FUZZ_RADIUS_M = 15
@@ -36,11 +36,14 @@ export interface MapDot {
   missed?: boolean
   /** Shown at the true spot because of a chaser's Focus, Bomoh's team-wide reveal, a toll gate or a green tap. */
   exact?: true
+  /** Hang Hebat: this runner is the wanted one. Set in the Kejar's, marshals' and spectators' views while it lasts. */
+  wanted?: true
   /**
    * Exact specifically because of Pak Guard's Focus, Bomoh's reveal, Tuch and Ga's gate, or tapping green in Mak Kau
-   * Hijau (`hijau`: at the tapped spot, until the next ping reveal); null for every other dot.
+   * Hijau (`hijau`: at the tapped spot, until the next ping reveal), or Bomba's last call (`lastcall`: every free
+   * runner, whatever hid them); null for every other dot.
    */
-  revealedBy: 'focus' | 'bomoh' | 'toll' | 'hijau' | null
+  revealedBy: 'focus' | 'bomoh' | 'toll' | 'hijau' | 'lastcall' | null
   at: string
   /**
    * Set only for a runner just caught or auto-jailed, within the slide-off window (`MOMENT_WINDOW_MS` of
@@ -161,6 +164,11 @@ export interface View {
    * see where they were at the alert, so their unseen window has started (checkins design §5.4).
    */
   snapshotted: boolean
+  /**
+   * The endgame once it is revealed (null before, on every role, and for a Hang Hebat with nobody wanted). Jailed
+   * runners get it live too: the takeover is a game event every player needs. `label` is the wanted runner's tag.
+   */
+  endgame: { kind: EndgameKind; revealedAt: number; wanted: { id: string; label: string } | null; bountyCaught: boolean } | null
   feed: FeedItem[]
   counts: { runnersFree: number; runnersJailed: number; runnersLuarGarisan: number; chasers: number }
   /** Everyone in the game: shown in the lobby and to marshals; empty for players mid-game. */
@@ -501,6 +509,8 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
     last.seq >= BONUS_SEQ_BASE
       ? Date.parse(last.alert_at)
       : (pingTimes(i.game, i.now).find((t) => t.seq === last.seq)?.alertAt ?? revealAt - alertLeadFor(last.seq))
+  // Bomba's last call: every free runner shows exactly, Ponteng or not.
+  const lastCall = pingTimes(i.game, i.now).find((t) => t.seq === last.seq)?.lastCall === true
   const prev = revealed[revealed.length - 2]
   const prevAt = prev ? Date.parse(prev.reveal_at) : (chaseStartOf(i.game, i.now) ?? revealAt)
 
@@ -541,7 +551,7 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
     }
     const at = latestAtOrBefore(i.positions[p.id], revealAt)
     // A cloaked runner must look exactly like one who never checked in.
-    if (!at || cloaked.has(p.id)) {
+    if (!at || (cloaked.has(p.id) && !lastCall)) {
       notes.push({ at: last.reveal_at, text: `${tagLabel(p)} never checked in` })
       continue
     }
@@ -553,8 +563,8 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
     const tolled = tollGates.some((s) => distanceM(s, at) <= TOLL_RADIUS_M)
     // Bomoh takes priority over Focus when both apply: the rarer, team-wide effect wins the purple ring.
     const revealedByBomoh = bomohActive ? 'bomoh' : null
-    const isExact = revealedByBomoh !== null || focused || tolled
-    const revealedBy = revealedByBomoh ?? (focused ? 'focus' : tolled ? 'toll' : null)
+    const isExact = lastCall || revealedByBomoh !== null || focused || tolled
+    const revealedBy: MapDot['revealedBy'] = lastCall ? 'lastcall' : (revealedByBomoh ?? (focused ? 'focus' : tolled ? 'toll' : null))
     let dot: MapDot
     if (decoyed.has(p.id)) {
       // Drawn the same way as everyone else in range, so neither Focus nor Bomoh can expose a Decoy.
@@ -862,6 +872,8 @@ interface FeedContext {
   tappedGreen: boolean
   /** I must tap green right now (see `hijauTargetMe`). */
   hijauTarget: boolean
+  /** PKP is revealed: its `endgame` line says "5 minutes left" already. */
+  pkp: boolean
 }
 
 type Line = Omit<FeedItem, 'at'>
@@ -883,6 +895,7 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
       const seen = Number(e.data.seen ?? 0)
       const missed = Number(e.data.missed ?? 0)
       const tail = missed > 0 ? `, ${missed} missed check-in${missed === 1 ? '' : 's'}` : ''
+      if (e.data.lastCall === true) return two('Last call!', 'LAST CALL', 'Kejar see exactly where you were.', 'Every free Dikejar shows exactly on your map.')
       return two(`Ping: ${seen} Dikejar seen${tail}.`, 'PING', 'Kejar now know roughly where you were.', 'Fresh circles are on your map.')
     }
     case 'used':
@@ -997,6 +1010,16 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
     case 'luar-garisan':
       // For everyone. The warning (`out-warned`) stays private to the player, so it has no line.
       return actor ? plain(`${tagLabel(actor)} is Luar Garisan, out of this round.`) : null
+    case 'endgame': {
+      if (e.data.kind === 'bomba') return plain('Endgame: Bomba.')
+      if (e.data.kind === 'pkp') return plain('Endgame: PKP.')
+      if (e.data.kind === 'hebat') return plain(`Endgame: Hang Hebat. ${String(e.data.who ?? target?.name ?? 'A Dikejar')} is wanted.`)
+      return null
+    }
+    case 'wanted':
+      return plain(`${String(e.data.who ?? (target ? tagLabel(target) : 'A Dikejar'))} is now wanted.`)
+    case 'five-left':
+      return ctx.pkp ? null : plain('5 minutes left!')
     default: {
       const text = feedText(e, byId)
       return text ? plain(text) : null
@@ -1054,6 +1077,7 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       // The runner's name only, never the tag number (fair-play §1.4).
       return `A marshal undid a kejar. ${target?.name ?? 'A Dikejar'} is back in.`
     case 'final-whistle':
+      if (e.data.cause === 'bounty') return 'Hang Hebat caught! Final whistle in 60 s.'
       // A removal or Luar Garisan put the last runner out without a catch; older events carry no cause (a catch).
       return e.data.cause === 'removed' || e.data.cause === 'luar-garisan' || e.data.cause === 'hijau'
         ? 'No Dikejar left free! Final whistle in 60 s.'
@@ -1073,7 +1097,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, arrest: null, hijau: null, penjaraLockedUntil: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, ringZone: null, hijauZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, ringStash: undefined, ringCard: undefined, hijauStash: undefined, hijauCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, arrest: null, endgame: null, hijau: null, penjaraLockedUntil: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, ringZone: null, hijauZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, ringStash: undefined, ringCard: undefined, hijauStash: undefined, hijauCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
   }
   return v
 }
@@ -1106,6 +1130,12 @@ function fullView(input: ViewInput): View {
     chaserNearby = r.nearby
   }
 
+  // Hang Hebat: the wanted runner's dot is marked for everyone who watches the map from outside the free runners.
+  const e = i.game.endgame
+  if (hebatLive(i.game) && (role === 'marshal' || role === 'chaser' || (role === 'runner' && isOut(i.me)))) {
+    dots = dots.map((d) => (d.id === e!.wanted ? { ...d, wanted: true as const } : d))
+  }
+
   const lastReveal = revealedPings(i.pings).at(-1)
   const upcoming = phase === 'hiding' || phase === 'chasing' ? nextReveal(i.game, i.pings, i.now) : null
 
@@ -1117,6 +1147,7 @@ function fullView(input: ViewInput): View {
     jailedNow: runnersNow.filter((p) => p.jailed).length,
     tappedGreen: !!i.game.hijau?.tapped.includes(i.me.id),
     hijauTarget: hijauTargetMe(i),
+    pkp: revealed(i.game, 'pkp'),
   }
   // Newest first; events recorded in the same millisecond keep their recorded order (later first).
   const feed = [
@@ -1172,6 +1203,7 @@ function fullView(input: ViewInput): View {
     checkin: checkinFor(i, phase),
     chaserSnapshot: chaserSnapshotFor(i),
     snapshotted: snapshottedFor(i, phase),
+    endgame: endgameFor(i, byId),
     feed,
     counts: {
       runnersFree: runners.filter((p) => !isOut(p)).length,
@@ -1237,6 +1269,19 @@ function fullView(input: ViewInput): View {
     briefing: briefingFor(i, organiser),
     results: i.results,
   }
+}
+
+/** The endgame as a player sees it (see `View.endgame`): nothing until the reveal, and nothing for a Hang Hebat with nobody wanted. */
+function endgameFor(i: ViewInput, byId: Map<string, Player>): View['endgame'] {
+  const e = i.game.endgame
+  if (!e || !revealed(i.game)) return null
+  let wanted: { id: string; label: string } | null = null
+  if (e.kind === 'hebat') {
+    const w = e.wanted ? byId.get(e.wanted) : undefined
+    if (!w) return null
+    wanted = { id: w.id, label: tagLabel(w) }
+  }
+  return { kind: e.kind, revealedAt: Date.parse(e.revealedAt!), wanted, bountyCaught: !!e.bountyAt }
 }
 
 /** The briefing view (see `View.briefing`): the organiser's tally, a player's open/ready, nothing for marshals. */

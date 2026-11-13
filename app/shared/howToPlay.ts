@@ -15,6 +15,7 @@ export type SceneId =
   | 'snapshot'
   | 'stop-rescue'
   | 'chaser-powerups'
+  | 'endgame'
 
 export interface Card {
   scene: SceneId
@@ -45,10 +46,13 @@ const CHASER_AFTER_SNAPSHOT: Card[] = [
   { scene: 'sos', headline: 'Anything wrong? SOS', line: 'Hurt, or a dispute? <b>Tap the ! in the corner, then hold for 1 second.</b> Never sort it out physically.' },
 ]
 
-/** The story for one side. The cards are the same in Core and Full; only the power-up scene's stickers differ. */
-export function cardsFor(side: Side, _mode: Mode, snapshot: boolean): Card[] {
-  if (side === 'runner') return RUNNER
-  return [...CHASER_BEFORE_SNAPSHOT, ...(snapshot ? [CHASER_SNAPSHOT] : []), ...CHASER_AFTER_SNAPSHOT]
+const ENDGAME: Card = { scene: 'endgame', headline: 'Endgame', line: "Near the end, <b>something changes</b>. You'll find out when it happens." }
+
+/** The story for one side. `endgame`: any endgame switch is on, so the last card shows. The cards are the same in Core and Full; only the power-up scene's stickers differ. */
+export function cardsFor(side: Side, _mode: Mode, snapshot: boolean, endgame = false): Card[] {
+  const last = endgame ? [ENDGAME] : []
+  if (side === 'runner') return [...RUNNER, ...last]
+  return [...CHASER_BEFORE_SNAPSHOT, ...(snapshot ? [CHASER_SNAPSHOT] : []), ...CHASER_AFTER_SNAPSHOT, ...last]
 }
 
 /** The stickers the power-up scene shows: this mode's deck for the side, once each, never a legendary. */
