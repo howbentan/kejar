@@ -22,10 +22,10 @@ type Variant =
   /** Sent in without a catch or a missed check-in: Mak Kau Hijau, or leaving Super Ring's house arrest. */
   | { kind: 'hijau' | 'bail-revoked'; caughtAtMs: number | null }
 
-/** What each way in says under STATUS, with its small English echo. */
+/** What each way in says under STATUS. */
 const REASON_STATUS = {
-  hijau: ['TAK SENTUH HIJAU', "didn't touch green"],
-  'bail-revoked': ['LANGGAR TAHANAN RUMAH', 'broke house arrest'],
+  hijau: "DIDN'T TOUCH GREEN",
+  'bail-revoked': 'LEFT HOUSE ARREST',
 } as const
 
 export default function PenjaraTicket({
@@ -47,8 +47,8 @@ export default function PenjaraTicket({
 }) {
   const number = pick(TICKET_NUMBERS, playerId)
   const reason = variant.kind === 'hijau' || variant.kind === 'bail-revoked' ? REASON_STATUS[variant.kind] : null
-  const status = settled ? 'FREE' : outForGood ? 'HABIS · TIADA KELUARAN' : reason ? reason[0] : variant.kind === 'catch' ? 'BELUM BAYAR' : 'SESSION TIMED OUT'
-  const statusEcho = settled ? 'bebas' : outForGood ? 'no further exit this round' : reason ? reason[1] : variant.kind === 'catch' ? 'unpaid, walk to the gate' : 'tempoh tamat, jalan ke gerbang'
+  const status = settled ? 'FREE' : outForGood ? 'NO EXIT THIS ROUND' : reason ? reason : variant.kind === 'catch' ? 'NOT PAID, WALK TO THE GATE' : 'SESSION TIMED OUT'
+  const toGate = distanceM !== null ? `${Math.round(distanceM / 10) * 10} M` : '-'
 
   return (
     <div className="toll-ticket">
@@ -56,11 +56,10 @@ export default function PenjaraTicket({
       <div className="toll-ticket-head">
         <div>
           <p className="toll-ticket-brand">kejar. plaza tol</p>
-          <p className="toll-ticket-kind mono">TIKET MASUK</p>
-          <p className="toll-ticket-echo">entry ticket</p>
+          <p className="toll-ticket-kind mono">ENTRY TICKET</p>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <p className="toll-ticket-label mono">GERBANG</p>
+          <p className="toll-ticket-label mono">GATE</p>
           <p className="toll-ticket-gate">PENJARA</p>
         </div>
       </div>
@@ -68,36 +67,22 @@ export default function PenjaraTicket({
       <p className="toll-ticket-number">{number}</p>
 
       <div className="toll-ticket-fields">
-        {variant.kind === 'catch' ? (
-          <>
-            <Field label="MASUK" value={variant.caughtAtMs !== null ? wallClock(variant.caughtAtMs) : '-'} />
-            <Field label="JARAK KE GERBANG" value={distanceM !== null ? `${Math.round(distanceM / 10) * 10} M` : '-'} />
-          </>
-        ) : variant.kind !== 'auto' ? (
-          <>
-            <Field label="MASUK" value={variant.caughtAtMs !== null ? wallClock(variant.caughtAtMs) : '-'} />
-            <Field label="DISTANCE TO GATE" value={distanceM !== null ? `${Math.round(distanceM / 10) * 10} M` : '-'} />
-          </>
+        {variant.kind === 'auto' ? (
+          <Field label="LAST SEEN" value={variant.lastSeenMs !== null ? wallClock(variant.lastSeenMs) : '-'} />
         ) : (
-          <>
-            <Field label="LAST SEEN" value={variant.lastSeenMs !== null ? wallClock(variant.lastSeenMs) : '-'} />
-            <Field label="DISTANCE TO GATE" value={distanceM !== null ? `${Math.round(distanceM / 10) * 10} M` : '-'} />
-          </>
+          <Field label="IN AT" value={variant.caughtAtMs !== null ? wallClock(variant.caughtAtMs) : '-'} />
         )}
+        <Field label="DISTANCE TO GATE" value={toGate} />
       </div>
 
       <div className="toll-ticket-status">
         <p className="toll-ticket-label mono">STATUS</p>
         <p className="toll-ticket-status-value">{status}</p>
-        <p className="toll-ticket-echo" style={{ textAlign: 'right' }}>
-          {statusEcho}
-        </p>
       </div>
 
       <p className="toll-ticket-footer mono">
-        {variant.kind === 'catch' ? '*** SIMPAN TIKET INI UNTUK KELUAR ***' : '*** PHONE PROBLEM? ASK A MARSHAL ***'}
+        {variant.kind === 'catch' ? '*** KEEP THIS TICKET TO EXIT ***' : '*** PHONE PROBLEM? ASK A MARSHAL ***'}
       </p>
-      {variant.kind === 'catch' && <p className="toll-ticket-echo" style={{ textAlign: 'center' }}>keep this ticket to exit</p>}
 
       <Barcode />
 
