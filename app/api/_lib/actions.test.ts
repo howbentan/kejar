@@ -5335,8 +5335,9 @@ describe('Undo kejar and the final whistle (fair-play §1.4)', () => {
   })
 
   it('(e) time runs out during the hold: no results until the undo, then a Dikejar win on the next poll', async () => {
-    // A 15-minute chase: hiding to +5, the chase to +20, scheduled pings at +10 and +15.
-    const g = await safetyGame({ lengthMin: 15, checkinMode: 'schedule' })
+    // A 15-minute chase: hiding to +5, the chase to +20, scheduled pings at +10 and +15. No endgame, so Bomba's pings
+    // don't join them.
+    const g = await safetyGame({ lengthMin: 15, checkinMode: 'schedule', endgames: { bomba: 'off', hebat: 'off', pkp: 'off' } })
     await catchAt(g, 'aina', T0 + 7 * MIN)
     for (const m of [10, 15]) {
       now = T0 + m * MIN - 20 * S
@@ -6696,8 +6697,9 @@ describe('Super Ring: house arrest instead of Penjara (Plan E2 task 4)', () => {
   })
 
   it('the game ends during house arrest: they count as free (Dikejar win if nobody else is free)', async () => {
-    // A 15-minute chase: hiding to +5, the chase to +20, scheduled pings at +10 and +15.
-    const g = await holding({ lengthMin: 15, checkinMode: 'schedule' })
+    // A 15-minute chase: hiding to +5, the chase to +20, scheduled pings at +10 and +15. No endgame, so Bomba's pings
+    // don't join them.
+    const g = await holding({ lengthMin: 15, checkinMode: 'schedule', endgames: { bomba: 'off', hebat: 'off', pkp: 'off' } })
     expect(await catchAt(g, 'chong', 'hafiz', T0 + 8 * MIN)).toMatchObject({ ok: true })
     for (const m of [10, 15]) {
       now = T0 + m * MIN - 20 * S
@@ -7439,5 +7441,154 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
       now = t + 10 * MIN + 120 * S
       expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true })
     })
+  })
+})
+
+describe('the endgame: roll, reveal and push (Plan E3 task 4)', () => {
+  const only = (kind: 'bomba' | 'hebat' | 'pkp') => ({
+    mode: 'full',
+    endgames: { bomba: kind === 'bomba' ? 'on' : 'off', hebat: kind === 'hebat' ? 'on' : 'off', pkp: kind === 'pkp' ? 'on' : 'off' },
+  })
+  const begin = async (settings: object) => {
+    const g = await readyGame(settings)
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    const gameId = (await store.gameByCode(g.code))!.id
+    return { ...g, gameId }
+  }
+  const poll = (g: { code: string; organiserToken: string }, atMs = now) => {
+    now = atMs
+    return run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+  }
+  const endgameEvents = async (gameId: string) => (await store.events(gameId)).filter((e) => e.type === 'endgame')
+  const bodies = () => pushes.map((p) => (p.payload as { body?: string }).body)
+  const iso = (ms: number) => new Date(ms).toISOString()
+
+  it('endgame: start stores the roll, and Full with only Hang Hebat on rolls it', async () => {
+    const g = await begin(only('hebat'))
+    expect((await store.gameByCode(g.code))!.endgame).toEqual({ kind: 'hebat', revealedAt: null, wanted: null, bountyAt: null })
+  })
+
+  it('endgame: start stores null when every switch is off', async () => {
+    const g = await begin({ mode: 'core', endgames: { bomba: 'off', hebat: 'off', pkp: 'off' } })
+    expect((await store.gameByCode(g.code))!.endgame).toBeNull()
+  })
+
+  it("endgame: a Bomba game's ping rows include Bomba's times", async () => {
+    const g = await begin(only('bomba'))
+    const reveals = (await store.pings(g.gameId)).map((r) => r.reveal_at)
+    for (const left of [8, 6, 5, 4, 3, 2, 1]) expect(reveals).toContain(iso(T0 + (50 - left) * MIN))
+  })
+
+  it('endgame: nobody polls from 11:00 to 7:50 left; the one poll reveals once, first, and skips the stale alert', async () => {
+    const g = await begin(only('bomba'))
+    await keepCheckingIn(g, 6, 39)
+    await poll(g, T0 + 39 * MIN)
+    expect(await endgameEvents(g.gameId)).toHaveLength(0)
+    pushes = []
+    // Both check in for the 40-minute ping without polling, so nobody is auto-jailed when it reveals late.
+    now = T0 + 39.75 * MIN
+    await run('location', { code: g.code, token: g.aina.token, ...at(20) })
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(30) })
+    await poll(g, T0 + 42 * MIN + 10_000)
+    const events = await store.events(g.gameId)
+    const reveal = events.findIndex((e) => e.type === 'endgame')
+    expect(events.filter((e) => e.type === 'endgame')).toHaveLength(1)
+    expect(events[reveal].data).toEqual({ kind: 'bomba' })
+    const bombaSeq = (await store.pings(g.gameId)).find((r) => r.reveal_at === iso(T0 + 42 * MIN))!.seq
+    const pingIndexes = events.flatMap((e, k) => (e.type === 'ping' && [bombaSeq - 1, bombaSeq].includes(e.data.seq as number) ? [k] : []))
+    expect(pingIndexes).toHaveLength(2)
+    expect(pingIndexes.every((k) => k > reveal)).toBe(true)
+    expect(pushes.filter((p) => (p.payload as { type: string }).type === 'checkin')).toEqual([])
+    expect(bodies().filter((b) => b === 'Endgame: Bomba!')).toHaveLength(3)
+  })
+
+  it('endgame: a pause across the moment holds the reveal and moves it 1:30 later', async () => {
+    const g = await begin(only('bomba'))
+    await keepCheckingIn(g, 6, 39)
+    now = T0 + 39.5 * MIN
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    await poll(g, T0 + 40.5 * MIN)
+    expect(await endgameEvents(g.gameId)).toHaveLength(0)
+    now = T0 + 41 * MIN
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    await poll(g, T0 + 41.5 * MIN - 1_000)
+    expect(await endgameEvents(g.gameId)).toHaveLength(0)
+    await poll(g, T0 + 41.5 * MIN)
+    expect(await endgameEvents(g.gameId)).toHaveLength(1)
+    expect((await store.gameByCode(g.code))!.endgame!.revealedAt).toBe(iso(T0 + 41.5 * MIN))
+  })
+
+  it('endgame: PKP at 5:00 left sends one merged push and posts both five-left and endgame', async () => {
+    const g = await begin(only('pkp'))
+    await keepCheckingIn(g, 6, 44)
+    await poll(g, T0 + 44 * MIN)
+    pushes = []
+    await poll(g, T0 + 45 * MIN)
+    expect(bodies().filter((b) => b === '5 minutes left · PKP!')).toHaveLength(3)
+    expect(bodies().filter((b) => b === '5 minutes left!')).toHaveLength(0)
+    expect(pushes[0].payload).toMatchObject({ type: 'notice', code: g.code, title: 'kejar.' })
+    const events = await store.events(g.gameId)
+    expect(events.filter((e) => e.type === 'five-left')).toHaveLength(1)
+    expect(events.filter((e) => e.type === 'endgame').map((e) => e.data)).toEqual([{ kind: 'pkp' }])
+  })
+
+  it('endgame: two concurrent polls at the moment post one event', async () => {
+    const g = await begin(only('bomba'))
+    await keepCheckingIn(g, 6, 40)
+    now = T0 + 40 * MIN
+    await Promise.all([poll(g), run('state', { code: g.code, token: g.aina.token })])
+    expect(await endgameEvents(g.gameId)).toHaveLength(1)
+    expect(bodies().filter((b) => b === 'Endgame: Bomba!')).toHaveLength(3)
+  })
+
+  it('endgame: a failed push never fails the poll', async () => {
+    const g = await begin(only('bomba'))
+    await keepCheckingIn(g, 6, 40)
+    pushFails = true
+    await poll(g, T0 + 40 * MIN)
+    expect(await endgameEvents(g.gameId)).toHaveLength(1)
+  })
+
+  it('endgame: Hang Hebat names the never-caught runner over one freed at minute 4', async () => {
+    const g = await begin(only('hebat'))
+    now = T0 + 9 * MIN
+    await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(20) })
+    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3) })).toMatchObject({ ok: true })
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    expect(await breakOut(g.code, g.aina.token)).toMatchObject({ ok: true })
+    expect((await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!.jailed).toBe(false)
+    await keepCheckingIn(g, 10, 40)
+    pushes = []
+    await poll(g, T0 + 40 * MIN)
+    // Hafiz (#03) would win a tie on tag number; Aina wins because her free stretch is the longer one.
+    expect((await endgameEvents(g.gameId)).map((e) => e.data)).toEqual([{ kind: 'hebat', wanted: g.aina.playerId, who: 'Aina #07' }])
+    expect((await store.gameByCode(g.code))!.endgame).toMatchObject({ revealedAt: iso(T0 + 40 * MIN), wanted: g.aina.playerId })
+    expect(bodies().filter((b) => b === 'Endgame: Hang Hebat! #07 Aina is wanted.')).toHaveLength(3)
+  })
+
+  it('endgame: Hang Hebat with nobody eligible is claimed with nobody wanted, and nothing else happens', async () => {
+    const g = await begin(only('hebat'))
+    await keepCheckingIn(g, 6, 39)
+    await store.updatePlayers([g.aina.playerId, g.hafiz.playerId].map((id) => ({ id, patch: { jailed: true, caught_at: iso(T0 + 39 * MIN) } })))
+    pushes = []
+    await poll(g, T0 + 40 * MIN)
+    expect((await store.gameByCode(g.code))!.endgame).toMatchObject({ revealedAt: iso(T0 + 40 * MIN), wanted: null })
+    expect(await endgameEvents(g.gameId)).toHaveLength(0)
+    expect(pushes.filter((p) => (p.payload as { type: string }).type === 'notice')).toEqual([])
+  })
+
+  it("endgame: the last call's ping event has lastCall and counts a cloaked runner as seen", async () => {
+    const g = await begin(only('bomba'))
+    await keepCheckingIn(g, 6, 48)
+    now = T0 + 48.5 * MIN
+    const cloak = await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'cloak', station: 1 })
+    await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: cloak.id })
+    await keepCheckingIn(g, 49, 49)
+    await poll(g, T0 + 49 * MIN)
+    const lastSeq = (await store.pings(g.gameId)).find((r) => r.reveal_at === iso(T0 + 49 * MIN))!.seq
+    const pings = (await store.events(g.gameId)).filter((e) => e.type === 'ping')
+    expect(pings.find((e) => e.data.seq === lastSeq)!.data).toMatchObject({ seen: 2, missed: 0, lastCall: true })
+    expect(pings.find((e) => e.data.seq === lastSeq - 1)!.data.lastCall).toBeUndefined()
   })
 })

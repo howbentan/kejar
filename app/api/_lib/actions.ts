@@ -18,6 +18,7 @@ import { autoJailDue, checkinsSince, countedCheckIn, countRestartAt, fairlyWarne
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
+import { maskEndgame, pickWanted, revealDue, rollEndgame } from '../../shared/endgame.js'
 import { isOut, undoableArrestId, undoableCatchId } from '../../shared/players.js'
 import { ARREST_FIX_FRESH_MS, ARREST_OPEN_MS, arrestEndsAt, insideArrest, releaseVerdict, usableFix } from '../../shared/arrest.js'
 import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
@@ -626,6 +627,38 @@ async function withSnapshotMoment(ctx: Ctx, input: SnapshotInput, times: string[
   return out
 }
 
+/**
+ * Reveals the endgame once it's due (endgame design §6.3): Hang Hebat names its wanted runner first, then the claim
+ * picks the one caller who posts the feed line and pushes everyone. Hang Hebat with nobody to name is still claimed,
+ * so it isn't retried, but says nothing: there's no bounty to announce.
+ */
+async function revealEndgame(ctx: Ctx, game: Game): Promise<void> {
+  const { store, now } = ctx
+  const kind = game.endgame!.kind
+  const players = kind === 'hebat' ? await store.players(game.id) : []
+  const wanted = kind === 'hebat' ? pickWanted(players, await store.events(game.id), chaseStartOf(game, now)!) : null
+  if (!(await store.claimEndgameReveal(game.id, iso(now), wanted?.id ?? null))) return
+  if (kind === 'hebat' && !wanted) return
+  await store.addEvent({
+    game_id: game.id,
+    type: 'endgame',
+    actor_id: null,
+    target_id: null,
+    data: wanted ? { kind, wanted: wanted.id, who: who(wanted) } : { kind },
+  })
+  const body =
+    kind === 'pkp'
+      ? '5 minutes left · PKP!'
+      : wanted
+        ? `Endgame: Hang Hebat! ${wanted.tag_id !== null ? `#${tag2(wanted.tag_id)} ` : ''}${wanted.name} is wanted.`
+        : 'Endgame: Bomba!'
+  try {
+    await pushTo(ctx, await store.players(game.id), { type: 'notice', code: game.code, title: 'kejar.', body })
+  } catch {
+    // The feed line carries it, and every screen shows the endgame from the next poll.
+  }
+}
+
 /** Brings the game up to date: chase start, alerts, reveals and the end. Safe to call from many pages at once. */
 async function advance(ctx: Ctx, game: Game): Promise<void> {
   const { store, now } = ctx
@@ -637,14 +670,21 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     await store.addEvent({ game_id: game.id, type: 'chase', actor_id: null, target_id: null, data: {} })
   }
 
+  // The endgame is revealed once, on whichever poll first finds it due (there's no server tick): the claim decides
+  // who posts it. It comes before the pings below, so a Bomba alert is never sent ahead of its reveal.
+  if (revealDue(game, now)) await revealEndgame(ctx, game)
+
   // '5 minutes left!' goes out once per game: the claim decides who posts it (rules §2.7).
   if (fiveLeftDue(game, now) && (await store.claimFiveWarning(game.id, iso(now)))) {
     await store.addEvent({ game_id: game.id, type: 'five-left', actor_id: null, target_id: null, data: {} })
-    const everyone = await store.players(game.id)
-    try {
-      await pushTo(ctx, everyone, { type: 'notice', code: game.code, title: 'kejar.', body: '5 minutes left!' })
-    } catch {
-      // The feed line and the lime clock still carry it.
+    // PKP is revealed at this same moment, and its push says both: one buzz, not two.
+    if (game.endgame?.kind !== 'pkp') {
+      const everyone = await store.players(game.id)
+      try {
+        await pushTo(ctx, everyone, { type: 'notice', code: game.code, title: 'kejar.', body: '5 minutes left!' })
+      } catch {
+        // The feed line and the lime clock still carry it.
+      }
     }
   }
 
@@ -693,7 +733,10 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
         .filter((u) => u.kind === 'cloak' && u.used_at && Date.parse(u.used_at) > prevRevealAt && Date.parse(u.used_at) <= revealAt)
         .map((u) => u.player_id),
     )
-    const seen = free.filter((p) => !cloaked.has(p.id) && (positions[p.id] ?? []).length > 0).length
+    const scheduled = seq < BONUS_SEQ_BASE ? pingTimes(game, now).find((t) => t.seq === seq) : undefined
+    // Bomba's last call shows everyone: Ponteng doesn't hide a runner from it, so the count includes them.
+    const lastCall = scheduled?.lastCall === true
+    const seen = free.filter((p) => (lastCall || !cloaked.has(p.id)) && (positions[p.id] ?? []).length > 0).length
     // The count starts fresh at each runner's own last release (checkins design §4.4), from Penjara or from house
     // arrest (one events read per claimed reveal).
     const events = (await store.events(game.id)).filter((e) => e.type === 'arrest-ended')
@@ -701,7 +744,6 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     // With the chaser-snapshot switch on, a scheduled reveal records who checked in (a location inside its
     // 45 s window, counted under the same release rule as auto-jail), so a runner's view can find the last
     // window they checked into without loading every reveal's positions (checkins design §5.4).
-    const scheduled = seq < BONUS_SEQ_BASE ? pingTimes(game, now).find((t) => t.seq === seq) : undefined
     const checkedInIds =
       game.settings.chaserSnapshot === true && scheduled
         ? free
@@ -714,7 +756,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
       type: 'ping',
       actor_id: null,
       target_id: null,
-      data: { seq, seen, missed: free.length - seen, ...(checkedInIds ? { checkedIn: checkedInIds } : {}) },
+      data: { seq, seen, missed: free.length - seen, ...(checkedInIds ? { checkedIn: checkedInIds } : {}), ...(lastCall ? { lastCall: true } : {}) },
     })
     if (seq < BONUS_SEQ_BASE) {
       // Flares give only 30 s notice, so only scheduled pings count towards a missed streak.
@@ -1205,7 +1247,11 @@ const start: Action = async (ctx, body) => {
   // the game starts with that legendary off, and the organiser is told.
   const { game: settled, notices } = await settleAllLobbyCards(ctx, game, organiser.organisation_id)
   const startedAt = iso(ctx.now)
-  const started = { ...game, started_at: startedAt }
+  // The endgame is rolled now and kept on the game, secret until its reveal. Bomba changes the ping schedule, so the
+  // ping rows below are built from a game that already carries it.
+  const rolled = rollEndgame(settled.settings, ctx.rng)
+  const endgame = rolled ? { kind: rolled, revealedAt: null, wanted: null, bountyAt: null } : null
+  const started = { ...game, started_at: startedAt, endgame }
   const count = (role: Role) => Object.values(roles).filter((r) => r === role).length
   const offLegendaries: Partial<Settings['legendaries']> = {}
   for (const kind of LEGENDARY_KINDS) if (wantsCard(settled, kind)) offLegendaries[kind] = 'off'
@@ -1216,6 +1262,7 @@ const start: Action = async (ctx, body) => {
     started_at: startedAt,
     runner_sets: setsFor('runner', count('runner')),
     deck_seed: newToken(),
+    endgame,
     chaser_sets: setsFor('chaser', count('chaser')),
   })
   const chaseAt = iso(chaseStartOf(started)!)
@@ -1299,7 +1346,8 @@ const state: Action = async (ctx, body) => {
     game,
     me,
     players,
-    positions: await withSnapshotMoment(ctx, { game, me, positions: loaded, events, now: ctx.now }, times),
+    // Masked like the view itself, so the snapshot's window agrees with the one the view finds before the reveal.
+    positions: await withSnapshotMoment(ctx, { game: maskEndgame(game), me, positions: loaded, events, now: ctx.now }, times),
     pings,
     events,
     now: ctx.now,
