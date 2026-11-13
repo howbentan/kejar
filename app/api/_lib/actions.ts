@@ -540,7 +540,11 @@ function endgamesFrom(input: object): NonNullable<Settings['endgames']> {
   return { bomba: merged.bomba as 'on' | 'off', hebat: merged.hebat as 'on' | 'off', pkp: merged.pkp as 'on' | 'off', banjir: 'off' }
 }
 
-function settingsFrom(input: unknown, pick?: () => number): Settings {
+/**
+ * Validates settings. `fresh` is a new game (create): only it gets the default endgame switches. A stored game
+ * re-read here (a mode switch, a start time) that has none keeps none, so it reads as all off (endgame design §6.1).
+ */
+function settingsFrom(input: unknown, pick?: () => number, fresh = false): Settings {
   const given = typeof input === 'object' && input ? input : {}
   // The legendaries first: create's pick is the request's first random draw.
   const legendaries = legendariesFrom(given, pick)
@@ -558,7 +562,8 @@ function settingsFrom(input: unknown, pick?: () => number): Settings {
   if (s.mode === 'core') s.chaserSnapshot = false
   if (![20, 30, 40].includes(s.playersBand)) throw new ActionError(400, 'Expected players must be 20, 30 or 40')
   s.legendaries = legendaries
-  s.endgames = endgamesFrom(given)
+  if (fresh || (given as { endgames?: unknown }).endgames !== undefined) s.endgames = endgamesFrom(given)
+  else delete s.endgames
   // The planned start only survives as a real time; anything else a client sends is dropped.
   s.startsAt = typeof s.startsAt === 'string' && Number.isFinite(Date.parse(s.startsAt)) ? s.startsAt : null
   return s
@@ -1164,7 +1169,7 @@ const create: Action = async (ctx, body) => {
   }
   // A new game has no planned start yet; the organiser sets one in the lobby (setStartTime).
   // The app picks one legendary per side here (new power-ups design §6.1), before anything else draws from rng.
-  const settings = { ...settingsFrom(body.settings, ctx.rng), startsAt: null }
+  const settings = { ...settingsFrom(body.settings, ctx.rng, true), startsAt: null }
   // Full with a legendary picked: a free card of its colour now, so the organiser can print it before hiding it
   // (ruling R15). With none free but one free for the other legendary of that side, the game switches to that one.
   // With neither, the game still gets made (Review Focus 1); it keeps wanting the picked one and tries again later (R9).

@@ -2141,6 +2141,31 @@ describe('game mode', () => {
       expect((await store.gameByCode(g.code))!.settings.endgames).toEqual({ bomba: 'on', hebat: 'on', pkp: 'on', banjir: 'off' })
     })
 
+    /** A lobby game stored before the switches existed: its settings have no `endgames` at all. */
+    const preDeploy = async () => {
+      const g = await readyGame({ mode: 'core' })
+      const row = (await store.gameByCode(g.code))!
+      const { endgames: _drop, ...old } = row.settings
+      await store.updateGame(row.id, { settings: old })
+      return g
+    }
+
+    it('stay absent on a game stored without them when the organiser switches mode', async () => {
+      const g = await preDeploy()
+      await run('setMode', { code: g.code, organiserToken: g.organiserToken, mode: 'full' })
+      const settings = (await store.gameByCode(g.code))!.settings
+      expect(settings.mode).toBe('full')
+      expect(settings.endgames).toBeUndefined()
+    })
+
+    it('stay absent on a game stored without them when the organiser sets a start time', async () => {
+      const g = await preDeploy()
+      await run('setStartTime', { code: g.code, organiserToken: g.organiserToken, startsAt: new Date(now + 60 * MIN).toISOString() })
+      const settings = (await store.gameByCode(g.code))!.settings
+      expect(settings.startsAt).toBe(new Date(now + 60 * MIN).toISOString())
+      expect(settings.endgames).toBeUndefined()
+    })
+
     it('store what a Full game asks for, and only the four keys', async () => {
       expect(await stored({ mode: 'full', endgames: { bomba: 'off', hebat: 'on', pkp: 'off', extra: 'on' } })).toEqual({ bomba: 'off', hebat: 'on', pkp: 'off', banjir: 'off' })
     })
