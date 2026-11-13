@@ -136,6 +136,43 @@ describe('Settle at Penjara (jail design §4b, §4d)', () => {
     await scan('KEJAR:JAIL')
     expect(screen.getByText('Get within 30 m of Penjara')).toBeInTheDocument()
   })
+
+  it('locked after Mak Kau Hijau: says how long is left', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'penjara-locked', lockedMs: 134_000 })
+    render(<Jail code="ABC234" view={holder()} />)
+    await scan('KEJAR:JAIL')
+    expect(screen.getByText('Penjara is locked for 2:14.')).toBeInTheDocument()
+  })
+})
+
+describe('Penjara locked after Mak Kau Hijau (owner, 2026-11-13)', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('shows Penjara locked with a mono countdown while it lasts, then goes', () => {
+    vi.useFakeTimers({ now: 5_000_000 })
+    // testView's clock is at 100 000 ms: 2:14 left.
+    const { rerender } = render(<Jail code="ABC234" view={{ ...caught(60_000), penjaraLockedUntil: 234_000 }} />)
+    const lock = screen.getByRole('status', { name: 'Penjara locked' })
+    expect(lock).toHaveTextContent('Penjara locked · 2:14')
+    expect(lock.querySelector('.mono')).toHaveTextContent('2:14')
+    act(() => vi.advanceTimersByTime(4_000))
+    expect(lock).toHaveTextContent('Penjara locked · 2:10')
+    rerender(<Jail code="ABC234" view={{ ...caught(60_000), penjaraLockedUntil: null }} />)
+    expect(screen.queryByRole('status', { name: 'Penjara locked' })).toBeNull()
+  })
+
+  it('holds still while paused', () => {
+    vi.useFakeTimers({ now: 5_000_000 })
+    render(<Jail code="ABC234" view={{ ...caught(60_000), paused: true, penjaraLockedUntil: 234_000 }} />)
+    act(() => vi.advanceTimersByTime(4_000))
+    expect(screen.getByRole('status', { name: 'Penjara locked' })).toHaveTextContent('2:14')
+  })
+
+  it('shows on the auto-jailed screen too', () => {
+    const view = testView({ jailReason: 'hijau', penjaraLockedUntil: 160_000 })
+    render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true, caught_at: new Date(40_000).toISOString() } }} />)
+    expect(screen.getByRole('status', { name: 'Penjara locked' })).toHaveTextContent('Penjara locked · 1:00')
+  })
 })
 
 describe('Jail', () => {

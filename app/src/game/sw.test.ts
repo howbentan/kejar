@@ -168,7 +168,7 @@ describe('service worker Mak Kau Hijau push', () => {
     const pending: Promise<unknown>[] = []
     listeners.push({
       data: {
-        json: () => ({ type: 'hijau', code: 'ABC234', deadline: '2026-11-12T10:00:45.000Z', title: 'Mak kau hijau!', body: 'Mak kau hijau! Tap the green in 45 s or go to Penjara.' }),
+        json: () => ({ type: 'hijau', code: 'ABC234', deadline: '2026-11-12T10:00:20.000Z', title: 'Mak kau hijau!', body: 'Mak kau hijau! Tap the green in 20 s or go to Penjara.' }),
       },
       waitUntil: (p: Promise<unknown>) => pending.push(p),
     })
@@ -176,7 +176,7 @@ describe('service worker Mak Kau Hijau push', () => {
     expect(self.registration.showNotification).toHaveBeenCalledWith(
       'Mak kau hijau!',
       expect.objectContaining({
-        body: 'Mak kau hijau! Tap the green in 45 s or go to Penjara.',
+        body: 'Mak kau hijau! Tap the green in 20 s or go to Penjara.',
         tag: 'kejar-hijau',
         requireInteraction: true,
         data: { url: '/g/ABC234' },

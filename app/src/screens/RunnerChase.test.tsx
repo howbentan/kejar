@@ -48,13 +48,15 @@ async function scan(text: string) {
 }
 
 describe('RunnerChase: Mak Kau Hijau and the new hint zones (Plan E2)', () => {
-  it('takes over the screen and a tap sends touchGreen with my token', async () => {
+  it('takes over the screen and a tap sends touchGreen with my token and where I am', async () => {
     call.mockResolvedValue({ ok: true })
-    render(<RunnerChase code="ABC234" view={testView({ hijau: { claimedAt: 90_000, startsAt: 90_000, deadline: 135_000, tapped: false } })} />)
+    here.coords = { lat: 3.1, lng: 101.6, accuracy_m: 9 }
+    render(<RunnerChase code="ABC234" view={testView({ hijau: { claimedAt: 90_000, startsAt: 90_000, deadline: 110_000, tapped: false } })} />)
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Tap the green' })))
     expect(call).toHaveBeenCalledTimes(1)
-    expect(call).toHaveBeenCalledWith('touchGreen', { code: 'ABC234', token: 't1' })
-    expect(screen.getByText('Safe! You touched green.')).toBeInTheDocument()
+    expect(call).toHaveBeenCalledWith('touchGreen', { code: 'ABC234', token: 't1', lat: 3.1, lng: 101.6, accuracy_m: 9 })
+    expect(screen.getByText('Safe! You touched green. The Kejar can see where you tapped.')).toBeInTheDocument()
+    here.coords = {}
   })
 
   it('passes the orange and green hint zones to the map', () => {

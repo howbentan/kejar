@@ -1,5 +1,6 @@
 import { animate, useReducedMotion } from 'motion/react'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { penjaraLockedLine } from '../../shared/hijau.js'
 import { REEL_SLOTS } from '../../shared/penjara.js'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
@@ -152,7 +153,7 @@ export default function PenjaraReel({
     setHold(true)
     try {
       const here = await currentCoords()
-      const r = await call<{ ok: true; result: Result } | { ok: false; reason: string }>('pullReel', {
+      const r = await call<{ ok: true; result: Result } | { ok: false; reason: string; lockedMs?: number }>('pullReel', {
         code,
         token: loadSession(localStorage, code).token,
         ...here,
@@ -164,7 +165,7 @@ export default function PenjaraReel({
         setResult('black')
         setHold(false)
       } else {
-        setError(REFUSALS[r.reason] ?? 'The reel did not move. Try again.')
+        setError(r.reason === 'penjara-locked' ? penjaraLockedLine(r.lockedMs ?? 0) : (REFUSALS[r.reason] ?? 'The reel did not move. Try again.'))
         setHold(false)
       }
     } catch (e) {

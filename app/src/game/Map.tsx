@@ -546,6 +546,19 @@ export default function GameMap({
           'circle-stroke-width': 2,
         },
       })
+      // Mak Kau Hijau's tap reveal: the same thin ring as Bomoh's, in its deep green.
+      m.addLayer({
+        id: 'hijau-reveal-ring',
+        type: 'circle',
+        source: 'points',
+        filter: ['==', ['get', 'revealedBy'], 'hijau'],
+        paint: {
+          'circle-radius': 11,
+          'circle-color': 'rgba(0,0,0,0)',
+          'circle-stroke-color': legendaryGreen().main,
+          'circle-stroke-width': 2,
+        },
+      })
       // Tuch and Ga's reveal: a soft lime halo (Pak Guard's is a thin ring), so the two never look alike.
       m.addLayer({
         id: 'toll-reveal-ring',

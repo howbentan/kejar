@@ -3,6 +3,7 @@ import type { BreakJudgement } from '../../shared/catch.js'
 import { RESCUE_HOLD_MS, RESCUE_PING_MS } from '../../shared/penjara.js'
 import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
+import { penjaraLockedLine } from '../../shared/hijau.js'
 import { isBomohQr, isDatoQr, isHijauQr, isRingQr, stationFromQr } from '../../shared/ids.js'
 import AlertsCard from '../game/AlertsCard'
 import { call } from '../game/api'
@@ -133,6 +134,7 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
     if (s.action === 'jailbreak') {
       const b = r as BreakResult
       if (b.ok) return b.rescue === 'joined' ? 'You joined the rescue. Stay close!' : 'Rescue on! Stay close to Penjara for 10 s.'
+      if (b.reason === 'penjara-locked' && 'lockedMs' in b) return penjaraLockedLine(b.lockedMs)
       return BREAK_REJECTIONS[b.reason] ?? 'Nobody freed'
     }
     if (isDatoQr(text) || isBomohQr(text) || isRingQr(text) || isHijauQr(text)) return stashMessage(r as ClaimResult, 'runner')
@@ -144,11 +146,14 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
     [deckLeft],
   )
 
-  // Mak Kau Hijau: one tap of the big green button, sent with my token (the takeover retries a lost one).
+  // Mak Kau Hijau: one tap of the green pill, sent with my token and where I am (the Kejar see the spot). The fix
+  // gets 1.5 s at most so the tap still lands inside the 20 s; without one the server uses my last fix. The takeover
+  // retries a lost tap.
   const tapGreen = useCallback(async (): Promise<TapResult> => {
     const token = loadSession(localStorage, code).token
     if (!token) return { ok: false, reason: 'no-token' }
-    return call<TapResult>('touchGreen', { code, token })
+    const here = await currentCoords(1_500)
+    return call<TapResult>('touchGreen', { code, token, ...here })
   }, [code])
 
   return (

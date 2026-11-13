@@ -481,6 +481,23 @@ describe('GameMap', () => {
       expect(layer('reveal-ring').filter).toEqual(['==', ['get', 'revealedBy'], 'focus'])
       expect(created.data.points).toMatchObject({ features: [{ properties: { revealedBy: 'bomoh' } }, { properties: { revealedBy: 'focus' } }] })
     })
+
+    it('draws a green ring only around dots revealed by tapping green in Mak Kau Hijau', () => {
+      created.layers = []
+      created.data = {}
+      const dots = [
+        { id: 'r1', kind: 'runner' as const, lat: 3.1, lng: 101.1, at: '', revealedBy: 'hijau' as const },
+        { id: 'r2', kind: 'runner' as const, lat: 3.3, lng: 101.3, at: '', revealedBy: 'bomoh' as const },
+      ]
+      render(<GameMap arena={arena} dots={dots} />)
+      created.load!()
+      const ids = created.layers.map((l) => l.id)
+      expect(ids.indexOf('hijau-reveal-ring')).toBeGreaterThan(ids.indexOf('points'))
+      const ring = layer('hijau-reveal-ring')
+      expect(ring.filter).toEqual(['==', ['get', 'revealedBy'], 'hijau'])
+      expect(ring.paint['circle-stroke-color']).toBe('#3FA86B')
+      expect(layer('bomoh-reveal-ring').filter).toEqual(['==', ['get', 'revealedBy'], 'bomoh'])
+    })
   })
 
   describe("Super Ring's and Mak Kau Hijau's hint zones (Plan E2)", () => {

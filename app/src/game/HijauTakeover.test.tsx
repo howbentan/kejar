@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { testView } from '../screens/testView'
 import HijauTakeover, { SAFE_MS } from './HijauTakeover'
 
+const SAFE_LINE = 'Safe! You touched green. The Kejar can see where you tapped.'
+
 // Fake timers and a fixed Date.now for every test: the countdown ticks off `useServerNow`'s 1 s interval, so a slow
 // run on real timers could shift the value under an assertion.
 beforeEach(() => {
@@ -15,15 +17,31 @@ afterEach(() => {
 
 // testView's clock is at 100 000 ms.
 const running = (over: Partial<NonNullable<ReturnType<typeof testView>['hijau']>> = {}) =>
-  testView({ hijau: { claimedAt: 90_000, startsAt: 90_000, deadline: 135_000, tapped: false, ...over } })
+  testView({ hijau: { claimedAt: 90_000, startsAt: 90_000, deadline: 110_000, tapped: false, ...over } })
 
-describe('HijauTakeover (new power-ups §6.3)', () => {
-  it('fills the screen with the line, one big green button and the countdown to the deadline', () => {
-    render(<HijauTakeover view={running()} onTap={vi.fn()} />)
+const lit = (c: HTMLElement) => c.querySelectorAll('.hijau-seg.on').length
+
+describe('HijauTakeover (new power-ups §6.3, tap screen A)', () => {
+  it('fills the screen flat green: the sticker, the title, the countdown panel and one black pill', () => {
+    const { container } = render(<HijauTakeover view={running()} onTap={vi.fn()} />)
     expect(screen.getByRole('alertdialog', { name: 'Mak kau hijau!' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Mak kau hijau!' })).toBeInTheDocument()
+    expect(screen.getByText('MAK KAU HIJAU · LEGENDARY')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Mak Kau Hijau' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'mak kau hijau!' })).toBeInTheDocument()
+    expect(screen.getByText('TAP IN')).toBeInTheDocument()
+    expect(screen.getByText('0:10')).toBeInTheDocument()
+    expect(screen.getByText('Miss it and you go to Penjara. Tap and the Kejar see where you are.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tap the green' })).toBeEnabled()
-    expect(screen.getByText('0:35')).toBeInTheDocument()
+    // Ten segments, half lit with 10 of the 20 s left.
+    expect(container.querySelectorAll('.hijau-seg')).toHaveLength(10)
+    expect(lit(container)).toBe(5)
+  })
+
+  it('the bar drains with the clock', () => {
+    const { container } = render(<HijauTakeover view={running()} onTap={vi.fn()} />)
+    act(() => vi.advanceTimersByTime(6_000))
+    expect(screen.getByText('0:04')).toBeInTheDocument()
+    expect(lit(container)).toBe(2)
   })
 
   it('shows nothing with no Mak Kau Hijau, before it starts, or once tapped', () => {
@@ -45,10 +63,12 @@ describe('HijauTakeover (new power-ups §6.3)', () => {
     expect(onTap).toHaveBeenCalledTimes(1)
     expect(button).toBeDisabled()
     await act(async () => resolve({ ok: true }))
-    expect(screen.getByText('Safe! You touched green.')).toBeInTheDocument()
+    expect(screen.getByText(SAFE_LINE)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'safe!' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tapped' })).toBeDisabled()
     // The next poll says tapped: the Safe line still stays up for its moment.
     rerender(<HijauTakeover view={running({ tapped: true })} onTap={onTap} />)
-    expect(screen.getByText('Safe! You touched green.')).toBeInTheDocument()
+    expect(screen.getByText(SAFE_LINE)).toBeInTheDocument()
     act(() => vi.advanceTimersByTime(SAFE_MS))
     expect(container).toBeEmptyDOMElement()
     expect(onTap).toHaveBeenCalledTimes(1)
@@ -58,30 +78,30 @@ describe('HijauTakeover (new power-ups §6.3)', () => {
     const onTap = vi.fn(async () => ({ ok: false as const, reason: 'too-late' }))
     render(<HijauTakeover view={running()} onTap={onTap} />)
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Tap the green' })))
-    expect(screen.queryByText('Safe! You touched green.')).toBeNull()
+    expect(screen.queryByText(SAFE_LINE)).toBeNull()
     expect(screen.getByRole('button', { name: 'Tap the green' })).toBeDisabled()
   })
 
-  it('a dropped connection retries quietly inside the 45 s', async () => {
+  it('a dropped connection retries quietly inside the 20 s', async () => {
     const onTap = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ ok: true })
     render(<HijauTakeover view={running()} onTap={onTap} />)
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Tap the green' })))
     expect(screen.queryByRole('alert')).toBeNull()
     await act(async () => vi.advanceTimersByTime(2_000))
     expect(onTap).toHaveBeenCalledTimes(2)
-    expect(screen.getByText('Safe! You touched green.')).toBeInTheDocument()
+    expect(screen.getByText(SAFE_LINE)).toBeInTheDocument()
   })
 
   it('the countdown holds still while paused', () => {
     render(<HijauTakeover view={{ ...running(), paused: true }} onTap={vi.fn()} />)
     act(() => vi.advanceTimersByTime(5_000))
-    expect(screen.getByText('0:35')).toBeInTheDocument()
+    expect(screen.getByText('0:10')).toBeInTheDocument()
   })
 
   it('the countdown ticks with the clock', () => {
     render(<HijauTakeover view={running()} onTap={vi.fn()} />)
     act(() => vi.advanceTimersByTime(5_000))
-    expect(screen.getByText('0:30')).toBeInTheDocument()
+    expect(screen.getByText('0:05')).toBeInTheDocument()
   })
 
   it('after a good tap it stays hidden for that run, even if a slow poll still says not tapped', async () => {
@@ -100,7 +120,7 @@ describe('HijauTakeover (new power-ups §6.3)', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Tap the green' })))
     act(() => vi.advanceTimersByTime(SAFE_MS))
     // Paused for 30 s, then resumed: the server moved startsAt and deadline later; claimedAt stays put.
-    const resumed = { ...running({ startsAt: 120_000, deadline: 165_000 }), now: 130_000 }
+    const resumed = { ...running({ startsAt: 120_000, deadline: 140_000 }), now: 130_000 }
     rerender(<HijauTakeover view={resumed} onTap={onTap} />)
     expect(container).toBeEmptyDOMElement()
     expect(onTap).toHaveBeenCalledTimes(1)
@@ -111,7 +131,7 @@ describe('HijauTakeover (new power-ups §6.3)', () => {
     const { rerender } = render(<HijauTakeover view={running()} onTap={onTap} />)
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Tap the green' })))
     act(() => vi.advanceTimersByTime(SAFE_MS))
-    const later = testView({ now: 500_000, hijau: { claimedAt: 490_000, startsAt: 490_000, deadline: 535_000, tapped: false } })
+    const later = testView({ now: 500_000, hijau: { claimedAt: 490_000, startsAt: 490_000, deadline: 510_000, tapped: false } })
     rerender(<HijauTakeover view={later} onTap={onTap} />)
     expect(screen.getByRole('button', { name: 'Tap the green' })).toBeEnabled()
   })

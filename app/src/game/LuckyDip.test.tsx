@@ -155,6 +155,6 @@ describe("Dato Seri's reveal (motion design §7)", () => {
 
   it('the private claim lines for Super Ring and Mak Kau Hijau', () => {
     expect(stashMessage({ ok: true, kind: 'ring' })).toBe("Super Ring! Next time you'd go to Penjara, it's house arrest instead.")
-    expect(stashMessage({ ok: true, kind: 'hijau' })).toBe('Mak kau hijau! Dikejar have 45 s.')
+    expect(stashMessage({ ok: true, kind: 'hijau' })).toBe('Mak kau hijau! Dikejar have 20 s.')
   })
 })

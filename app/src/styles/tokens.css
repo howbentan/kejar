@@ -340,30 +340,41 @@ select.input option { background: #141614; color: var(--white); }
 /* Plan E2: Super Ring's cheese orange and Mak Kau Hijau's deep green, on the same legendary face, slot and ? marker. */
 .slot.legendary.ring { --leg: var(--ring-2); }
 @keyframes ring-glow { 50% { box-shadow: 0 0 24px rgba(255, 169, 77, 0.85); } }
-@keyframes hijau-glow { 50% { box-shadow: 0 0 24px rgba(63, 168, 107, 0.9); } }
 .ring-marker b { background: var(--ring-2); border-color: var(--ring-3); color: var(--ring-ink); }
 .ring-marker .legendary-ring { border-color: var(--ring-2); }
 .hijau-marker b { background: var(--hijau-2); border-color: var(--hijau-3); color: var(--hijau-ink); }
 .hijau-marker .legendary-ring { border-color: var(--hijau-2); }
 
-/* Mak Kau Hijau's takeover: deep green fills the runner's screen, with one huge button (like the SOS fills lime). */
+/* Mak Kau Hijau's takeover (tap screen A): flat green fills the runner's screen, black type, a black countdown panel
+   and one black pill, like the SOS takeover fills lime. No gradients, shine or glow. */
 .hijau-takeover {
-  position: fixed; inset: 0; z-index: 58; overflow-y: auto; background: var(--hijau-3); color: var(--white);
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  position: fixed; inset: 0; z-index: 58; overflow-y: auto; background: var(--hijau-2); color: var(--black);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
   padding: 28px 20px calc(28px + env(safe-area-inset-bottom)); text-align: center;
 }
-.hijau-takeover .eyebrow { color: var(--hijau-1); }
-.hijau-takeover h1 { margin: 0; font-size: 44px; font-weight: 800; letter-spacing: -0.06em; line-height: 1; }
-.hijau-count { font: 700 48px var(--mono); letter-spacing: -0.04em; color: var(--hijau-1); }
-.hijau-takeover p { margin: 0; font-size: 14px; max-width: 300px; }
-.green-btn {
-  appearance: none; cursor: pointer; width: min(64vw, 240px); aspect-ratio: 1; border-radius: 50%; border: 6px solid var(--white);
-  background: radial-gradient(circle at 35% 30%, #6FD394, var(--hijau-2) 60%, #2E8B57); color: var(--hijau-ink);
-  font: 800 26px var(--font); letter-spacing: -0.03em; box-shadow: 0 0 0 10px rgba(205, 239, 216, 0.18), 0 10px 0 #0E4A2A;
+.hijau-takeover > .eyebrow { color: var(--black); opacity: 0.7; }
+.hijau-title { margin: 0 0 14px; font: 800 44px var(--font); letter-spacing: -0.06em; line-height: 1; }
+.hijau-panel {
+  width: 100%; max-width: 420px; background: var(--black); color: var(--white); border-radius: 16px; padding: 14px 16px;
+  display: grid; gap: 10px; text-align: left;
 }
-.green-btn:active:not(:disabled) { transform: translateY(6px); box-shadow: 0 0 0 10px rgba(205, 239, 216, 0.18), 0 4px 0 #0E4A2A; }
-.green-btn:disabled { cursor: default; opacity: 0.8; }
-.green-btn.safe { background: var(--hijau-1); opacity: 1; }
+.hijau-panel-top { display: flex; justify-content: space-between; align-items: baseline; }
+.hijau-count { font: 700 34px var(--mono); letter-spacing: -0.02em; color: var(--hijau-2); }
+.hijau-panel p { margin: 0; font-size: 13px; color: var(--dim); }
+.hijau-segs { display: flex; gap: 4px; width: 100%; }
+.hijau-seg { flex: 1; height: 8px; border-radius: 4px; background: #2a2a2a; }
+.hijau-seg.on { background: var(--hijau-2); }
+.hijau-pill {
+  appearance: none; cursor: pointer; border: 0; border-radius: 999px; padding: 18px 22px; width: 100%; max-width: 420px;
+  background: var(--black); color: var(--hijau-2); font: 800 20px var(--font); letter-spacing: -0.03em;
+}
+.hijau-pill:active:not(:disabled) { transform: translateY(2px); }
+.hijau-pill:disabled { cursor: default; opacity: 0.6; }
+.hijau-tick {
+  appearance: none; width: min(64vw, 240px); aspect-ratio: 1; border-radius: 50%; border: 6px solid var(--black);
+  background: var(--hijau-1); display: grid; place-items: center;
+}
+.hijau-safe-line { margin: 0; font-size: 16px; font-weight: 700; max-width: 300px; }
 
 /* Super Ring's house arrest screen. */
 .arrest-count { font: 700 64px var(--mono); letter-spacing: -0.05em; color: var(--ring-2); line-height: 1; }
@@ -685,5 +696,4 @@ select.input option { background: #141614; color: var(--white); }
 /* "Mak Kau Hijau" is the longest name: a size smaller so it stays on one line and the effect line fits. */
 .power-card.legendary.hijau .pc-name { font-size: 11px; white-space: nowrap; }
 .power-card.big.legendary.hijau .pc-name { font-size: 18px; }
-.green-btn.safe { display: grid; place-items: center; }
 .bold-tick { width: 64%; height: 64%; overflow: visible; }

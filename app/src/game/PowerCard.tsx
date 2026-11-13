@@ -4,7 +4,7 @@ import { INFO } from './powerInfo'
 import Sticker from './Sticker'
 
 /** Mak Kau Hijau's card face words: the chasers' legendary that works on claim. */
-const HIJAU_INFO = { name: 'Mak Kau Hijau', effect: 'Tap green in 45 s or Penjara' }
+const HIJAU_INFO = { name: 'Mak Kau Hijau', effect: 'Tap green in 20 s or Penjara' }
 
 /** Marker scribbles round a legendary card: a crown on top, stars and rays at the sides. Drawn in the card's colour. */
 function Scribbles({ big }: { big: boolean }) {

@@ -56,7 +56,7 @@ export const BOMOH_FOUND = 'Bomoh found! Every Dikejar shows up for Kejar at the
 export const RING_FOUND = "Super Ring! Next time you'd go to Penjara, it's house arrest instead."
 
 /** A chaser claiming Mak Kau Hijau: the runners are told separately. */
-export const HIJAU_FOUND = 'Mak kau hijau! Dikejar have 45 s.'
+export const HIJAU_FOUND = 'Mak kau hijau! Dikejar have 20 s.'
 
 /** A card that arrived doubled (a Nasi Lemak KFC combo) says so; Bomoh never does. */
 const claimedLine = (kind: ClaimedKind, double?: boolean) =>

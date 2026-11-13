@@ -12,7 +12,7 @@ import Stamp from '../game/Stamp'
 import { WalkGuide } from '../game/WalkGuide'
 import { shouldPlay } from '../game/moments'
 import GameMap from '../game/Map'
-import { wallClock } from '../game/time'
+import { clock, useServerNow, wallClock } from '../game/time'
 import { Screen } from '../game/ui'
 import { Feed } from './RunnerChase'
 
@@ -32,6 +32,23 @@ function CheckinRow({ checkins }: { checkins: { at: number; ok: boolean }[] }) {
         </span>
       ))}
       {missed.length > 0 && <Marker marks={missed.map((i) => ({ shape: 'strike' as const, target: { get current() { return refs.current[i] } } }))} delayMs={300} />}
+    </div>
+  )
+}
+
+/**
+ * `Penjara locked · 2:14` after a Mak Kau Hijau that counted (owner, 2026-11-13): no rescue, Settle or reel until it
+ * runs out. Held still while paused, so it counts from the server's moment then.
+ */
+function PenjaraLock({ view }: { view: View }) {
+  const ticking = useServerNow(view.now)
+  const until = view.penjaraLockedUntil
+  if (until === null) return null
+  const left = until - (view.paused ? view.now : ticking)
+  if (left <= 0) return null
+  return (
+    <div role="status" aria-label="Penjara locked" className="pill pill-on" style={{ alignSelf: 'flex-start', borderColor: 'var(--hijau-2)', color: 'var(--hijau-2)' }}>
+      Penjara locked · <span className="mono">{clock(left)}</span>
     </div>
   )
 }
@@ -98,6 +115,7 @@ function AutoJailed({ code, view, reason = 'missed-checkins' }: { code: string; 
         {outForGood ? 'You were already freed once, so you stay in Penjara until the end. Watch the chase from here.' : lineFor(view.me.id, copy.lines)}
       </p>
       {reason === 'missed-checkins' && view.jailCheckins && view.jailCheckins.length > 0 && <CheckinRow checkins={view.jailCheckins} />}
+      {view.me.jailed && <PenjaraLock view={view} />}
       {view.me.jailed && !view.me.freed_once && <RescueBanner view={view} />}
       <PenjaraTicket
         playerId={view.me.id}
@@ -209,6 +227,7 @@ function Caught({ code, view }: { code: string; view: View }) {
           ? 'You’ve already been broken out once, so you stay in Penjara this time.'
           : 'A free runner can still break you out, but only once. A marshal will give your tag back.'}
       </p>
+      {view.me.jailed && <PenjaraLock view={view} />}
       {view.me.jailed && !view.me.freed_once && <RescueBanner view={view} />}
       <PenjaraTicket
         playerId={view.me.id}
