@@ -5,7 +5,7 @@ import { newDatoCode } from './secrets.js'
 import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PhoneMoveRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, RedeemPhoneMoveResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
 const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, reel_pulled_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at, brief_opened_at, brief_ready_at, frozen_until, arrest'
-const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, final_whistle_at, rescue, five_warned_at, wiped_at, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit, briefed_at'
+const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, final_whistle_at, rescue, five_warned_at, wiped_at, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit, briefed_at, endgame'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
   if (res.error) throw new Error(res.error.message)
@@ -109,6 +109,18 @@ export class SupabaseStore implements GameStore {
   }
   async claimFiveWarning(gameId: string, atIso: string) {
     return check(await this.db.rpc('claim_five_warning', { p_game: gameId, p_at: atIso })) === true
+  }
+  async claimEndgameReveal(gameId: string, atIso: string, wanted: string | null) {
+    return check(await this.db.rpc('claim_endgame_reveal', { p_game: gameId, p_at: atIso, p_wanted: wanted })) === true
+  }
+  async claimBounty(gameId: string, atIso: string) {
+    return check(await this.db.rpc('claim_bounty', { p_game: gameId, p_at: atIso })) === true
+  }
+  async clearBounty(gameId: string) {
+    check(await this.db.rpc('clear_bounty', { p_game: gameId }))
+  }
+  async setWanted(gameId: string, playerId: string | null) {
+    check(await this.db.rpc('set_wanted', { p_game: gameId, p_player: playerId }))
   }
   async startRescue(gameId: string, by: string, atIso: string) {
     return check(await this.db.rpc('start_rescue', { p_game: gameId, p_by: by, p_at: atIso })) === true
@@ -354,12 +366,18 @@ export class SupabaseStore implements GameStore {
     // One conditional update in the database: only a chaser who isn't frozen right now takes it. True for the winner.
     return check(await this.db.rpc('freeze_chaser', { p_player: chaserId, p_until: untilIso, p_at: this.nowIso() })) === true
   }
+  /** Both twin functions return the new card as one row, or nothing; this reads that reply. */
+  private async twinRpc(fn: 'apply_combo' | 'add_twin', args: Record<string, unknown>): Promise<PowerUp | null> {
+    const rows = check(await this.db.rpc(fn, { ...args, p_at: this.nowIso() })) as PowerUp[] | null
+    return rows?.[0] ?? null
+  }
   async applyCombo(playerId: string, powerUpId: string): Promise<PowerUp | null> {
     // The database function locks the ready combo, consumes it and inserts the twin together.
-    const rows = check(await this.db.rpc('apply_combo', { p_player: playerId, p_powerup: powerUpId, p_at: this.nowIso() })) as
-      | PowerUp[]
-      | null
-    return rows?.[0] ?? null
+    return this.twinRpc('apply_combo', { p_player: playerId, p_powerup: powerUpId })
+  }
+  async addTwin(powerUpId: string): Promise<PowerUp | null> {
+    // The same twin without a combo; the database function locks the card so it only ever gets one.
+    return this.twinRpc('add_twin', { p_powerup: powerUpId })
   }
   async consumeShield(id: string) {
     const rows = check(

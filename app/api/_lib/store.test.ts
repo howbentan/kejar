@@ -885,6 +885,45 @@ describe('MemoryStore new deck cards', () => {
     expect(await store.applyCombo(p.id, card.id)).toBeNull()
   })
 
+  it('addTwin makes a twin of a card without a combo, once', async () => {
+    const g = await startedGame()
+    const p = await newPlayer(g.id, 'runner')
+    const card = await store.addPowerUp({ game_id: g.id, player_id: p.id, kind: 'decoy', station: 2 })
+    const twin = await store.addTwin(card.id)
+    expect(twin).toMatchObject({ kind: 'decoy', twin_of: card.id, station: null, used_at: null, game_id: g.id, player_id: p.id })
+    expect(await store.addTwin(card.id)).toBeNull()
+    expect(await store.addTwin('nope')).toBeNull()
+  })
+
+  it('claimEndgameReveal reveals once, and only with an endgame on a game that is still on', async () => {
+    const g = await startedGame()
+    expect(await store.claimEndgameReveal(g.id, iso(T0), null)).toBe(false) // no endgame rolled
+    await store.updateGame(g.id, { endgame: { kind: 'hebat', revealedAt: null, wanted: null, bountyAt: null } })
+    expect(await store.claimEndgameReveal(g.id, iso(T0), 'p1')).toBe(true)
+    expect(await store.claimEndgameReveal(g.id, iso(T0 + MIN), 'p2')).toBe(false)
+    expect((await store.gameByCode(g.code))!.endgame).toEqual({ kind: 'hebat', revealedAt: iso(T0), wanted: 'p1', bountyAt: null })
+  })
+
+  it('claimEndgameReveal does nothing after the game has ended', async () => {
+    const g = await startedGame()
+    await store.updateGame(g.id, { endgame: { kind: 'bomba', revealedAt: null, wanted: null, bountyAt: null }, ended_at: iso(T0) })
+    expect(await store.claimEndgameReveal(g.id, iso(T0), null)).toBe(false)
+  })
+
+  it('claimBounty gives true once, and again after clearBounty; setWanted names the runner', async () => {
+    const g = await startedGame()
+    await store.updateGame(g.id, { endgame: { kind: 'hebat', revealedAt: iso(T0), wanted: 'p1', bountyAt: null } })
+    expect(await store.claimBounty(g.id, iso(T0))).toBe(true)
+    expect(await store.claimBounty(g.id, iso(T0 + MIN))).toBe(false)
+    await store.clearBounty(g.id)
+    expect((await store.gameByCode(g.code))!.endgame!.bountyAt).toBeNull()
+    expect(await store.claimBounty(g.id, iso(T0 + MIN))).toBe(true)
+    await store.setWanted(g.id, 'p2')
+    expect((await store.gameByCode(g.code))!.endgame).toMatchObject({ wanted: 'p2', bountyAt: iso(T0 + MIN) })
+    await store.setWanted(g.id, null)
+    expect((await store.gameByCode(g.code))!.endgame!.wanted).toBeNull()
+  })
+
   it('addPowerUp defaults twin_of and spot to null', async () => {
     const g = await startedGame()
     const u = await store.addPowerUp({ game_id: g.id, player_id: 'p1', kind: 'toll', station: 1 })

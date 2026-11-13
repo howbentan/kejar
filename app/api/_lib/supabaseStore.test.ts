@@ -268,6 +268,35 @@ describe('SupabaseStore legendaries: Super Ring and Mak Kau Hijau', () => {
     firedAt: NOW, route: 'catch' as const, by: 'c1', center: null, startedAt: null, ringId: 'u1', catchEventId: null,
   }
 
+  it('adds a twin through add_twin, returning the twin or null', async () => {
+    const { rpcs, store } = rpcStore([[{ id: 'u2', kind: 'decoy', twin_of: 'u1' }], []])
+    expect(await store.addTwin('u1')).toMatchObject({ id: 'u2', twin_of: 'u1' })
+    expect(await store.addTwin('u1')).toBeNull()
+    expect(rpcs[0]).toEqual({ fn: 'add_twin', args: { p_powerup: 'u1', p_at: NOW } })
+  })
+
+  it('claims the endgame reveal through claim_endgame_reveal, true only for the winner', async () => {
+    const { rpcs, store } = rpcStore([true, false])
+    expect(await store.claimEndgameReveal('g1', NOW, 'p1')).toBe(true)
+    expect(await store.claimEndgameReveal('g1', NOW, null)).toBe(false)
+    expect(rpcs[0]).toEqual({ fn: 'claim_endgame_reveal', args: { p_game: 'g1', p_at: NOW, p_wanted: 'p1' } })
+    expect(rpcs[1]).toEqual({ fn: 'claim_endgame_reveal', args: { p_game: 'g1', p_at: NOW, p_wanted: null } })
+  })
+
+  it('claims, clears and sets the bounty through claim_bounty, clear_bounty and set_wanted', async () => {
+    const { rpcs, store } = rpcStore([true, false, null, null])
+    expect(await store.claimBounty('g1', NOW)).toBe(true)
+    expect(await store.claimBounty('g1', NOW)).toBe(false)
+    await store.clearBounty('g1')
+    await store.setWanted('g1', 'p1')
+    expect(rpcs).toEqual([
+      { fn: 'claim_bounty', args: { p_game: 'g1', p_at: NOW } },
+      { fn: 'claim_bounty', args: { p_game: 'g1', p_at: NOW } },
+      { fn: 'clear_bounty', args: { p_game: 'g1' } },
+      { fn: 'set_wanted', args: { p_game: 'g1', p_player: 'p1' } },
+    ])
+  })
+
   it('claims a Super Ring through claim_ring, returning the card or null', async () => {
     const { rpcs, store } = rpcStore([[{ id: 'u1', kind: 'ring', player_id: 'p1' }], []])
     expect(await store.claimRing('g1', 'p1')).toMatchObject({ id: 'u1', kind: 'ring' })

@@ -105,6 +105,17 @@ export interface GameStore {
   claimFinalWhistle(gameId: string, atIso: string): Promise<boolean>
   /** Sets `five_warned_at` only if it is still null and the game hasn't ended; true for the first caller (rules §2.7). */
   claimFiveWarning(gameId: string, atIso: string): Promise<boolean>
+  /**
+   * The endgame's reveal: sets `endgame.revealedAt` and `endgame.wanted` only if an endgame exists, it isn't revealed
+   * yet and the game hasn't ended; true for the first caller.
+   */
+  claimEndgameReveal(gameId: string, atIso: string, wanted: string | null): Promise<boolean>
+  /** Starts Hang Hebat's bounty hold: sets `endgame.bountyAt` only if it is null and the game hasn't ended; true for the first caller. */
+  claimBounty(gameId: string, atIso: string): Promise<boolean>
+  /** Takes the hold back (`endgame.bountyAt` to null). */
+  clearBounty(gameId: string): Promise<void>
+  /** Names the wanted runner in `endgame.wanted` (null clears it). */
+  setWanted(gameId: string, playerId: string | null): Promise<void>
   /** Sets `briefed_at` only if it is still null; true for the first caller (how to play). */
   setBriefedAt(gameId: string, atIso: string): Promise<boolean>
   /** Sets one of a player's briefing times only if it is still null. */
@@ -229,6 +240,11 @@ export interface GameStore {
    * Returns the twin, or null if no combo was ready.
    */
   applyCombo(playerId: string, powerUpId: string): Promise<PowerUp | null>
+  /**
+   * Makes the twin of a card exactly as `applyCombo` does, without consuming a combo (PKP's station claims). Null if
+   * the card is unknown or already has a twin.
+   */
+  addTwin(powerUpId: string): Promise<PowerUp | null>
   /** Consumes a shield only if it wasn't already; true for the first caller. */
   consumeShield(id: string): Promise<boolean>
   /** Adds a bonus (Flare) ping with the next free bonus number; safe when two happen at once. */
@@ -536,6 +552,26 @@ export class MemoryStore implements GameStore {
     if (!g || g.ended_at || g.five_warned_at) return false
     g.five_warned_at = atIso
     return true
+  }
+  async claimEndgameReveal(gameId: string, atIso: string, wanted: string | null) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g?.endgame || g.endgame.revealedAt || g.ended_at) return false
+    g.endgame = { ...g.endgame, revealedAt: atIso, wanted }
+    return true
+  }
+  async claimBounty(gameId: string, atIso: string) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g?.endgame || g.endgame.bountyAt || g.ended_at) return false
+    g.endgame = { ...g.endgame, bountyAt: atIso }
+    return true
+  }
+  async clearBounty(gameId: string) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (g?.endgame) g.endgame = { ...g.endgame, bountyAt: null }
+  }
+  async setWanted(gameId: string, playerId: string | null) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (g?.endgame) g.endgame = { ...g.endgame, wanted: playerId }
   }
   async setBriefedAt(gameId: string, atIso: string) {
     const g = this.games.find((x) => x.id === gameId)
@@ -861,11 +897,8 @@ export class MemoryStore implements GameStore {
     p.frozen_until = untilIso
     return true
   }
-  async applyCombo(playerId: string, powerUpId: string) {
-    const combo = this.powerUpRows.find((u) => u.player_id === playerId && u.kind === 'combo' && u.used_at && !u.consumed_at && !u.taken_at)
-    const src = this.powerUpRows.find((u) => u.id === powerUpId)
-    if (!combo || !src) return null
-    combo.consumed_at = this.nowIso()
+  /** The twin of a card: same game, player, kind and sealed, no station, `twin_of` set. Shared by combos and PKP. */
+  private pushTwin(src: PowerUp, playerId: string): PowerUp {
     const twin: PowerUp = {
       id: this.id('u'),
       game_id: src.game_id,
@@ -883,6 +916,18 @@ export class MemoryStore implements GameStore {
     }
     this.powerUpRows.push(twin)
     return { ...twin }
+  }
+  async applyCombo(playerId: string, powerUpId: string) {
+    const combo = this.powerUpRows.find((u) => u.player_id === playerId && u.kind === 'combo' && u.used_at && !u.consumed_at && !u.taken_at)
+    const src = this.powerUpRows.find((u) => u.id === powerUpId)
+    if (!combo || !src) return null
+    combo.consumed_at = this.nowIso()
+    return this.pushTwin(src, playerId)
+  }
+  async addTwin(powerUpId: string) {
+    const src = this.powerUpRows.find((u) => u.id === powerUpId)
+    if (!src || this.powerUpRows.some((u) => u.twin_of === powerUpId)) return null
+    return this.pushTwin(src, src.player_id)
   }
   async consumeShield(id: string) {
     const u = this.powerUpRows.find((x) => x.id === id)
