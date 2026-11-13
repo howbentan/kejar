@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New legendaries</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;600;700;800&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; background: #050505; }
+  .mk { max-width: 1180px; margin: 0 auto; padding: 28px 20px 60px; color: #F5F5F3; font-family: 'Geist', system-ui, sans-serif; }
+  .mk h1 { font-size: 34px; letter-spacing: -0.04em; margin: 0 0 6px; }
+  .mk h1 span { color: #C6FF3D; }
+  .mk > p { opacity: .7; max-width: 780px; line-height: 1.45; margin: 4px 0 8px; font-size: 14.5px; }
+  .mk h2 { font-size: 20px; letter-spacing: -0.03em; margin: 34px 0 4px; }
+  .mk h2 + p { font-size: 13.5px; opacity: .65; margin: 0 0 16px; max-width: 760px; line-height: 1.45; }
+  .row { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; }
+  .fig { text-align: center; }
+  .fig small { display: block; font-size: 12px; opacity: .65; margin-top: 6px; }
+  .fig.new small { opacity: 1; color: #C6FF3D; }
+  .cell { width: 320px; }
+  .cell h3 { font-size: 14px; margin: 10px 2px 6px; letter-spacing: -0.02em; opacity: .85; font-weight: 600; }
+  .dockbox { background: #0A0A0B; border: 1px solid #222; border-radius: 18px; padding: 12px; position: relative; }
+  .phone { width: 360px; height: 740px; border-radius: 38px; border: 2px solid #2a2a2a; overflow: hidden; position: relative; background: #0A0A0B; }
+  .phone > div { height: 100%; }
+  .note { font-size: 12.5px; opacity: .65; margin: 8px 2px 0; max-width: 360px; line-height: 1.4; }
+  .mapbox { max-width: 760px; border: 2px solid #2a2a2a; border-radius: 18px; overflow: hidden; }
+  .phone { transform: translateZ(0); }
+  .pickerbox { transform: translateZ(0); position: relative; width: 360px; height: 420px; border: 2px solid #2a2a2a; border-radius: 28px; overflow: hidden; background: #0A0A0B; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="./main.tsx"></script>
+</body>
+</html>
