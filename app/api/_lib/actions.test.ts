@@ -7851,3 +7851,163 @@ describe('Hang Hebat: the wanted runner decides the game (Plan E3 task 5)', () =
     expect(await whistles(g)).toEqual([{ cause: 'removed' }])
   })
 })
+
+describe('PKP closes Penjara and doubles stations (Plan E3 task 6)', () => {
+  const S = 1000
+  const S1 = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng, accuracy_m: 8 }
+  const closed = { ok: false, reason: 'penjara-closed' }
+  type G = Awaited<ReturnType<typeof pkpGame>>
+  const iso = (ms: number) => new Date(ms).toISOString()
+
+  /** A chasing Full game with only PKP on. Ben chases; Aina and Hafiz run. Nothing is revealed yet. */
+  async function pkpGame() {
+    const g = await readyGame({ mode: 'full', endgames: { bomba: 'off', hebat: 'off', pkp: 'on' } }, { stations: [S1] })
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    const gameId = (await store.gameByCode(g.code))!.id
+    return { ...g, siti, gameId }
+  }
+  const poll = (g: G, ms: number) => {
+    now = ms
+    return run<View>('state', { code: g.code, organiserToken: g.organiserToken })
+  }
+  /** Moves to 5:00 left and polls: PKP is revealed. */
+  async function reveal(g: G) {
+    await poll(g, T0 + 45 * MIN)
+    expect((await store.gameByCode(g.code))!.endgame!.revealedAt).toBeTruthy()
+  }
+  const jailHafiz = (g: G) => store.updatePlayers([{ id: g.hafiz.playerId, patch: { jailed: true, caught_at: iso(now), caught_by: g.ben.playerId } }])
+  const events = async (g: G, type: string) => (await store.events(g.gameId)).filter((e) => e.type === type)
+  const hafizRow = async (g: G) => (await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!
+  /** Moves the runners' deck to the next card that passes `want`, so a claim draws it. */
+  async function forceDraw(g: G, want: (k: PowerUpKind) => boolean) {
+    const row = (await store.gameByCode(g.code))!
+    const deck = deckFor('full', 'runner', row.runner_sets!)
+    let i = row.runner_draws ?? 0
+    while (!want(cardAt(`${row.deck_seed}:runner`, deck, i))) i++
+    await store.updateGame(row.id, { runner_draws: i })
+    return cardAt(`${row.deck_seed}:runner`, deck, i)
+  }
+  const doublable = (k: PowerUpKind) => !['grab', 'combo', 'dato'].includes(k)
+  const claimS1 = (g: G) => run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...S1 })
+  const ownCards = async (g: G, kind: PowerUpKind) =>
+    (await store.powerUps(g.gameId)).filter((u) => u.player_id === g.aina.playerId && u.kind === kind)
+  const comboReady = async (g: G) => (await run<View>('state', { code: g.code, token: g.aina.token })).comboReady
+
+  it('pkp: a free runner scanning Penjara after the reveal is refused and starts nothing', async () => {
+    const g = await pkpGame()
+    await jailHafiz(g)
+    await reveal(g)
+    now = T0 + 46 * MIN
+    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toEqual(closed)
+    expect(await events(g, 'rescue-started')).toHaveLength(0)
+    expect((await store.gameByCode(g.code))!.rescue ?? null).toBeNull()
+  })
+
+  it('pkp: before the reveal a Penjara scan starts a rescue as usual', async () => {
+    const g = await pkpGame()
+    await jailHafiz(g)
+    now = T0 + 44 * MIN
+    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true, rescue: 'started' })
+  })
+
+  it('pkp: a rescue started at 5:05 left fails at the 5:00 reveal and frees nobody', async () => {
+    const g = await pkpGame()
+    await jailHafiz(g)
+    now = T0 + 45 * MIN - 5 * S
+    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true, rescue: 'started' })
+    now = T0 + 45 * MIN + 6 * S
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    await poll(g, T0 + 45 * MIN + 7 * S)
+    expect((await store.gameByCode(g.code))!.endgame!.revealedAt).toBeTruthy()
+    expect((await hafizRow(g)).jailed).toBe(true)
+    expect(await events(g, 'jailbreak')).toHaveLength(0)
+    expect(await events(g, 'rescue-failed')).toHaveLength(1)
+  })
+
+  it('pkp: a rescue whose hold ends before the reveal still frees', async () => {
+    const g = await pkpGame()
+    await jailHafiz(g)
+    now = T0 + 44 * MIN
+    await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })
+    now = T0 + 44 * MIN + 11 * S
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    await poll(g, T0 + 45 * MIN + S)
+    expect((await hafizRow(g)).jailed).toBe(false)
+    expect(await events(g, 'rescue-failed')).toHaveLength(0)
+  })
+
+  it("pkp: a jailed runner's pull is refused and not spent", async () => {
+    const g = await pkpGame()
+    await jailHafiz(g)
+    await reveal(g)
+    now = T0 + 46 * MIN
+    expect(await run('pullReel', { code: g.code, token: g.hafiz.token, ...at(10) })).toEqual(closed)
+    expect((await hafizRow(g)).reel_pulled_at ?? null).toBeNull()
+  })
+
+  it('pkp: Settle is refused and Dato Seri stays unused', async () => {
+    const g = await pkpGame()
+    const dato = await store.addPowerUp({ game_id: g.gameId, player_id: g.hafiz.playerId, kind: 'dato', station: null })
+    await jailHafiz(g)
+    await reveal(g)
+    now = T0 + 46 * MIN
+    expect(await run('settle', { code: g.code, token: g.hafiz.token, qr: JAIL_QR, targetIds: [], ...at(10) })).toEqual(closed)
+    expect((await store.powerUps(g.gameId)).find((u) => u.id === dato.id)!.used_at).toBeNull()
+    expect((await hafizRow(g)).jailed).toBe(true)
+  })
+
+  it("pkp: a marshal's Undo kejar still frees the runner", async () => {
+    const g = await pkpGame()
+    now = T0 + 44 * MIN
+    await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
+    expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(3), ...at(0) })).toMatchObject({ ok: true })
+    const caught = (await events(g, 'caught'))[0]!
+    await reveal(g)
+    now = T0 + 46 * MIN
+    expect(await run('undoKejar', { code: g.code, eventId: caught.id, token: g.siti.token })).toEqual({ ok: true })
+    expect((await hafizRow(g)).jailed).toBe(false)
+  })
+
+  it('pkp: a station claim after the reveal gives the card and its twin', async () => {
+    const g = await pkpGame()
+    await reveal(g)
+    now = T0 + 46 * MIN
+    const kind = await forceDraw(g, doublable)
+    expect(await claimS1(g)).toEqual({ ok: true, kind, double: true })
+    expect(await ownCards(g, kind)).toHaveLength(2)
+  })
+
+  it('pkp: a combo-ready player gets exactly two goes and stays combo ready', async () => {
+    const g = await pkpGame()
+    const combo = await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'combo', station: null })
+    await store.updatePowerUp(combo.id, { used_at: iso(now) })
+    await reveal(g)
+    now = T0 + 46 * MIN
+    const kind = await forceDraw(g, doublable)
+    expect(await comboReady(g)).toBe(true)
+    expect(await claimS1(g)).toEqual({ ok: true, kind, double: true })
+    expect(await ownCards(g, kind)).toHaveLength(2)
+    expect(await comboReady(g)).toBe(true)
+  })
+
+  it('pkp: a card the doubling cannot apply to arrives as normal', async () => {
+    const g = await pkpGame()
+    await reveal(g)
+    now = T0 + 46 * MIN
+    const kind = await forceDraw(g, (k) => k === 'grab')
+    expect(await claimS1(g)).toEqual({ ok: true, kind })
+    expect(await ownCards(g, kind)).toHaveLength(1)
+  })
+
+  it('pkp: before the reveal a claim is not doubled', async () => {
+    const g = await pkpGame()
+    now = T0 + 44 * MIN
+    const kind = await forceDraw(g, doublable)
+    expect(await claimS1(g)).toEqual({ ok: true, kind })
+    expect(await ownCards(g, kind)).toHaveLength(1)
+  })
+})

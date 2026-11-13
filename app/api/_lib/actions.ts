@@ -18,7 +18,7 @@ import { autoJailDue, checkinsSince, countedCheckIn, countRestartAt, fairlyWarne
 import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
-import { hebatLive, maskEndgame, pickWanted, revealDue, rollEndgame, wantedOut } from '../../shared/endgame.js'
+import { hebatLive, maskEndgame, pickWanted, pkpClosed, revealDue, rollEndgame, wantedOut } from '../../shared/endgame.js'
 import { isOut, undoableArrestId, undoableCatchId } from '../../shared/players.js'
 import { ARREST_FIX_FRESH_MS, ARREST_OPEN_MS, arrestEndsAt, insideArrest, releaseVerdict, usableFix } from '../../shared/arrest.js'
 import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
@@ -821,7 +821,11 @@ async function settleRescue(ctx: Ctx, game: Game, phase = phaseAt(game, ctx.now)
   // A removed rescuer has left the game: the same as being caught. A hold that ends with Penjara locked after Mak
   // Kau Hijau can't free anyone either.
   const judged = rescuer ? rescueVerdict({ rescue: { by: r.by, startedAt }, rescuer, fixes, jail: game.arena.jail, now, pauses: game.pauses, pausedAt: game.paused_at }) : 'failed'
-  const verdict = judged !== 'holding' && penjaraLockLeft(game, Math.min(now, startedAt + RESCUE_HOLD_MS)) > 0 ? 'failed' : judged
+  // PKP shuts Penjara for good: a hold that ends once it is revealed frees nobody. `advance` settles the rescue
+  // before it claims the reveal, so a reveal that is due but not yet posted counts too.
+  const holdEnd = Math.min(now, startedAt + RESCUE_HOLD_MS)
+  const closed = pkpClosed(game) || revealDue(game, holdEnd)
+  const verdict = judged !== 'holding' && (closed || penjaraLockLeft(game, holdEnd) > 0) ? 'failed' : judged
   if (verdict === 'holding' || !(await store.endRescue(game.id, r.startedAt))) return
   if (verdict === 'failed') {
     await store.addEvent({ game_id: game.id, type: 'rescue-failed', actor_id: r.by, target_id: null, data: {} })
@@ -1601,6 +1605,7 @@ const jailbreak: Action = async (ctx, body) => {
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
   if (fresh.paused_at) return { ok: false, reason: 'paused' }
+  if (pkpClosed(fresh)) return { ok: false, reason: 'penjara-closed' }
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeJailbreak({
     phase: phaseAt(fresh, ctx.now).phase,
@@ -1639,6 +1644,7 @@ const pullReel: Action = async (ctx, body) => {
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
   if (fresh.paused_at) return { ok: false, reason: 'paused' }
+  if (pkpClosed(fresh)) return { ok: false, reason: 'penjara-closed' }
   if (phaseAt(fresh, ctx.now).phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   const current = (await ctx.store.players(game.id)).find((p) => p.id === me.id)
   if (!current || current.role !== 'runner' || !current.jailed) return { ok: false, reason: 'not-jailed' }
@@ -1680,6 +1686,8 @@ const settle: Action = async (ctx, body) => {
   await advance(ctx, game)
   const fresh = (await loadGame(ctx, body)) as Game
   if (fresh.paused_at) return { ok: false, reason: 'paused' }
+  // PKP: Settle frees nobody either, so Dato Seri is kept, unspent.
+  if (pkpClosed(fresh)) return { ok: false, reason: 'penjara-closed' }
   const dato = (await ctx.store.powerUps(game.id)).find(
     (u) => u.player_id === me.id && u.kind === 'dato' && u.used_at === null && !u.taken_at,
   )
@@ -1923,6 +1931,11 @@ const claim: Action = async (ctx, body) => {
   )
   if (!claimed.ok) return claimed
   await ctx.store.addEvent({ game_id: game.id, type: 'powerup', actor_id: me.id, target_id: null, data: {} })
+  // PKP doubles every station card with a twin. It doesn't use up a combo, so a combo-ready player gets two goes
+  // and stays combo ready. A card that can't be doubled takes the normal combo path.
+  if (pkpClosed(fresh) && !COMBO_EXCLUDED.includes(claimed.powerUp.kind)) {
+    return { ok: true, kind, ...((await ctx.store.addTwin(claimed.powerUp.id)) ? { double: true } : {}) }
+  }
   return { ok: true, kind, ...(await doubleIfCombo(ctx, me, claimed.powerUp)) }
 }
 
