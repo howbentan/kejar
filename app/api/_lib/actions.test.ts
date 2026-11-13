@@ -2123,6 +2123,34 @@ describe('game mode', () => {
     await rejects(run('create', { arenaId: 'around-me', center: CENTER, settings: { mode: 'party' }, organiserToken }), 400, 'Unknown game mode')
   })
 
+  describe('endgame switches', () => {
+    const stored = async (settings: object) => (await store.gameByCode((await readyGame(settings)).code))!.settings.endgames
+
+    it('default to all three on, with Banjir Kilat off', async () => {
+      expect(await stored({ mode: 'full' })).toEqual({ bomba: 'on', hebat: 'on', pkp: 'on', banjir: 'off' })
+    })
+
+    it('keep only Bomba in Core', async () => {
+      expect(await stored({ mode: 'core', endgames: { bomba: 'off', hebat: 'on', pkp: 'on' } })).toEqual({ bomba: 'off', hebat: 'off', pkp: 'off', banjir: 'off' })
+      expect(await stored({ mode: 'core' })).toEqual({ bomba: 'on', hebat: 'off', pkp: 'off', banjir: 'off' })
+    })
+
+    it('store what a Full game asks for, and only the four keys', async () => {
+      expect(await stored({ mode: 'full', endgames: { bomba: 'off', hebat: 'on', pkp: 'off', extra: 'on' } })).toEqual({ bomba: 'off', hebat: 'on', pkp: 'off', banjir: 'off' })
+    })
+
+    it('store Banjir Kilat as off even when sent on', async () => {
+      expect((await stored({ mode: 'full', endgames: { banjir: 'on' } }))!.banjir).toBe('off')
+    })
+
+    it('reject a bad value', async () => {
+      const organiserToken = await createOrganiser()
+      for (const endgames of [{ bomba: 'yes' }, { pkp: true }, 'on', null, []]) {
+        await rejects(run('create', { arenaId: 'around-me', center: CENTER, settings: { endgames }, organiserToken }), 400, 'Unknown endgame setting')
+      }
+    })
+  })
+
   it('start stores how many deck sets each side gets', async () => {
     const g = await readyGame()
     await run('start', { code: g.code, organiserToken: g.organiserToken })

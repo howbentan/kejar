@@ -42,6 +42,11 @@ export interface Settings {
    * countdown); it never starts the game. Older games have none: read them as null.
    */
   startsAt?: string | null
+  /**
+   * Which endgames the organiser allows (endgame design §3). Core only reads Bomba; Banjir Kilat is "coming soon", so
+   * its switch is always off. Older games have none: read them as all off, so they never get an endgame.
+   */
+  endgames?: { bomba: 'on' | 'off'; hebat: 'on' | 'off'; pkp: 'on' | 'off'; banjir: 'off' }
 }
 
 /** Spec §4.3 defaults. */
@@ -55,6 +60,20 @@ export const DEFAULT_SETTINGS: Settings = {
   chaserSnapshot: false,
   playersBand: 20,
   legendaries: { dato: 'stash', bomoh: 'off', ring: 'off', hijau: 'off' },
+  endgames: { bomba: 'on', hebat: 'on', pkp: 'on', banjir: 'off' },
+}
+
+export type EndgameKind = 'bomba' | 'hebat' | 'pkp' | 'banjir'
+
+/**
+ * The endgame rolled at start and kept secret until `revealedAt` is set. `wanted` is a player id (Hang Hebat only).
+ * `bountyAt` is when the wanted runner went out; only an undo clears it.
+ */
+export interface EndgameState {
+  kind: EndgameKind
+  revealedAt: string | null
+  wanted: string | null
+  bountyAt: string | null
 }
 
 export interface Arena {
@@ -123,6 +142,8 @@ export interface Game {
   hijau_stash?: HijauStash | null
   /** Mak Kau Hijau's run, once a player scans the green card; null or absent before that. */
   hijau?: HijauRun | null
+  /** The endgame rolled at start. Never sent to a client before `revealedAt` is set. Older games have none. */
+  endgame?: EndgameState | null
   /**
    * The organiser's packing list: `ticks` maps an item id to the label it was ticked under (the item un-ticks
    * itself if its label changes), and `placed` is which cards are taped up. Older games have none.
@@ -352,6 +373,10 @@ export type EventType =
   | 'hijau'
   /** Mak Kau Hijau settled. data: { jailed: number; void: boolean } */
   | 'hijau-done'
+  /** The endgame was revealed. data: { kind, wanted?, who? } (`wanted` is the runner's id, `who` their name) */
+  | 'endgame'
+  /** Hang Hebat's bounty passed on. target: the new wanted runner. data: { who } */
+  | 'wanted'
 
 export type PowerUpKind =
   | 'decoy'
