@@ -290,18 +290,22 @@ describe('SupabaseStore legendaries: Super Ring and Mak Kau Hijau', () => {
     const { rpcs, store } = rpcStore([true, false, true, false])
     expect(await store.claimHijauPush('g1', NOW, ['r1', 'r2'])).toBe(true)
     expect(await store.claimHijauPush('g1', NOW, [])).toBe(false)
-    expect(await store.tapHijau('g1', 'c1', NOW)).toBe(true)
+    const fix = { lat: 3.2, lng: 101.7, at: NOW }
+    expect(await store.tapHijau('g1', 'c1', NOW, fix)).toBe(true)
     expect(await store.tapHijau('g1', 'c1', NOW)).toBe(false)
     expect(rpcs[0]).toEqual({ fn: 'claim_hijau_push', args: { p_game: 'g1', p_at: NOW, p_targets: ['r1', 'r2'] } })
-    expect(rpcs[2]).toEqual({ fn: 'tap_hijau', args: { p_game: 'g1', p_player: 'c1', p_at: NOW } })
+    expect(rpcs[2]).toEqual({ fn: 'tap_hijau', args: { p_game: 'g1', p_player: 'c1', p_at: NOW, p_fix: fix } })
+    expect(rpcs[3]).toEqual({ fn: 'tap_hijau', args: { p_game: 'g1', p_player: 'c1', p_at: NOW, p_fix: null } })
   })
 
   it('settles through claim_hijau_settle, returning the run or null', async () => {
     const run = { claimedBy: 'p1', claimedAt: NOW, startsAt: NOW, deadline: NOW, sentAt: NOW, settledAt: NOW, tapped: ['c1'] }
     const { rpcs, store } = rpcStore([run, null])
-    expect(await store.claimHijauSettle('g1', NOW)).toEqual(run)
-    expect(await store.claimHijauSettle('g1', NOW)).toBeNull()
-    expect(rpcs[0]).toEqual({ fn: 'claim_hijau_settle', args: { p_game: 'g1', p_at: NOW } })
+    const until = '2026-10-25T09:10:00.000Z'
+    expect(await store.claimHijauSettle('g1', NOW, until)).toEqual(run)
+    expect(await store.claimHijauSettle('g1', NOW, null)).toBeNull()
+    expect(rpcs[0]).toEqual({ fn: 'claim_hijau_settle', args: { p_game: 'g1', p_at: NOW, p_locked_until: until } })
+    expect(rpcs[1]).toEqual({ fn: 'claim_hijau_settle', args: { p_game: 'g1', p_at: NOW, p_locked_until: null } })
   })
 
   it('starts, updates and ends an arrest through the arrest functions', async () => {

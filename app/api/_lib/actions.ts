@@ -22,7 +22,7 @@ import { isOut, undoableArrestId, undoableCatchId } from '../../shared/players.j
 import { ARREST_FIX_FRESH_MS, ARREST_OPEN_MS, arrestEndsAt, insideArrest, releaseVerdict, usableFix } from '../../shared/arrest.js'
 import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
-import { HIJAU_MS, hijauCounts, hijauStartsAt, hijauTargets } from '../../shared/hijau.js'
+import { HIJAU_FIX_FRESH_MS, HIJAU_MS, hijauCounts, hijauLockEnd, hijauStartsAt, hijauTargets, penjaraLockLeft } from '../../shared/hijau.js'
 import { bomohCodeFromQr, datoCodeFromQr, hijauCodeFromQr, isBomohQr, isDatoQr, isHijauQr, isRingQr, ringCodeFromQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, judgeHijauClaim, judgeRingClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS, TOLL_FRESH_MS } from '../../shared/powerups.js'
 import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict, sentDuringPause } from '../../shared/penjara.js'
@@ -30,7 +30,7 @@ import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
 import { fallbackFor, LEGENDARY_KINDS, pickLegendaries, sidesOf, type SideSwitch } from '../../shared/legendaries.js'
 import { validateTeams } from '../../shared/teams.js'
-import { DEFAULT_SETTINGS, type Arena, type Arrest, type BomohStash, type DatoStash, type Game, type LatLng, type LegendaryKind, type Player, type Position, type PowerUp, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
+import { DEFAULT_SETTINGS, type Arena, type Arrest, type BomohStash, type DatoStash, type Game, type HijauFix, type LatLng, type LegendaryKind, type Player, type Position, type PowerUp, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
 import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
 import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
@@ -759,8 +759,10 @@ async function settleRescue(ctx: Ctx, game: Game, phase = phaseAt(game, ctx.now)
   if (!fix && rescuer) {
     fixes = (await store.latestPositions(game.id, [iso(Math.min(now, startedAt + RESCUE_HOLD_MS))]))[r.by] ?? []
   }
-  // A removed rescuer has left the game: the same as being caught.
-  const verdict = rescuer ? rescueVerdict({ rescue: { by: r.by, startedAt }, rescuer, fixes, jail: game.arena.jail, now, pauses: game.pauses, pausedAt: game.paused_at }) : 'failed'
+  // A removed rescuer has left the game: the same as being caught. A hold that ends with Penjara locked after Mak
+  // Kau Hijau can't free anyone either.
+  const judged = rescuer ? rescueVerdict({ rescue: { by: r.by, startedAt }, rescuer, fixes, jail: game.arena.jail, now, pauses: game.pauses, pausedAt: game.paused_at }) : 'failed'
+  const verdict = judged !== 'holding' && penjaraLockLeft(game, Math.min(now, startedAt + RESCUE_HOLD_MS)) > 0 ? 'failed' : judged
   if (verdict === 'holding' || !(await store.endRescue(game.id, r.startedAt))) return
   if (verdict === 'failed') {
     await store.addEvent({ game_id: game.id, type: 'rescue-failed', actor_id: r.by, target_id: null, data: {} })
@@ -947,14 +949,15 @@ async function settleArrests(ctx: Ctx, game: Game): Promise<boolean> {
 }
 
 /** Mak Kau Hijau's push (new power-ups §6.3). */
-const HIJAU_PUSH = 'Mak kau hijau! Tap the green in 45 s or go to Penjara.'
+const HIJAU_PUSH = 'Mak kau hijau! Tap the green in 20 s or go to Penjara.'
 
 /**
  * Moves an unsettled Mak Kau Hijau along (the caller skips paused games). From `startsAt`, the first call sends
  * the one batch push and records its time; from the deadline, the first call settles it once. It is void (nobody
- * jailed) when the push went out under 25 s before the deadline or never, and silently when the deadline fell
- * after the game's end. Otherwise every target who didn't tap goes to Penjara (or house arrest, with Super Ring)
- * under an `auto-jailed` event, so the marshals' undo works. True if a final whistle is pending.
+ * jailed, revealed or locked in) when the push went out under 15 s before the deadline or never, and silently when
+ * the deadline fell after the game's end. Otherwise every target who didn't tap goes to Penjara (or house arrest,
+ * with Super Ring) under an `auto-jailed` event, so the marshals' undo works, and Penjara is locked for 3 minutes
+ * from the deadline (`lockedUntil`, stored with the settle). True if a final whistle is pending.
  */
 async function stepHijau(ctx: Ctx, game: Game): Promise<boolean> {
   const { store, now } = ctx
@@ -974,15 +977,17 @@ async function stepHijau(ctx: Ctx, game: Game): Promise<boolean> {
     }
     return false
   }
-  const settled = await store.claimHijauSettle(game.id, iso(now))
+  // The whistle went first (an early end, or the clock ran out before the deadline): it judges nobody.
+  const ended = !!game.ended_at || phaseAt(game, deadline).phase === 'ended'
+  const lockedUntil = !ended && hijauCounts(run) ? iso(hijauLockEnd(game, now)) : null
+  const settled = await store.claimHijauSettle(game.id, iso(now), lockedUntil)
   if (!settled) return false
   const done = (data: Record<string, unknown>) => store.addEvent({ game_id: game.id, type: 'hijau-done', actor_id: null, target_id: null, data })
-  // The whistle went first (an early end, or the clock ran out before the deadline): it judges nobody.
-  if (game.ended_at || phaseAt(game, deadline).phase === 'ended') {
+  if (ended) {
     await done({ void: true, jailed: 0, ended: true })
     return false
   }
-  if (!hijauCounts(settled)) {
+  if (!lockedUntil) {
     await done({ void: true, jailed: 0 })
     return false
   }
@@ -1504,6 +1509,7 @@ const jailbreak: Action = async (ctx, body) => {
     runnerPos: latest(positions[me.id]),
     jail: game.arena.jail,
     now: ctx.now,
+    lockedMs: penjaraLockLeft(fresh, ctx.now),
   })
   if (!verdict.ok) return verdict
   // The scan starts the 10-second hold instead of freeing at once (rules §9a); `advance` settles it.
@@ -1537,6 +1543,9 @@ const pullReel: Action = async (ctx, body) => {
   const current = (await ctx.store.players(game.id)).find((p) => p.id === me.id)
   if (!current || current.role !== 'runner' || !current.jailed) return { ok: false, reason: 'not-jailed' }
   if (reelPulledThisStay(current)) return { ok: false, reason: 'already-pulled' }
+  // Locked after Mak Kau Hijau: no free slot for anyone, so the pull waits (it isn't spent).
+  const lockedMs = penjaraLockLeft(fresh, ctx.now)
+  if (lockedMs > 0) return { ok: false, reason: 'penjara-locked', lockedMs }
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   if (!atJail(latest(positions[me.id]), game.arena.jail, ctx.now)) return { ok: false, reason: 'too-far-from-jail' }
   if (!(await ctx.store.pullReel(me.id, iso(ctx.now)))) return { ok: false, reason: 'already-pulled' }
@@ -1584,6 +1593,7 @@ const settle: Action = async (ctx, body) => {
     jail: game.arena.jail,
     targetIds,
     now: ctx.now,
+    lockedMs: penjaraLockLeft(fresh, ctx.now),
   })
   if (!verdict.ok) return verdict
   if (!(await ctx.store.markUsed(dato!.id))) return { ok: false, reason: 'already-used' }
@@ -1987,7 +1997,7 @@ async function claimHijau(ctx: Ctx, game: GameRow, me: Player, scanned: string |
   const endsAt = phaseAt(game, ctx.now).endsAt
   if (endsAt !== null && startsAt + HIJAU_MS > endsAt) {
     // It can't run to its deadline before the whistle: the card is spent and does nothing.
-    if (await ctx.store.claimHijauSettle(game.id, iso(ctx.now))) {
+    if (await ctx.store.claimHijauSettle(game.id, iso(ctx.now), null)) {
       await ctx.store.addEvent({ game_id: game.id, type: 'hijau-done', actor_id: null, target_id: null, data: { void: true, jailed: 0, ended: true } })
     }
   } else if (startsAt <= ctx.now) {
@@ -2000,8 +2010,9 @@ async function claimHijau(ctx: Ctx, game: GameRow, me: Player, scanned: string |
 
 /**
  * A runner taps green during Mak Kau Hijau (§6.3). Judged by server time against the one shared deadline: a tap
- * that lands at or after it is `too-late`. A tap while paused counts as made at the pause (the 45 s is held
- * still, and resume moves the deadline). A repeat tap (a retry on a bad connection) is fine.
+ * that lands at or after it is `too-late`. A tap while paused counts as made at the pause (the 20 s is held
+ * still, and resume moves the deadline). A repeat tap (a retry on a bad connection) is fine. The tap reveals the
+ * runner to the Kejar where they tapped (`tapFix`); a tap with no usable fix still counts.
  */
 const touchGreen: Action = async (ctx, body) => {
   const loaded = await loadGame(ctx, body)
@@ -2015,10 +2026,26 @@ const touchGreen: Action = async (ctx, body) => {
   const at = game.paused_at ? Math.min(ctx.now, Date.parse(game.paused_at)) : ctx.now
   if (run.settledAt || at >= Date.parse(run.deadline)) return { ok: false, reason: 'too-late' }
   if (!(run.targets ?? []).includes(me.id) || !hijauTargets([me]).length) return { ok: false, reason: 'not-a-target' }
-  if (await ctx.store.tapHijau(game.id, me.id, iso(at))) return { ok: true }
+  if (await ctx.store.tapHijau(game.id, me.id, iso(at), await tapFix(ctx, game, me, body, at))) return { ok: true }
   // Lost to the deadline, or a racing tap of their own already landed.
   const after = (await loadGame(ctx, body)).hijau
   return after?.tapped.includes(me.id) ? { ok: true } : { ok: false, reason: 'too-late' }
+}
+
+/**
+ * Where a runner tapped green, for the Kejar's map: the fix sent with the tap if it's usable (50 m or better), else
+ * their latest stored fix from the 20 s before the tap if that's usable, else none. Stamped with the tap's time, so
+ * the next ping reveal after the tap replaces it.
+ */
+async function tapFix(ctx: Ctx, game: Game, me: Player, body: Body, at: number): Promise<HijauFix | null> {
+  const { lat, lng, accuracy_m } = body as { lat?: unknown; lng?: unknown; accuracy_m?: unknown }
+  if (typeof lat === 'number' && typeof lng === 'number' && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
+    const accuracy = cleanAccuracy(accuracy_m)
+    if (accuracy !== null && usableFix({ lat, lng, accuracy_m: accuracy, at: iso(at) })) return { lat, lng, at: iso(at) }
+  }
+  const stored = latest((await ctx.store.latestPositions(game.id, [iso(at)]))[me.id])
+  if (!stored || at - Date.parse(stored.at) > HIJAU_FIX_FRESH_MS || !usableFix(stored)) return null
+  return { lat: stored.lat, lng: stored.lng, at: iso(at) }
 }
 
 /**

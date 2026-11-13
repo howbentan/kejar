@@ -17,7 +17,9 @@ alter table secret_cards
   check (legendary in ('dato', 'bomoh', 'ring', 'hijau'));
 
 -- 3. Columns. ring_stash and hijau_stash have the shape of bomoh_stash: { code, card, lat, lng, claimedBy, claimedAt }.
--- hijau is the run: { claimedBy, claimedAt, startsAt, deadline, sentAt, settledAt, tapped[], targets[] }.
+-- hijau is the run: { claimedBy, claimedAt, startsAt, deadline, sentAt, settledAt, tapped[], targets[], fixes, lockedUntil }.
+-- fixes maps a tapper's player id to where they tapped ({ lat, lng, at }); lockedUntil is the end of Penjara's 3-minute
+-- lock, set when the run settles (null when it was void).
 -- players.arrest is a runner's house arrest: { firedAt, route, by, center, startedAt, ringId, catchEventId }, or null.
 alter table games add column if not exists ring_stash jsonb;
 alter table games add column if not exists hijau_stash jsonb;
@@ -77,7 +79,9 @@ begin
            'sentAt', null,
            'settledAt', null,
            'tapped', '[]'::jsonb,
-           'targets', '[]'::jsonb)
+           'targets', '[]'::jsonb,
+           'fixes', '{}'::jsonb,
+           'lockedUntil', null)
    where id = p_game;
   return true;
 end;
@@ -109,14 +113,22 @@ $$;
 revoke execute on function claim_hijau_push(uuid, timestamptz, jsonb) from public, anon, authenticated;
 grant execute on function claim_hijau_push(uuid, timestamptz, jsonb) to service_role;
 
--- 7. Adds a runner to hijau.tapped only while the run is unsettled, before the deadline, and only once. True iff
--- this call added them.
-create or replace function tap_hijau(p_game uuid, p_player uuid, p_at timestamptz) returns boolean
+-- 7. Adds a runner to hijau.tapped only while the run is unsettled, before the deadline, and only once, and keeps
+-- where they tapped (p_fix, { lat, lng, at }) in hijau.fixes in the same update when there is one. True iff this
+-- call added them.
+drop function if exists tap_hijau(uuid, uuid, timestamptz);
+create or replace function tap_hijau(p_game uuid, p_player uuid, p_at timestamptz, p_fix jsonb default null) returns boolean
 language plpgsql
 as $$
 begin
   update games
      set hijau = jsonb_set(hijau, '{tapped}', (hijau -> 'tapped') || to_jsonb(p_player::text))
+       || case
+            when p_fix is null or jsonb_typeof(p_fix) <> 'object' then '{}'::jsonb
+            else jsonb_build_object('fixes',
+              (case when jsonb_typeof(hijau -> 'fixes') = 'object' then hijau -> 'fixes' else '{}'::jsonb end)
+                || jsonb_build_object(p_player::text, p_fix))
+          end
    where id = p_game
      and hijau is not null and jsonb_typeof(hijau) = 'object'
      and (hijau ->> 'settledAt') is null
@@ -126,11 +138,13 @@ begin
 end;
 $$;
 
-revoke execute on function tap_hijau(uuid, uuid, timestamptz) from public, anon, authenticated;
-grant execute on function tap_hijau(uuid, uuid, timestamptz) to service_role;
+revoke execute on function tap_hijau(uuid, uuid, timestamptz, jsonb) from public, anon, authenticated;
+grant execute on function tap_hijau(uuid, uuid, timestamptz, jsonb) to service_role;
 
--- 8. Sets hijau.settledAt once and returns the run (null if there's no run or it already settled).
-create or replace function claim_hijau_settle(p_game uuid, p_at timestamptz) returns jsonb
+-- 8. Sets hijau.settledAt and hijau.lockedUntil (the end of Penjara's lock; null for a void run) once and returns the
+-- run (null if there's no run or it already settled).
+drop function if exists claim_hijau_settle(uuid, timestamptz);
+create or replace function claim_hijau_settle(p_game uuid, p_at timestamptz, p_locked_until timestamptz default null) returns jsonb
 language plpgsql
 as $$
 declare
@@ -138,6 +152,10 @@ declare
 begin
   update games
      set hijau = jsonb_set(hijau, '{settledAt}', to_jsonb(to_char(p_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))
+       || jsonb_build_object('lockedUntil', case
+            when p_locked_until is null then null
+            else to_jsonb(to_char(p_locked_until at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+          end)
    where id = p_game
      and hijau is not null and jsonb_typeof(hijau) = 'object'
      and (hijau ->> 'settledAt') is null
@@ -146,8 +164,8 @@ begin
 end;
 $$;
 
-revoke execute on function claim_hijau_settle(uuid, timestamptz) from public, anon, authenticated;
-grant execute on function claim_hijau_settle(uuid, timestamptz) to service_role;
+revoke execute on function claim_hijau_settle(uuid, timestamptz, timestamptz) from public, anon, authenticated;
+grant execute on function claim_hijau_settle(uuid, timestamptz, timestamptz) to service_role;
 
 -- 9. House arrest. start_arrest: only a runner with no arrest who isn't jailed. True iff this call started it.
 create or replace function start_arrest(p_player uuid, p_arrest jsonb) returns boolean
@@ -251,8 +269,8 @@ $$;
 revoke execute on function steal_card(uuid, text, timestamptz) from public, anon, authenticated;
 grant execute on function steal_card(uuid, text, timestamptz) to service_role;
 
--- 11. resume_game, from 0019_new_deck_cards.sql, unchanged except that a house arrest's clock and a Mak Kau Hijau
--- window that hasn't closed move by the pause too.
+-- 11. resume_game, from 0019_new_deck_cards.sql, unchanged except that a house arrest's clock, a Mak Kau Hijau
+-- window that hasn't closed and Penjara's lock while it runs move by the pause too.
 create or replace function resume_game(p_game uuid, p_at timestamptz) returns int
 language plpgsql
 as $$
@@ -306,6 +324,12 @@ begin
       jsonb_set(hijau, '{startsAt}', to_jsonb(to_char(((hijau->>'startsAt')::timestamptz + d) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))),
       '{deadline}', to_jsonb(to_char(((hijau->>'deadline')::timestamptz + d) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))
     where id = p_game and hijau is not null and jsonb_typeof(hijau) = 'object' and (hijau->>'deadline')::timestamptz > started;
+  -- Penjara's lock after a Mak Kau Hijau is held still too while it runs; one that ran out before the pause is left alone.
+  update games
+    set hijau = jsonb_set(hijau, '{lockedUntil}',
+      to_jsonb(to_char(((hijau->>'lockedUntil')::timestamptz + d) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))
+    where id = p_game and hijau is not null and jsonb_typeof(hijau) = 'object'
+      and jsonb_typeof(hijau->'lockedUntil') = 'string' and (hijau->>'lockedUntil')::timestamptz > started;
   return (extract(epoch from d) * 1000)::int;
 end;
 $$;

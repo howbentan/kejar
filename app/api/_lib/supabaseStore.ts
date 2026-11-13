@@ -1,6 +1,6 @@
 import { LUAR_GARISAN_GRACE_MS } from '../../shared/alerts.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Arrest, Game, GameEvent, HijauRun, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard } from '../../shared/types.js'
+import type { Arrest, Game, GameEvent, HijauFix, HijauRun, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard } from '../../shared/types.js'
 import { newDatoCode } from './secrets.js'
 import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PhoneMoveRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, RedeemPhoneMoveResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
@@ -308,7 +308,7 @@ export class SupabaseStore implements GameStore {
       | null
     return rows?.[0] ?? null
   }
-  async claimHijau(gameId: string, playerId: string, run: Omit<HijauRun, 'claimedBy' | 'claimedAt' | 'sentAt' | 'settledAt' | 'tapped' | 'targets'>): Promise<boolean> {
+  async claimHijau(gameId: string, playerId: string, run: Pick<HijauRun, 'startsAt' | 'deadline'>): Promise<boolean> {
     // One function: locks the game row, re-checks the stash, marks it claimed and writes the run together. True for the winner.
     return (
       check(
@@ -326,13 +326,17 @@ export class SupabaseStore implements GameStore {
     // One conditional update in the database: only a run with no sentAt takes it, with its targets. True for the winner.
     return check(await this.db.rpc('claim_hijau_push', { p_game: gameId, p_at: atIso, p_targets: targets })) === true
   }
-  async tapHijau(gameId: string, playerId: string, atIso: string): Promise<boolean> {
-    // One conditional update: not settled, before the deadline, and only if this player isn't in the list yet.
-    return check(await this.db.rpc('tap_hijau', { p_game: gameId, p_player: playerId, p_at: atIso })) === true
+  async tapHijau(gameId: string, playerId: string, atIso: string, fix?: HijauFix | null): Promise<boolean> {
+    // One conditional update: not settled, before the deadline, and only if this player isn't in the list yet. The
+    // tap's spot (if any) goes into hijau.fixes in the same update.
+    return check(await this.db.rpc('tap_hijau', { p_game: gameId, p_player: playerId, p_at: atIso, p_fix: fix ?? null })) === true
   }
-  async claimHijauSettle(gameId: string, atIso: string): Promise<HijauRun | null> {
-    // One conditional update that returns the run it settled; null if there was none or it had settled already.
-    return (check(await this.db.rpc('claim_hijau_settle', { p_game: gameId, p_at: atIso })) as HijauRun | null) ?? null
+  async claimHijauSettle(gameId: string, atIso: string, lockedUntilIso: string | null): Promise<HijauRun | null> {
+    // One conditional update that sets settledAt and Penjara's lock and returns the run it settled; null if there was
+    // none or it had settled already.
+    return (
+      (check(await this.db.rpc('claim_hijau_settle', { p_game: gameId, p_at: atIso, p_locked_until: lockedUntilIso })) as HijauRun | null) ?? null
+    )
   }
   async startArrest(playerId: string, arrest: Arrest): Promise<boolean> {
     // One conditional update: only a runner with no arrest who isn't jailed. True for the winner.

@@ -184,6 +184,20 @@ export interface HijauRun {
   tapped: string[]
   /** Who the push went to (set with `sentAt`, empty before): only they can tap, see the takeover or be jailed. */
   targets: string[]
+  /**
+   * Where each runner was when they tapped (their fix on the tap, else their latest from the last 20 s), keyed by
+   * player id, with the tap's time. A tap with no usable fix has none. The Kejar see these spots until the next ping.
+   */
+  fixes?: Record<string, HijauFix>
+  /** Set when it settles: the end of Penjara's 3-minute lock, or null when the run was void. */
+  lockedUntil?: string | null
+}
+
+/** A tapper's spot for the Kejar's map (see `HijauRun.fixes`). */
+export interface HijauFix {
+  lat: number
+  lng: number
+  at: string
 }
 
 /**

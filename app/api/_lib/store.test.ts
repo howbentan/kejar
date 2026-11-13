@@ -935,6 +935,7 @@ describe('MemoryStore legendaries: Super Ring and Mak Kau Hijau', () => {
     expect(row.hijau_stash).toMatchObject({ claimedBy: 'p1', claimedAt: iso(T0) })
     expect(row.hijau).toEqual({
       claimedBy: 'p1', claimedAt: iso(T0), startsAt: iso(T0 + 10_000), deadline: iso(T0 + 55_000), sentAt: null, settledAt: null, tapped: [], targets: [],
+      fixes: {}, lockedUntil: null,
     })
   })
 
@@ -969,6 +970,18 @@ describe('MemoryStore legendaries: Super Ring and Mak Kau Hijau', () => {
     expect((await store.gameByCode('ABC234'))!.hijau!.tapped).toEqual(['c1', 'c4'])
   })
 
+  it('tapHijau keeps where the runner tapped, when the tap carries a fix', async () => {
+    const g = await startedGame()
+    await store.updateGame(g.id, { hijau_stash: stash() })
+    await store.claimHijau(g.id, 'p1', runOf())
+    const fix = { lat: 3.2, lng: 101.7, at: iso(T0 + 20_000) }
+    expect(await store.tapHijau(g.id, 'c1', iso(T0 + 20_000), fix)).toBe(true)
+    expect(await store.tapHijau(g.id, 'c2', iso(T0 + 21_000))).toBe(true)
+    // A repeat tap never moves the spot.
+    expect(await store.tapHijau(g.id, 'c1', iso(T0 + 22_000), { lat: 9, lng: 9, at: iso(T0 + 22_000) })).toBe(false)
+    expect((await store.gameByCode('ABC234'))!.hijau).toMatchObject({ tapped: ['c1', 'c2'], fixes: { c1: fix } })
+  })
+
   it('tapHijau is false when there is no run', async () => {
     const g = await startedGame()
     expect(await store.tapHijau(g.id, 'c1', iso(T0))).toBe(false)
@@ -980,9 +993,10 @@ describe('MemoryStore legendaries: Super Ring and Mak Kau Hijau', () => {
     await store.updateGame(g.id, { hijau_stash: stash() })
     await store.claimHijau(g.id, 'p1', runOf())
     await store.tapHijau(g.id, 'c1', iso(T0 + 20_000))
-    const run = await store.claimHijauSettle(g.id, iso(T0 + 60_000))
-    expect(run).toMatchObject({ claimedBy: 'p1', tapped: ['c1'], settledAt: iso(T0 + 60_000) })
-    expect(await store.claimHijauSettle(g.id, iso(T0 + 61_000))).toBeNull()
+    const run = await store.claimHijauSettle(g.id, iso(T0 + 60_000), iso(T0 + 55_000 + 3 * MIN))
+    expect(run).toMatchObject({ claimedBy: 'p1', tapped: ['c1'], settledAt: iso(T0 + 60_000), lockedUntil: iso(T0 + 55_000 + 3 * MIN) })
+    expect((await store.gameByCode('ABC234'))!.hijau!.lockedUntil).toBe(iso(T0 + 55_000 + 3 * MIN))
+    expect(await store.claimHijauSettle(g.id, iso(T0 + 61_000), null)).toBeNull()
   })
 
   it('startArrest only works when not arrested and not jailed', async () => {
@@ -1078,6 +1092,23 @@ describe('MemoryStore legendaries: Super Ring and Mak Kau Hijau', () => {
     now = T0 + 6 * MIN
     await store.resumeGame(g.id)
     expect((await store.gameByCode('ABC234'))!.hijau).toMatchObject({ startsAt: iso(T0 + 2 * MIN), deadline: iso(T0 + 4 * MIN) })
+  })
+
+  it("resumeGame moves Penjara's lock by the pause while it runs, and leaves an expired one alone", async () => {
+    const g = await startedGame()
+    await store.updateGame(g.id, { hijau_stash: stash() })
+    await store.claimHijau(g.id, 'p1', { startsAt: iso(T0), deadline: iso(T0 + MIN) })
+    await store.claimHijauSettle(g.id, iso(T0 + MIN), iso(T0 + 4 * MIN))
+    now = T0 + 2 * MIN
+    await store.pauseGame(g.id)
+    now = T0 + 3 * MIN
+    await store.resumeGame(g.id)
+    expect((await store.gameByCode('ABC234'))!.hijau).toMatchObject({ deadline: iso(T0 + MIN), lockedUntil: iso(T0 + 5 * MIN) })
+    now = T0 + 6 * MIN
+    await store.pauseGame(g.id)
+    now = T0 + 7 * MIN
+    await store.resumeGame(g.id)
+    expect((await store.gameByCode('ABC234'))!.hijau!.lockedUntil).toBe(iso(T0 + 5 * MIN))
   })
 
   it('wiping a game clears every arrest centre', async () => {

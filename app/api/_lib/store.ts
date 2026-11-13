@@ -1,6 +1,6 @@
 import { LUAR_GARISAN_GRACE_MS } from '../../shared/alerts.js'
 import type { ArenaDraft } from '../../shared/arenaDraft.js'
-import type { Arena, Arrest, Game, GameEvent, HijauRun, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard } from '../../shared/types.js'
+import type { Arena, Arrest, Game, GameEvent, HijauFix, HijauRun, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard } from '../../shared/types.js'
 import { newDatoCode } from './secrets.js'
 
 export type GameRow = Game & { organiser_id: string; host_push?: PushSubscriptionJSON | null }
@@ -196,13 +196,19 @@ export interface GameStore {
    * Mak Kau Hijau: atomically, if the green stash is dropped and unclaimed, marks it claimed by this player and
    * writes `games.hijau` (nothing sent or settled yet, nobody tapped). True only for the one caller who wins.
    */
-  claimHijau(gameId: string, playerId: string, run: Omit<HijauRun, 'claimedBy' | 'claimedAt' | 'sentAt' | 'settledAt' | 'tapped' | 'targets'>): Promise<boolean>
+  claimHijau(gameId: string, playerId: string, run: Pick<HijauRun, 'startsAt' | 'deadline'>): Promise<boolean>
   /** Sets `hijau.sentAt` and `hijau.targets` (who the push goes to) together, once; true for the first caller. */
   claimHijauPush(gameId: string, atIso: string, targets: string[]): Promise<boolean>
-  /** Adds the player to `hijau.tapped` only if the run hasn't settled, `atIso` is before the deadline and they aren't in it yet. */
-  tapHijau(gameId: string, playerId: string, atIso: string): Promise<boolean>
-  /** Sets `hijau.settledAt` once and returns the run; null if there's no run or it already settled. */
-  claimHijauSettle(gameId: string, atIso: string): Promise<HijauRun | null>
+  /**
+   * Adds the player to `hijau.tapped` only if the run hasn't settled, `atIso` is before the deadline and they aren't in
+   * it yet, keeping `fix` (where they tapped) in `hijau.fixes` in the same step when there is one.
+   */
+  tapHijau(gameId: string, playerId: string, atIso: string, fix?: HijauFix | null): Promise<boolean>
+  /**
+   * Sets `hijau.settledAt` and `hijau.lockedUntil` (Penjara's lock, null for a void run) once and returns the run;
+   * null if there's no run or it already settled.
+   */
+  claimHijauSettle(gameId: string, atIso: string, lockedUntilIso: string | null): Promise<HijauRun | null>
   /** Starts a runner's house arrest only if they have none and aren't jailed; true for the one caller who wins. */
   startArrest(playerId: string, arrest: Arrest): Promise<boolean>
   /** Merges a patch into the runner's arrest; nothing happens without one. */
@@ -788,7 +794,7 @@ export class MemoryStore implements GameStore {
     this.powerUpRows.push(row)
     return { ...row }
   }
-  async claimHijau(gameId: string, playerId: string, run: Omit<HijauRun, 'claimedBy' | 'claimedAt' | 'sentAt' | 'settledAt' | 'tapped' | 'targets'>) {
+  async claimHijau(gameId: string, playerId: string, run: Pick<HijauRun, 'startsAt' | 'deadline'>) {
     const g = this.games.find((x) => x.id === gameId)
     if (!g?.hijau_stash || typeof g.hijau_stash.lat !== 'number' || g.hijau_stash.claimedBy !== null) return false
     g.hijau_stash = { ...g.hijau_stash, claimedBy: playerId, claimedAt: this.nowIso() }
@@ -801,6 +807,8 @@ export class MemoryStore implements GameStore {
       settledAt: null,
       tapped: [],
       targets: [],
+      fixes: {},
+      lockedUntil: null,
     }
     return true
   }
@@ -810,17 +818,18 @@ export class MemoryStore implements GameStore {
     g.hijau = { ...g.hijau, sentAt: atIso, targets: [...targets] }
     return true
   }
-  async tapHijau(gameId: string, playerId: string, atIso: string) {
+  async tapHijau(gameId: string, playerId: string, atIso: string, fix?: HijauFix | null) {
     const g = this.games.find((x) => x.id === gameId)
     if (!g?.hijau || g.hijau.settledAt || g.hijau.tapped.includes(playerId) || !(Date.parse(atIso) < Date.parse(g.hijau.deadline))) return false
-    g.hijau = { ...g.hijau, tapped: [...g.hijau.tapped, playerId] }
+    const fixes = fix ? { ...(g.hijau.fixes ?? {}), [playerId]: { ...fix } } : (g.hijau.fixes ?? {})
+    g.hijau = { ...g.hijau, tapped: [...g.hijau.tapped, playerId], fixes }
     return true
   }
-  async claimHijauSettle(gameId: string, atIso: string) {
+  async claimHijauSettle(gameId: string, atIso: string, lockedUntilIso: string | null) {
     const g = this.games.find((x) => x.id === gameId)
     if (!g?.hijau || g.hijau.settledAt) return null
-    g.hijau = { ...g.hijau, settledAt: atIso }
-    return { ...g.hijau, tapped: [...g.hijau.tapped], targets: [...(g.hijau.targets ?? [])] }
+    g.hijau = { ...g.hijau, settledAt: atIso, lockedUntil: lockedUntilIso }
+    return { ...g.hijau, tapped: [...g.hijau.tapped], targets: [...(g.hijau.targets ?? [])], fixes: { ...(g.hijau.fixes ?? {}) } }
   }
   async startArrest(playerId: string, arrest: Arrest) {
     const p = this.playerRows.find((x) => x.id === playerId)
@@ -914,6 +923,10 @@ export class MemoryStore implements GameStore {
     // A Mak Kau Hijau window that hasn't closed waits out the pause whole (one that already closed is left alone).
     if (g.hijau && Date.parse(g.hijau.deadline) > pausedAt) {
       g.hijau = { ...g.hijau, startsAt: shift(g.hijau.startsAt), deadline: shift(g.hijau.deadline) }
+    }
+    // Penjara's lock after it is held still too, while it runs (an expired one is left alone).
+    if (g.hijau?.lockedUntil && Date.parse(g.hijau.lockedUntil) > pausedAt) {
+      g.hijau = { ...g.hijau, lockedUntil: shift(g.hijau.lockedUntil) }
     }
     // A running freeze (Cheese Ais) waits out the pause too.
     for (const p of this.playerRows) {

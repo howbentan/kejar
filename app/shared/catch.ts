@@ -104,9 +104,13 @@ export function plausibleLimitM(chaserPos: Position, runnerPos: Position, now: n
   return PLAUSIBLE_BASE_M + slack(chaserPos) + slack(runnerPos) + (RUNNER_SPEED_MPS * Math.min(age, PLAUSIBLE_MAX_AGE_MS)) / 1000
 }
 
+/** Penjara is locked after Mak Kau Hijau (owner, 2026-11-13): `lockedMs` is how long it stays locked. */
+export type LockedRefusal = { ok: false; reason: 'penjara-locked'; lockedMs: number }
+
 export type BreakJudgement =
   | { ok: true; freedIds: string[] }
   | { ok: false; reason: 'not-chasing' | 'not-a-free-runner' | 'too-far-from-jail' | 'nobody-to-free' }
+  | LockedRefusal
 
 export function judgeJailbreak(i: {
   phase: Phase
@@ -115,10 +119,13 @@ export function judgeJailbreak(i: {
   runnerPos: Position | null
   jail: LatLng
   now: number
+  /** How long Penjara stays locked after Mak Kau Hijau (`penjaraLockLeft`); 0 or absent when it isn't. */
+  lockedMs?: number
 }): BreakJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   // Under house arrest they can't be caught, so they mustn't hold a rescue nobody could stop (new power-ups §6.2).
   if (i.runner.role !== 'runner' || isOut(i.runner) || i.runner.arrest) return { ok: false, reason: 'not-a-free-runner' }
+  if (i.lockedMs && i.lockedMs > 0) return { ok: false, reason: 'penjara-locked', lockedMs: i.lockedMs }
   if (!atJail(i.runnerPos, i.jail, i.now)) return { ok: false, reason: 'too-far-from-jail' }
   const freedIds = i.players.filter((p) => p.role === 'runner' && p.jailed && !p.freed_once).map((p) => p.id)
   if (freedIds.length === 0) return { ok: false, reason: 'nobody-to-free' }
@@ -135,6 +142,7 @@ export const SETTLE_MAX_TARGETS = 2
 
 export type SettleJudgement =
   | { ok: true; freedIds: string[] }
+  | LockedRefusal
   | {
       ok: false
       reason:
@@ -166,10 +174,13 @@ export function judgeSettle(i: {
   jail: LatLng
   targetIds: string[]
   now: number
+  /** As for `judgeJailbreak`: Penjara locked after Mak Kau Hijau. */
+  lockedMs?: number
 }): SettleJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (i.holder.role !== 'runner' || !i.holder.jailed) return { ok: false, reason: 'not-jailed' }
   if (!i.holdsDato) return { ok: false, reason: 'no-dato' }
+  if (i.lockedMs && i.lockedMs > 0) return { ok: false, reason: 'penjara-locked', lockedMs: i.lockedMs }
   if (!atJail(i.holderPos, i.jail, i.now)) return { ok: false, reason: 'too-far-from-jail' }
   if (i.targetIds.length > SETTLE_MAX_TARGETS) return { ok: false, reason: 'too-many-targets' }
   const seen = new Set<string>([i.holder.id])

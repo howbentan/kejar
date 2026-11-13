@@ -8,7 +8,7 @@ import { MOMENT_WINDOW_MS } from './moments.js'
 import { reelPulledThisStay, RESCUE_HOLD_MS } from './penjara.js'
 import { isOut, undoableArrestId, undoableCatchId } from './players.js'
 import { ARREST_OPEN_MS, arrestEndsAt } from './arrest.js'
-import { hijauTargets } from './hijau.js'
+import { hijauCounts, hijauTargets, penjaraLockLeft } from './hijau.js'
 import { POWER_NAME } from './powerNames.js'
 import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, shieldArmedAt, slotBusy, TOLL_RADIUS_M } from './powerups.js'
 import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type LegendaryKind, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
@@ -33,10 +33,13 @@ export interface MapDot {
   label?: string
   fuzzy?: boolean
   missed?: boolean
-  /** Shown at the true spot because of a chaser's Focus or Bomoh's team-wide reveal. */
+  /** Shown at the true spot because of a chaser's Focus, Bomoh's team-wide reveal, a toll gate or a green tap. */
   exact?: true
-  /** Exact specifically because of Pak Guard's Focus or Bomoh's reveal; null for every other dot. */
-  revealedBy: 'focus' | 'bomoh' | 'toll' | null
+  /**
+   * Exact specifically because of Pak Guard's Focus, Bomoh's reveal, Tuch and Ga's gate, or tapping green in Mak Kau
+   * Hijau (`hijau`: at the tapped spot, until the next ping reveal); null for every other dot.
+   */
+  revealedBy: 'focus' | 'bomoh' | 'toll' | 'hijau' | null
   at: string
   /**
    * Set only for a runner just caught or auto-jailed, within the slide-off window (`MOMENT_WINDOW_MS` of
@@ -133,6 +136,11 @@ export interface View {
    * `claimedAt` names the run and never moves (a resume shifts `startsAt` and `deadline`).
    */
   hijau: { claimedAt: number; startsAt: number; deadline: number; tapped: boolean } | null
+  /**
+   * Penjara is locked for 3 minutes after a Mak Kau Hijau that counted (owner, 2026-11-13): when it opens again, held
+   * still while paused (count from `now` then, like `hijau`). Null when it isn't locked, and outside the chase.
+   */
+  penjaraLockedUntil: number | null
   /** My running Durian's end time; null for effects that wait for the next ping (motion design §7b). */
   activeEndsAt: number | null
   /** A chaser holding Mat Rempit while the team waits: when it unlocks (power-ups design §5a). */
@@ -448,6 +456,21 @@ function tollGatesFor(i: ViewInput): LatLng[] {
     .map((u) => u.spot as LatLng)
 }
 
+/**
+ * Mak Kau Hijau's tap reveal (owner, 2026-11-13): where each runner tapped green, while the run counts (not void),
+ * keyed by player id. A spot lasts until the next ping reveal after the tap (`since`: the last reveal so far).
+ */
+function hijauSpots(i: ViewInput, since: number | null): Map<string, { lat: number; lng: number; at: string }> {
+  const run = i.game.hijau
+  const spots = new Map<string, { lat: number; lng: number; at: string }>()
+  // Void runs reveal nobody: a late (or no) push, or one settled with no lock (late, or after the whistle).
+  if (!run || !hijauCounts(run) || (run.settledAt && !run.lockedUntil)) return spots
+  for (const [id, fix] of Object.entries(run.fixes ?? {})) {
+    if (since === null || Date.parse(fix.at) > since) spots.set(id, fix)
+  }
+  return spots
+}
+
 function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: string }[] } {
   const dots: MapDot[] = []
   const notes: { at: string; text: string }[] = []
@@ -459,7 +482,19 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
   }
   const revealed = revealedPings(i.pings)
   const last = revealed[revealed.length - 1]
-  if (!last) return { dots, notes }
+  const tapped = hijauSpots(i, last ? Date.parse(last.reveal_at) : null)
+  // A tapper the Kejar can see: free, still in the round and not under house arrest (hidden like any runner then).
+  const tapDot = (p: Player): MapDot | null => {
+    const spot = tapped.get(p.id)
+    return spot && !p.jailed && !isOut(p) && !p.arrest ? { ...dotFor(p, { ...spot, accuracy_m: 0 }, 'runner'), exact: true, revealedBy: 'hijau' } : null
+  }
+  if (!last) {
+    for (const p of i.players) {
+      const dot = p.role === 'runner' ? tapDot(p) : null
+      if (dot) dots.push(dot)
+    }
+    return { dots, notes }
+  }
   const revealAt = Date.parse(last.reveal_at)
   const alertAt =
     last.seq >= BONUS_SEQ_BASE
@@ -497,6 +532,12 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
     // Luar Garisan: out of the round, so neither a target on the map nor a "never checked in" note. Super Ring's
     // house arrest hides the runner the same way, so nobody can wait outside the circle.
     if (isOut(p) || p.arrest) continue
+    // Tapped green since the last ping: shown exactly where they tapped, whatever the ping showed.
+    const tapDotNow = tapDot(p)
+    if (tapDotNow) {
+      dots.push(tapDotNow)
+      continue
+    }
     const at = latestAtOrBefore(i.positions[p.id], revealAt)
     // A cloaked runner must look exactly like one who never checked in.
     if (!at || cloaked.has(p.id)) {
@@ -793,6 +834,13 @@ function hijauTargetMe(i: Pick<ViewInput, 'game' | 'me'>): boolean {
   return !!i.game.hijau?.targets?.includes(i.me.id) && hijauTargets([i.me]).length > 0
 }
 
+/** When Penjara opens again after Mak Kau Hijau (see `View.penjaraLockedUntil`). */
+function penjaraLockedUntilFor(i: ViewInput, phase: Phase): number | null {
+  if (phase !== 'chasing') return null
+  const left = penjaraLockLeft(i.game, i.now)
+  return left > 0 ? i.now + left : null
+}
+
 /** My Mak Kau Hijau takeover (see `View.hijau`). */
 function hijauFor(i: ViewInput, phase: Phase): View['hijau'] {
   const run = i.game.hijau
@@ -936,7 +984,7 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
     case 'hijau':
       // Only a runner who must tap gets the buzz; jailed, arrested or Luar Garisan runners just read it.
       if (ctx.side === 'runner') return { ...plain('Mak kau hijau! Tap the green.'), act: ctx.hijauTarget }
-      return plain('Mak kau hijau! Dikejar have 45 s.')
+      return plain('Mak kau hijau! Dikejar have 20 s.')
     case 'hijau-done': {
       // Too close to the end to run: nothing happened, so nothing to explain beyond the found card.
       if (e.data.ended === true) return null
@@ -1024,7 +1072,7 @@ export function viewFor(i: ViewInput): View {
   const v = fullView(i)
   // A removed player's page keeps polling: give it nothing of the game (spec §5.1).
   if (i.me.removed_at) {
-    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, arrest: null, hijau: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, ringZone: null, hijauZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, ringStash: undefined, ringCard: undefined, hijauStash: undefined, hijauCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
+    return { ...v, dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, arrest: null, hijau: null, penjaraLockedUntil: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, ringZone: null, hijauZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, ringStash: undefined, ringCard: undefined, hijauStash: undefined, hijauCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
   }
   return v
 }
@@ -1103,6 +1151,7 @@ function fullView(i: ViewInput): View {
     jailReason: jailReasonFor(i),
     arrest: arrestFor(i),
     hijau: hijauFor(i, phase),
+    penjaraLockedUntil: penjaraLockedUntilFor(i, phase),
     outWarned: !!i.me.out_warned_at && !i.me.disqualified_at,
     activeEndsAt: (() => {
       const shield = activeShield(i.powerUps, i.me.id, i.now)

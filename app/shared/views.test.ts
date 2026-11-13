@@ -1257,6 +1257,66 @@ describe("Mak Kau Hijau's takeover view", () => {
   })
 })
 
+describe("Mak Kau Hijau's tap reveal and Penjara's lock (owner, 2026-11-13)", () => {
+  const TAP = { lat: 3.0011, lng: 101.0011 }
+  const tappedAt = T0 + 15.5 * MIN
+  const run = (over = {}) => ({
+    claimedBy: 'c1',
+    claimedAt: iso(T0 + 15.2 * MIN),
+    startsAt: iso(T0 + 15.2 * MIN),
+    deadline: iso(T0 + 15.2 * MIN + 20_000),
+    sentAt: iso(T0 + 15.2 * MIN),
+    settledAt: iso(T0 + 15.2 * MIN + 20_000),
+    tapped: ['r1'],
+    targets: ['r1', 'r2'],
+    fixes: { r1: { ...TAP, at: iso(tappedAt) } },
+    lockedUntil: iso(T0 + 15.2 * MIN + 20_000 + 3 * MIN),
+    ...over,
+  })
+
+  it('a Kejar sees a tapper exactly where they tapped, ringed for Mak Kau Hijau', () => {
+    const dot = view(chaser, { game: game({ hijau: run() }) }).dots.find((d) => d.id === 'r1')!
+    expect(dot).toMatchObject({ kind: 'runner', lat: TAP.lat, lng: TAP.lng, exact: true, revealedBy: 'hijau', at: iso(tappedAt), label: '#07' })
+    expect(dot.fuzzy).toBeUndefined()
+  })
+
+  it('shows even before the first ping reveal', () => {
+    const early = { ...run(), settledAt: null, lockedUntil: null }
+    const v = view(chaser, { game: game({ hijau: early }), pings: [], now: tappedAt + 1_000 })
+    expect(v.dots.find((d) => d.id === 'r1')).toMatchObject({ revealedBy: 'hijau', lat: TAP.lat })
+  })
+
+  it('the next ping reveal replaces it', () => {
+    const v = view(chaser, { game: game({ hijau: run() }), pings: [...pings, ping(3, T0 + 20 * MIN)], now: T0 + 21 * MIN })
+    expect(v.dots.find((d) => d.id === 'r1')!.revealedBy).toBeNull()
+  })
+
+  it('a void run, a jailed tapper or one under house arrest shows nothing', () => {
+    const voidRun = run({ lockedUntil: null })
+    expect(view(chaser, { game: game({ hijau: voidRun }) }).dots.find((d) => d.id === 'r1')!.revealedBy).toBeNull()
+    const late = run({ sentAt: iso(T0 + 15.2 * MIN + 6_000), settledAt: null, lockedUntil: null })
+    expect(view(chaser, { game: game({ hijau: late }) }).dots.find((d) => d.id === 'r1')!.revealedBy).toBeNull()
+    const jailed = { ...aina, jailed: true }
+    expect(view(chaser, { game: game({ hijau: run() }), players: [chaser, jailed, hafiz, wei, siti] }).dots.find((d) => d.id === 'r1')).toBeUndefined()
+    const arrest = { firedAt: iso(T0), route: 'hijau' as const, by: null, center: null, startedAt: null, ringId: 'u1', catchEventId: null }
+    expect(view(chaser, { game: game({ hijau: run() }), players: [chaser, { ...aina, arrest }, hafiz, wei, siti] }).dots.find((d) => d.id === 'r1')).toBeUndefined()
+  })
+
+  it('runners never see it', () => {
+    expect(view(hafiz, { game: game({ hijau: run() }) }).dots.some((d) => d.revealedBy === 'hijau')).toBe(false)
+  })
+
+  it("carries when Penjara's lock ends while it runs, frozen while paused", () => {
+    const lockEnd = T0 + 15.2 * MIN + 20_000 + 3 * MIN
+    expect(view(hafiz, { game: game({ hijau: run() }) }).penjaraLockedUntil).toBe(lockEnd)
+    expect(view(hafiz, { game: game({ hijau: run() }), now: lockEnd }).penjaraLockedUntil).toBeNull()
+    expect(view(hafiz, { game: game({ hijau: run({ lockedUntil: null }) }) }).penjaraLockedUntil).toBeNull()
+    expect(view(hafiz).penjaraLockedUntil).toBeNull()
+    const paused = game({ hijau: run(), paused_at: iso(NOW) })
+    expect(view(hafiz, { game: paused, now: NOW + 5 * MIN }).penjaraLockedUntil).toBe(NOW + 5 * MIN + (lockEnd - NOW))
+  })
+})
+
 describe("Super Ring's and Mak Kau Hijau's hint zones (Plan E2)", () => {
   const stash = { lat: 3.004, lng: 101.004, claimedBy: null, claimedAt: null }
   const claimed = { ...stash, claimedBy: 'r2', claimedAt: iso(NOW) }
