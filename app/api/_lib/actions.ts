@@ -657,6 +657,9 @@ async function revealEndgame(ctx: Ctx, game: Game): Promise<void> {
   } catch {
     // The feed line carries it, and every screen shows the endgame from the next poll.
   }
+  // The pick read the players before the claim: a catch of the wanted runner in between ran its own check while no
+  // one was wanted yet, so nothing else would blow the bounty whistle. Check now, from fresh reads.
+  if (wanted) await allOutCheck(ctx, game, 'bounty')
 }
 
 /** Brings the game up to date: chase start, alerts, reveals and the end. Safe to call from many pages at once. */

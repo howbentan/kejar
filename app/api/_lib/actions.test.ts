@@ -7578,6 +7578,23 @@ describe('the endgame: roll, reveal and push (Plan E3 task 4)', () => {
     expect(pushes.filter((p) => (p.payload as { type: string }).type === 'notice')).toEqual([])
   })
 
+  it('endgame: a wanted runner caught between the pick and the claim blows the bounty whistle at the reveal', async () => {
+    // Pings every 3 minutes, so none is revealed at the 40:00 reveal and no ping's own check runs after it.
+    const g = await begin({ ...only('hebat'), pingMin: 3 })
+    await keepCheckingIn(g, 6, 39)
+    await poll(g, T0 + 39.5 * MIN)
+    // The pick reads the players, then a catch of the picked runner lands before the claim.
+    const claim = store.claimEndgameReveal.bind(store)
+    store.claimEndgameReveal = async (gameId, at, wanted) => {
+      if (wanted) await store.updatePlayers([{ id: wanted, patch: { jailed: true, caught_at: at } }])
+      return claim(gameId, at, wanted)
+    }
+    await poll(g, T0 + 40 * MIN)
+    // Hafiz (#03) wins the tie on tag number.
+    expect((await store.gameByCode(g.code))!.endgame).toMatchObject({ wanted: g.hafiz.playerId, bountyAt: iso(T0 + 40 * MIN) })
+    expect((await store.events(g.gameId)).filter((e) => e.type === 'final-whistle').map((e) => e.data)).toEqual([{ cause: 'bounty' }])
+  })
+
   it("endgame: the last call's ping event has lastCall and counts a cloaked runner as seen", async () => {
     const g = await begin(only('bomba'))
     await keepCheckingIn(g, 6, 48)
