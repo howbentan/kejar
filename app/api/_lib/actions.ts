@@ -824,7 +824,7 @@ async function settleRescue(ctx: Ctx, game: Game, phase = phaseAt(game, ctx.now)
   // PKP shuts Penjara for good: a hold that ends once it is revealed frees nobody. `advance` settles the rescue
   // before it claims the reveal, so a reveal that is due but not yet posted counts too.
   const holdEnd = Math.min(now, startedAt + RESCUE_HOLD_MS)
-  const closed = pkpClosed(game) || revealDue(game, holdEnd)
+  const closed = pkpClosed(game) || (game.endgame?.kind === 'pkp' && revealDue(game, holdEnd))
   const verdict = judged !== 'holding' && (closed || penjaraLockLeft(game, holdEnd) > 0) ? 'failed' : judged
   if (verdict === 'holding' || !(await store.endRescue(game.id, r.startedAt))) return
   if (verdict === 'failed') {

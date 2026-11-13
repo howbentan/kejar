@@ -7940,6 +7940,24 @@ describe('PKP closes Penjara and doubles stations (Plan E3 task 6)', () => {
     expect(await events(g, 'rescue-failed')).toHaveLength(0)
   })
 
+  it.each(['bomba', 'hebat'] as const)('pkp: a rescue in a %s game still frees across the 10:00 mark', async (kind) => {
+    const g = await readyGame({ mode: 'full', endgames: { bomba: kind === 'bomba' ? 'on' : 'off', hebat: kind === 'hebat' ? 'on' : 'off', pkp: 'off' } })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    const gameId = (await store.gameByCode(g.code))!.id
+    await store.updatePlayers([{ id: g.hafiz.playerId, patch: { jailed: true, caught_at: iso(now), caught_by: g.ben.playerId } }])
+    now = T0 + 40 * MIN - 5 * S
+    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true, rescue: 'started' })
+    now = T0 + 40 * MIN + 6 * S
+    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    now = T0 + 40 * MIN + 7 * S
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    const evs = await store.events(gameId)
+    expect(evs.filter((e) => e.type === 'rescue-failed')).toHaveLength(0)
+    expect((await store.players(gameId)).find((p) => p.id === g.hafiz.playerId)!.jailed).toBe(false)
+  })
+
   it("pkp: a jailed runner's pull is refused and not spent", async () => {
     const g = await pkpGame()
     await jailHafiz(g)
