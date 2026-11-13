@@ -1,6 +1,6 @@
 # Kejar: handoff notes
 
-Start here on a new machine or in a new Claude session. Last updated 2026-11-11.
+Start here on a new machine or in a new Claude session. Last updated 2026-11-13.
 
 **Read `docs/superpowers/specs/2026-10-30-kejar-rules.md` first.** It's the single source of truth for the game (Core and Full modes, every number, which spec owns what, and what's still open). The notes below are history and status.
 
@@ -78,6 +78,13 @@ A web app for organised, real-world chase games (runners vs chasers, with marsha
   - **The Penjara ticket reads in English now** (`ENTRY TICKET`, `IN AT`, `DISTANCE TO GATE`, `NOT PAID, WALK TO THE GATE`, `KEEP THIS TICKET TO EXIT`), with no small echo lines.
   - Mockups: `docs/superpowers/mockups/2026-11-12-new-legendaries/index.html`.
   - **To check in a real game:** the house-arrest release on a still phone in a pocket (the 5 s fresh fixes), how the green takeover feels on iPhone with push, and whether 20 s and the 15 s late-push line are fair on a slow phone.
+- **The endgame: Bomba, Hang Hebat and PKP (branch `plan-e3-endgame`, built 2026-11-13, not merged yet).** Design: `docs/superpowers/specs/2026-11-13-kejar-endgame-design.md`; summary in rules doc §9d.
+  - **Before merging: run `supabase/migrations/0021_endgame.sql` in Supabase first.** It adds `games.endgame` and the endgame settings default. Without it every game poll fails.
+  - **How it works.** One endgame is rolled in secret at game start (Core always gets Bomba; Full picks from the ones switched on). It is revealed lazily on a poll: 10 minutes left for Bomba and Hang Hebat, 5 for PKP (one push with the `5 minutes left!` warning). Everyone gets a takeover, a push, a feed line and a chip.
+  - **Bomba:** pings at 8, 6, 5, 4, 3, 2 minutes left, then an exact "Last call" at 1 (no fuzz, no Ponteng; house arrest stays hidden; Gostan still moves the dot). **Hang Hebat:** the longest-free runner is wanted and only they decide the game; an undo clears the bounty only if it undoes the out that claimed it. **PKP:** no rescue, reel or Settle, and station claims are doubled (Abang Grab is not).
+  - **Secret kept.** Only the organiser's setup screen has the endgame switches. Players and marshals get just "an endgame may happen" for the how-to-play card. Jailed runners see the reveal live.
+  - **To check in a real game:** how the takeover and the chip feel on a phone with push, whether Bomba's pings feel fair to runners, and whether Hang Hebat's wanted poster is clear to the Kejar.
+  - **Next design: Banjir Kilat** (the flood). It has a name, logo and colour only, and needs rules worked out against Luar Garisan and the outside alerts (design §10).
 - **Plan 6 (polish): not started.** Replay, share card, 24 h deletion, 12-month safety-record deletion.
 
 ## Decisions made since the design doc (not yet in the spec)
@@ -91,7 +98,7 @@ A web app for organised, real-world chase games (runners vs chasers, with marsha
 - **Focus/Pak Guard's reveal radius is 75 m, not 150 m** (owner's decision, 2026-10-28), to keep it clearly weaker than the chaser legendary power-up being designed alongside it. `FOCUS_M` in `app/shared/views.ts` already reflects this.
 
 ## Open discussion (undecided)
-**Endgame intensity.** Proposed, not yet approved:
+**Endgame intensity (superseded 2026-11-13).** Bomba, Hang Hebat and PKP are built (see Status); Banjir Kilat is the next design. The older proposal, kept for history:
 - Pings speed up: every 2 min in the last 10 minutes, every 1 min in the last 5 (not 30 s).
 - The play area shrinks in the last 10 minutes.
 - A "Last call" exact ping 1 minute before the end.

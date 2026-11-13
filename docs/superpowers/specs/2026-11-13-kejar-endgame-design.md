@@ -2,7 +2,7 @@
 
 > **Current rules:** `docs/superpowers/specs/2026-10-30-kejar-rules.md` is the single source of truth for the game as a whole. This design adds to it; when built, the rules doc gets a new endgame section and its §9/§11 rows for "Endgame notes" are replaced by a pointer here.
 
-**Status:** Draft for the owner's approval (builder check done). Nothing is built yet.
+**Status:** Built in Plan E3 (Bomba, Hang Hebat and PKP). Banjir Kilat is still to come.
 **Date:** 2026-11-13
 **Replaces:** the unapproved brainstorm in `2026-10-26-kejar-endgame-intensity-design.md` (ideas 1, 3 and 5 live on here as Bomba and PKP; idea 2 becomes Banjir Kilat).
 **Mockup:** `docs/superpowers/mockups/2026-11-13-endgame/` (logos, reveals, chip, wanted poster), also live at https://claude.ai/artifact/372stkU1RqhizcuCD9NdeU.

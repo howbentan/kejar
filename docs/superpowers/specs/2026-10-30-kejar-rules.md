@@ -179,7 +179,7 @@ Prices are from MR.DIY's online listings on 2026-10-30 and may change. Velcro st
 | Everything that moves, SOS, the marshal SOS screen, the crew of two, the feed, results, the scribble | `2026-10-30-kejar-motion-design.md` |
 | Creating a game (five steps), the kit checklist, walking the park, lobby checks | `2026-10-30-kejar-organiser-setup-design.md` |
 | Organiser accounts; real parks and saved arenas | `2026-10-26-kejar-plan4a-organiser-accounts-design.md`, `2026-10-27-kejar-plan4b-arenas-design.md` |
-| Endgame ideas (not approved) | `2026-10-26-kejar-endgame-intensity-design.md` |
+| The endgame (Bomba, Hang Hebat, PKP; Banjir Kilat later) | `2026-11-13-kejar-endgame-design.md` (summary in §9d). The older brainstorm `2026-10-26-kejar-endgame-intensity-design.md` is replaced |
 | Bomoh (chaser legendary) | `2026-10-30-kejar-chaser-legendary-design.md` |
 
 ## 9. Conflicts settled in this pass
@@ -195,7 +195,7 @@ Prices are from MR.DIY's online listings on 2026-10-30 and may change. Velcro st
 | Jail design: "dare wheel" / dare reel | The reel is now a **black-slot reel** with a Penjara lever: one lime free slot among nine black, no dares and no marshal confirm (owner's decision, 2026-11-11; §9a) |
 | Jail design §4: Dato Seri needs a quest-giver, a coin and Pak Pulis | Hidden stash by default; quest-giver is an option (jail §4b). Full mode only |
 | Chaser legendary notes: "fills all 3 hand slots"; a staff of 5 | One slot; it must fit the crew of two, so a hidden-stash style grant unless volunteers exist (open, §11) |
-| Endgame notes: "Last call" and other ideas | Only `5 minutes left` (a warning, the feed line and the lime clock) is agreed. The rest stays unapproved (§11) |
+| Endgame notes: "Last call" and other ideas | Replaced by the endgame design, `2026-11-13-kejar-endgame-design.md` (§9d). Banjir Kilat, the shrinking play area, is still to come |
 | HANDOFF: "stations stay random-on-claim", "Abang Grab claims a station remotely", "slang applies to power-ups only" | Shared deck; Abang Grab picks 1 of the top 3 (sealed); English messages, local names (§6) |
 | Base §4.7: one scan at Penjara frees everyone at once | A **10-second hold** after the scan (§9a) |
 | Jail §4b and motion §8.2: everyone sees a yellow Dato Seri zone; the feed says `Dato Seri has been found` | **Dato Seri is a secret** (§9b): an unlabelled `?` zone, and the feed says `Something legendary was found.` |
@@ -239,6 +239,23 @@ Dato Seri is the one legendary, so its Settle is now bigger: it frees **the hold
 - **Counterplay for chasers:** the feed tells everyone at once, `Something legendary freed 3 Dikejar!` (with the real number), as a lime-box line for Kejar. Freed runners walk out of Penjara as usual and can be caught again (for good, since their escape is used).
 - **Where it lives:** jail design §4, both Dato Seri modes.
 
+## 9d. The endgame (owner's decision, 2026-11-13; **built** in Plan E3)
+
+Every Full game can end with a twist. One endgame is rolled in secret when the game starts, and nobody (players, marshals, even the organiser's view) learns which until it is revealed. Design: `docs/superpowers/specs/2026-11-13-kejar-endgame-design.md`. Core always gets Bomba. The organiser can switch each endgame on or off in setup (all on by default; all off means no endgame). Games made before this shipped never get one.
+
+| Endgame | Revealed at | In one line |
+|---|---|---|
+| Bomba (red) | 10 minutes left | Pings every 2 minutes, then every minute, then an exact "Last call" |
+| Hang Hebat (cream) | 10 minutes left | The longest-free runner is wanted: catch them and the Kejar win, they reach the whistle and the Dikejar win |
+| PKP (hot pink) | 5 minutes left | Penjara closes for good and every station gives two goes |
+| Banjir Kilat (blue) | later | Designed in name only; the shrinking play area comes in a second plan |
+
+Everyone gets a full-screen takeover and a push at the reveal, then a small chip on the chase screen that reopens the rule card. Only the organiser's setup screen shows the endgame switches. Players and marshals are told only that "an endgame may happen" (one card in the how-to-play story).
+
+- **Bomba.** From 10 minutes left the normal ping schedule stops. Pings land at 8, 6, 5, 4, 3 and 2 minutes left, and each counts as a scheduled ping (check-in alert, auto-jail and all). At 1 minute left comes the **last call**: every free runner shows at their exact spot, with no fuzz and no Ponteng. A runner under house arrest stays hidden. Gostan (decoy) still moves the dot at the last call, as Pak Guard does.
+- **Hang Hebat.** At the reveal, the free runner who has been free longest becomes wanted (a tie goes to the lowest armband number). From then on only they decide the game: the Kejar win the moment they are out by any route, and the Dikejar win if they are still free at the whistle, even if everyone else is in Penjara. Everyone sees their poster, and the Kejar's map marks their circle. The copy says "they're now wanted". The usual 60 second final whistle holds the end so a wrong catch can be undone. An undo clears the bounty only if it undoes the out that claimed it; a later re-catch's undo doesn't. If a marshal removes the wanted runner, the bounty passes on.
+- **PKP.** From 5 minutes left there are no rescues, no reel, and Dato Seri's Settle frees nobody. A marshal's undo still frees a wrongly caught runner. Every station claim gives two goes of its card, the same way Nasi Lemak KFC does, but a player who is already combo-ready doesn't get four. Abang Grab deliveries are not doubled. PKP's reveal and the `5 minutes left!` warning go out as one push.
+
 ## 10. Still to design before building
 
 1. ~~**Organiser setup**~~ **designed 2026-10-30:** `2026-10-30-kejar-organiser-setup-design.md` covers five setup steps, the kit checklist, walking the park, the stash drop and lobby checks.
@@ -258,7 +275,7 @@ The owner's partner suggested dropping the tag scan and catching a runner when a
 
 ## 11. Still open (owner's decisions)
 
-- **Endgame intensity:** faster pings near the end, a shrinking play area, "Last call", and the other ideas in the endgame notes. Not approved.
+- **Endgame:** Bomba, Hang Hebat and PKP are built (§9d). Banjir Kilat (the shrinking play area) still needs its own design; see `2026-11-13-kejar-endgame-design.md`.
 - **Core and Full deck counts and the chaser snapshot's 30 m:** first things to tune after playtests.
 
 ## 12. Build order (unchanged in spirit, updated for modes)
