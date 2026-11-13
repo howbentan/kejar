@@ -7883,6 +7883,24 @@ describe('Hang Hebat: the wanted runner decides the game (Plan E3 task 5)', () =
     expect(await whistles(g)).toEqual([{ cause: 'bounty' }])
   })
 
+  it('hebat: a check racing the removal of the wanted runner never claims the bounty for them', async () => {
+    const g = await live()
+    // Aina's phone already reads as jailed (a catch whose own check hasn't run), then a marshal removes her.
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: true, caught_at: stamp(T0 + 8 * MIN) } }])
+    // In the window between the removal and the bounty passing on, a catch of Ravi runs its own check.
+    const setWanted = store.setWanted.bind(store)
+    store.setWanted = async (gameId, playerId) => {
+      store.setWanted = setWanted
+      expect(await catchAt(g, 'ravi', T0 + 8 * MIN)).toMatchObject({ ok: true })
+      return setWanted(gameId, playerId)
+    }
+    now = T0 + 8 * MIN
+    expect(await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.aina.playerId })).toEqual({ ok: true })
+    // Hafiz (#03) wins the tie with Ravi on tag number.
+    expect((await gameRow(g)).endgame).toMatchObject({ wanted: g.hafiz.playerId, bountyAt: null })
+    expect(await whistles(g)).toEqual([])
+  })
+
   it('hebat: removing the wanted runner with nobody else free puts the normal rules back', async () => {
     const g = await live()
     await catchAt(g, 'hafiz', T0 + 7.5 * MIN)

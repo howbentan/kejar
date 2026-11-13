@@ -874,7 +874,9 @@ async function allOutCheck(ctx: Ctx, game: Game, cause: WhistleCause = 'catch'):
   const players = await ctx.store.players(game.id)
   if (hebatLive(g)) {
     const e = g.endgame!
-    const wanted = players.find((p) => p.id === e.wanted)
+    // A removed wanted runner isn't out (endgame design §8.2): their bounty passes on. `players` already skips removed
+    // rows; the check says so here too, since a call racing the removal can still find them wanted.
+    const wanted = players.find((p) => p.id === e.wanted && !p.removed_at)
     if (!e.bountyAt && !(wanted && wantedOut(wanted))) return false
     if (!e.bountyAt) await ctx.store.claimBounty(game.id, iso(ctx.now))
     cause = 'bounty'
