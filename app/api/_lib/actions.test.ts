@@ -1836,7 +1836,7 @@ describe('Tuch and Ga', () => {
   }
   const give = async (gameId: string, playerId: string, kind: PowerUpKind) =>
     store.addPowerUp({ game_id: gameId, player_id: playerId, kind, station: null })
-  const use = (g: { code: string }, token: string, powerupId: string, extra: object = {}) =>
+  const activate = (g: { code: string }, token: string, powerupId: string, extra: object = {}) =>
     run('usePowerup', { code: g.code, token, powerupId, ...extra })
   const view = (g: { code: string }, token: string) => run<View>('state', { code: g.code, token })
   const loc = (g: { code: string }, token: string, dLatM: number) => run('location', { code: g.code, token, ...at(dLatM) })
@@ -1847,7 +1847,7 @@ describe('Tuch and Ga', () => {
   async function gateThenReveal(g: Awaited<ReturnType<typeof chasing>>) {
     const toll = await give(g.gameId, g.ben.playerId, 'toll')
     await loc(g, g.ben.token, 0)
-    expect(await use(g, g.ben.token, toll.id)).toEqual({ ok: true, kind: 'toll' })
+    expect(await activate(g, g.ben.token, toll.id)).toEqual({ ok: true, kind: 'toll' })
     return toll
   }
   async function checkInAndReveal(g: Awaited<ReturnType<typeof chasing>>, ainaAt = 30) {
@@ -1881,21 +1881,21 @@ describe('Tuch and Ga', () => {
     const toll = await give(g.gameId, g.ben.playerId, 'toll')
     await loc(g, g.ben.token, 0)
     now += 61_000
-    expect(await use(g, g.ben.token, toll.id)).toEqual({ ok: false, reason: 'no-location' })
+    expect(await activate(g, g.ben.token, toll.id)).toEqual({ ok: false, reason: 'no-location' })
     const row = (await store.powerUps(g.gameId)).find((u) => u.id === toll.id)!
     expect(row.used_at).toBeNull()
     expect(row.spot).toBeNull()
     expect((await store.events(g.gameId)).filter((e) => e.type === 'used')).toHaveLength(0)
     // A fresh fix makes it work, with the same card.
     await loc(g, g.ben.token, 0)
-    expect(await use(g, g.ben.token, toll.id)).toEqual({ ok: true, kind: 'toll' })
+    expect(await activate(g, g.ben.token, toll.id)).toEqual({ ok: true, kind: 'toll' })
   })
 
   it('Ponteng beats the gate', async () => {
     const g = await chasing()
     await gateThenReveal(g)
     const cloak = await give(g.gameId, g.aina.playerId, 'cloak')
-    expect(await use(g, g.aina.token, cloak.id)).toEqual({ ok: true, kind: 'cloak' })
+    expect(await activate(g, g.aina.token, cloak.id)).toEqual({ ok: true, kind: 'cloak' })
     await checkInAndReveal(g)
     const v = await view(g, g.ben.token)
     expect(dotOf(v, g.aina.playerId)).toBeUndefined()
@@ -1906,7 +1906,7 @@ describe('Tuch and Ga', () => {
     const g = await chasing()
     await gateThenReveal(g)
     const decoy = await give(g.gameId, g.aina.playerId, 'decoy')
-    expect(await use(g, g.aina.token, decoy.id)).toEqual({ ok: true, kind: 'decoy' })
+    expect(await activate(g, g.aina.token, decoy.id)).toEqual({ ok: true, kind: 'decoy' })
     await checkInAndReveal(g)
     const dot = dotOf(await view(g, g.ben.token), g.aina.playerId)!
     // Drawn at the decoy spot, well away from where Aina really is.
@@ -1950,7 +1950,7 @@ describe('Tuch and Ga', () => {
     const g = await chasing()
     await gateThenReveal(g)
     const cheese = await give(g.gameId, g.aina.playerId, 'cheese')
-    expect(await use(g, g.aina.token, cheese.id, { targetId: g.ben.playerId })).toMatchObject({ ok: true, kind: 'cheese' })
+    expect(await activate(g, g.aina.token, cheese.id, { targetId: g.ben.playerId })).toMatchObject({ ok: true, kind: 'cheese' })
     await checkInAndReveal(g)
     const v = await view(g, g.ben.token)
     expect(dotOf(v, g.aina.playerId)).toMatchObject({ exact: true, revealedBy: 'toll' })
@@ -1962,15 +1962,15 @@ describe('Tuch and Ga', () => {
     const first = await give(g.gameId, g.ben.playerId, 'toll')
     const twin = (await store.applyCombo(g.ben.playerId, first.id))!
     await loc(g, g.ben.token, 0)
-    expect(await use(g, g.ben.token, first.id)).toEqual({ ok: true, kind: 'toll' })
+    expect(await activate(g, g.ben.token, first.id)).toEqual({ ok: true, kind: 'toll' })
     // The twin waits for the first gate's reveal (a doubled card's second use never lands on the same ping).
-    expect(await use(g, g.ben.token, twin.id)).toEqual({ ok: false, reason: 'effect-running' })
+    expect(await activate(g, g.ben.token, twin.id)).toEqual({ ok: false, reason: 'effect-running' })
     expect((await view(g, g.ben.token)).tollGates).toHaveLength(1)
     await checkInAndReveal(g)
     await view(g, g.ben.token)
     now += 30_000
     await loc(g, g.ben.token, 100)
-    expect(await use(g, g.ben.token, twin.id)).toEqual({ ok: true, kind: 'toll' })
+    expect(await activate(g, g.ben.token, twin.id)).toEqual({ ok: true, kind: 'toll' })
     const gates = (await view(g, g.ben.token)).tollGates
     expect(gates).toHaveLength(1)
     expect(gates[0].lat).toBeCloseTo(at(100).lat, 6)
