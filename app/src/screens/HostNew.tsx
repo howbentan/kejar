@@ -14,6 +14,7 @@ import { ErrorText, Pills, Screen } from '../game/ui'
 import { platformOf } from '../game/device'
 import ArenaSetup, { type SavedArenaForEdit } from './ArenaSetup'
 import { noticeParam } from '../game/cardNotice'
+import { BusyLabel, FullLoader } from '../game/Runner'
 
 /** A saved park as listArenas returns it. */
 interface SavedPark {
@@ -151,7 +152,7 @@ function Legendary(props: { side: 'runner' | 'chaser'; title: ReactNode; seg: Re
         </span>
         <div>
           <b style={{ fontSize: 15 }}>{props.title}</b>
-          <small style={{ display: 'block', font: '500 9px var(--mono)', letterSpacing: '0.12em' }}>
+          <small style={{ display: 'block', marginTop: 2, font: '700 12px var(--mono)', letterSpacing: '0.06em' }}>
             <span style={{ color: a.colour }}>{a.name}</span>
             <span style={{ color: 'var(--dim)' }}> OR </span>
             <span style={{ color: b.colour }}>{b.name}</span>
@@ -223,6 +224,8 @@ export default function HostNew() {
   const [sides, setSides] = useState<SideSwitch>(() => sidesOf(DEFAULT_SETTINGS.legendaries))
   const [showFields, setShowFields] = useState(false)
   const [busy, setBusy] = useState(false)
+  // Which button is waiting, so only Create game shows the running j while the game is made.
+  const [creatingGame, setCreatingGame] = useState(false)
   const [error, setError] = useState('')
   const [showInvite, setShowInvite] = useState(false)
   const [peerName, setPeerName] = useState('')
@@ -307,6 +310,7 @@ export default function HostNew() {
     if (creating.current) return
     creating.current = true
     setBusy(true)
+    setCreatingGame(true)
     setError('')
     try {
       if (!chosen && !oneOff) throw new Error('Pick a park or set up a new play area first.')
@@ -328,6 +332,7 @@ export default function HostNew() {
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setBusy(false)
+      setCreatingGame(false)
       creating.current = false
     }
   }
@@ -384,6 +389,9 @@ export default function HostNew() {
       <span style={{ color: 'var(--volt)' }}>?</span>
     </>
   )
+
+  // Nothing to show on step 1 until the saved parks arrive: the full-size loader (errors still show as before).
+  if (step === 1 && !setup && parks === null && organiserToken && !error) return <FullLoader caption="JAP, LOADING YOUR PARKS" />
 
   return (
     <Screen>
@@ -653,10 +661,10 @@ export default function HostNew() {
               {label('LEGENDARY CARDS · SECRET FROM PLAYERS')}
               <Legendary
                 side="runner"
-                title="Dikejar legendary"
+                title="Dikejar Legendary"
                 seg={
                   <Seg<'off' | 'on'>
-                    label="Dikejar legendary"
+                    label="Dikejar Legendary"
                     value={sides.runner}
                     options={[
                       { value: 'off', text: 'Off' },
@@ -669,10 +677,10 @@ export default function HostNew() {
               />
               <Legendary
                 side="chaser"
-                title="Kejar legendary"
+                title="Kejar Legendary"
                 seg={
                   <Seg<'off' | 'on'>
-                    label="Kejar legendary"
+                    label="Kejar Legendary"
                     value={sides.chaser}
                     options={[
                       { value: 'off', text: 'Off' },
@@ -716,8 +724,8 @@ export default function HostNew() {
 
           <ErrorText>{error}</ErrorText>
           {buttons(
-            <button type="button" className="btn" style={{ flex: 1 }} disabled={busy} onClick={create}>
-              {busy ? 'Creating…' : 'Create game'}
+            <button type="button" className="btn" style={{ flex: 1 }} disabled={busy} aria-busy={creatingGame || undefined} onClick={create}>
+              {creatingGame ? <BusyLabel label="Creating game" /> : 'Create game'}
             </button>,
             true,
           )}

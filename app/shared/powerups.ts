@@ -12,7 +12,7 @@ export const SHIELD_MS = 10 * 60_000
 export const FLARE_COOLDOWN_MS = 3 * 60_000
 /** Cheese Ais: how long a chaser's power-up slot stays frozen. */
 export const FREEZE_MS = 3 * 60_000
-/** Tuch and Ga: how close a runner must be to the toll point, and how fresh their fix must be. */
+/** Tee And Gee: how close a runner must be to the toll point, and how fresh their fix must be. */
 export const TOLL_RADIUS_M = 40
 export const TOLL_FRESH_MS = 60_000
 /** Cards Nasi Lemak KFC can't double. */
@@ -202,7 +202,7 @@ export function runningEffect(powerUps: PowerUp[], playerId: string, pings: Ping
 /**
  * What fills a player's one slot (power-ups §5a): an unused card, or a used one whose effect is still
  * running. Durian runs until it blocks a catch or 10 minutes pass (a twin waits for its partner first);
- * Gostan, Ponteng, Pak Guard and Tuch and Ga until the next reveal after use; Mat Rempit until its own
+ * Gostan, Ponteng, Pak Guard and Tee And Gee until the next reveal after use; Mat Rempit until its own
  * surprise ping is revealed. Nasi Lemak KFC and Cheese Ais are done the moment they're used.
  */
 export function slotBusy(powerUps: PowerUp[], playerId: string, pings: Ping[], now: number, me?: Pick<Player, 'arrest'>): { kind: PowerUpKind; running: boolean } | null {

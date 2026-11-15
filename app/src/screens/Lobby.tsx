@@ -9,6 +9,7 @@ import Scanner from '../game/Scanner'
 import SetupMap from '../game/SetupMap'
 import WalkPark from './WalkPark'
 import { ErrorText, ModeBadge, Screen, tagText } from '../game/ui'
+import { WaitingLine } from '../game/Runner'
 
 const ROLE_COPY = {
   runner: 'You’re a Dikejar. Hide when the game starts.',
@@ -70,7 +71,7 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
         <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.04em' }}>Hi {view.me.name}</h1>
         <ModeBadge mode={view.settings.mode} />
       </div>
-      <p className="muted">{role ? ROLE_COPY[role] : 'Waiting for the organiser to give you a role…'}</p>
+      {role ? <p className="muted">{ROLE_COPY[role]}</p> : <WaitingLine>Waiting for the organiser to give you a role</WaitingLine>}
       {/* Marshals are the helper: the hidden card is the organiser's alone (rules doc §9b), so no panel here. */}
       {role === 'marshal' && <SetupMap view={view} />}
       {role === 'marshal' && token && (
@@ -106,7 +107,7 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
       )}
       <ErrorText>{error}</ErrorText>
       <AlertsCard code={code} view={view} onDone={refresh} />
-      <p className="muted">Waiting for the organiser to start the game…</p>
+      <WaitingLine>Waiting for the organiser to start the game</WaitingLine>
     </Screen>
   )
 }

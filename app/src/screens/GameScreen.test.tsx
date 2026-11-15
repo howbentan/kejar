@@ -32,7 +32,8 @@ describe('GameScreen loading', () => {
     state.view = null
     render(<GameScreen code="ABC234" />)
     expect(screen.getByRole('img', { name: 'kejar.' })).toBeInTheDocument()
-    expect(screen.getByText(/LOADING GAME ABC234/)).toBeInTheDocument()
+    expect(screen.getByText(/JOM, LOADING GAME ABC234/)).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'JOM, LOADING GAME ABC234' })).toBeInTheDocument()
   })
 
   it('once the game arrives the j runs off and the game shows', () => {

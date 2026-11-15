@@ -180,12 +180,12 @@ describe('PowerUpHand', () => {
       expect(await screen.findByText("Combo already ready. This one's spent.")).toBeInTheDocument()
     })
 
-    it('Tuch and Ga shows its used line', async () => {
+    it('Tee And Gee shows its used line', async () => {
       call.mockResolvedValue({ ok: true, kind: 'toll' })
       render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'toll' }] })} />)
-      fireEvent.click(screen.getByRole('button', { name: /tuch and ga/i }))
-      fireEvent.click(screen.getByRole('button', { name: 'Use Tuch and Ga' }))
-      expect(await screen.findByText('Tuch and Ga! Toll gate up. Runners checking in near it get charged.')).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: /tee and gee/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'Use Tee And Gee' }))
+      expect(await screen.findByText('Tee And Gee! Toll gate up. Runners checking in near it get charged.')).toBeInTheDocument()
     })
 
     it('claim messages: a doubled claim, and a frozen chaser at a station', () => {

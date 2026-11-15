@@ -25,7 +25,7 @@ describe('deckFor', () => {
     expect(SET.full.runner).toEqual(['decoy', 'decoy', 'shield', 'shield', 'cloak', 'cloak', 'toyol', 'grab', 'cheese', 'combo'])
     expect(count(deckFor('full', 'runner', 1))).toEqual({ decoy: 2, shield: 2, cloak: 2, toyol: 1, grab: 1, cheese: 1, combo: 1 })
   })
-  it('Full chasers: Mat Rempit x2, Pak Guard x2, Ah Long x1, Abang Grab x1, Tuch and Ga x2, Nasi Lemak KFC x1 per set (9 cards)', () => {
+  it('Full chasers: Mat Rempit x2, Pak Guard x2, Ah Long x1, Abang Grab x1, Tee And Gee x2, Nasi Lemak KFC x1 per set (9 cards)', () => {
     expect(SET.full.chaser).toEqual(['flare', 'flare', 'focus', 'focus', 'along', 'grab', 'toll', 'toll', 'combo'])
     expect(count(deckFor('full', 'chaser', 1))).toEqual({ flare: 2, focus: 2, along: 1, grab: 1, toll: 2, combo: 1 })
   })

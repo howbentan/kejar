@@ -1809,7 +1809,7 @@ describe('Nasi Lemak KFC', () => {
   })
 })
 
-describe('Tuch and Ga', () => {
+describe('Tee And Gee', () => {
   /** Ben, Kim and Lee chase; Aina, Hafiz and Wei run. Full mode, the chase has begun. */
   async function chasing() {
     const g = await readyGame({ mode: 'full' })
@@ -1918,13 +1918,13 @@ describe('Tuch and Ga', () => {
     await gateThenReveal(g)
     const vAina = await view(g, g.aina.token)
     expect(vAina.tollGates).toEqual([])
-    expect(vAina.feed.map((f) => f.text).join('|')).not.toMatch(/toll|Tuch/i)
+    expect(vAina.feed.map((f) => f.text).join('|')).not.toMatch(/toll|Tee And Gee/i)
     const vBen = await view(g, g.ben.token)
     expect(vBen.tollGates).toHaveLength(1)
     expect(vBen.tollGates[0].lat).toBeCloseTo(at(0).lat, 6)
     expect(vBen.feed[0]).toMatchObject({
       text: GATE_TEXT,
-      label: 'Tuch and Ga',
+      label: 'Tee And Gee',
       means: 'Dikejar checking in near it show exactly at the next ping.',
     })
     // The whole chasing team sees it.
@@ -1943,7 +1943,7 @@ describe('Tuch and Ga', () => {
     await gateThenReveal(g)
     const vOrg = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     expect(vOrg.tollGates).toEqual([])
-    expect(vOrg.feed[0].text).toBe('A Kejar used Tuch and Ga')
+    expect(vOrg.feed[0].text).toBe('A Kejar used Tee And Gee')
   })
 
   it("a frozen chaser's toll gate still lands", async () => {
@@ -1956,7 +1956,7 @@ describe('Tuch and Ga', () => {
     expect(dotOf(v, g.aina.playerId)).toMatchObject({ exact: true, revealedBy: 'toll' })
   })
 
-  it('a doubled Tuch and Ga sets its second gate only after the first one lands', async () => {
+  it('a doubled Tee And Gee sets its second gate only after the first one lands', async () => {
     const g = await chasing()
     await give(g.gameId, g.ben.playerId, 'combo').then((c) => store.updatePowerUp(c.id, { used_at: new Date(now).toISOString() }))
     const first = await give(g.gameId, g.ben.playerId, 'toll')

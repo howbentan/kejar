@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { distanceM } from '../../shared/geo.js'
 import type { Arena, LatLng } from '../../shared/types.js'
 import GameMap from './Map'
+import { WaitingLine } from './Runner'
 
 /** Within this distance the runner has reached Penjara, and the spectator view takes over (motion design §5). */
 export const ARRIVED_M = 30
@@ -85,7 +86,7 @@ export function WalkGuide({
       {metres !== null && !lost ? (
         <p className="walk-distance">{`${Math.round(metres / 10) * 10} M · WALK, DON'T RUN`}</p>
       ) : (
-        <p className="muted">{lost ? 'Walk to the PENJARA pin on the map.' : 'Finding you…'}</p>
+        lost ? <p className="muted">Walk to the PENJARA pin on the map.</p> : <WaitingLine>Finding you</WaitingLine>
       )}
     </div>
   )

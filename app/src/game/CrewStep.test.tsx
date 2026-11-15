@@ -51,9 +51,9 @@ describe('CrewStep', () => {
     expect(screen.getByText('You plus 3 helpers for up to 40 players.')).toBeInTheDocument()
   })
 
-  it('makes each row\'s invite up front, showing Creating... until it is ready', async () => {
+  it('makes each row\'s invite up front, showing the running j until it is ready', async () => {
     render(<CrewStep code="ABC234" view={view()} organiserToken="h1" />)
-    expect(screen.getByText('Creating…')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Creating invite link' })).toContainElement(screen.getByTestId('mini-runner'))
     expect(await screen.findByText('INVITE')).toBeInTheDocument()
     expect(call).toHaveBeenCalledWith('createMarshalInvite', { code: 'ABC234', organiserToken: 'h1' })
     expect(call).toHaveBeenCalledTimes(1)

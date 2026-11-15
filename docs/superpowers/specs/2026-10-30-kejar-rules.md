@@ -48,7 +48,7 @@ Rules:
 | Chase, check-ins, auto-jail, Penjara, jailbreak, Penjara reel | ✓ | ✓ |
 | Safety tools, motion, the marker scribble, results | ✓ | ✓ |
 | **Runners' deck** | **Durian, Ponteng** | Gostan, Durian, Ponteng, Toyol, Abang Grab, Cheese Ais, Nasi Lemak KFC |
-| **Chasers' deck** | **Mat Rempit, Pak Guard** | Mat Rempit, Pak Guard, Ah Long, Abang Grab, Tuch and Ga, Nasi Lemak KFC |
+| **Chasers' deck** | **Mat Rempit, Pak Guard** | Mat Rempit, Pak Guard, Ah Long, Abang Grab, Tee And Gee, Nasi Lemak KFC |
 | **One legendary per side, picked by the app** (updated 2026-11-12, new power-ups design §6.1) | – | ✓ the organiser switches each side On or Off; when On, the app secretly picks which one and assigns its card. Players never learn which until it's found |
 | Runner legendary: Dato Seri (yellow) **or Super Ring** (cheese orange) | – | ✓ hidden stash (Dato Seri's quest-giver mode if there are volunteers) |
 | Chaser legendary: Bomoh (purple) **or Mak Kau Hijau** (deep green) | – | ✓ hidden stash (Bomoh's ritual if there are volunteers) |
@@ -82,7 +82,7 @@ Rules:
 | Gostan | next ping shows you 120–180 m away | power-ups §6.1 |
 | Mat Rempit | extra ping in 30 s, one at a time, 3 min team cooldown | power-ups §5a |
 | Cheese Ais freeze | 3 min, one chaser, no stacking | new power-ups design §5.1 |
-| Tuch and Ga | runners within 40 m of the gate exact at the next ping | new power-ups design §5.3 |
+| Tee And Gee | runners within 40 m of the gate exact at the next ping | new power-ups design §5.3 |
 | Station claim | within 30 m, once per player per station, station locks 60 s | base §4.8.1 |
 | Penjara rescue | scan the Penjara QR, then stay within 30 m for 10 s; frees everyone inside | this doc §9a |
 | Freed | once per runner per game, by any route | base §4.7 |

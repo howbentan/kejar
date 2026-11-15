@@ -4,6 +4,7 @@ import { currentPushEnv, pushSupport } from '../game/push'
 import { forgetName, loadName, saveName } from '../game/nameMemory'
 import { loadSession, saveSession } from '../game/session'
 import { ErrorText, Screen } from '../game/ui'
+import { BusyLabel } from '../game/Runner'
 
 export default function Join({ code }: { code: string }) {
   const [remembered, setRemembered] = useState(() => loadName(localStorage))
@@ -83,8 +84,8 @@ export default function Join({ code }: { code: string }) {
         <span>I accept the waiver and share my location during this game only.</span>
       </label>
       <ErrorText>{error}</ErrorText>
-      <button className="btn" disabled={!name.trim() || !conduct || !waiver || busy} onClick={join}>
-        {busy ? 'Joining…' : 'Join game'}
+      <button className="btn" disabled={!name.trim() || !conduct || !waiver || busy} aria-busy={busy || undefined} onClick={join}>
+        {busy ? <BusyLabel label="Joining" /> : 'Join game'}
       </button>
     </Screen>
   )

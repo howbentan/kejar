@@ -65,4 +65,19 @@ describe('Join', () => {
     fireEvent.click(screen.getByRole('button', { name: /join game/i }))
     await waitFor(() => expect(localStorage.getItem('kejar.name')).toBe('Zara'))
   })
+
+  it('while joining, the button runs the small j beside "Joining"', async () => {
+    let finish!: (v: unknown) => void
+    call.mockImplementation(() => new Promise((r) => (finish = r)))
+    render(<Join code="ABC234" />)
+    fireEvent.change(screen.getByLabelText(/your name/i), { target: { value: 'Aina' } })
+    fireEvent.click(screen.getByLabelText(/no grabbing/i))
+    fireEvent.click(screen.getByLabelText(/waiver/i))
+    fireEvent.click(screen.getByRole('button', { name: /join game/i }))
+    const busy = await screen.findByRole('button', { name: 'Joining' })
+    expect(busy).toHaveAttribute('aria-busy', 'true')
+    expect(busy).toContainElement(screen.getByTestId('mini-runner'))
+    expect(screen.queryByText(/Joining…/)).toBeNull()
+    finish({ token: 't' })
+  })
 })

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { call } from '../game/api'
 import { loadSession, saveSession } from '../game/session'
 import { ErrorText, Screen } from '../game/ui'
+import { FullLoader } from '../game/Runner'
 
 /** A one-time link from a marshal: moves this player onto this phone. The old phone stops working. */
 export default function PhoneMove({ code, token }: { code: string; token: string }) {
@@ -38,10 +39,13 @@ export default function PhoneMove({ code, token }: { code: string; token: string
     )
   }
 
+  // While moving, the full-size loader; an error shows as before.
+  if (!error) return <FullLoader caption="PINDAH RUMAH, MOVING YOU OVER" />
+
   return (
     <Screen eyebrow={`kejar. · new phone ${code}`}>
-      <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.04em' }}>{error ? 'Could not move you' : 'Moving you to this phone'}</h1>
-      {error ? <ErrorText>{error}</ErrorText> : <p className="muted">One moment.</p>}
+      <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.04em' }}>Could not move you</h1>
+      <ErrorText>{error}</ErrorText>
     </Screen>
   )
 }

@@ -39,7 +39,7 @@ export interface MapDot {
   /** Hang Hebat: this runner is the wanted one. Set in the Kejar's, marshals' and spectators' views while it lasts. */
   wanted?: true
   /**
-   * Exact specifically because of Pak Guard's Focus, Bomoh's reveal, Tuch and Ga's gate, or tapping green in Mak Kau
+   * Exact specifically because of Pak Guard's Focus, Bomoh's reveal, Tee And Gee's gate, or tapping green in Mak Kau
    * Hijau (`hijau`: at the tapped spot, until the next ping reveal), or Bomba's last call (`lastcall`: every free
    * runner, whatever hid them); null for every other dot.
    */
@@ -231,7 +231,7 @@ export interface View {
   frozenUntil: number | null
   /** Nasi Lemak KFC: I used one, so my next deck card arrives doubled (`COMBO READY` on the slot). */
   comboReady: boolean
-  /** Tuch and Ga: the chasers' hidden toll gates still waiting for their reveal; empty for runners and marshals. */
+  /** Tee And Gee: the chasers' hidden toll gates still waiting for their reveal; empty for runners and marshals. */
   tollGates: LatLng[]
   /**
    * The organiser only: exactly where the stash is (null if none), and who claimed it. Left out of players' and
@@ -456,7 +456,7 @@ function landingAt(i: ViewInput, kind: PowerUp['kind'], revealAt: number, prevRe
 }
 
 /**
- * Tuch and Ga: the chasers' gates that are set but haven't had their reveal yet (no revealed ping at or after
+ * Tee And Gee: the chasers' gates that are set but haven't had their reveal yet (no revealed ping at or after
  * the use). Chasers only; a landed gate has done its work and is gone. A doubled card can mean two.
  */
 function tollGatesFor(i: ViewInput): LatLng[] {
@@ -526,7 +526,7 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
     .map((u) => latestAtOrBefore(i.positions[u.player_id], revealAt))
     .filter((p): p is Position => !!p)
 
-  // Tuch and Ga: a fixed point instead of a chaser, the same effect as Pak Guard around it.
+  // Tee And Gee: a fixed point instead of a chaser, the same effect as Pak Guard around it.
   const tollGates = landingAt(i, 'toll', revealAt, prevAt)
     .map((u) => u.spot)
     .filter((s): s is LatLng => !!s)
@@ -915,11 +915,11 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
           'Next ping shows Dikejar near them exactly.',
           'runner',
         )
-      // Tuch and Ga: only the chasers learn a gate was set; runners get nothing, so they can't tell where to avoid.
+      // Tee And Gee: only the chasers learn a gate was set; runners get nothing, so they can't tell where to avoid.
       if (e.data.kind === 'toll') {
         if (ctx.side === 'runner') return null
-        if (ctx.side === null) return plain('A Kejar used Tuch and Ga')
-        return two('A Kejar set a toll gate.', 'Tuch and Ga', '', 'Dikejar checking in near it show exactly at the next ping.')
+        if (ctx.side === null) return plain('A Kejar used Tee And Gee')
+        return two('A Kejar set a toll gate.', 'Tee And Gee', '', 'Dikejar checking in near it show exactly at the next ping.')
       }
       return null
     case 'stolen': {
@@ -1063,7 +1063,7 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       // Runner power-ups stay secret; chasers' ones are announced.
       if (e.data.kind === 'flare') return 'A Kejar used Mat Rempit. Extra ping in 30 s!'
       if (e.data.kind === 'focus') return 'A Kejar used Pak Guard'
-      if (e.data.kind === 'toll') return 'A Kejar used Tuch and Ga'
+      if (e.data.kind === 'toll') return 'A Kejar used Tee And Gee'
       return null
     case 'frozen':
       return target ? `A Dikejar froze ${target.name}'s power-up` : 'A Dikejar froze a chaser power-up'

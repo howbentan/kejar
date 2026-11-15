@@ -407,7 +407,7 @@ export class MemoryStore implements GameStore {
     for (const r of this.safetyRows) if (r.game_id === id) Object.assign(r, { data: {}, lat: null, lng: null })
     this.phoneMoveRows = this.phoneMoveRows.filter((r) => r.game_id !== id)
     this.marshalInviteRows = this.marshalInviteRows.filter((r) => r.game_id !== id)
-    // A Tuch and Ga gate's position is a chaser's exact position.
+    // A Tee And Gee gate's position is a chaser's exact position.
     for (const u of this.powerUpRows) if (u.game_id === id) u.spot = null
     // A house arrest's centre is a runner's position.
     for (const p of this.playerRows) if (p.game_id === id) p.arrest = null

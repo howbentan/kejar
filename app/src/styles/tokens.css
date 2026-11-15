@@ -765,3 +765,25 @@ select.input option { background: #141614; color: var(--white); }
 /* "Mak Kau Hijau" is the longest name: a size smaller so it stays on one line and the effect line fits. */
 .power-card.legendary.hijau .pc-name { font-size: 11px; white-space: nowrap; }
 .power-card.big.legendary.hijau .pc-name { font-size: 18px; }
+
+/* Loaders across Kejar (loaders design, option A): the running j while the app waits. */
+/* A button waiting on its tap keeps its full colour: the small j inside shows it's working, not greyed out. */
+.btn[aria-busy='true']:disabled, .pill[aria-busy='true']:disabled, .scan[aria-busy='true']:disabled, .grab-card[aria-busy='true']:disabled { opacity: 1; }
+.grab-card { position: relative; }
+.grab-busy { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: rgba(10, 10, 11, 0.82); pointer-events: none; }
+/* The full-size loader over a screen (park setup, while a picked park's outline and lakes load). */
+.loader-overlay { position: fixed; inset: 0; z-index: 40; background: var(--black); overflow: hidden; }
+/* The map's tiles loading: a small j in the middle; taps go straight through to the map. */
+.map-loading { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 1; }
+
+/* No blue tap box on Android Chrome; every button gives its own press feedback instead. */
+html { -webkit-tap-highlight-color: transparent; }
+.scan { transition: transform 0.4s var(--spring); }
+.scan:active:not(:disabled) { transform: scale(0.97); }
+.pill { transition: background 0.3s var(--spring), color 0.3s var(--spring), transform 0.4s var(--spring); }
+.pill:active:not(:disabled) { transform: scale(0.95); }
+/* Plain buttons that had no press feedback: a quick dim while pressed. Only these classes, so the SOS hold bar,
+   the Penjara reel and the lucky dip look exactly as before. */
+.slot:active:not(:disabled), .grab-card:active:not(:disabled), .dock-pop-text:active, .map-me:active, .home-link:active:not(:disabled), .home-tip:active { opacity: 0.65; }
+/* `all: unset` drops the browser's focus ring: put a keyboard one back. */
+.home-link:focus-visible, .home-tip:focus-visible { outline: 2px solid var(--volt); outline-offset: 2px; border-radius: 6px; }

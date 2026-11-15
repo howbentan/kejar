@@ -6,6 +6,7 @@ import PowerCard from './PowerCard'
 import { INFO } from './powerInfo'
 import { loadSession } from './session'
 import { ErrorText } from './ui'
+import { MiniRunner } from './Runner'
 
 type PickResult = { ok: true; kind: PowerUpKind; powerupId: string; double?: boolean } | { ok: false; reason: string }
 
@@ -38,6 +39,8 @@ export default function GrabChooser({
   onClose: () => void
 }) {
   const [busy, setBusy] = useState(false)
+  // The card that was tapped, while its pick is on the way: only it runs the small j.
+  const [picked, setPicked] = useState<number | null>(null)
   const [brought, setBrought] = useState<PowerUpKind | null>(null)
   const [doubled, setDoubled] = useState(false)
   const [refusal, setRefusal] = useState('')
@@ -46,6 +49,7 @@ export default function GrabChooser({
   async function pick(choice: number) {
     if (busy || brought) return
     setBusy(true)
+    setPicked(choice)
     setError('')
     try {
       const r = await call<PickResult>('grabPick', { code, token: loadSession(localStorage, code).token, powerupId, choice })
@@ -58,6 +62,7 @@ export default function GrabChooser({
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
+      setPicked(null)
     }
   }
 
@@ -101,12 +106,18 @@ export default function GrabChooser({
                 className="grab-card"
                 aria-label={`Keep ${INFO[kind].name}`}
                 disabled={busy}
+                aria-busy={picked === i || undefined}
                 initial={{ y: 24, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ delay: i * 0.06, duration: 0.3 }}
                 onClick={() => pick(i)}
               >
                 <PowerCard kind={kind} />
+                {picked === i && (
+                  <span className="grab-busy">
+                    <MiniRunner height={22} />
+                  </span>
+                )}
               </m.button>
             ))}
           </div>

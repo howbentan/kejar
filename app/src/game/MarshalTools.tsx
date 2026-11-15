@@ -6,6 +6,7 @@ import { currentPushEnv, NotificationsDeniedError, pushSupport, subscribe } from
 import { call } from './api'
 import { credentials } from './auth'
 import { ErrorText, tagText } from './ui'
+import { BusyLabel } from './Runner'
 
 const KIND_LABEL: Record<Alert['kind'], string> = {
   sos: 'SOS',
@@ -94,6 +95,8 @@ export default function MarshalTools({
   onOpenSos?: (alertId: string) => void
 }) {
   const [busy, setBusy] = useState(false)
+  // The alert button that was tapped (`<action>:<alert id>`), so only it runs the small j.
+  const [busyOn, setBusyOn] = useState<string | null>(null)
   const [error, setError] = useState('')
   const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null)
   const [tab, setTab] = useState<'live' | 'after'>('live')
@@ -108,8 +111,9 @@ export default function MarshalTools({
     lastSos.current = openSos
   }, [openSos])
 
-  async function act(action: string, extra: object = {}) {
+  async function act(action: string, extra: object = {}, tapped: string | null = null) {
     setBusy(true)
+    setBusyOn(tapped)
     setError('')
     try {
       const r = await call<{ ok?: boolean; reason?: string } | undefined>(action, { code, ...credentials(code), ...extra })
@@ -120,7 +124,24 @@ export default function MarshalTools({
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
+      setBusyOn(null)
     }
+  }
+
+  /** An alert's button: tapped, it runs the small j beside its busy label. */
+  function alertButton(a: Alert, action: string, label: string, busyLabel: string, ghost = false) {
+    const key = `${action}:${a.id}`
+    return (
+      <button
+        type="button"
+        className={ghost ? 'btn btn-ghost alert-btn' : 'btn alert-btn'}
+        disabled={busy}
+        aria-busy={busyOn === key || undefined}
+        onClick={() => act(action, { eventId: a.id }, key)}
+      >
+        {busyOn === key ? <BusyLabel label={busyLabel} colour={ghost ? 'var(--volt)' : 'var(--black)'} height={18} /> : label}
+      </button>
+    )
   }
 
   async function makePhoneLink(playerId: string) {
@@ -182,23 +203,15 @@ export default function MarshalTools({
         )}
         {!a.handled && a.kind === 'auto-jail' && (
           <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <button type="button" className="btn alert-btn" disabled={busy} onClick={() => act('undoAutoJail', { eventId: a.id })}>
-              Phone problem: undo
-            </button>
-            <button type="button" className="btn btn-ghost alert-btn" disabled={busy} onClick={() => act('handleAlert', { eventId: a.id })}>
-              It stands
-            </button>
+            {alertButton(a, 'undoAutoJail', 'Phone problem: undo', 'Undoing')}
+            {alertButton(a, 'handleAlert', 'It stands', 'Marking', true)}
           </span>
         )}
         {!a.handled && a.kind === 'flagged-catch' && undoable.has(a.id) && (
-          <button type="button" className="btn alert-btn" disabled={busy} onClick={() => act('undoKejar', { eventId: a.id })}>
-            Undo kejar
-          </button>
+          alertButton(a, 'undoKejar', 'Undo kejar', 'Undoing')
         )}
         {!a.handled && a.kind !== 'auto-jail' && a.kind !== 'sos' && (
-          <button type="button" className="btn btn-ghost alert-btn" disabled={busy} onClick={() => act('handleAlert', { eventId: a.id })}>
-            Handled
-          </button>
+          alertButton(a, 'handleAlert', 'Handled', 'Marking', true)
         )}
       </li>
     )

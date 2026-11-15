@@ -11,6 +11,10 @@ import { CHASER_SNAPSHOT_FUZZ_M, FUZZ_RADIUS_M, type ChaserSnapshot, type MapDot
 import { kejarMapStyle } from './mapStyle'
 import { RIPPLE_MS } from './ripple'
 import { SlideTracker } from './slideOff'
+import { MiniRunner } from './Runner'
+
+/** How long the tiles' small j runs at most when the map never loads (failed style, offline). */
+const MAP_LOADER_MS = 8000
 
 const VOLT = '#C6FF3D'
 const WHITE = '#F5F5F3'
@@ -133,7 +137,7 @@ function pinFeatures(pins: Pin[]): FeatureCollection {
   )
 }
 
-/** Tuch and Ga's gates, on the chaser map only (the view sends them to chasers and no one else). */
+/** Tee And Gee's gates, on the chaser map only (the view sends them to chasers and no one else). */
 function tollGateFeatures(gates: LatLng[]): FeatureCollection {
   return collection(gates.map((g) => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [g.lng, g.lat] } })))
 }
@@ -293,11 +297,13 @@ export default function GameMap({
   stash?: LatLng | null
   /** The stash pin's colour: the secret card's (yellow, orange, purple or green). Read once, when the map loads. */
   stashTone?: SecretTone
-  /** Chasers: where Tuch and Ga's hidden toll gates stand. */
+  /** Chasers: where Tee And Gee's hidden toll gates stand. */
   tollGates?: LatLng[]
 }) {
   const reduce = useReducedMotion()
   const [loaded, setLoaded] = useState(false)
+  // The tiles' small j gives up on a map error or after MAP_LOADER_MS, so a map that never loads isn't covered for good.
+  const [gaveUp, setGaveUp] = useState(false)
   const latestZone = useRef(legendaryZone)
   latestZone.current = legendaryZone
   const latestBomohZone = useRef(bomohZone)
@@ -353,7 +359,13 @@ export default function GameMap({
       attributionControl: { compact: false },
     })
     map.current = m
+    const giveUp = window.setTimeout(() => setGaveUp(true), MAP_LOADER_MS)
+    m.on('error', () => {
+      window.clearTimeout(giveUp)
+      setGaveUp(true)
+    })
     m.on('load', () => {
+      window.clearTimeout(giveUp)
       m.addSource('arena', {
         type: 'geojson',
         data: collection([{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: ring(arena.boundary) } }]),
@@ -616,7 +628,7 @@ export default function GameMap({
         layout: { 'text-field': 'WANTED', 'text-font': ['Noto Sans Regular'], 'text-size': 9, 'text-offset': [0, -3.2], 'text-allow-overlap': true },
         paint: { 'text-color': eg.hebatInk, 'text-halo-color': eg.hebat, 'text-halo-width': 2 },
       })
-      // Tuch and Ga's reveal: a soft lime halo (Pak Guard's is a thin ring), so the two never look alike.
+      // Tee And Gee's reveal: a soft lime halo (Pak Guard's is a thin ring), so the two never look alike.
       m.addLayer({
         id: 'toll-reveal-ring',
         type: 'circle',
@@ -682,8 +694,10 @@ export default function GameMap({
       setLoaded(true)
     })
     return () => {
+      window.clearTimeout(giveUp)
       ready.current = false
       setLoaded(false)
+      setGaveUp(false)
       m.remove()
       map.current = null
     }
@@ -874,6 +888,12 @@ export default function GameMap({
   return (
     <div style={{ position: 'relative', height: typeof height === 'string' ? height : undefined }}>
       <div ref={el} style={{ height, borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hair)' }} />
+      {/* Until the map's first load, a small j runs in the middle (loaders design). Taps go straight through. */}
+      {!loaded && !gaveUp && (
+        <div className="map-loading" data-testid="map-loading" aria-hidden="true">
+          <MiniRunner height={42} />
+        </div>
+      )}
       {rings && (
         <div className="ripple-rings" aria-hidden="true">
           {[0, 0.15, 0.3].map((d, k) => (

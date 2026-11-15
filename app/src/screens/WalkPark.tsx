@@ -8,6 +8,7 @@ import { loadOrganiserSession } from '../game/organiserSession'
 import GameMap from '../game/Map'
 import { ErrorText, Screen } from '../game/ui'
 import { useGameState } from '../game/useGameState'
+import { FullLoader, WaitingLine } from '../game/Runner'
 
 /** Within this distance of a spot, the card turns lime and the button appears. */
 export const WALK_HERE_M = 15
@@ -227,7 +228,11 @@ export default function WalkPark({
               <>
                 <p className="eyebrow">{`NEXT · ${count}`}</p>
                 <p style={{ fontWeight: 800, fontSize: 21, letterSpacing: '-0.04em' }}>{next.label}</p>
-                <p className="mono">{metres === null ? 'Finding you…' : `${Math.round(metres / 10) * 10} M · ${compass(here!, next)}`}</p>
+                {metres === null ? (
+                  <WaitingLine className="mono">Finding you</WaitingLine>
+                ) : (
+                  <p className="mono">{`${Math.round(metres / 10) * 10} M · ${compass(here!, next)}`}</p>
+                )}
               </>
             )}
           </div>
@@ -268,6 +273,7 @@ export function HostWalk({ code }: { code: string }) {
       </Screen>
     )
   }
+  if (!view && !error) return <FullLoader caption="JOM JALAN, LOADING THE WALK" />
   if (!view) {
     return (
       <Screen eyebrow="WALK THE PARK">

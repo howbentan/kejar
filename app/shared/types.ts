@@ -411,7 +411,7 @@ export interface PowerUp {
   offer: PowerUpKind[] | null
   /** Nasi Lemak KFC: the id of the card this one doubles; null for an ordinary card. */
   twin_of: string | null
-  /** Tuch and Ga: where the gate stands once placed; null otherwise. */
+  /** Tee And Gee: where the gate stands once placed; null otherwise. */
   spot: LatLng | null
 }
 

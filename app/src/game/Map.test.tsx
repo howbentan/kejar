@@ -7,6 +7,7 @@ const created = vi.hoisted(() => ({
   fits: [] as unknown[],
   fitOpts: [] as unknown[],
   load: null as null | (() => void),
+  error: null as null | (() => void),
   layers: [] as { id: string; source: string }[],
   data: {} as Record<string, unknown>,
   markers: [] as { el: HTMLElement; lngLat?: number[]; removed: boolean }[],
@@ -38,6 +39,7 @@ vi.mock('maplibre-gl', () => ({
       }
       on(event: string, cb: () => void) {
         if (event === 'load') created.load = cb
+        if (event === 'error') created.error = cb
       }
       removed = false
       remove() {
@@ -89,6 +91,35 @@ const arena = {
 }
 
 describe('GameMap', () => {
+  it('runs a small j over the map until its first load, then takes it away', () => {
+    render(<GameMap arena={arena} dots={[]} />)
+    const loading = screen.getByTestId('map-loading')
+    expect(loading).toHaveAttribute('aria-hidden', 'true')
+    expect(loading.querySelector('[data-testid="mini-runner"]')).not.toBeNull()
+    act(() => created.load!())
+    expect(screen.queryByTestId('map-loading')).toBeNull()
+  })
+
+  it("takes the small j away after 8 s if the map never loads", () => {
+    vi.useFakeTimers()
+    try {
+      render(<GameMap arena={arena} dots={[]} />)
+      act(() => vi.advanceTimersByTime(7900))
+      expect(screen.getByTestId('map-loading')).toBeInTheDocument()
+      act(() => vi.advanceTimersByTime(200))
+      expect(screen.queryByTestId('map-loading')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('takes the small j away at once on a map error', () => {
+    render(<GameMap arena={arena} dots={[]} />)
+    expect(screen.getByTestId('map-loading')).toBeInTheDocument()
+    act(() => created.error!())
+    expect(screen.queryByTestId('map-loading')).toBeNull()
+  })
+
   it('leaving the screen mid-ripple never touches the removed map', () => {
     const { rerender, unmount } = render(<GameMap arena={arena} dots={[]} />)
     created.load!()
@@ -227,7 +258,7 @@ describe('GameMap', () => {
     expect(created.data['toll-gates']).toMatchObject({ features: [] })
   })
 
-  it("gives a dot revealed by Tuch and Ga's toll gate its own layer, not Pak Guard's or Bomoh's", () => {
+  it("gives a dot revealed by Tee And Gee's toll gate its own layer, not Pak Guard's or Bomoh's", () => {
     created.layers = []
     created.data = {}
     const dots = [{ id: 'r1', kind: 'runner' as const, lat: 3.1, lng: 101.1, at: '', revealedBy: 'toll' as const }]

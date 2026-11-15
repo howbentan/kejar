@@ -11,6 +11,7 @@ import FreezePicker from './FreezePicker'
 import GrabChooser from './GrabChooser'
 import Sticker from './Sticker'
 import { ErrorText } from './ui'
+import { BusyLabel } from './Runner'
 
 /**
  * What a successful claim can hand back: a deck card, Dato Seri, or Bomoh. Bomoh is never a `PowerUpKind` (he works on
@@ -105,6 +106,8 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
   const [error, setError] = useState('')
   const [grab, setGrab] = useState<{ powerupId: string; offer: PowerUpKind[] } | null>(null)
   const [freeze, setFreeze] = useState<PowerUp | null>(null)
+  // The card being used, while its call is on the way: its Use button runs the small j.
+  const [using, setUsing] = useState<PowerUp | null>(null)
   const token = () => loadSession(localStorage, code).token
   const now = useServerNow(view.now)
 
@@ -130,6 +133,8 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
     setConfirm(null)
     setFreeze(null)
     setError('')
+    setMessage('')
+    setUsing(u)
     try {
       const r = await call<UseResult>('usePowerup', { code, token: token(), powerupId: u.id, ...(targetId ? { targetId } : {}) })
       if (r.ok && r.kind === 'grab' && r.offer) {
@@ -157,6 +162,8 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
       )
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setUsing(null)
     }
   }
 
@@ -173,9 +180,16 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
 
   return (
     <div className="slot-wrap">
-      {(confirm || message || error) && (
+      {(confirm || using || message || error) && (
         <div className="dock-pop">
-          {confirm ? (
+          {using ? (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ flex: 1 }}>{`Use ${INFO[using.kind].name}?`}</span>
+              <button type="button" className="btn" style={{ padding: '10px 16px' }} disabled aria-busy="true">
+                <BusyLabel label={`Using ${INFO[using.kind].name}`} height={20} />
+              </button>
+            </div>
+          ) : confirm ? (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <span style={{ flex: 1 }}>{`Use ${INFO[confirm.kind].name}?`}</span>
               <button type="button" className="btn" style={{ padding: '10px 16px' }} onClick={() => use(confirm)}>
@@ -240,7 +254,7 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
               key={u.id}
               type="button"
               className="slot"
-              disabled={cooling || frozen}
+              disabled={cooling || frozen || !!using}
               initial={{ y: -16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               transition={{ type: 'spring', stiffness: 500, damping: 18 }}

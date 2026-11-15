@@ -89,12 +89,20 @@ const createCalls = () => call.mock.calls.filter((c) => c[0] === 'create')
 const parksLoaded = () => screen.findByText('KLCC · 3 stations')
 
 describe('HostNew step 1, the park', () => {
+  it('shows the full-size loader while the saved parks load', async () => {
+    render(<HostNew />)
+    expect(screen.getByRole('status', { name: 'JAP, LOADING YOUR PARKS' })).toBeInTheDocument()
+    expect(screen.getByText('JAP, LOADING YOUR PARKS')).toBeInTheDocument()
+    await parksLoaded()
+    expect(screen.queryByText('JAP, LOADING YOUR PARKS')).toBeNull()
+  })
+
   it('shows the step, the heading and the progress bar', async () => {
     render(<HostNew />)
+    await parksLoaded()
     expect(screen.getByText('NEW GAME · STEP 1 OF 5')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Where are you?' })).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'Step 1 of 5' })).toBeInTheDocument()
-    await parksLoaded()
   })
 
   it('lists saved parks with size and station count', async () => {
@@ -148,13 +156,14 @@ describe('HostNew step 1, the park', () => {
 
   it('has small links to invite another organiser and to the kit', async () => {
     render(<HostNew />)
+    await parksLoaded()
     expect(screen.getByRole('link', { name: 'Your kit' }).getAttribute('href')).toBe('/host/kit')
     expect(screen.getByRole('button', { name: 'Invite another organiser' })).toBeInTheDocument()
-    await parksLoaded()
   })
 
   it('invites a peer organiser and shows the link to share', async () => {
     render(<HostNew />)
+    await parksLoaded()
     expect(screen.queryByLabelText("New organiser's name")).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Invite another organiser' }))
     fireEvent.change(screen.getByLabelText("New organiser's name"), { target: { value: 'Partner' } })
@@ -166,8 +175,8 @@ describe('HostNew step 1, the park', () => {
   it('suggests creating from a phone when on a laptop', async () => {
     setUa('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/129.0')
     render(<HostNew />)
-    expect(screen.getByText(/create the game on your phone/i)).toBeInTheDocument()
     await parksLoaded()
+    expect(screen.getByText(/create the game on your phone/i)).toBeInTheDocument()
   })
 
   it('does not nag on a phone', async () => {
@@ -207,7 +216,7 @@ describe('HostNew step 2, which game', () => {
       .getAllByRole('img')
       .map((i) => i.getAttribute('aria-label'))
     expect(names).toHaveLength(13)
-    expect(names).toEqual(expect.arrayContaining(['Cheese Ais', 'Nasi Lemak KFC', 'Tuch and Ga']))
+    expect(names).toEqual(expect.arrayContaining(['Cheese Ais', 'Nasi Lemak KFC', 'Tee And Gee']))
     expect(names.slice(-2)).toEqual(['Dato Seri', 'Bomoh'])
   })
 
@@ -274,11 +283,11 @@ describe('HostNew step 3, how long', () => {
     render(<HostNew />)
     await toStep3('Full')
     expect(screen.getByText('LEGENDARY CARDS · SECRET FROM PLAYERS')).toBeInTheDocument()
-    expect(screen.getByText('Dikejar legendary')).toBeInTheDocument()
-    expect(screen.getByText('Kejar legendary')).toBeInTheDocument()
+    expect(screen.getByText('Dikejar Legendary')).toBeInTheDocument()
+    expect(screen.getByText('Kejar Legendary')).toBeInTheDocument()
     expect(screen.getByText("The app secretly picks which one. You'll see which card to hide.")).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Dikejar legendary: On' })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByRole('radio', { name: 'Kejar legendary: Off' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'Dikejar Legendary: On' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'Kejar Legendary: Off' })).toHaveAttribute('aria-checked', 'true')
     // No per-legendary switch any more.
     expect(screen.queryByRole('radio', { name: /Dato Seri|Bomoh/ })).toBeNull()
     expect(document.body.textContent).not.toMatch(/—/)
@@ -288,8 +297,8 @@ describe('HostNew step 3, how long', () => {
     render(<HostNew />)
     await toStep3('Full')
     const row = (title: string) => screen.getByText(title).closest('[data-side]') as HTMLElement
-    expect(within(row('Dikejar legendary')).getAllByRole('img').map((i) => i.getAttribute('aria-label'))).toEqual(['Dato Seri', 'Super Ring'])
-    expect(within(row('Kejar legendary')).getAllByRole('img').map((i) => i.getAttribute('aria-label'))).toEqual(['Bomoh', 'Mak Kau Hijau'])
+    expect(within(row('Dikejar Legendary')).getAllByRole('img').map((i) => i.getAttribute('aria-label'))).toEqual(['Dato Seri', 'Super Ring'])
+    expect(within(row('Kejar Legendary')).getAllByRole('img').map((i) => i.getAttribute('aria-label'))).toEqual(['Bomoh', 'Mak Kau Hijau'])
   })
 
   it('sends legendarySides', async () => {
@@ -303,8 +312,8 @@ describe('HostNew step 3, how long', () => {
   it('each side can be switched, and what is sent follows', async () => {
     render(<HostNew />)
     await toStep3('Full')
-    fireEvent.click(screen.getByRole('radio', { name: 'Dikejar legendary: Off' }))
-    const kejar = screen.getByRole('radio', { name: 'Kejar legendary: On' })
+    fireEvent.click(screen.getByRole('radio', { name: 'Dikejar Legendary: Off' }))
+    const kejar = screen.getByRole('radio', { name: 'Kejar Legendary: On' })
     fireEvent.click(kejar)
     expect(kejar).toHaveAttribute('aria-checked', 'true')
     createGame()
@@ -356,7 +365,7 @@ describe('HostNew step 3, how long', () => {
     render(<HostNew />)
     await toStep3('Full')
     const text = document.body.textContent ?? ''
-    expect(text.indexOf('ENDGAME · SECRET FROM PLAYERS')).toBeGreaterThan(text.indexOf('Kejar legendary'))
+    expect(text.indexOf('ENDGAME · SECRET FROM PLAYERS')).toBeGreaterThan(text.indexOf('Kejar Legendary'))
     for (const name of ['Bomba', 'Hang Hebat', 'PKP']) expect(screen.getByRole('radio', { name: `${name}: On` })).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByRole('radio', { name: 'Banjir Kilat: On' })).toBeDisabled()
     expect(screen.getByRole('radio', { name: 'Banjir Kilat: Off' })).toHaveAttribute('aria-checked', 'true')
@@ -487,7 +496,7 @@ describe('HostNew creating', () => {
     await toStep3('Full')
     fireEvent.click(screen.getByRole('radio', { name: 'Length: Long' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Expected players: 21–30' }))
-    fireEvent.click(screen.getByRole('radio', { name: 'Dikejar legendary: Off' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Dikejar Legendary: Off' }))
     back()
     expect(screen.getByRole('radio', { name: 'Game: Full' })).toHaveAttribute('aria-checked', 'true')
     back()
@@ -497,7 +506,7 @@ describe('HostNew creating', () => {
     next()
     expect(screen.getByRole('radio', { name: 'Length: Long' })).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByRole('radio', { name: 'Expected players: 21–30' })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByRole('radio', { name: 'Dikejar legendary: Off' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'Dikejar Legendary: Off' })).toHaveAttribute('aria-checked', 'true')
     createGame()
     await waitFor(() =>
       createdWith({

@@ -3,6 +3,7 @@ import { call } from '../game/api'
 import { loadName, saveName } from '../game/nameMemory'
 import { saveSession } from '../game/session'
 import { ErrorText, Screen } from '../game/ui'
+import { BusyLabel } from '../game/Runner'
 
 export default function MarshalRedeem({ code, token }: { code: string; token: string }) {
   const [name, setName] = useState(() => loadName(localStorage))
@@ -35,8 +36,8 @@ export default function MarshalRedeem({ code, token }: { code: string; token: st
       </label>
       <input id="name" className="input" maxLength={24} value={name} onChange={(e) => setName(e.target.value)} />
       <ErrorText>{error}</ErrorText>
-      <button className="btn" disabled={!name.trim() || busy} onClick={redeem}>
-        {busy ? 'Joining…' : 'Join as marshal'}
+      <button className="btn" disabled={!name.trim() || busy} aria-busy={busy || undefined} onClick={redeem}>
+        {busy ? <BusyLabel label="Joining as marshal" /> : 'Join as marshal'}
       </button>
     </Screen>
   )

@@ -83,6 +83,22 @@ describe('ArenaSetup', () => {
     expect(call).toHaveBeenCalledTimes(1)
   })
 
+  it('while a picked park maps, the full-size loader shows its name, then goes', async () => {
+    let lakes!: (v: unknown) => void
+    call.mockImplementation(async (action: string) => {
+      if (action === 'searchParks') return found([hit])
+      if (action === 'parkFeatures') return new Promise((r) => (lakes = r))
+      return {}
+    })
+    render(<ArenaSetup onDone={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText('Park name'), { target: { value: 'KLCC Park' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    fireEvent.click(await screen.findByRole('button', { name: /^KLCC Park/ }))
+    expect(await screen.findByRole('status', { name: 'KEJAP JE, MAPPING KLCC PARK' })).toBeInTheDocument()
+    lakes({ water: [], toilets: [], waterChecked: true })
+    await waitFor(() => expect(screen.queryByRole('status', { name: 'KEJAP JE, MAPPING KLCC PARK' })).toBeNull())
+  })
+
   it('picking a result loads lakes and shows the area in hectares', async () => {
     render(<ArenaSetup onDone={vi.fn()} />)
     await pickKlcc()
@@ -210,7 +226,7 @@ describe('ArenaSetup', () => {
       await search(found([hit], jalil), () => slow.promise)
       expect(await screen.findByRole('button', { name: /^KLCC Park/ })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Circle around Bukit Jalil' })).toBeInTheDocument()
-      expect(screen.getByText('Finding parks near Bukit Jalil…')).toBeInTheDocument()
+      expect(screen.getByText('Finding parks near Bukit Jalil')).toBeInTheDocument()
       expect(screen.queryByText('Parks near Bukit Jalil')).toBeNull()
       slow.resolve({ nearby: [taman] })
       expect(await screen.findByText('Parks near Bukit Jalil')).toBeInTheDocument()
@@ -222,7 +238,7 @@ describe('ArenaSetup', () => {
       const bad = deferred<unknown>()
       render(<ArenaSetup onDone={vi.fn()} />)
       await search(found([hit], jalil), () => bad.promise)
-      await screen.findByText('Finding parks near Bukit Jalil…')
+      await screen.findByText('Finding parks near Bukit Jalil')
       bad.reject(new Error('Park search is down'))
       await waitFor(() => expect(screen.queryByText(/^Finding parks near/)).toBeNull())
       expect(screen.queryByText(/^Parks near/)).toBeNull()
@@ -256,7 +272,8 @@ describe('ArenaSetup', () => {
       first.reject(new Error('Park search is down right now.'))
       await new Promise((r) => setTimeout(r, 20))
       expect(screen.queryByText(/down right now/)).toBeNull()
-      expect(screen.getByRole('button', { name: 'Search' })).toBeDisabled()
+      // Still waiting on the second search: the button runs the small j.
+      expect(screen.getByRole('button', { name: 'Searching' })).toBeDisabled()
       second.resolve(found([hit]))
       expect(await screen.findByRole('button', { name: /^KLCC Park/ })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Search' })).toBeEnabled()
@@ -266,7 +283,7 @@ describe('ArenaSetup', () => {
       const first = deferred<{ nearby: unknown[] }>()
       render(<ArenaSetup onDone={vi.fn()} />)
       await search(found([], jalil), () => first.promise)
-      await screen.findByText('Finding parks near Bukit Jalil…')
+      await screen.findByText('Finding parks near Bukit Jalil')
       const sri = { name: 'Sri Petaling', center: { lat: 3.07, lng: 101.69 } }
       const other = { osmRef: 'way/88', name: 'Taman Sri Petaling', areaHa: 5, outline: geo.lake, pieces: 1 }
       call.mockImplementation(async (action: string) => {

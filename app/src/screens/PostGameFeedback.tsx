@@ -5,6 +5,7 @@ import { call } from '../game/api'
 import { credentials } from '../game/auth'
 import { currentCoords } from '../game/here'
 import { ErrorText, Pills } from '../game/ui'
+import { BusyLabel } from '../game/Runner'
 
 const REPORT_REASONS = (Object.keys(REASON_LABEL) as ReportReason[]).map((value) => ({ value, text: REASON_LABEL[value] }))
 const RATINGS = [1, 2, 3, 4, 5]
@@ -83,8 +84,8 @@ export default function PostGameFeedback({ code, view }: { code: string; view: V
               onChange={(e) => setChangeNote(e.target.value)}
             />
             <ErrorText>{rateError}</ErrorText>
-            <button type="button" className="btn" disabled={rateBusy || !rating} onClick={sendRating}>
-              Send
+            <button type="button" className="btn" disabled={rateBusy || !rating} aria-busy={rateBusy || undefined} onClick={sendRating}>
+              {rateBusy ? <BusyLabel label="Sending rating" /> : 'Send'}
             </button>
           </>
         )}
@@ -115,8 +116,8 @@ export default function PostGameFeedback({ code, view }: { code: string; view: V
             <textarea id="report-note" className="input" rows={2} maxLength={NOTE_MAX} value={note} onChange={(e) => setNote(e.target.value)} />
             <ErrorText>{reportError}</ErrorText>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" className="btn" disabled={reportBusy || !target} onClick={sendReport}>
-                Send report
+              <button type="button" className="btn" disabled={reportBusy || !target} aria-busy={reportBusy || undefined} onClick={sendReport}>
+                {reportBusy ? <BusyLabel label="Sending report" /> : 'Send report'}
               </button>
               <button type="button" className="btn btn-ghost" onClick={() => setReporting(false)}>
                 Cancel

@@ -8,6 +8,7 @@ import { call } from '../game/api'
 import { loadOrganiserSession } from '../game/organiserSession'
 import PlaceMap, { type PlaceMode } from '../game/PlaceMap'
 import { ErrorText, Pills } from '../game/ui'
+import { BusyLabel, FullLoader, WaitingLine } from '../game/Runner'
 
 const SIZES = ['150', '200', '300', '500'] as const
 type Size = (typeof SIZES)[number]
@@ -69,6 +70,10 @@ export default function ArenaSetup({
   const [stations, setStations] = useState<LatLng[]>(d0?.stations ?? [])
   const [name, setName] = useState(d0?.name ?? '')
   const [busy, setBusy] = useState(false)
+  // Which wait is on: a search or a save (the tapped button shows the running j), or the picked park's outline and
+  // lakes loading (`mapping`, its name: the full-size loader over the setup).
+  const [busyOn, setBusyOn] = useState<'search' | 'save' | null>(null)
+  const [mapping, setMapping] = useState<string | null>(null)
   const [error, setError] = useState('')
 
   const circleOn = source === 'circle' || usePart
@@ -108,6 +113,7 @@ export default function ArenaSetup({
   async function search() {
     setError('')
     setBusy(true)
+    setBusyOn('search')
     const id = ++searchId.current
     setResults(null)
     setNearby({ loading: false, parks: [] })
@@ -119,7 +125,10 @@ export default function ArenaSetup({
     } catch (e) {
       if (id === searchId.current) setError(e instanceof Error ? e.message : String(e))
     } finally {
-      if (id === searchId.current) setBusy(false)
+      if (id === searchId.current) {
+        setBusy(false)
+        setBusyOn(null)
+      }
     }
   }
 
@@ -143,6 +152,7 @@ export default function ArenaSetup({
   function pickAround(place: { name: string; center: LatLng }) {
     searchId.current++
     setBusy(false)
+    setBusyOn(null)
     setError('')
     setSource('circle')
     setPark(null)
@@ -161,6 +171,8 @@ export default function ArenaSetup({
     searchId.current++
     setError('')
     setBusy(true)
+    setBusyOn(null)
+    setMapping(hit.name)
     setPark({ osmRef: hit.osmRef, outline: hit.outline, pieces: hit.pieces })
     setResults(null)
     setJail(null)
@@ -175,6 +187,7 @@ export default function ArenaSetup({
       setFeatures({ water: [], toilets: [], waterChecked: false })
     } finally {
       setBusy(false)
+      setMapping(null)
     }
   }
 
@@ -207,6 +220,7 @@ export default function ArenaSetup({
   async function save() {
     setError('')
     setBusy(true)
+    setBusyOn('save')
     try {
       const r = await call<{ arenaId: string }>('saveArena', {
         organiserToken,
@@ -218,6 +232,7 @@ export default function ArenaSetup({
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
+      setBusyOn(null)
     }
   }
 
@@ -257,8 +272,8 @@ export default function ArenaSetup({
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && query.trim().length >= 3 && void search()}
             />
-            <button type="button" className="btn" disabled={busy || query.trim().length < 3} onClick={() => void search()}>
-              Search
+            <button type="button" className="btn" disabled={busy || query.trim().length < 3} aria-busy={busyOn === 'search' || undefined} onClick={() => void search()}>
+              {busyOn === 'search' ? <BusyLabel label="Searching" /> : 'Search'}
             </button>
           </div>
           {results && results.parks.length === 0 && !results.around && <p className="muted">{NO_PARKS}</p>}
@@ -268,7 +283,7 @@ export default function ArenaSetup({
               {`Circle around ${results.around.name}`}
             </button>
           )}
-          {results?.around && nearby.loading && <p className="muted">{`Finding parks near ${results.around.name}…`}</p>}
+          {results?.around && nearby.loading && <WaitingLine>{`Finding parks near ${results.around.name}`}</WaitingLine>}
           {results?.around && nearby.parks.length > 0 && (
             <>
               <p className="eyebrow">{`Parks near ${results.around.name}`}</p>
@@ -328,8 +343,8 @@ export default function ArenaSetup({
           </label>
           <input id="park-name" className="input" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} />
           <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className="btn" disabled={busy || !!preview?.problem || !name.trim()} onClick={() => void save()}>
-              Save park
+            <button type="button" className="btn" disabled={busy || !!preview?.problem || !name.trim()} aria-busy={busyOn === 'save' || undefined} onClick={() => void save()}>
+              {busyOn === 'save' ? <BusyLabel label="Saving park" /> : 'Save park'}
             </button>
             {source === 'circle' && !initial && (
               <button
@@ -345,6 +360,11 @@ export default function ArenaSetup({
         </>
       )}
       <ErrorText>{error}</ErrorText>
+      {mapping !== null && (
+        <div className="loader-overlay">
+          <FullLoader caption={`KEJAP JE, MAPPING ${mapping.toUpperCase()}`} />
+        </div>
+      )}
     </div>
   )
 }

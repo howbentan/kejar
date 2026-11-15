@@ -52,9 +52,16 @@ describe('YourKit', () => {
     expect(call).not.toHaveBeenCalled()
   })
 
-  it('shows the heading and the every-game group, each printing the sheet', () => {
+  it('shows the full-size loader until the cards arrive', async () => {
     render(<YourKit />)
-    expect(screen.getByRole('heading', { name: 'Print once.' })).toBeTruthy()
+    expect(screen.getByRole('status', { name: 'TUNGGU JAP, PACKING YOUR KIT' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: 'Print once.' })).toBeTruthy()
+    expect(screen.queryByRole('status', { name: 'TUNGGU JAP, PACKING YOUR KIT' })).toBeNull()
+  })
+
+  it('shows the heading and the every-game group, each printing the sheet', async () => {
+    render(<YourKit />)
+    expect(await screen.findByRole('heading', { name: 'Print once.' })).toBeTruthy()
     expect(screen.getByText('Laminate it and reuse it every game.')).toBeTruthy()
     expect(screen.getByText('EVERY GAME')).toBeTruthy()
     for (const label of ['Armbands #01–#40', 'Station cards 1–8', 'Penjara card']) {

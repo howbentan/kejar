@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { BusyLabel } from './Runner'
 
 /** The hand-drawn kejar logo (the j is a running figure), in volt on the dark screens. `size` is its height in px. */
 export function Wordmark({ size = 64 }: { size?: number }) {
@@ -43,6 +44,8 @@ export function Pills<T extends string>(props: {
   options: { value: T; text: string }[]
   value: T | null
   disabled?: boolean
+  /** The option that was tapped and is waiting on the server: it shows the small running j beside its text. */
+  busyValue?: T | null
   onChange: (value: T) => void
 }) {
   return (
@@ -56,9 +59,10 @@ export function Pills<T extends string>(props: {
           aria-label={`${props.label}: ${o.text}`}
           className={props.value === o.value ? 'pill pill-on' : 'pill'}
           disabled={props.disabled}
+          aria-busy={props.busyValue === o.value || undefined}
           onClick={() => props.value !== o.value && props.onChange(o.value)}
         >
-          {o.text}
+          {props.busyValue === o.value ? <BusyLabel label={o.text} colour="currentColor" height={16} /> : o.text}
         </button>
       ))}
     </div>

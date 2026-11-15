@@ -2303,7 +2303,7 @@ const usePowerup: Action = async (ctx, body) => {
     const t = cheeseTarget
     if (!t || t.role !== 'chaser' || t.removed_at || t.disqualified_at || frozenForMs(t, ctx.now) > 0) return { ok: false, reason: 'no-target' }
   }
-  // Tuch and Ga (new power-ups §5.3): the gate goes where the chaser stands now. No fresh fix, no gate, and the
+  // Tee And Gee (new power-ups §5.3): the gate goes where the chaser stands now. No fresh fix, no gate, and the
   // card is kept (checked before the card is spent).
   let gateSpot: { lat: number; lng: number } | null = null
   if (u.kind === 'toll') {

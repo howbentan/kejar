@@ -5,6 +5,7 @@ import { call } from './api'
 import SetupSteps from './SetupSteps'
 import { ErrorText } from './ui'
 import { noticeLegendaries } from './cardNotice'
+import { MiniRunner } from './Runner'
 
 interface Row {
   key: number
@@ -153,10 +154,11 @@ export default function CrewStep({ code, view, organiserToken }: { code: string;
           <button
             type="button"
             disabled={!r.link}
+            aria-label={!r.link ? 'Creating invite link' : undefined}
             onClick={() => shareRow(r)}
             style={{ ...pill, background: 'none', border: 0, padding: 4, cursor: 'pointer', color: r.sent ? 'var(--volt)' : 'inherit', opacity: r.sent ? 1 : 0.7 }}
           >
-            {!r.link ? 'Creating…' : r.sent ? 'SENT' : 'INVITE'}
+            {!r.link ? <MiniRunner height={16} colour="currentColor" /> : r.sent ? 'SENT' : 'INVITE'}
           </button>,
           r.key,
           r.error,

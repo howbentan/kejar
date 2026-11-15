@@ -14,6 +14,7 @@ import { clockOf, nextOccurrence, startsLabel } from '../game/plannedStart'
 import { qrDataUrl } from '../game/qr'
 import { ErrorText, ModeBadge, Pills, Screen, tagText } from '../game/ui'
 import { useGameState } from '../game/useGameState'
+import { BusyLabel, FullLoader } from '../game/Runner'
 
 type Side = Extract<Role, 'runner' | 'chaser'>
 
@@ -33,6 +34,8 @@ export default function HostLobby({ code }: { code: string }) {
   const [qr, setQr] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  // Which button was tapped ('start', 'mode', 'invite', or `role:<player id>`), so only it shows the running j.
+  const [busyOn, setBusyOn] = useState<string | null>(null)
   const [marshalInviteUrl, setMarshalInviteUrl] = useState('')
   const [notice, setNotice] = useState('')
   const [startNotice, setStartNotice] = useState('')
@@ -64,8 +67,9 @@ export default function HostLobby({ code }: { code: string }) {
     void act('setStartTime', { startsAt: new Date(nextOccurrence(startText, Date.now())).toISOString() })
   }
 
-  async function act(action: string, body: object) {
+  async function act(action: string, body: object, tapped: string | null = null) {
     setBusy(true)
+    setBusyOn(tapped)
     setError('')
     try {
       const res = await call<{ notice?: string } | undefined>(action, { code, organiserToken: organiser!.organiserToken, ...body })
@@ -75,6 +79,7 @@ export default function HostLobby({ code }: { code: string }) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
+      setBusyOn(null)
     }
   }
 
@@ -82,6 +87,7 @@ export default function HostLobby({ code }: { code: string }) {
   async function changeMode() {
     if (!view) return
     setBusy(true)
+    setBusyOn('mode')
     setError('')
     setNotice('')
     try {
@@ -98,11 +104,13 @@ export default function HostLobby({ code }: { code: string }) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
+      setBusyOn(null)
     }
   }
 
   async function inviteMarshal() {
     setBusy(true)
+    setBusyOn('invite')
     setError('')
     try {
       const { inviteToken } = await call<{ inviteToken: string }>('createMarshalInvite', {
@@ -114,6 +122,7 @@ export default function HostLobby({ code }: { code: string }) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
+      setBusyOn(null)
     }
   }
 
@@ -138,6 +147,9 @@ export default function HostLobby({ code }: { code: string }) {
       </Screen>
     )
   }
+
+  // Nothing to show before the first view: the full-size loader (a load error still shows as before).
+  if (!view && !loadError) return <FullLoader caption={`SABAR KEJAP, OPENING ${code.toUpperCase()}`} />
 
   // The new-game setup's steps 4 and 5 stand in for the lobby: no join QR yet.
   const setup = new URLSearchParams(window.location.search).get('setup')
@@ -174,8 +186,8 @@ export default function HostLobby({ code }: { code: string }) {
         </h1>
         {view && <ModeBadge mode={view.settings.mode} />}
         {view && (
-          <button type="button" className="btn btn-ghost" style={{ width: 'auto', padding: '4px 10px', fontSize: 12 }} disabled={busy} onClick={changeMode}>
-            Change
+          <button type="button" className="btn btn-ghost" style={{ width: 'auto', padding: '4px 10px', fontSize: 12 }} disabled={busy} aria-busy={busyOn === 'mode' || undefined} onClick={changeMode}>
+            {busyOn === 'mode' ? <BusyLabel label={`Switching to ${view.settings.mode === 'full' ? 'Core' : 'Full'}`} colour="var(--volt)" height={16} /> : 'Change'}
           </button>
         )}
       </div>
@@ -229,8 +241,8 @@ export default function HostLobby({ code }: { code: string }) {
       {view && <OrganiserTools view={view} code={code} credentials={{ organiserToken: organiser.organiserToken }} refresh={refresh} />}
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <button className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={inviteMarshal}>
-          Invite a marshal
+        <button className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} disabled={busy} aria-busy={busyOn === 'invite' || undefined} onClick={inviteMarshal}>
+          {busyOn === 'invite' ? <BusyLabel label="Inviting marshal" colour="var(--volt)" /> : 'Invite a marshal'}
         </button>
         {marshalInviteUrl && (
           <p className="muted" style={{ wordBreak: 'break-all' }}>
@@ -257,8 +269,9 @@ export default function HostLobby({ code }: { code: string }) {
                   label={p.name}
                   value={p.role === 'runner' || p.role === 'chaser' ? p.role : null}
                   disabled={busy}
+                  busyValue={busyOn?.startsWith(`role:${p.id}:`) ? (busyOn.slice(`role:${p.id}:`.length) as Side) : null}
                   options={SIDES}
-                  onChange={(role) => act('setRoles', { roles: { [p.id]: role } })}
+                  onChange={(role) => act('setRoles', { roles: { [p.id]: role } }, `role:${p.id}:${role}`)}
                 />
               </td>
             </tr>
@@ -276,8 +289,8 @@ export default function HostLobby({ code }: { code: string }) {
       </table>
 
       <ErrorText>{error || loadError}</ErrorText>
-      <button className="btn" disabled={busy} onClick={() => act('start', {})}>
-        Start game
+      <button className="btn" disabled={busy} aria-busy={busyOn === 'start' || undefined} onClick={() => act('start', {}, 'start')}>
+        {busyOn === 'start' ? <BusyLabel label="Starting game" /> : 'Start game'}
       </button>
     </Screen>
   )

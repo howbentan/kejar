@@ -756,7 +756,7 @@ describe('wiping a game', () => {
     expect(await store.wipeGame(g.id)).toBe(false)
   })
 
-  it("clears a Tuch and Ga gate's position", async () => {
+  it("clears a Tee And Gee gate's position", async () => {
     const g = await playedGame()
     const gate = await store.addPowerUp({ game_id: g.id, player_id: 'p1', kind: 'toll', station: null })
     await store.updatePowerUp(gate.id, { spot: { lat: 3.1, lng: 101.6 } })

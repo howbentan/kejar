@@ -148,8 +148,11 @@ describe('RunnerChase', () => {
     call.mockImplementation(() => new Promise((r) => (finish = r)))
     render(<RunnerChase code="ABC234" view={testView()} />)
     await scan('KEJAR:STATION:2')
-    expect(screen.getByRole('button', { name: 'Scan' })).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: 'Scan' }))
+    // While the claim is checked, the Scan button runs the small j beside "Checking".
+    const checking = screen.getByRole('button', { name: 'Checking' })
+    expect(checking).toBeDisabled()
+    expect(checking).toContainElement(screen.getByTestId('mini-runner'))
+    fireEvent.click(checking)
     expect(screen.queryByRole('button', { name: 'fake camera' })).toBeNull()
     expect(call).toHaveBeenCalledTimes(1)
     await act(async () => finish({ ok: false, reason: 'too-far' }))

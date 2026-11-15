@@ -4,6 +4,7 @@ import { call } from '../game/api'
 import { loadOrganiserSession } from '../game/organiserSession'
 import { printCardUrl } from '../game/printLinks'
 import { ErrorText, Screen } from '../game/ui'
+import { FullLoader } from '../game/Runner'
 
 type Legendary = LegendaryKind
 interface KitCard {
@@ -71,6 +72,9 @@ export default function YourKit() {
       </Screen>
     )
   }
+
+  // Nothing to show until the cards arrive: the full-size loader (a load error still shows as before).
+  if (cards === null && !error) return <FullLoader caption="TUNGGU JAP, PACKING YOUR KIT" />
 
   /**
    * Runs a card action. When it prints, the tab opens blank straight away, inside the tap, because a browser blocks
