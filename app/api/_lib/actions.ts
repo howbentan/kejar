@@ -235,7 +235,7 @@ function stashOf(g: Game, legendary: LegendaryKind): DatoStash | BomohStash | nu
 
 /** Writes (or clears, with `null`) a legendary's stash onto a game, into its own field. */
 function writeStash(ctx: Ctx, gameId: string, legendary: LegendaryKind, stash: DatoStash | BomohStash | null): Promise<void> {
-  const field = { dato: 'dato_stash', bomoh: 'bomoh_stash', ring: 'ring_stash', hijau: 'hijau_stash' }[legendary] as const
+  const field = ({ dato: 'dato_stash', bomoh: 'bomoh_stash', ring: 'ring_stash', hijau: 'hijau_stash' } as const)[legendary]
   return ctx.store.updateGame(gameId, { [field]: stash })
 }
 
