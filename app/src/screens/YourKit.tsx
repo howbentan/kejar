@@ -111,7 +111,7 @@ export default function YourKit() {
       <p className="eyebrow">EVERY GAME</p>
       <div>
         {['Armbands #01–#40', 'Station cards 1–8', 'Penjara card'].map((label) => (
-          <div key={label} data-testid="kit-row" style={rowStyle}>
+          <div key={label} data-testid="kit-row" style={{ ...rowStyle, alignItems: 'center' }}>
             <div style={{ fontSize: 15 }}>{label}</div>
             <button type="button" style={pill} onClick={openSheet}>
               PRINT

@@ -14,7 +14,7 @@ import { Screen } from '../game/ui'
 export default function Paused({ view }: { view: View }) {
   const photo = useRef<HTMLImageElement>(null)
   return (
-    <Screen eyebrow="Paused">
+    <Screen eyebrow="Paused" centred>
       <div className="paused">
         <h1 className="paused-title">Game paused</h1>
         <div className="paused-photo">

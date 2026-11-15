@@ -71,6 +71,11 @@ body {
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--hair); }
 th { font: 500 10px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim); }
+/* A table's outer columns sit on the screen's own edges, level with the headings and notes above it. */
+th:first-child, td:first-child { padding-left: 0; }
+th:last-child, td:last-child { padding-right: 0; }
+/* A centred screen (Paused, Removed) centres its eyebrow too. */
+.screen-centred > .eyebrow { text-align: center; }
 
 /* "You've been pinged" ripple */
 .ping-ripple {
@@ -303,7 +308,7 @@ select.input option { background: #141614; color: var(--white); }
 .power-card.big .pc-effect { font-size: 12px; min-height: 30px; }
 .pc-eyebrow { font: 500 6.5px var(--mono); letter-spacing: 0.16em; color: var(--volt); }
 .pc-art { margin-top: 4px; width: 70px; height: 70px; border-radius: 50%; display: grid; place-items: center; background: rgba(198, 255, 61, 0.08); }
-.pc-name { margin-top: auto; font-size: 14px; font-weight: 800; letter-spacing: -0.04em; }
+.pc-name { margin-top: auto; font-size: 14px; font-weight: 800; letter-spacing: -0.04em; text-align: center; }
 .pc-effect { font-size: 8px; line-height: 1.25; text-align: center; opacity: 0.78; min-height: 20px; margin-top: 2px; }
 .power-card.back {
   background-color: var(--black); border: 2px solid var(--volt); justify-content: center;
@@ -363,7 +368,7 @@ select.input option { background: #141614; color: var(--white); }
 .hijau-title { margin: 0 0 14px; font: 800 44px var(--font); letter-spacing: -0.06em; line-height: 1; }
 .hijau-panel {
   width: 100%; max-width: 420px; background: var(--black); color: var(--white); border-radius: 16px; padding: 14px 16px;
-  display: grid; gap: 10px; text-align: left;
+  display: grid; gap: 10px; text-align: center;
 }
 .hijau-panel-top { display: flex; justify-content: space-between; align-items: baseline; }
 .hijau-count { font: 700 34px var(--mono); letter-spacing: -0.02em; color: var(--hijau-2); }
@@ -391,7 +396,7 @@ select.input option { background: #141614; color: var(--white); }
 .endgame-title { margin: 0; font: 800 48px var(--font); letter-spacing: -0.06em; line-height: 1; }
 .endgame-panel {
   width: 100%; max-width: 420px; box-sizing: border-box; background: var(--black); color: var(--white); border-radius: 16px;
-  padding: 14px 16px; display: grid; gap: 6px; text-align: left;
+  padding: 14px 16px; display: grid; gap: 6px; text-align: center;
 }
 .endgame-panel b { font-size: 15px; }
 .endgame-panel span { font-size: 13px; color: var(--dim); }
@@ -597,8 +602,8 @@ select.input option { background: #141614; color: var(--white); }
 .toll-ticket-number { margin: 12px 0 2px; font-size: 32px; font-weight: 900; letter-spacing: -0.01em; line-height: 1; }
 .toll-ticket-fields { display: flex; gap: 22px; margin-top: 12px; }
 .toll-ticket-value { margin: 0; font-size: 13px; font-weight: 700; }
-.toll-ticket-status { margin-top: 12px; display: flex; flex-direction: column; align-items: flex-end; }
-.toll-ticket-status-value { margin: 0; font-size: 13px; font-weight: 800; align-self: flex-start; }
+.toll-ticket-status { margin-top: 12px; display: flex; flex-direction: column; align-items: flex-start; }
+.toll-ticket-status-value { margin: 0; font-size: 13px; font-weight: 800; }
 .toll-ticket-footer { margin: 12px 0 0; font-size: 9px; letter-spacing: 0.04em; color: rgba(10, 10, 11, 0.5); text-align: center; }
 .toll-ticket-barcode { display: flex; align-items: center; height: 26px; margin-top: 10px; gap: 2px; }
 .toll-ticket-barcode span { height: 100%; background: var(--black); display: block; }

@@ -73,7 +73,7 @@ export default function HowToPlay({ side, mode, snapshot, endgame = false, onClo
       aria-label="How to play"
       style={{ position: 'fixed', inset: 0, zIndex: 50, background: '#0A0A0B', color: '#F5F5F3', overflow: 'hidden', display: 'flex', flexDirection: 'column', pointerEvents: 'auto' }}
     >
-      <div data-testid="segments" style={{ flex: 'none', margin: '12px 12px 0', display: 'flex', gap: 4 }}>
+      <div data-testid="segments" style={{ flex: 'none', margin: '12px 16px 0', display: 'flex', gap: 4 }}>
         {cards.map((_, n) => (
           <i key={n} data-state={n < i ? 'done' : n === i ? 'current' : 'todo'} style={{ flex: 1, height: 3, borderRadius: 2, background: '#2a2a2a', overflow: 'hidden', position: 'relative' }}>
             {n <= i && (
@@ -88,7 +88,7 @@ export default function HowToPlay({ side, mode, snapshot, endgame = false, onClo
           </i>
         ))}
       </div>
-      <div style={{ flex: 'none', margin: '8px 14px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative', zIndex: 4 }}>
+      <div style={{ flex: 'none', margin: '8px 16px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', position: 'relative', zIndex: 4 }}>
         <button
           ref={closeRef}
           type="button"
@@ -104,7 +104,7 @@ export default function HowToPlay({ side, mode, snapshot, endgame = false, onClo
         <div data-testid="scene-box" style={{ flex: '0 1 auto', height: 'min(250px, 40dvh)', minHeight: 0, display: 'grid', placeItems: 'center', overflow: 'hidden' }}>
           <Scene key={`${card.scene}-${i}`} id={card.scene} stickers={card.scene.endsWith('powerups') ? stickers : undefined} />
         </div>
-        <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', padding: '16px 18px 0' }}>
+        <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', padding: '16px 16px 0' }}>
           <h2 style={{ margin: '0 0 8px', fontSize: 30, fontWeight: 800, letterSpacing: '-0.055em', lineHeight: 1 }}>
             {card.headline}
             <span style={{ color: 'var(--volt)' }}>.</span>

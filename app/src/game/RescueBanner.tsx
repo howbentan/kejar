@@ -12,7 +12,7 @@ export default function RescueBanner({ view }: { view: View }) {
   const now = view.paused ? view.now : ticking
   const s = Math.max(0, Math.ceil((rescue.endsAt - now) / 1000))
   return (
-    <div role="status" aria-label="Rescue" className="pill pill-on" style={{ alignSelf: 'flex-start', borderColor: 'var(--volt)', color: 'var(--volt)' }}>
+    <div role="status" aria-label="Rescue" className="pill pill-on" style={{ alignSelf: 'flex-start', borderColor: 'var(--volt)' }}>
       {`${rescue.byName ?? 'A Dikejar'} is breaking you out · ${s} s`}
     </div>
   )

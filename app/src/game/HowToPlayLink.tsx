@@ -17,7 +17,7 @@ export default function HowToPlayLink({ code, view }: { code: string; view: View
       <button
         type="button"
         onClick={() => setOpen(true)}
-        style={{ all: 'unset', cursor: 'pointer', boxSizing: 'border-box', minHeight: 32, display: 'inline-flex', alignItems: 'center', padding: '0 4px', fontSize: 12, opacity: 0.7, textDecoration: 'underline', pointerEvents: 'auto' }}
+        style={{ all: 'unset', cursor: 'pointer', boxSizing: 'border-box', minHeight: 32, display: 'inline-flex', alignItems: 'center', padding: '0 4px 0 0', fontSize: 12, opacity: 0.7, textDecoration: 'underline', pointerEvents: 'auto' }}
       >
         How to play
       </button>

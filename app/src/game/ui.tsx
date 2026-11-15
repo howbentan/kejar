@@ -19,9 +19,10 @@ export function ModeBadge({ mode }: { mode?: 'core' | 'full' }) {
   )
 }
 
-export function Screen({ eyebrow, children }: { eyebrow?: string; children: ReactNode }) {
+/** `centred`: the screen's content is centred, so its eyebrow is too. */
+export function Screen({ eyebrow, centred = false, children }: { eyebrow?: string; centred?: boolean; children: ReactNode }) {
   return (
-    <main className="screen">
+    <main className={centred ? 'screen screen-centred' : 'screen'}>
       {eyebrow && <p className="eyebrow">{eyebrow}</p>}
       {children}
     </main>

@@ -93,7 +93,7 @@ export default function PostGameFeedback({ code, view }: { code: string; view: V
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {reported ? (
-          <p role="status" className="safety-status">
+          <p role="status" className="safety-status" style={{ textAlign: 'left' }}>
             Report sent
           </p>
         ) : reporting ? (
@@ -125,7 +125,7 @@ export default function PostGameFeedback({ code, view }: { code: string; view: V
             </div>
           </>
         ) : (
-          <button type="button" className="sos-link" onClick={() => setReporting(true)}>
+          <button type="button" className="sos-link" style={{ alignSelf: 'flex-start', paddingLeft: 0 }} onClick={() => setReporting(true)}>
             Report a player
           </button>
         )}
