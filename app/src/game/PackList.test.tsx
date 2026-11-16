@@ -100,6 +100,18 @@ describe('PackList', () => {
     expect(assign).toHaveBeenCalledWith('/host/ABC234')
   })
 
+  it('Back returns to step 4, the crew', () => {
+    render(<PackList code="ABC234" view={view()} refresh={refresh} />)
+    expect(screen.getByRole('button', { name: 'Back' })).toHaveTextContent('‹')
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(assign).toHaveBeenCalledWith('/host/ABC234?setup=crew')
+  })
+
+  it('the lobby view (compact) has no Back', () => {
+    render(<PackList code="ABC234" view={view()} refresh={refresh} compact />)
+    expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
+  })
+
   it('tells the organiser to reprint a yellow card after a notice', () => {
     at('?setup=pack&notice=dato')
     render(<PackList code="ABC234" view={view()} refresh={refresh} />)

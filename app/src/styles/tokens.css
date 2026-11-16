@@ -774,7 +774,7 @@ select.input option { background: #141614; color: var(--white); }
 
 /* the organiser's planned start in the lobby (home upgrades design) */
 .planned-start { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.planned-start .input { width: auto; padding: 8px 12px; }
+.planned-start .input { width: 10em; min-width: 150px; padding: 10px 14px; font-size: 16px; box-sizing: border-box; }
 .home-scanner .card { background: #111; }
 
 /* "Mak Kau Hijau" is the longest name: a size smaller so it stays on one line and the effect line fits. */

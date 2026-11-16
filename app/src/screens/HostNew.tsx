@@ -32,8 +32,8 @@ const stationCount = (n: number) => `${n} station${n === 1 ? '' : 's'}`
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 const CORE_STICKERS: PowerUpKind[] = ['shield', 'cloak', 'flare', 'focus']
-// Both secret legendaries end Full's row; this row is organiser-only, so naming them here is fine.
-const FULL_STICKERS: StickerKind[] = ['decoy', 'shield', 'cloak', 'toyol', 'grab', 'flare', 'focus', 'along', 'cheese', 'combo', 'toll', 'dato', 'bomoh']
+// All four legendaries end Full's row (each side gets one of its two); this row is organiser-only, so naming them is fine.
+const FULL_STICKERS: StickerKind[] = ['decoy', 'shield', 'cloak', 'toyol', 'grab', 'flare', 'focus', 'along', 'cheese', 'combo', 'toll', 'dato', 'ring', 'bomoh', 'hijau']
 
 const LENGTHS: { value: Settings['lengthMin']; text: string; sub: string }[] = [
   { value: 30, text: 'Quick', sub: '30 MIN' },
@@ -208,6 +208,25 @@ function EndgameRow(props: { kind: keyof Switches; value: 'on' | 'off'; onChange
 export default function HostNew() {
   // All the wizard's state lives here, so going Back loses nothing.
   const [step, setStep] = useState<1 | 2 | 3>(1)
+  const ownPop = useRef(false)
+  // Each step is a page in the browser's history, so the phone's back gesture steps back one step instead of leaving.
+  useEffect(() => {
+    window.history.replaceState({ ...(window.history.state ?? {}), newGameStep: 1 }, '')
+    const onPop = (e: PopStateEvent) => {
+      // The pop our own Back button caused: the step already changed when it was tapped.
+      if (ownPop.current) {
+        ownPop.current = false
+        return
+      }
+      const s = (e.state as { newGameStep?: number } | null)?.newGameStep
+      if (s === 1 || s === 2 || s === 3) {
+        setError('')
+        setStep(s)
+      }
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
   const [parks, setParks] = useState<SavedPark[] | null>(null)
   const [chosenId, setChosenId] = useState<string | null>(null)
   const [oneOff, setOneOff] = useState<ArenaDraft | null>(null)
@@ -329,7 +348,8 @@ export default function HostNew() {
         ...(chosen ? { savedArenaId: chosen.id, overrides } : { draft: oneOff }),
       })
       const param = noticeParam(notice)
-      window.location.assign(`/host/${code}?setup=crew${param ? `&notice=${param}` : ''}`)
+      // Replace, not push: the phone's back gesture from step 4 must never land on a fresh step 1 and make a second game.
+      window.location.replace(`/host/${code}?setup=crew${param ? `&notice=${param}` : ''}`)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setBusy(false)
@@ -368,12 +388,20 @@ export default function HostNew() {
 
   const goTo = (s: 1 | 2 | 3) => {
     setError('')
+    // Back walks the history the forward steps made, so the gesture and the button always agree. The step changes at
+    // once; the pop that follows sets the same step again.
+    if (s < step && (window.history.state as { newGameStep?: number } | null)?.newGameStep === step) {
+      ownPop.current = true
+      window.history.back()
+    }
+    if (s > step) window.history.pushState({ newGameStep: s }, '')
     setStep(s)
   }
   const buttons = (primary: ReactNode, hasBack: boolean) => (
     <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
       {hasBack && (
         <button type="button" className="btn btn-ghost" style={{ flex: '0 0 34%' }} onClick={() => goTo((step - 1) as 1 | 2)}>
+          <span aria-hidden="true">‹ </span>
           Back
         </button>
       )}
@@ -383,6 +411,7 @@ export default function HostNew() {
   const nextButton = (disabled = false) => (
     <button type="button" className="btn" style={{ flex: 1 }} disabled={disabled} onClick={() => goTo((step + 1) as 2 | 3)}>
       Next
+      <span aria-hidden="true"> ›</span>
     </button>
   )
   const headingStyle = { fontSize: 32, fontWeight: 800, letterSpacing: '-0.05em', lineHeight: 1.05 } as const
@@ -548,7 +577,7 @@ export default function HostNew() {
             {(
               [
                 { value: 'core', title: 'Core', tag: 'BEST FOR FIRST-TIMERS', text: 'The chase, check-ins and Penjara, plus 4 simple power-ups. Learnable in 5 minutes.', stickers: CORE_STICKERS },
-                { value: 'full', title: 'Full', tag: 'FOR REGULARS', text: 'Everything in Core, plus 7 more power-ups and two secret legendaries.', stickers: FULL_STICKERS },
+                { value: 'full', title: 'Full', tag: 'FOR REGULARS', text: 'Everything in Core, plus 7 more power-ups and a secret legendary for each side.', stickers: FULL_STICKERS },
               ] as const
             ).map((m) => {
               const picked = settings.mode === m.value

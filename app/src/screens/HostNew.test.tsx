@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const call = vi.hoisted(() => vi.fn())
@@ -207,17 +207,31 @@ describe('HostNew step 2, which game', () => {
     expect(within(core).getAllByRole('img').map((i) => i.getAttribute('aria-label'))).toEqual(['Durian', 'Ponteng', 'Mat Rempit', 'Pak Guard'])
   })
 
-  it('Full shows its copy and stickers, ending with both legendaries', async () => {
+  it('Full shows its copy and stickers, ending with all four legendaries', async () => {
     render(<HostNew />)
     await toStep2()
     expect(screen.getByText('FOR REGULARS')).toBeInTheDocument()
-    expect(screen.getByText('Everything in Core, plus 7 more power-ups and two secret legendaries.')).toBeInTheDocument()
+    expect(screen.getByText('Everything in Core, plus 7 more power-ups and a secret legendary for each side.')).toBeInTheDocument()
     const names = within(screen.getByRole('radio', { name: 'Game: Full' }))
       .getAllByRole('img')
       .map((i) => i.getAttribute('aria-label'))
-    expect(names).toHaveLength(13)
+    expect(names).toHaveLength(15)
     expect(names).toEqual(expect.arrayContaining(['Cheese Ais', 'Nasi Lemak KFC', 'Tee And Gee']))
-    expect(names.slice(-2)).toEqual(['Dato Seri', 'Bomoh'])
+    expect(names.slice(-4)).toEqual(['Dato Seri', 'Super Ring', 'Bomoh', 'Mak Kau Hijau'])
+  })
+
+  it("the phone's back gesture steps back one step, and Back does the same; the buttons carry arrows", async () => {
+    render(<HostNew />)
+    await toStep2()
+    expect(screen.getByText('NEW GAME · STEP 2 OF 5')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Back' })).toHaveTextContent('‹')
+    expect(screen.getByRole('button', { name: 'Next' })).toHaveTextContent('›')
+    act(() => window.history.back())
+    await waitFor(() => expect(screen.getByText('NEW GAME · STEP 1 OF 5')).toBeInTheDocument())
+    next()
+    expect(screen.getByText('NEW GAME · STEP 2 OF 5')).toBeInTheDocument()
+    back()
+    await waitFor(() => expect(screen.getByText('NEW GAME · STEP 1 OF 5')).toBeInTheDocument())
   })
 
   it('has Back and Next', async () => {
@@ -426,17 +440,17 @@ describe('HostNew creating', () => {
   })
 
   it('goes to the crew step of the new game', async () => {
-    const assign = vi.fn()
-    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign } })
+    const replace = vi.fn()
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign: vi.fn(), replace } })
     render(<HostNew />)
     await toStep3()
     createGame()
-    await waitFor(() => expect(assign).toHaveBeenCalledWith('/host/ABC234?setup=crew'))
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/host/ABC234?setup=crew'))
   })
 
   it('carries the Dato Seri notice along when create returns one', async () => {
-    const assign = vi.fn()
-    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign } })
+    const replace = vi.fn()
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign: vi.fn(), replace } })
     call.mockImplementation(async (action: string) => {
       if (action === 'listArenas') return { arenas }
       return { code: 'ABC234', notice: 'Reprint a yellow card to use Dato Seri.' }
@@ -444,15 +458,15 @@ describe('HostNew creating', () => {
     render(<HostNew />)
     await toStep3('Full')
     createGame()
-    await waitFor(() => expect(assign).toHaveBeenCalledWith('/host/ABC234?setup=crew&notice=dato'))
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/host/ABC234?setup=crew&notice=dato'))
   })
 
   it.each([
     ['Reprint a purple card to use Bomoh.', 'bomoh'],
     ['Reprint a yellow card to use Dato Seri. Reprint a purple card to use Bomoh.', 'dato,bomoh'],
   ])('carries a purple card notice along too (%s)', async (notice, param) => {
-    const assign = vi.fn()
-    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign } })
+    const replace = vi.fn()
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign: vi.fn(), replace } })
     call.mockImplementation(async (action: string) => {
       if (action === 'listArenas') return { arenas }
       return { code: 'ABC234', notice }
@@ -460,7 +474,7 @@ describe('HostNew creating', () => {
     render(<HostNew />)
     await toStep3('Full')
     createGame()
-    await waitFor(() => expect(assign).toHaveBeenCalledWith(`/host/ABC234?setup=crew&notice=${param}`))
+    await waitFor(() => expect(replace).toHaveBeenCalledWith(`/host/ABC234?setup=crew&notice=${param}`))
   })
 
   it('shows a create error and lets the organiser try again', async () => {

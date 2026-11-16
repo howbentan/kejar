@@ -179,6 +179,7 @@ export default function CrewStep({ code, view, organiserToken }: { code: string;
       </button>
       <button className="btn btn-ghost" onClick={next}>
         Next
+        <span aria-hidden="true"> ›</span>
       </button>
     </>
   )
