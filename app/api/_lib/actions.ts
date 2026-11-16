@@ -30,7 +30,7 @@ import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim
 import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict, sentDuringPause } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
-import { fallbackFor, LEGENDARY_KINDS, pickLegendaries, sidesOf, type SideSwitch } from '../../shared/legendaries.js'
+import { fallbackFor, LEGENDARY_KINDS, pickLegendaries, SIDE_PAIRS, sidesOf, type SideSwitch } from '../../shared/legendaries.js'
 import { validateTeams } from '../../shared/teams.js'
 import { DEFAULT_SETTINGS, type Arena, type Arrest, type BomohStash, type DatoStash, type Game, type GameEvent, type HijauFix, type LatLng, type LegendaryKind, type Player, type Position, type PowerUp, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
 import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
@@ -2286,6 +2286,47 @@ function dropLegendary(legendary: 'ring' | 'hijau', name: string): Action {
 const dropRing = dropLegendary('ring', 'Super Ring')
 const dropHijau = dropLegendary('hijau', 'Mak Kau Hijau')
 
+/** Adds a sheet of 20 slips (10 per side) to the organisation's stock. Any organiser of the organisation may print more. */
+const makeSlipSheet: Action = async (ctx, body) => {
+  const organiser = await requireAnyOrganiser(ctx, body)
+  await ctx.store.makeSlipSheet(organiser.organisation_id)
+  return { ok: true }
+}
+
+/**
+ * The organisation's slips, `dikejar` first then by number, with each one's state. The tokens are returned on
+ * purpose: this is the organiser-only source the printed QR codes come from, and no player or marshal view has it.
+ */
+const listSlips: Action = async (ctx, body) => {
+  const organiser = await requireAnyOrganiser(ctx, body)
+  const slips = await ctx.store.slips(organiser.organisation_id)
+  return slips
+    .map((s) => ({ side: s.side, number: s.number, token: s.token, state: s.used_at ? 'used' : s.bound_game_id ? 'bound' : 'unused' }))
+    .sort((a, b) => (a.side === b.side ? a.number - b.number : a.side === 'dikejar' ? -1 : 1))
+}
+
+/**
+ * The organiser hides a side's Tupperware and saves the spot. It goes into the stash of whichever legendary that side
+ * picked at creation, with no card or code: the box is found by walking up to it, not by scanning a printed card.
+ * Organiser only, Full mode only, lobby only, and dropping again moves it.
+ */
+const dropTupperware: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  await requireOrganiser(ctx, game, body)
+  if (game.settings.mode !== 'full') throw new ActionError(409, 'Tupperware is in Full mode only')
+  requireLobby(game, ctx.now)
+  if (body.side !== 'dikejar' && body.side !== 'kejar') throw new ActionError(400, 'Invalid side')
+  const legendaries = { ...DEFAULT_SETTINGS.legendaries, ...game.settings.legendaries }
+  const pair = body.side === 'dikejar' ? SIDE_PAIRS.runner : SIDE_PAIRS.chaser
+  const legendary = pair.find((k) => legendaries[k] === 'stash')
+  if (!legendary) throw new ActionError(409, 'That side has no legendary this game.')
+  const at = coordsOf(body)
+  if (!at) throw new ActionError(400, 'Invalid location')
+  if (!inPlayArea(at, game.arena)) throw new ActionError(400, 'Drop it inside the play area')
+  await writeStash(ctx, game.id, legendary, { lat: at.lat, lng: at.lng, claimedBy: null, claimedAt: null })
+  return { ok: true }
+}
+
 const usePowerup: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const me = await requirePlayer(ctx, game, body)
@@ -3026,6 +3067,9 @@ export const actions = {
   dropBomoh,
   dropRing,
   dropHijau,
+  makeSlipSheet,
+  listSlips,
+  dropTupperware,
   listSecretCards,
   retireSecretCard,
   reprintSecretCard,

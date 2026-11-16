@@ -8272,3 +8272,54 @@ describe('PKP closes Penjara and doubles stations (Plan E3 task 6)', () => {
     expect(await ownCards(g, kind)).toHaveLength(1)
   })
 })
+
+describe('Tupperware slip sheets and dropping a box', () => {
+  const SPOT = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const BOTH = { mode: 'full', legendarySides: { runner: 'on', chaser: 'on' } }
+  const gameOf = async (code: string) => (await store.gameByCode(code))!
+
+  it('makeSlipSheet adds 20 slips for the organisation; listSlips sorts them and another organisation sees none', async () => {
+    const organiserToken = await createOrganiser()
+    expect(await run('makeSlipSheet', { organiserToken })).toEqual({ ok: true })
+    const slips = await run<{ side: string; number: number; token: string; state: string }[]>('listSlips', { organiserToken })
+    expect(slips).toHaveLength(20)
+    expect(slips[0]).toMatchObject({ side: 'dikejar', number: 1, state: 'unused' })
+    expect(slips[9]).toMatchObject({ side: 'dikejar', number: 10 })
+    expect(slips[10]).toMatchObject({ side: 'kejar', number: 1 })
+    expect(slips.every((s) => s.token.length > 0)).toBe(true)
+    await run('makeSlipSheet', { organiserToken })
+    expect((await run<{ number: number }[]>('listSlips', { organiserToken })).map((s) => s.number)[10]).toBe(11)
+    const other = await createOrganiser()
+    expect(await run('listSlips', { organiserToken: other })).toEqual([])
+    await rejects(run('makeSlipSheet', {}), 403)
+    await rejects(run('listSlips', {}), 403)
+  })
+
+  it("dropTupperware saves the box's spot into the picked legendary's stash, with no code or card", async () => {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame(BOTH)
+    const chosen = (await gameOf(g.code)).settings.legendaries
+    expect(chosen.ring).toBe('stash')
+    expect(chosen.hijau).toBe('stash')
+    expect(await run('dropTupperware', { code: g.code, organiserToken: g.organiserToken, side: 'dikejar', ...SPOT })).toEqual({ ok: true })
+    expect((await gameOf(g.code)).ring_stash).toEqual({ ...SPOT, claimedBy: null, claimedAt: null })
+    await run('dropTupperware', { code: g.code, organiserToken: g.organiserToken, side: 'kejar', ...SPOT })
+    expect((await gameOf(g.code)).hijau_stash).toEqual({ ...SPOT, claimedBy: null, claimedAt: null })
+  })
+
+  it('dropTupperware refuses a side that is off, Core, a started game, outside the area and non-organisers', async () => {
+    forcedDraws = [0.9]
+    const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'off' } })
+    await rejects(run('dropTupperware', { code: g.code, organiserToken: g.organiserToken, side: 'kejar', ...SPOT }), 409, 'That side has no legendary this game.')
+    await rejects(run('dropTupperware', { code: g.code, organiserToken: g.organiserToken, side: 'nope', ...SPOT }), 400)
+    await rejects(run('dropTupperware', { code: g.code, organiserToken: g.organiserToken, side: 'dikejar', lat: CENTER.lat + 0.1, lng: CENTER.lng }), 400, 'inside the play area')
+    await rejects(run('dropTupperware', { code: g.code, token: g.aina.token, side: 'dikejar', ...SPOT }), 403)
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    await rejects(run('dropTupperware', { code: g.code, token: siti.token, side: 'dikejar', ...SPOT }), 403)
+    const core = await readyGame({ mode: 'core' })
+    await rejects(run('dropTupperware', { code: core.code, organiserToken: core.organiserToken, side: 'dikejar', ...SPOT }), 409, 'Full mode')
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    await rejects(run('dropTupperware', { code: g.code, organiserToken: g.organiserToken, side: 'dikejar', ...SPOT }), 409)
+  })
+})
