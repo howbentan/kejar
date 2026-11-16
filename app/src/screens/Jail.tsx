@@ -192,7 +192,7 @@ function WalkThenWatch({
   const onLost = useCallback(() => setLost(true), [])
   return (
     <>
-      {!arrived && <WalkGuide jail={view.arena.jail} arena={spectate ? undefined : view.arena} onArrived={onArrived} onLost={onLost} onDistance={onDistance} />}
+      {!arrived && <WalkGuide jail={view.arena.jail} arena={spectate ? undefined : view.arena} onArrived={onArrived} onLost={onLost} onDistance={onDistance} flood={view.endgame?.flood ?? null} />}
       {arrived && reel && <PenjaraReel code={code} freedOnce={view.me.freed_once} reel={reel} closed={pkpClosed(view)} />}
       {/* No GPS fix (none, denied, or none in 10 s): the spectator view, with the Penjara pin on it. */}
       {arrived || lost || spectate || !navigator.geolocation ? (

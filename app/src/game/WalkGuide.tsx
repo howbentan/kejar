@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { distanceM } from '../../shared/geo.js'
+import type { FloodNow } from '../../shared/flood.js'
 import type { Arena, LatLng } from '../../shared/types.js'
 import GameMap from './Map'
 import { WaitingLine } from './Runner'
@@ -19,9 +20,12 @@ export function WalkGuide({
   onArrived,
   onLost,
   onDistance,
+  flood = null,
 }: {
   jail: LatLng
   arena?: Arena
+  /** Banjir Kilat's water, so the walk to a flooded Penjara shows it. */
+  flood?: FloodNow | null
   onArrived: () => void
   onLost?: () => void
   /** The live distance, for a caller that wants to show it somewhere other than this component's own line (e.g. a ticket). */
@@ -81,6 +85,7 @@ export function WalkGuide({
           dots={here ? [{ id: 'me', kind: 'me', lat: here.lat, lng: here.lng, at: new Date().toISOString(), revealedBy: null }] : []}
           route={here ? { from: here, to: jail } : null}
           height={220}
+          flood={flood}
         />
       )}
       {metres !== null && !lost ? (
