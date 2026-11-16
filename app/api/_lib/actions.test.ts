@@ -2617,6 +2617,46 @@ describe('marshal invites', () => {
   })
 })
 
+describe('cancelling a game', () => {
+  it('the organiser cancels a lobby: every view says cancelled and shows nothing of the game', async () => {
+    const g = await readyGame()
+    expect(await run('cancelGame', { code: g.code, organiserToken: g.organiserToken })).toEqual({ ok: true })
+    const v = await run<View>('state', { code: g.code, token: g.aina.token })
+    expect(v.cancelled).toBe(true)
+    expect(v.roster).toEqual([])
+    expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).cancelled).toBe(true)
+  })
+
+  it('every other action is refused with 410 once cancelled', async () => {
+    const g = await readyGame()
+    await run('cancelGame', { code: g.code, organiserToken: g.organiserToken })
+    await rejects(run('start', { code: g.code, organiserToken: g.organiserToken }), 410, 'cancelled')
+    await rejects(run('join', { code: g.code, name: 'Late', accepted: true }), 410)
+  })
+
+  it('mid-game: the game stops with no results, and every player is told', async () => {
+    const g = await safetyGame()
+    expect(await run('cancelGame', { code: g.code, organiserToken: g.organiserToken })).toEqual({ ok: true })
+    const v = await run<View>('state', { code: g.code, token: g.ben.token })
+    expect(v.cancelled).toBe(true)
+    expect(v.results ?? null).toBeNull()
+    await rejects(run('location', { code: g.code, token: g.aina.token, ...at(0) }), 410)
+    await rejects(run('rate', { code: g.code, token: g.aina.token, stars: 5 }), 410)
+    const told = pushes.filter((p) => (p.payload as { text?: string }).text === `The organiser cancelled game ${g.code}.`).map((p) => p.endpoint)
+    expect(told).toEqual(expect.arrayContaining(['https://push/Ben', 'https://push/Aina', 'https://push/Hafiz', 'https://push/Siti']))
+  })
+
+  it('only the organiser can cancel, a second cancel is harmless, and an ended game cannot be', async () => {
+    const g = await safetyGame()
+    await rejects(run('cancelGame', { code: g.code, token: g.siti.token }), 403)
+    await run('cancelGame', { code: g.code, organiserToken: g.organiserToken })
+    expect(await run('cancelGame', { code: g.code, organiserToken: g.organiserToken })).toEqual({ ok: true })
+    const done = await safetyGame()
+    now = T0 + 200 * MIN
+    await rejects(run('cancelGame', { code: done.code, organiserToken: done.organiserToken }), 409, 'already ended')
+  })
+})
+
 describe('removing a player', () => {
   it('a removed runner is refused with 403 except state, which shows removed_at', async () => {
     const g = await safetyGame()

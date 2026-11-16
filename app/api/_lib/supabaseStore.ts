@@ -215,6 +215,10 @@ export class SupabaseStore implements GameStore {
     )
     return (rows ?? []).length > 0
   }
+  async cancelGame(gameId: string, atIso: string) {
+    const rows = check(await this.db.from('games').update({ cancelled_at: atIso, ended_at: atIso }).eq('id', gameId).is('ended_at', null).select('id'))
+    return (rows ?? []).length > 0
+  }
   async claimEnd(gameId: string, winner: 'runners' | 'chasers') {
     const rows = check(
       await this.db

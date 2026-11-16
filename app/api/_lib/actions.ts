@@ -71,9 +71,13 @@ const tagLabelOf = (players: Player[], id: string) => {
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 const iso = (ms: number) => new Date(ms).toISOString()
 
-async function loadGame(ctx: Ctx, body: Body): Promise<GameRow> {
+export const CANCELLED_LINE = 'The organiser cancelled this game.'
+
+/** The game named in the body. A cancelled game is refused (410) unless `cancelled: 'allow'` (state, cancelGame). */
+async function loadGame(ctx: Ctx, body: Body, opts: { cancelled?: 'allow' } = {}): Promise<GameRow> {
   const game = await ctx.store.gameByCode(str(body.code).toUpperCase())
   if (!game) throw new ActionError(404, 'Game not found')
+  if (game.cancelled_at && opts.cancelled !== 'allow') throw new ActionError(410, CANCELLED_LINE)
   return game
 }
 
@@ -1343,7 +1347,7 @@ const linkTag: Action = async (ctx, body) => {
 }
 
 const state: Action = async (ctx, body) => {
-  let game: Game = await loadGame(ctx, body)
+  let game: Game = await loadGame(ctx, body, { cancelled: 'allow' })
   let me: Player
   if (body.token) me = await requirePlayer(ctx, game, body, true)
   else {
@@ -1371,7 +1375,7 @@ const state: Action = async (ctx, body) => {
   }
   // The organiser's own poll only (ruling R9): an expired lobby re-checks its card, so the print link never shows a
   // card another game holds, and a lobby with no card tries for one. Any legendary's. Player polls never pay for this.
-  if (me.id === 'host' && LEGENDARY_KINDS.some((k) => needsRecheck(game, ctx.now, k))) {
+  if (me.id === 'host' && !game.cancelled_at && LEGENDARY_KINDS.some((k) => needsRecheck(game, ctx.now, k))) {
     const org = (await ctx.store.organiserById((game as GameRow).organiser_id))?.organisation_id
     if (org) {
       let fresh = game as GameRow
@@ -1380,8 +1384,8 @@ const state: Action = async (ctx, body) => {
       }
     }
   }
-  await advance(ctx, game)
-  game = (await loadGame(ctx, body)) as Game
+  if (!game.cancelled_at) await advance(ctx, game)
+  game = (await loadGame(ctx, body, { cancelled: 'allow' })) as Game
   const players = await ctx.store.players(game.id)
   if (me.id !== 'host') me = players.find((p) => p.id === me.id) ?? me
   const events = await ctx.store.events(game.id)
@@ -2939,8 +2943,25 @@ const setStartTime: Action = async (ctx, body) => {
   return { ok: true }
 }
 
+/**
+ * The organiser calls the game off (cancel design, 2026-11-16): it stops at once with no results, every action but
+ * state is refused from then on, and every player still in it is told. A second cancel is harmless.
+ */
+const cancelGame: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body, { cancelled: 'allow' })
+  await requireOrganiser(ctx, game, body)
+  if (game.cancelled_at) return { ok: true }
+  if (phaseAt(game, ctx.now).phase === 'ended' || !(await ctx.store.cancelGame(game.id, iso(ctx.now)))) {
+    throw new ActionError(409, 'The game has already ended')
+  }
+  const players = (await ctx.store.players(game.id)).filter((p) => !p.removed_at)
+  await pushTo(ctx, players, { type: 'alert', code: game.code, text: `The organiser cancelled game ${game.code}.` })
+  return { ok: true }
+}
+
 export const actions = {
   create,
+  cancelGame,
   setKit,
   setMode,
   setStartTime,

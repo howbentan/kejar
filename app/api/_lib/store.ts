@@ -157,6 +157,8 @@ export interface GameStore {
   claimPing(gameId: string, seq: number, field: 'alerted' | 'revealed'): Promise<boolean>
   /** Ends the game only if it has not ended; true for the first caller. */
   claimEnd(gameId: string, winner: 'runners' | 'chasers'): Promise<boolean>
+  /** Cancels a game that hasn't ended: sets `cancelled_at` and `ended_at` to `atIso`. True iff this call did it. */
+  cancelGame(gameId: string, atIso: string): Promise<boolean>
   addEvent(e: Omit<GameEvent, 'id' | 'at'>): Promise<GameEvent>
   events(gameId: string): Promise<GameEvent[]>
   /** claimed_at = the store's clock. */
@@ -681,6 +683,13 @@ export class MemoryStore implements GameStore {
     if (!p || p[field]) return false
     p[field] = true
     if (field === 'alerted') p.alert_sent_at = this.nowIso()
+    return true
+  }
+  async cancelGame(gameId: string, atIso: string) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g || g.ended_at) return false
+    g.cancelled_at = atIso
+    g.ended_at = atIso
     return true
   }
   async claimEnd(gameId: string, winner: 'runners' | 'chasers') {

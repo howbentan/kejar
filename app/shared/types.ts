@@ -116,6 +116,11 @@ export interface Game {
   rescue: { by: string; startedAt: string; joiners: string[] } | null
   /** When the one '5 minutes left!' warning went out (rules §2.7). Null until then; set once per game. */
   five_warned_at: string | null
+  /**
+   * When the organiser cancelled the game (cancel design, 2026-11-16): it also set `ended_at`, so everything that
+   * stops on an ended game stops, but there are no results. Null or missing for every other game.
+   */
+  cancelled_at?: string | null
   /** When this game's personal data was wiped (fair-play §1.8), 30 days after it ended. Null until then. */
   wiped_at: string | null
   /** When the organiser tapped Brief the players (ISO): the how-to-play story opens on every player's phone from then. Set once; older games have none. */
