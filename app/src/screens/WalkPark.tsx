@@ -73,6 +73,8 @@ const SECRET: Record<SecretTone, { token: string; button: string; drop: string; 
   yellow: { token: 'legendary', button: 'btn-legendary', drop: 'dropDatoSeri', dropText: 'Drop Dato Seri here', runner: true, letter: (v) => v.datoCard?.letter },
   orange: { token: 'ring', button: 'btn-ring', drop: 'dropRing', dropText: 'Drop Super Ring here', runner: true, letter: (v) => v.ringCard?.letter },
   purple: { token: 'bomoh', button: 'btn-bomoh', drop: 'dropBomoh', dropText: 'Drop Bomoh here', runner: false, letter: (v) => v.bomohCard?.letter },
+  // Temporary until the walk is rebuilt around the Tupperware (Task 8): reuses the yellow look, and has no drop action yet.
+  red: { token: 'legendary', button: 'btn-legendary', drop: 'dropDatoSeri', dropText: 'Drop the Tupperware here', runner: true, letter: () => undefined },
   green: { token: 'hijau', button: 'btn-hijau', drop: 'dropHijau', dropText: 'Drop Mak Kau Hijau here', runner: false, letter: (v) => v.hijauCard?.letter },
 }
 

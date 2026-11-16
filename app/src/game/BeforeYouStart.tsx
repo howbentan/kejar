@@ -44,7 +44,7 @@ export default function BeforeYouStart({ code, view, refresh }: { code: string; 
   const [preview, setPreview] = useState<'runner' | 'chaser' | null>(null)
 
   const marshals = view.roster.filter((p) => p.role === 'marshal')
-  // The secret card's own spot is the organiser's alone, so it isn't part of "kit placed".
+  // The Tupperware's own spot is the organiser's alone, so it isn't part of "kit placed".
   const shared = (view.kit?.places ?? []).filter((p) => !SECRET_PLACE_IDS.includes(p.id))
   const placed = shared.filter((p) => view.kit?.placed[p.id] === true).length
   const kitDone = shared.length > 0 && placed === shared.length

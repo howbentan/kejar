@@ -25,16 +25,21 @@ export function sideOf(role: Player['role']): TupperSide | null {
 const stashOf = (game: Game, kind: LegendaryKind) =>
   ({ dato: game.dato_stash, ring: game.ring_stash, bomoh: game.bomoh_stash, hijau: game.hijau_stash })[kind]
 
+/** The legendary this side's Tupperware holds: the one of its pair that is on a hidden stash (Full mode only). */
+export function legendaryOn(game: Game, side: TupperSide): LegendaryKind | null {
+  if (game.settings.mode !== 'full') return null
+  const legendaries = { ...DEFAULT_SETTINGS.legendaries, ...game.settings.legendaries }
+  const pair = side === 'dikejar' ? SIDE_PAIRS.runner : SIDE_PAIRS.chaser
+  return pair.find((k) => legendaries[k] === 'stash') ?? null
+}
+
 /**
  * The side's Tupperware: its legendary that is on a hidden stash (Full mode only), with the spot it was dropped at.
  * Null when the side is off or the box hasn't been dropped yet. Older games may lack legendary keys, so they're read
  * with the defaults.
  */
 export function boxFor(game: Game, side: TupperSide): { legendary: LegendaryKind; spot: PlacedStash } | null {
-  if (game.settings.mode !== 'full') return null
-  const legendaries = { ...DEFAULT_SETTINGS.legendaries, ...game.settings.legendaries }
-  const pair = side === 'dikejar' ? SIDE_PAIRS.runner : SIDE_PAIRS.chaser
-  const legendary = pair.find((k) => legendaries[k] === 'stash')
+  const legendary = legendaryOn(game, side)
   const spot = legendary ? placedStash(stashOf(game, legendary)) : null
   return legendary && spot ? { legendary, spot } : null
 }

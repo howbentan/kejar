@@ -29,7 +29,7 @@ import { bomohCodeFromQr, datoCodeFromQr, hijauCodeFromQr, isBomohQr, isDatoQr, 
 import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, judgeHijauClaim, judgeRingClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS, TOLL_FRESH_MS } from '../../shared/powerups.js'
 import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict, sentDuringPause } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
-import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
+import { packItems, placeIdFor, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS } from '../../shared/kit.js'
 import { fallbackFor, LEGENDARY_KINDS, pickLegendaries, SIDE_PAIRS, sidesOf, type SideSwitch } from '../../shared/legendaries.js'
 import { validateTeams } from '../../shared/teams.js'
 import { boxFor, judgeSlip, SIDE_QUEST_RADIUS_M, sideOf as tupperSideOf } from '../../shared/tupperware.js'
@@ -169,16 +169,6 @@ async function marshalName(ctx: Ctx, game: GameRow, body: Body, marshal: Player 
   return marshal ? marshal.name : (await requireOrganiser(ctx, game, body)).name
 }
 
-/** The card letters of the secret sets assigned to this game, one per legendary that holds a card. */
-function secretLettersFor(game: Game): SecretLetters {
-  const letters: SecretLetters = {}
-  for (const kind of LEGENDARY_KINDS) {
-    const letter = stashOf(game, kind)?.card?.letter
-    if (letter) letters[kind] = letter
-  }
-  return letters
-}
-
 // ---- Secret card sets: each organisation's reusable A-C yellow, orange, purple and green cards ----
 
 /** What `create` and `setMode` say when every yellow card is retired, waiting to be printed or in another game. */
@@ -290,11 +280,11 @@ const stashOn = (card: SecretCard): DatoStash | BomohStash => ({ code: card.code
 
 /**
  * The lobby lets go of its card (ruling R8): no stash, and the walk's secret step is no longer placed, so a card
- * given later has to be hidden again. `placed.<legendary>` is removed with the atomic kit write.
+ * given later has to be hidden again. its `placed.tupper-<side>` is removed with the atomic kit write.
  */
 async function releaseCard(ctx: Ctx, game: GameRow, legendary: LegendaryKind): Promise<void> {
   if (stashOf(game, legendary)) await writeStash(ctx, game.id, legendary, null)
-  if (game.kit?.placed?.[legendary]) await ctx.store.setKitKey(game.id, 'placed', legendary, null)
+  if (game.kit?.placed?.[placeIdFor(legendary)]) await ctx.store.setKitKey(game.id, 'placed', placeIdFor(legendary), null)
 }
 
 /** A lobby that wants a legendary (Full, setting on) but holds no card yet (ruling R9). */
@@ -458,7 +448,7 @@ const reprintSecretCard: Action = async (ctx, body) => {
   if (lobby) {
     const stash = stashOf(lobby, card.legendary)!
     await writeStash(ctx, lobby.id, card.legendary, { ...stash, code, lat: null, lng: null, claimedBy: null, claimedAt: null })
-    if (lobby.kit?.placed?.[card.legendary]) await ctx.store.setKitKey(lobby.id, 'placed', card.legendary, null)
+    if (lobby.kit?.placed?.[placeIdFor(card.legendary)]) await ctx.store.setKitKey(lobby.id, 'placed', placeIdFor(card.legendary), null)
   }
   return { ok: true }
 }
@@ -1408,7 +1398,6 @@ const state: Action = async (ctx, body) => {
     now: ctx.now,
     results: ended ? computeResults(game, players, events) : null,
     powerUps: await ctx.store.powerUps(game.id),
-    secretLetters: secretLettersFor(game),
   })
 }
 
@@ -3067,10 +3056,9 @@ const setKit: Action = async (ctx, body) => {
     throw new ActionError(403, 'Organiser only')
   }
   const game: Game = loaded
-  const letters = secretLettersFor(game)
   // Everything is checked before anything is written.
-  const item = tick ? packItems(game, letters).find((x) => x.id === tick.id) : undefined
-  const place = placed ? placeItems(game, organiser, letters).find((x) => x.id === placed.id) : undefined
+  const item = tick ? packItems(game).find((x) => x.id === tick.id) : undefined
+  const place = placed ? placeItems(game, organiser).find((x) => x.id === placed.id) : undefined
   if (tick && typeof tick.on !== 'boolean') throw new ActionError(400, 'Tick on or off')
   if (tick && !item) throw new ActionError(400, 'Unknown item')
   if (placed && typeof placed.on !== 'boolean') throw new ActionError(400, 'Place on or off')

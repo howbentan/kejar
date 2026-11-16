@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { game } from './fixtures.js'
 import { crewFor, isTicked, packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS } from './kit.js'
+import { mirroredSpots } from './tupperware.js'
 import { DEFAULT_SETTINGS, type Game } from './types.js'
 
 const withArena = (over: Partial<Game> = {}) =>
@@ -17,21 +18,21 @@ const label = (items: { id: string; label: string }[], id: string) => items.find
 describe('packItems', () => {
   it('always packs armbands #01–#40, whatever the band', () => {
     for (const playersBand of [20, 30, 40] as const) {
-      const items = packItems(withArena({ settings: { ...DEFAULT_SETTINGS, playersBand } }), {})
+      const items = packItems(withArena({ settings: { ...DEFAULT_SETTINGS, playersBand } }))
       expect(label(items, 'armbands')).toBe('Armbands #01–#40')
     }
   })
 
   it('the band changes only the lime vests count (a fifth of the band, rounded up)', () => {
     const vests = (playersBand: 20 | 30 | 40) =>
-      label(packItems(withArena({ settings: { ...DEFAULT_SETTINGS, playersBand } }), {}), 'vests-kejar')
+      label(packItems(withArena({ settings: { ...DEFAULT_SETTINGS, playersBand } })), 'vests-kejar')
     expect(vests(20)).toBe('4 lime vests')
     expect(vests(30)).toBe('6 lime vests')
     expect(vests(40)).toBe('8 lime vests')
   })
 
   it('lists the other items in the mockup order and wording', () => {
-    const items = packItems(withArena(), {})
+    const items = packItems(withArena())
     expect(items.map((i) => [i.id, i.label, i.group])).toEqual([
       ['armbands', 'Armbands #01–#40', 'pack'],
       ['vests-kejar', '4 lime vests', 'pack'],
@@ -47,30 +48,40 @@ describe('packItems', () => {
   })
 
   it('leaves out the station cards when the park has no stations', () => {
-    expect(packItems(game(), {}).map((i) => i.id)).not.toContain('stations')
+    expect(packItems(game()).map((i) => i.id)).not.toContain('stations')
   })
 
-  it('Core lists no secret card, even when a letter is passed', () => {
-    expect(packItems(withArena(), { dato: 'B' }).map((i) => i.id)).not.toContain('dato-card')
+  const sides = (dikejar: 'off' | 'stash', kejar: 'off' | 'stash') =>
+    full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: dikejar, ring: 'off', bomoh: kejar, hijau: 'off' } } })
+
+  it('Core lists no Tupperware', () => {
+    expect(packItems(withArena()).map((i) => i.id)).not.toContain('tupperware')
+    expect(packItems(withArena()).map((i) => i.id)).not.toContain('bring-home')
   })
 
-  it('Full with a yellow letter lists Yellow card B, yellow and secret, after Penjara', () => {
-    const items = packItems(full(), { dato: 'B' })
-    const card = items.find((i) => i.id === 'dato-card')!
-    expect(card).toMatchObject({ label: 'Yellow card B', tone: 'yellow', note: '(secret)', group: 'pack' })
-    expect(items.map((i) => i.id).indexOf('dato-card')).toBe(items.map((i) => i.id).indexOf('penjara') + 1)
+  it('Full packs the Tupperwares and slips in one line after Penjara, and the bring-home reminder last', () => {
+    const items = packItems(sides('stash', 'stash'))
+    expect(items.find((i) => i.id === 'tupperware')).toMatchObject({ label: '2 red Tupperwares, 1 slip of each side', group: 'pack' })
+    expect(items.map((i) => i.id).indexOf('tupperware')).toBe(items.map((i) => i.id).indexOf('penjara') + 1)
+    expect(items.at(-1)).toEqual({ id: 'bring-home', group: 'day', label: 'Bawa balik Tupperware Mak!' })
+    expect(items.map((i) => i.id)).not.toContain('dato-card')
   })
 
-  it('Full with no letter, or Dato Seri off, lists no yellow card', () => {
-    expect(packItems(full(), {}).map((i) => i.id)).not.toContain('dato-card')
-    const off = full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'off', ring: 'off', hijau: 'off' } } })
-    expect(packItems(off, { dato: 'B' }).map((i) => i.id)).not.toContain('dato-card')
+  it('with one side on, the line names just that side', () => {
+    expect(label(packItems(sides('stash', 'off')), 'tupperware')).toBe('1 red Tupperware, 1 Dikejar slip')
+    expect(label(packItems(sides('off', 'stash')), 'tupperware')).toBe('1 red Tupperware, 1 Kejar slip')
+  })
+
+  it('with both sides off there is nothing to pack', () => {
+    const ids = packItems(sides('off', 'off')).map((i) => i.id)
+    expect(ids).not.toContain('tupperware')
+    expect(ids).not.toContain('bring-home')
   })
 
   it('an older game with no band or legendaries reads the defaults', () => {
     const { playersBand: _b, legendaries: _l, ...old } = DEFAULT_SETTINGS
     const g = withArena({ settings: old as Game['settings'] })
-    expect(label(packItems(g, {}), 'vests-kejar')).toBe('4 lime vests')
+    expect(label(packItems(g), 'vests-kejar')).toBe('4 lime vests')
   })
 })
 
@@ -83,142 +94,78 @@ describe('crewFor', () => {
 describe('isTicked', () => {
   it('is true only while the stored label still matches', () => {
     const g20 = withArena({ kit: { ticks: { 'vests-kejar': '4 lime vests' }, placed: {} } })
-    const item = packItems(g20, {}).find((i) => i.id === 'vests-kejar')!
+    const item = packItems(g20).find((i) => i.id === 'vests-kejar')!
     expect(isTicked(g20, item)).toBe(true)
     const g30 = { ...g20, settings: { ...g20.settings, playersBand: 30 as const } }
-    const item30 = packItems(g30, {}).find((i) => i.id === 'vests-kejar')!
+    const item30 = packItems(g30).find((i) => i.id === 'vests-kejar')!
     expect(item30.label).toBe('6 lime vests')
     expect(isTicked(g30, item30)).toBe(false)
   })
 
   it('a game with no kit has nothing ticked', () => {
     const g = withArena()
-    expect(packItems(g, {}).some((i) => isTicked(g, i))).toBe(false)
+    expect(packItems(g).some((i) => isTicked(g, i))).toBe(false)
   })
 
   it('Walk the park ticks itself once every non-secret place is placed', () => {
     const ids = [...Array.from({ length: 8 }, (_, i) => `station-${i + 1}`), 'penjara']
     const placed = Object.fromEntries(ids.map((id) => [id, true]))
     const g = withArena({ kit: { ticks: {}, placed } })
-    expect(isTicked(g, packItems(g, {}).find((i) => i.id === 'walk')!)).toBe(true)
+    expect(isTicked(g, packItems(g).find((i) => i.id === 'walk')!)).toBe(true)
     const short = withArena({ kit: { ticks: {}, placed: { ...placed, 'station-3': false } } })
-    expect(isTicked(short, packItems(short, {}).find((i) => i.id === 'walk')!)).toBe(false)
+    expect(isTicked(short, packItems(short).find((i) => i.id === 'walk')!)).toBe(false)
   })
 
   it('the secret place does not hold up the auto-tick', () => {
     const ids = [...Array.from({ length: 8 }, (_, i) => `station-${i + 1}`), 'penjara']
     const g = full({ kit: { ticks: {}, placed: Object.fromEntries(ids.map((id) => [id, true])) } })
-    expect(isTicked(g, packItems(g, { dato: 'B' }).find((i) => i.id === 'walk')!)).toBe(true)
+    expect(isTicked(g, packItems(g).find((i) => i.id === 'walk')!)).toBe(true)
   })
 })
 
 describe('placeItems', () => {
+  const sides = (dikejar: 'off' | 'stash', kejar: 'off' | 'stash', over: Partial<Game> = {}) =>
+    full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: dikejar, ring: 'off', bomoh: kejar, hijau: 'off' } }, ...over })
+  const dropped = { lat: 3.002, lng: 101.003, claimedBy: null, claimedAt: null }
+
   it('lists stations 1 to 8, then Penjara, at their arena spots', () => {
     const g = withArena()
-    const places = placeItems(g, false, {})
+    const places = placeItems(g, false)
     expect(places.map((p) => p.id)).toEqual([...Array.from({ length: 8 }, (_, i) => `station-${i + 1}`), 'penjara'])
     expect(places.at(-1)).toMatchObject({ lat: g.arena.jail.lat, lng: g.arena.jail.lng })
     expect(places[0]).toMatchObject({ lat: g.arena.stations![0].lat, lng: g.arena.stations![0].lng })
   })
 
-  it('puts dato last, yellow, and only for the organiser', () => {
-    const g = full()
-    expect(placeItems(g, true, { dato: 'B' }).at(-1)).toMatchObject({ id: 'dato', tone: 'yellow' })
-    expect(placeItems(g, false, { dato: 'B' }).map((p) => p.id)).not.toContain('dato')
-  })
-
-  it('puts bomoh after dato, purple, and only for the organiser', () => {
-    const both = full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'stash', bomoh: 'stash', ring: 'off', hijau: 'off' } } })
-    const ids = placeItems(both, true, { dato: 'B', bomoh: 'C' }).map((p) => p.id)
-    expect(ids.slice(-2)).toEqual(['dato', 'bomoh'])
-    expect(placeItems(both, true, { dato: 'B', bomoh: 'C' }).at(-1)).toMatchObject({ id: 'bomoh', tone: 'purple', label: 'Purple card' })
-    expect(placeItems(both, false, { dato: 'B', bomoh: 'C' }).map((p) => p.id)).not.toContain('bomoh')
-  })
-
-  it('no bomoh place when off, in Core, with no letter, or once claimed; it sits where it was dropped', () => {
-    const on = (over = {}) => full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash', ring: 'off', hijau: 'off' } }, ...over })
-    expect(placeItems(on(), true, { bomoh: 'C' }).map((p) => p.id)).toContain('bomoh')
-    expect(placeItems(full(), true, { bomoh: 'C' }).map((p) => p.id)).not.toContain('bomoh')
-    expect(placeItems(on(), true, {}).map((p) => p.id)).not.toContain('bomoh')
-    const claimed = on({ bomoh_stash: { lat: 3.002, lng: 101.002, claimedBy: 'p1', claimedAt: 'x' } })
-    expect(placeItems(claimed, true, { bomoh: 'C' }).map((p) => p.id)).not.toContain('bomoh')
-    const dropped = on({ bomoh_stash: { lat: 3.002, lng: 101.003, claimedBy: null, claimedAt: null } })
-    expect(placeItems(dropped, true, { bomoh: 'C' }).at(-1)).toMatchObject({ lat: 3.002, lng: 101.003 })
-  })
-
-  it('lists Purple card C in the pack, purple and secret, only when Bomoh is on with a letter', () => {
-    const on = full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash', ring: 'off', hijau: 'off' } } })
-    expect(packItems(on, { bomoh: 'C' }).find((i) => i.id === 'bomoh-card')).toMatchObject({ label: 'Purple card C', tone: 'purple', note: '(secret)', group: 'pack' })
-    expect(packItems(on, {}).map((i) => i.id)).not.toContain('bomoh-card')
-    expect(packItems(full(), { bomoh: 'C' }).map((i) => i.id)).not.toContain('bomoh-card')
-  })
-
-  it('both secret ids are organiser-only', () => {
-    expect(SECRET_PLACE_IDS).toContain('bomoh')
-    expect(SECRET_PACK_IDS).toContain('bomoh-card')
-  })
-
-  it('no dato place in Core, with no card assigned, or once the card is claimed', () => {
-    expect(placeItems(withArena(), true, { dato: 'B' }).map((p) => p.id)).not.toContain('dato')
-    expect(placeItems(full(), true, {}).map((p) => p.id)).not.toContain('dato')
-    const claimed = full({ dato_stash: { lat: 3.002, lng: 101.002, claimedBy: 'p1', claimedAt: 'x' } })
-    expect(placeItems(claimed, true, { dato: 'B' }).map((p) => p.id)).not.toContain('dato')
-  })
-
-  it('dato sits where the stash was dropped', () => {
-    const g = full({ dato_stash: { lat: 3.002, lng: 101.003, claimedBy: null, claimedAt: null } })
-    expect(placeItems(g, true, { dato: 'B' }).at(-1)).toMatchObject({ lat: 3.002, lng: 101.003 })
-  })
-
-  const picked = (ring: 'off' | 'stash', hijau: 'off' | 'stash', over: Partial<Game> = {}) =>
-    full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'off', ring, hijau } }, ...over })
-
-  it("placeItems for the organiser lists the orange step when ring is stash; a marshal's never does", () => {
-    const g = picked('stash', 'off')
-    expect(placeItems(g, true, { ring: 'A' }).at(-1)).toMatchObject({ id: 'ring', tone: 'orange', label: 'Orange card' })
-    expect(placeItems(g, false, { ring: 'A' }).map((p) => p.id)).not.toContain('ring')
-    // Never counted in a marshal's OF N: the shared list is the same whether ring is on or off.
-    expect(placeItems(g, false, { ring: 'A' })).toEqual(placeItems(full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'off', ring: 'off', hijau: 'off' } } }), false, {}))
-  })
-
-  it('the green step works the same, after the orange one, and both sit where they were dropped', () => {
-    const g = picked('stash', 'stash', {
-      ring_stash: { lat: 3.002, lng: 101.004, claimedBy: null, claimedAt: null },
-      hijau_stash: { lat: 3.003, lng: 101.005, claimedBy: null, claimedAt: null },
-    })
-    const places = placeItems(g, true, { ring: 'A', hijau: 'B' })
-    expect(places.slice(-2).map((p) => [p.id, p.tone, p.label, p.lat, p.lng])).toEqual([
-      ['ring', 'orange', 'Orange card', 3.002, 101.004],
-      ['hijau', 'green', 'Green card', 3.003, 101.005],
+  it('the organiser gets two red Tupperware steps after Penjara; a marshal gets none', () => {
+    const g = sides('stash', 'stash')
+    const places = placeItems(g, true)
+    expect(places.slice(-2).map((p) => [p.id, p.label, p.tone])).toEqual([
+      ['tupper-dikejar', 'Dikejar Tupperware', 'red'],
+      ['tupper-kejar', 'Kejar Tupperware', 'red'],
     ])
-    expect(placeItems(g, false, { ring: 'A', hijau: 'B' }).map((p) => p.id)).not.toContain('hijau')
+    expect(placeItems(g, false).map((p) => p.id)).not.toContain('tupper-dikejar')
+    expect(placeItems(g, false).map((p) => p.id)).not.toContain('tupper-kejar')
   })
 
-  it('no orange or green step when off, in Core, with no letter, or once claimed', () => {
-    expect(placeItems(picked('off', 'off'), true, { ring: 'A', hijau: 'B' }).map((p) => p.id)).not.toContain('ring')
-    expect(placeItems(picked('stash', 'stash'), true, {}).map((p) => p.id)).not.toEqual(expect.arrayContaining(['ring']))
-    const core = withArena({ settings: { ...DEFAULT_SETTINGS, legendaries: { dato: 'off', bomoh: 'off', ring: 'stash', hijau: 'stash' } } })
-    expect(placeItems(core, true, { ring: 'A', hijau: 'B' }).map((p) => p.id)).toEqual(placeItems(core, false, {}).map((p) => p.id))
-    const claimed = picked('stash', 'stash', {
-      ring_stash: { lat: 3.002, lng: 101.002, claimedBy: 'p1', claimedAt: 'x' },
-      hijau_stash: { lat: 3.002, lng: 101.002, claimedBy: 'p2', claimedAt: 'x' },
-    })
-    const ids = placeItems(claimed, true, { ring: 'A', hijau: 'B' }).map((p) => p.id)
-    expect(ids).not.toContain('ring')
-    expect(ids).not.toContain('hijau')
+  it('a step sits at the suggested spot until the box is dropped, then where it was dropped', () => {
+    const g = sides('stash', 'off')
+    const suggested = mirroredSpots(g.arena, g.id).dikejar
+    expect(placeItems(g, true).at(-1)).toMatchObject({ id: 'tupper-dikejar', lat: suggested.lat, lng: suggested.lng })
+    expect(placeItems(sides('stash', 'off', { dato_stash: dropped }), true).at(-1)).toMatchObject({ lat: 3.002, lng: 101.003 })
   })
 
-  it('packs Orange card A and Green card B, coloured and secret, only when on with a letter', () => {
-    const g = picked('stash', 'stash')
-    const items = packItems(g, { ring: 'A', hijau: 'B' })
-    expect(items.find((i) => i.id === 'ring-card')).toMatchObject({ label: 'Orange card A', tone: 'orange', note: '(secret)', group: 'pack' })
-    expect(items.find((i) => i.id === 'hijau-card')).toMatchObject({ label: 'Green card B', tone: 'green', note: '(secret)', group: 'pack' })
-    expect(packItems(g, {}).map((i) => i.id)).not.toContain('ring-card')
-    expect(packItems(picked('off', 'off'), { ring: 'A', hijau: 'B' }).map((i) => i.id)).not.toContain('hijau-card')
+  it('no step in Core, for a side that is off, or once its box is claimed', () => {
+    expect(placeItems(withArena(), true).map((p) => p.id)).not.toContain('tupper-dikejar')
+    expect(placeItems(sides('off', 'stash'), true).map((p) => p.id)).toEqual(expect.not.arrayContaining(['tupper-dikejar']))
+    expect(placeItems(sides('off', 'stash'), true).map((p) => p.id)).toContain('tupper-kejar')
+    const claimed = sides('stash', 'stash', { dato_stash: { ...dropped, claimedBy: 'p1', claimedAt: 'x' } })
+    const ids = placeItems(claimed, true).map((p) => p.id)
+    expect(ids).not.toContain('tupper-dikejar')
+    expect(ids).toContain('tupper-kejar')
   })
 
-  it('the orange and green ids are organiser-only too', () => {
-    expect(SECRET_PLACE_IDS).toEqual(expect.arrayContaining(['dato', 'ring', 'bomoh', 'hijau']))
-    expect(SECRET_PACK_IDS).toEqual(expect.arrayContaining(['dato-card', 'ring-card', 'bomoh-card', 'hijau-card']))
+  it('both Tupperware place ids are organiser-only', () => {
+    expect(SECRET_PLACE_IDS).toEqual(['tupper-dikejar', 'tupper-kejar'])
+    expect(SECRET_PACK_IDS).toContain('tupperware')
   })
 })

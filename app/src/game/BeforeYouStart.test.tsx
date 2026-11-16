@@ -10,7 +10,7 @@ import BeforeYouStart from './BeforeYouStart'
 const places = [
   { id: 'station-1', label: 'Station 1', lat: 0, lng: 0 },
   { id: 'penjara', label: 'Penjara', lat: 0, lng: 0 },
-  { id: 'dato', label: 'Yellow card', lat: 0, lng: 0, tone: 'yellow' },
+  { id: 'tupper-dikejar', label: 'Dikejar Tupperware', lat: 0, lng: 0, tone: 'red' },
 ]
 
 function make(over: { placed?: string[]; marshals?: { name: string; pushOn: boolean }[]; mePush?: boolean; briefing?: { started: boolean; ready: number; total: number } } = {}) {
@@ -60,8 +60,8 @@ describe('BeforeYouStart', () => {
     expect(screen.getByText('2 of 2 placed')).toBeInTheDocument()
   })
 
-  it('Kit placed stays unticked while something is left, and the secret card does not count', () => {
-    render(<BeforeYouStart code="ABC234" view={make({ placed: ['station-1', 'dato'] })} refresh={refresh} />)
+  it('Kit placed stays unticked while something is left, and the Tupperware step does not count', () => {
+    render(<BeforeYouStart code="ABC234" view={make({ placed: ['station-1', 'tupper-dikejar'] })} refresh={refresh} />)
     expect(row('Kit placed')).toHaveAttribute('aria-checked', 'false')
     expect(screen.getByText('1 of 2 placed')).toBeInTheDocument()
   })

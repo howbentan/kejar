@@ -3,7 +3,7 @@ import { event, game, iso, MIN, ping, player, pos, T0 } from './fixtures.js'
 import { distanceM } from './geo.js'
 import { DEFAULT_SETTINGS, type Game, type GameEvent, type Player, type Position, type PowerUp } from './types.js'
 import { BONUS_SEQ_BASE, pingTimes, SCHEDULED_ALERT_LEAD_MS } from './clock.js'
-import { CHASER_SNAPSHOT_FUZZ_M, LEGENDARY_ZONE_M, viewFor } from './views.js'
+import { CHASER_SNAPSHOT_FUZZ_M, viewFor } from './views.js'
 
 const g = game()
 const NOW = T0 + 16 * MIN // chase started at +5; pings revealed at +10 and +15
@@ -928,34 +928,6 @@ describe("Dato Seri's hint zone (jail design §4b)", () => {
   const stash = { lat: 3.004, lng: 101.004, claimedBy: null, claimedAt: null }
   const full = (id: string) => game({ id, settings: { ...DEFAULT_SETTINGS, mode: 'full' }, dato_stash: stash })
 
-  it('always has the stash well inside, never at the centre, whatever the game', () => {
-    for (let k = 0; k < 40; k++) {
-      const z = view(aina, { game: full(`game-${k}`) }).legendaryZone!
-      expect(z.radiusM).toBe(LEGENDARY_ZONE_M)
-      const d = distanceM(z, stash)
-      expect(d).toBeGreaterThanOrEqual(0.3 * LEGENDARY_ZONE_M - 0.5)
-      expect(d).toBeLessThanOrEqual(0.8 * LEGENDARY_ZONE_M + 0.5)
-    }
-  })
-
-  it("is placed with the game's secret seed, not the game id players can see", () => {
-    const zone = (deck_seed: string) => view(aina, { game: { ...full('g1'), deck_seed } }).legendaryZone
-    expect(zone('secret-one')).not.toEqual(zone('secret-two'))
-    expect(zone('secret-one')).toEqual(zone('secret-one'))
-  })
-
-  it('is the same for runners and chasers, jailed or free; the organiser gets the exact stash instead, a marshal neither', () => {
-    const z = view(aina, { game: full('g1') }).legendaryZone
-    expect(view(chaser, { game: full('g1') }).legendaryZone).toEqual(z)
-    expect(view({ ...aina, jailed: true }, { game: full('g1') }).legendaryZone).toEqual(z)
-    const h = view(organiserMe, { game: full('g1') })
-    expect(h.legendaryZone).toBeNull()
-    expect(h.datoStash).toEqual(stash)
-    const m = view(siti, { game: full('g1') })
-    expect(m.legendaryZone).toBeNull()
-    expect(m).not.toHaveProperty('datoStash')
-  })
-
   it("the card is for the organiser only, never in a player's or a marshal's view (ruling R15, rules doc §9b)", () => {
     const g = { ...full('g1'), dato_stash: { ...stash, code: 'Secret-card-code-12345', card: { id: 'sc1', letter: 'B' } } }
     expect(view(organiserMe, { game: g }).datoCard).toEqual({ letter: 'B', code: 'Secret-card-code-12345' })
@@ -987,11 +959,9 @@ describe("Dato Seri's hint zone (jail design §4b)", () => {
     expect(view(holder, { ...over, now: T0 + 2 * MIN }).settle).toBeNull()
   })
 
-  it('is gone once claimed, and outside the chase', () => {
+  it('is gone once claimed', () => {
     const claimed = game({ settings: { ...DEFAULT_SETTINGS, mode: 'full' }, dato_stash: { ...stash, claimedBy: 'r2', claimedAt: iso(NOW) } })
     expect(view(aina, { game: claimed }).legendaryZone).toBeNull()
-    expect(view(aina, { game: full('g1'), now: T0 + 2 * MIN }).legendaryZone).toBeNull()
-    expect(view(aina, { game: { ...full('g1'), ended_at: iso(NOW - MIN) } }).legendaryZone).toBeNull()
   })
 })
 
@@ -999,40 +969,9 @@ describe("Bomoh's hint zone (jail design §2e)", () => {
   const stash = { lat: 3.004, lng: 101.004, claimedBy: null, claimedAt: null }
   const full = (id: string) => game({ id, settings: { ...DEFAULT_SETTINGS, mode: 'full' }, dato_stash: stash, bomoh_stash: stash })
 
-  it('lands at a different offset than an unclaimed dato_stash at the same spot (distinct seed suffix)', () => {
-    const v = view(aina, { game: full('g1') })
-    // Positive shape/geometry assertions first: a missing `bomohZoneFor` leaves `bomohZone` `undefined`, which
-    // would vacuously pass a bare `.not.toBeNull()`/`.not.toEqual()` check, so assert it's a real zone.
-    expect(v.bomohZone).not.toBeNull()
-    expect(typeof v.bomohZone?.lat).toBe('number')
-    expect(typeof v.bomohZone?.lng).toBe('number')
-    expect(v.bomohZone?.radiusM).toBe(LEGENDARY_ZONE_M)
-    const d = distanceM(v.bomohZone!, stash)
-    expect(d).toBeGreaterThanOrEqual(0.3 * LEGENDARY_ZONE_M - 0.5)
-    expect(d).toBeLessThanOrEqual(0.8 * LEGENDARY_ZONE_M + 0.5)
-    // And distinct from Dato's zone at the same spot, proving the seed suffix differs.
-    expect(v.bomohZone).not.toEqual(v.legendaryZone)
-  })
-
-  it('a claimed or undropped bomoh_stash produces no zone', () => {
-    const claimed = game({ settings: { ...DEFAULT_SETTINGS, mode: 'full' }, bomoh_stash: { ...stash, claimedBy: 'r2', claimedAt: iso(NOW) } })
-    expect(view(aina, { game: claimed }).bomohZone).toBeNull()
-    const undropped = game({ settings: { ...DEFAULT_SETTINGS, mode: 'full' }, bomoh_stash: { lat: null, lng: null, claimedBy: null, claimedAt: null } })
-    expect(view(aina, { game: undropped }).bomohZone).toBeNull()
-  })
-
-  it('Core mode produces no bomoh zone even with a dropped stash', () => {
-    const core = game({ settings: { ...DEFAULT_SETTINGS, mode: 'core' }, bomoh_stash: stash })
-    expect(view(aina, { game: core }).bomohZone).toBeNull()
-  })
-
-  it('the organiser gets the exact bomoh stash instead of a zone; a marshal gets neither', () => {
-    const h = view(organiserMe, { game: full('g1') })
-    expect(h.bomohZone).toBeNull()
-    expect(h.bomohStash).toEqual(stash)
-    const m = view(siti, { game: full('g1') })
-    expect(m.bomohZone).toBeNull()
-    expect(m).not.toHaveProperty('bomohStash')
+  it('the organiser gets the exact bomoh stash; a marshal gets none', () => {
+    expect(view(organiserMe, { game: full('g1') }).bomohStash).toEqual(stash)
+    expect(view(siti, { game: full('g1') })).not.toHaveProperty('bomohStash')
   })
 
   it("the Bomoh card is for the organiser only, never in a player's or a marshal's view (ruling R15, rules doc §9b)", () => {
@@ -1138,42 +1077,42 @@ describe('the packing list in organiser and marshal views', () => {
       kit: { ticks: { tape: 'Tape, zip bags, power bank' }, placed: { 'station-1': true } },
     })
   const host: Player = { ...siti, id: 'host', name: 'Organiser' }
-  const kitView = (me: Player) => view(me, { game: kitGame(), secretLetters: { dato: 'B' } })
+  const kitView = (me: Player) => view(me, { game: kitGame() })
 
-  it("the organiser's view has the secret card and its place", () => {
+  it("the organiser's view has the Tupperware line and its place", () => {
     const k = kitView(host).kit!
-    expect(k.items.find((i) => i.id === 'dato-card')).toMatchObject({ label: 'Yellow card B', tone: 'yellow', ticked: false })
+    expect(k.items.find((i) => i.id === 'tupperware')).toMatchObject({ label: '1 red Tupperware, 1 Dikejar slip', ticked: false })
+    expect(k.items.find((i) => i.id === 'bring-home')).toMatchObject({ label: 'Bawa balik Tupperware Mak!', group: 'day' })
     expect(k.items.find((i) => i.id === 'tape')!.ticked).toBe(true)
     expect(k.placed).toEqual({ 'station-1': true })
-    expect(k.places.map((p) => p.id)).toEqual(['station-1', 'penjara', 'dato'])
+    expect(k.places.map((p) => p.id)).toEqual(['station-1', 'penjara', 'tupper-dikejar'])
   })
 
-  it("a marshal's view has the list without the secret card, its letter or its place", () => {
+  it("a marshal's view has the list without the Tupperware step or its place", () => {
     const v = kitView(siti)
-    expect(v.kit!.items.map((i) => i.id)).not.toContain('dato-card')
-    expect(v.kit!.places.map((p) => p.id)).not.toContain('dato')
-    expect(JSON.stringify(v.kit)).not.toContain('Yellow card')
+    expect(v.kit!.places.map((p) => p.id)).toEqual(['station-1', 'penjara'])
+    expect(JSON.stringify(v.kit)).not.toContain('Tupperware step')
   })
 
-  describe("Bomoh's walk step (R8: placed only once the card is really dropped)", () => {
-    const bomohGame = (over: object = {}, placed: Record<string, boolean> = {}) =>
+  describe('the Tupperware walk step (placed only once the box is really dropped)', () => {
+    const boxGame = (over: object = {}, placed: Record<string, boolean> = {}) =>
       game({
         settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'stash', ring: 'off', hijau: 'off' } },
         arena: { ...game().arena, stations: [{ lat: 3.001, lng: 101.001 }] },
         kit: { ticks: {}, placed: { 'station-1': true, ...placed } },
         ...over,
       })
-    const bomohView = (g: ReturnType<typeof bomohGame>) => view(host, { game: g, secretLetters: { bomoh: 'C' } }).kit!
+    const boxView = (g: ReturnType<typeof boxGame>) => view(host, { game: g }).kit!
 
-    it('a saved flag with no dropped stash is not placed', () => {
-      const k = bomohView(bomohGame({}, { bomoh: true }))
-      expect(k.places.map((p) => p.id)).toContain('bomoh')
-      expect(k.placed.bomoh).toBeUndefined()
+    it('a saved flag with no dropped box is not placed', () => {
+      const k = boxView(boxGame({}, { 'tupper-kejar': true }))
+      expect(k.places.map((p) => p.id)).toContain('tupper-kejar')
+      expect(k.placed['tupper-kejar']).toBeUndefined()
     })
 
-    it('a dropped stash is placed even without the saved flag', () => {
-      const k = bomohView(bomohGame({ bomoh_stash: { lat: 3.002, lng: 101.002, claimedBy: null, claimedAt: null } }))
-      expect(k.placed.bomoh).toBe(true)
+    it('a dropped box is placed even without the saved flag', () => {
+      const k = boxView(boxGame({ bomoh_stash: { lat: 3.002, lng: 101.002, claimedBy: null, claimedAt: null } }))
+      expect(k.placed['tupper-kejar']).toBe(true)
     })
   })
 
@@ -1181,7 +1120,7 @@ describe('the packing list in organiser and marshal views', () => {
     for (const me of [aina, chaser]) {
       const v = kitView(me)
       expect(v).not.toHaveProperty('kit')
-      expect(JSON.stringify(v)).not.toContain('Yellow card')
+      expect(JSON.stringify(v)).not.toContain('Tupperware step')
     }
   })
 
@@ -1337,51 +1276,16 @@ describe("Mak Kau Hijau's tap reveal and Penjara's lock (owner, 2026-11-13)", ()
 
 describe("Super Ring's and Mak Kau Hijau's hint zones (Plan E2)", () => {
   const stash = { lat: 3.004, lng: 101.004, claimedBy: null, claimedAt: null }
-  const claimed = { ...stash, claimedBy: 'r2', claimedAt: iso(NOW) }
   const full = (over: Partial<ReturnType<typeof game>> = {}) =>
     game({ id: 'g1', settings: { ...DEFAULT_SETTINGS, mode: 'full' }, ring_stash: stash, hijau_stash: stash, ...over })
 
-  it('each is a 100 to 200 m zone with its stash well inside, distinct from the others', () => {
-    const v = view(aina, { game: full({ dato_stash: stash, bomoh_stash: stash }) })
-    for (const z of [v.ringZone, v.hijauZone]) {
-      expect(z).not.toBeNull()
-      expect(z!.radiusM).toBe(LEGENDARY_ZONE_M)
-      const d = distanceM(z!, stash)
-      expect(d).toBeGreaterThanOrEqual(0.3 * LEGENDARY_ZONE_M - 0.5)
-      expect(d).toBeLessThanOrEqual(0.8 * LEGENDARY_ZONE_M + 0.5)
-    }
-    const all = [v.legendaryZone, v.bomohZone, v.ringZone, v.hijauZone].map((z) => JSON.stringify(z))
-    expect(new Set(all).size).toBe(4)
-  })
-
-  it('is placed with the secret seed, and carries no name', () => {
-    const zone = (deck_seed: string) => view(aina, { game: full({ deck_seed }) }).ringZone
-    expect(zone('one')).not.toEqual(zone('two'))
-    expect(zone('one')).toEqual(zone('one'))
-    expect(Object.keys(view(aina, { game: full() }).ringZone!).sort()).toEqual(['lat', 'lng', 'radiusM'])
-  })
-
-  it('runners and chasers see both; the organiser and a marshal see neither', () => {
-    const z = view(aina, { game: full() })
-    expect(view(chaser, { game: full() }).ringZone).toEqual(z.ringZone)
-    expect(view(chaser, { game: full() }).hijauZone).toEqual(z.hijauZone)
-    for (const me of [organiserMe, siti]) {
-      const v = view(me, { game: full() })
-      expect(v.ringZone).toBeNull()
-      expect(v.hijauZone).toBeNull()
+  it('no hint zone reaches anybody any more: the Tupperware side quest replaced the ? zones', () => {
+    const g = full({ dato_stash: stash, bomoh_stash: stash })
+    for (const me of [aina, chaser, organiserMe, siti]) {
+      const v = view(me, { game: g })
+      expect([v.legendaryZone, v.bomohZone, v.ringZone, v.hijauZone]).toEqual([null, null, null, null])
     }
     expect(view(organiserMe, { game: full() }).ringStash).toEqual(stash)
-  })
-
-  it('is gone once claimed, undropped, outside the chase or in Core', () => {
-    expect(view(aina, { game: full({ ring_stash: claimed, hijau_stash: claimed }) }).ringZone).toBeNull()
-    expect(view(aina, { game: full({ ring_stash: claimed, hijau_stash: claimed }) }).hijauZone).toBeNull()
-    const undropped = { lat: null, lng: null, claimedBy: null, claimedAt: null }
-    expect(view(aina, { game: full({ ring_stash: undropped, hijau_stash: undropped }) }).ringZone).toBeNull()
-    expect(view(aina, { game: full(), now: T0 + 2 * MIN }).hijauZone).toBeNull()
-    const core = full({ settings: { ...DEFAULT_SETTINGS, mode: 'core' } })
-    expect(view(aina, { game: core }).ringZone).toBeNull()
-    expect(view(aina, { game: core }).hijauZone).toBeNull()
   })
 })
 
@@ -1521,5 +1425,64 @@ describe('side quest flag (Tupperware task 5)', () => {
     expect(view(awake, { game: full({ dato_stash: box('r2') }) }).sideQuest).toBe(false)
     expect(view(awake, { game: full({ ended_at: iso(NOW - MIN) }) }).sideQuest).toBe(false)
     expect(view(awake, { game: full({ dato_stash: null }) }).sideQuest).toBe(false)
+  })
+})
+
+describe('Tupperware in the views (task 6)', () => {
+  const stash = (over: object = {}) => ({ lat: 3.00417, lng: 101.00583, claimedBy: null, claimedAt: null, code: 'Secret-slip-token-123', ...over })
+  const full = (over: Partial<Game> = {}) =>
+    game({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'stash', ring: 'off', bomoh: 'stash', hijau: 'off' } }, dato_stash: stash(), bomoh_stash: stash({ lat: 3.0071234 }), ...over })
+
+  it("a player's view has no ? zones, no box spot and no side_quest_at", () => {
+    const awake = { ...aina, side_quest_at: iso(NOW - 1_000) }
+    for (const me of [awake, chaser]) {
+      const v = view(me, { game: full() })
+      expect([v.legendaryZone, v.bomohZone, v.ringZone, v.hijauZone]).toEqual([null, null, null, null])
+      expect(v).not.toHaveProperty('tupperware')
+      expect(v.me).not.toHaveProperty('side_quest_at')
+      const json = JSON.stringify(v)
+      expect(json).not.toContain('3.00417')
+      expect(json).not.toContain('3.0071234')
+      expect(json).not.toContain('Secret-slip-token-123')
+      expect(json).not.toContain('side_quest_at')
+    }
+    expect(view({ ...aina, side_quest_at: iso(NOW - 1_000) }, { game: full() }).sideQuest).toBe(true)
+  })
+
+  it('no roster entry and no marshal view carries side_quest_at', () => {
+    const awake = { ...aina, side_quest_at: iso(NOW - 1_000) }
+    const v = view(siti, { game: full(), players: [awake, chaser, hafiz, wei, siti] })
+    expect(v.roster.length).toBeGreaterThan(0)
+    expect(JSON.stringify(v)).not.toContain('side_quest_at')
+  })
+
+  it("the organiser sees each side's legendary, the drop and a suggested spot inside the play area", () => {
+    const before = view(organiserMe, { game: full({ dato_stash: null, bomoh_stash: null }) }).tupperware!
+    expect(before.dikejar).toMatchObject({ legendary: 'dato', dropped: null, claimed: false })
+    expect(before.kejar).toMatchObject({ legendary: 'bomoh', dropped: null, claimed: false })
+    for (const side of ['dikejar', 'kejar'] as const) {
+      const { lat, lng } = before[side]!.suggested
+      expect(lat).toBeGreaterThan(3.0)
+      expect(lat).toBeLessThan(3.01)
+      expect(lng).toBeGreaterThan(101.0)
+      expect(lng).toBeLessThan(101.01)
+    }
+    const after = view(organiserMe, { game: full({ dato_stash: stash({ claimedBy: 'r1', claimedAt: iso(NOW) }) }) }).tupperware!
+    expect(after.dikejar).toMatchObject({ dropped: { lat: 3.00417, lng: 101.00583 }, claimed: true })
+    expect(after.kejar).toMatchObject({ dropped: { lat: 3.0071234, lng: 101.00583 }, claimed: false })
+  })
+
+  it("leaves a side that is off out, and is null outside Full", () => {
+    const one = view(organiserMe, { game: full({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', ring: 'stash', bomoh: 'off', hijau: 'off' } } }) }).tupperware!
+    expect(Object.keys(one)).toEqual(['dikejar'])
+    expect(one.dikejar!.legendary).toBe('ring')
+    expect(view(organiserMe, { game: game() }).tupperware).toBeNull()
+  })
+
+  it('stays in every phase for the organiser, including ended; marshals never get it', () => {
+    for (const g of [full(), full({ started_at: null }), full({ ended_at: iso(NOW - MIN) })]) {
+      expect(view(organiserMe, { game: g }).tupperware).not.toBeNull()
+      expect(view(siti, { game: g })).not.toHaveProperty('tupperware')
+    }
   })
 })

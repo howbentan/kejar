@@ -16,6 +16,7 @@ const TONE_COLOUR: Record<NonNullable<Item['tone']>, string> = {
   orange: 'var(--ring-2)',
   purple: 'var(--bomoh-2)',
   green: 'var(--hijau-2)',
+  red: '#E63946',
 }
 
 function Row({ item, done, code, onTap }: { item: Item; done: boolean; code: string; onTap?: () => void }) {

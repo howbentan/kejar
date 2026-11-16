@@ -3,18 +3,18 @@ import { alertsFrom, type Alert, type ReportReason } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
 import { hebatLive, maskEndgame, revealed, rollEndgame } from './endgame.js'
 import { FLOOD_GRACE_MS, floodNow, floodSteps, wetElapsed, wetSince, type FloodNow } from './flood.js'
-import { distanceM, fuzz, hash, offset } from './geo.js'
+import { distanceM, fuzz } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
-import { isTicked, kitOf, packItems, placeItems, SECRET_PLACE_IDS, type KitItem, type PlaceItem, type SecretLetters } from './kit.js'
+import { isTicked, kitOf, packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type KitItem, type PlaceItem } from './kit.js'
 import { MOMENT_WINDOW_MS } from './moments.js'
 import { reelPulledThisStay, RESCUE_HOLD_MS } from './penjara.js'
 import { isOut, undoableArrestId, undoableCatchId } from './players.js'
 import { ARREST_OPEN_MS, arrestEndsAt } from './arrest.js'
 import { hijauCounts, hijauTargets, penjaraLockLeft } from './hijau.js'
-import { boxFor, sideOf } from './tupperware.js'
+import { boxFor, legendaryOn, mirroredSpots, sideOf } from './tupperware.js'
 import { POWER_NAME } from './powerNames.js'
 import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, shieldArmedAt, slotBusy, TOLL_RADIUS_M } from './powerups.js'
-import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type LegendaryKind, type EndgameKind, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
+import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type LegendaryKind, type EndgameKind, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings, type TupperSide } from './types.js'
 
 /** Spec §4.5–4.6 constants. */
 export const FUZZ_RADIUS_M = 15
@@ -128,6 +128,11 @@ export interface View {
   /** When the most recent ping revealed runners to chasers (drives the "you've been pinged" moment). */
   lastRevealAt: number | null
   chaserNearby: boolean
+  /**
+   * The organiser's own view of the Tupperwares, present in every phase (also once the game has ended); null outside
+   * Full. Never in a player's or marshal's view.
+   */
+  tupperware?: Partial<Record<TupperSide, { legendary: LegendaryKind; suggested: LatLng; dropped: LatLng | null; claimed: boolean }>> | null
   /** The Tupperware side quest has woken up for me: something is near, and my side's box is still unclaimed. */
   sideQuest: boolean
   /** Name of the chaser who caught me, while I'm jailed. */
@@ -310,8 +315,6 @@ export interface ViewInput {
   now: number
   results: Results | null
   powerUps: PowerUp[]
-  /** The card letters of this game's assigned secret sets; read only for the organiser's own view. */
-  secretLetters?: SecretLetters
 }
 
 /** '1 runner', '3 runners'. */
@@ -737,49 +740,6 @@ function snapshotLines(i: ViewInput, phase: Phase, endsAt: number | null): { at:
     .map((t) => ({ at: new Date(t.alertAt).toISOString(), text: SNAPSHOT_TAKEN }))
 }
 
-/**
- * The hint zone around an unclaimed stash, for runners and chasers during a Full game's chase (jail design §4b).
- * Its centre is the stash moved 30–80% of the radius in a direction seeded by the secret deck seed, so it never moves
- * during the game, the stash is always well inside, and the centre never gives the spot away. No label.
- */
-function legendaryZoneFor(i: ViewInput, phase: Phase): View['legendaryZone'] {
-  const s = placedStash(i.game.dato_stash)
-  if (i.game.settings.mode !== 'full' || phase !== 'chasing' || !s || s.claimedBy !== null) return null
-  if (i.me.role !== 'runner' && i.me.role !== 'chaser') return null
-  const h = hash(`${secretSeed(i.game)}:legendary-zone`)
-  const angle = ((h & 0xffff) / 0x10000) * 2 * Math.PI
-  const dist = (0.3 + ((h >>> 16) / 0x10000) * 0.5) * LEGENDARY_ZONE_M
-  const c = offset({ lat: s.lat, lng: s.lng }, dist, angle)
-  return { lat: c.lat, lng: c.lng, radiusM: LEGENDARY_ZONE_M }
-}
-
-/**
- * Bomoh's hint zone: the same shape and rules as `legendaryZoneFor`, seeded with a distinct suffix so the
- * two zones never land at the same offset even when both stashes share a spot.
- */
-function bomohZoneFor(i: ViewInput, phase: Phase): View['bomohZone'] {
-  const s = placedStash(i.game.bomoh_stash)
-  if (i.game.settings.mode !== 'full' || phase !== 'chasing' || !s || s.claimedBy !== null) return null
-  if (i.me.role !== 'runner' && i.me.role !== 'chaser') return null
-  const h = hash(`${secretSeed(i.game)}:bomoh-legendary-zone`)
-  const angle = ((h & 0xffff) / 0x10000) * 2 * Math.PI
-  const dist = (0.3 + ((h >>> 16) / 0x10000) * 0.5) * LEGENDARY_ZONE_M
-  const c = offset({ lat: s.lat, lng: s.lng }, dist, angle)
-  return { lat: c.lat, lng: c.lng, radiusM: LEGENDARY_ZONE_M }
-}
-
-/** A legendary's hint zone: the stash moved 30-80% of the radius in a direction seeded by the secret seed and `suffix`. */
-function stashZoneFor(i: ViewInput, phase: Phase, stash: Game['dato_stash'], suffix: string): View['ringZone'] {
-  const s = placedStash(stash)
-  if (i.game.settings.mode !== 'full' || phase !== 'chasing' || !s || s.claimedBy !== null) return null
-  if (i.me.role !== 'runner' && i.me.role !== 'chaser') return null
-  const h = hash(`${secretSeed(i.game)}:${suffix}`)
-  const angle = ((h & 0xffff) / 0x10000) * 2 * Math.PI
-  const dist = (0.3 + ((h >>> 16) / 0x10000) * 0.5) * LEGENDARY_ZONE_M
-  const c = offset({ lat: s.lat, lng: s.lng }, dist, angle)
-  return { lat: c.lat, lng: c.lng, radiusM: LEGENDARY_ZONE_M }
-}
-
 /** The Settle picker's choices, the same eligibility `judgeSettle` applies. */
 function settleFor(i: ViewInput, phase: Phase): View['settle'] {
   if (phase !== 'chasing' || i.game.paused_at || i.me.role !== 'runner' || !i.me.jailed) return null
@@ -1121,6 +1081,34 @@ export function viewFor(i: ViewInput): View {
   return v
 }
 
+/** My own row without when the side quest woke: the client reads `sideQuest`, never the time. */
+function withoutSideQuest(me: Player): Player {
+  const { side_quest_at: _woke, ...rest } = me
+  return rest
+}
+
+/**
+ * The organiser's view of both Tupperwares, in every phase: which legendary each holds, where it was dropped (null
+ * until then), whether it's been claimed, and the mirrored spot the kit suggests. A side that is off is left out,
+ * and outside Full there is none. The spot and the slips never go to anyone else.
+ */
+function tupperwareFor(i: ViewInput): View['tupperware'] {
+  const suggested = mirroredSpots(i.game.arena, i.game.id)
+  const out: NonNullable<View['tupperware']> = {}
+  for (const side of ['dikejar', 'kejar'] as const) {
+    const legendary = legendaryOn(i.game, side)
+    if (!legendary) continue
+    const box = boxFor(i.game, side)
+    out[side] = {
+      legendary,
+      suggested: suggested[side],
+      dropped: box ? { lat: box.spot.lat, lng: box.spot.lng } : null,
+      claimed: !!box && box.spot.claimedBy !== null,
+    }
+  }
+  return Object.keys(out).length > 0 ? out : null
+}
+
 /** True only once a ping has woken the side quest for me, and while my side's Tupperware is still there to find. */
 function sideQuestOn(i: ViewInput, phase: Phase): boolean {
   const side = sideOf(i.me.role)
@@ -1201,7 +1189,7 @@ function fullView(input: ViewInput): View {
     alerts: role === 'marshal' ? alertsFrom(i.events) : [],
     sosPositions: role === 'marshal' ? sosPositionsFor(i) : {},
     reportable: i.players.filter((p) => p.id !== i.me.id).map((p) => ({ id: p.id, name: p.name })),
-    me: i.me,
+    me: withoutSideQuest(i.me),
     arena: i.game.arena,
     settings: organiser ? i.game.settings : withoutSecrets(i.game.settings),
     // The roll's own rule (Core only knows Bomba), asked with a fixed draw; only whether it finds a kind leaves here.
@@ -1269,10 +1257,10 @@ function fullView(input: ViewInput): View {
       const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now, i.me)
       return busy?.running ? busy.kind : null
     })(),
-    legendaryZone: legendaryZoneFor(i, phase),
-    bomohZone: bomohZoneFor(i, phase),
-    ringZone: stashZoneFor(i, phase, i.game.ring_stash, 'ring-legendary-zone'),
-    hijauZone: stashZoneFor(i, phase, i.game.hijau_stash, 'hijau-legendary-zone'),
+    legendaryZone: null,
+    bomohZone: null,
+    ringZone: null,
+    hijauZone: null,
     settle: settleFor(i, phase),
     rescue: rescueFor(i, phase),
     fiveLeft: Boolean(i.game.five_warned_at),
@@ -1293,6 +1281,7 @@ function fullView(input: ViewInput): View {
           ringCard: cardOf(i.game.ring_stash),
           hijauStash: placedStash(i.game.hijau_stash),
           hijauCard: cardOf(i.game.hijau_stash),
+          tupperware: tupperwareFor(i),
         }
       : {}),
     // The packing list: marshals get the shared items, and only the organiser's own view adds the secret ones.
@@ -1373,16 +1362,20 @@ function withoutSecrets(s: Settings): Omit<Settings, 'legendaries' | 'endgames'>
 
 function kitFor(i: ViewInput): KitView {
   const organiser = i.me.id === 'host'
-  const letters = organiser ? (i.secretLetters ?? {}) : {}
   const kit = kitOf(i.game)
-  const places = placeItems(i.game, organiser, letters)
+  const places = placeItems(i.game, organiser)
   // The secret step is placed only when the stash is really dropped, never from the saved flag alone (ruling R8).
-  const secret = (id: string): id is LegendaryKind => (SECRET_PLACE_IDS as string[]).includes(id)
+  const secret = (id: string) => SECRET_PLACE_IDS.includes(id)
   const placed = Object.fromEntries(Object.entries(kit.placed).filter(([id]) => !secret(id) && places.some((p) => p.id === id)))
   const stashes: Record<LegendaryKind, Game['dato_stash']> = { dato: i.game.dato_stash, ring: i.game.ring_stash, bomoh: i.game.bomoh_stash, hijau: i.game.hijau_stash }
-  for (const p of places) if (secret(p.id) && placedStash(stashes[p.id])) placed[p.id] = true
+  for (const side of ['dikejar', 'kejar'] as const) {
+    const kind = legendaryOn(i.game, side)
+    if (kind && placedStash(stashes[kind])) placed[`tupper-${side}`] = true
+  }
+  // The Tupperware lines are the organiser's own: a marshal's list never mentions the box.
+  const items = packItems(i.game).filter((item) => organiser || !SECRET_PACK_IDS.includes(item.id))
   return {
-    items: packItems(i.game, letters).map((item) => ({ ...item, ticked: isTicked(i.game, item) })),
+    items: items.map((item) => ({ ...item, ticked: isTicked(i.game, item) })),
     placed,
     places,
   }

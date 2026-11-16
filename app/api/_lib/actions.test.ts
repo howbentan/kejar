@@ -4076,7 +4076,7 @@ describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
     expect((await run<View>('state', { code: g.code, token: g.aina.token })).hand.map((u) => u.kind)).toEqual(['dato'])
   })
 
-  it('every player sees an unlabelled hint zone around the stash during the chase, gone once claimed', async () => {
+  it('no player sees a hint zone around the stash any more (the Tupperware side quest replaced it)', async () => {
     const g = await lobby()
     await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...STASH })
     expect((await run<View>('state', { code: g.code, token: g.aina.token })).legendaryZone).toBeNull()
@@ -4084,21 +4084,12 @@ describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
     now = T0 + 2 * MIN // hiding: not yet
     expect((await run<View>('state', { code: g.code, token: g.aina.token })).legendaryZone).toBeNull()
     now = T0 + 7 * MIN
-    const zones: View['legendaryZone'][] = []
     for (const token of [g.aina.token, g.hafiz.token, g.ben.token]) {
       const v = await run<View>('state', { code: g.code, token })
-      expect(Object.keys(v.legendaryZone!).sort()).toEqual(['lat', 'lng', 'radiusM'])
-      expect(v.legendaryZone!.radiusM).toBe(150)
-      expect(distanceM(v.legendaryZone!, STASH)).toBeLessThan(150)
+      expect(v.legendaryZone).toBeNull()
       expect(v).not.toHaveProperty('datoStash')
       expect(JSON.stringify(v)).not.toMatch(/dato/i)
-      zones.push(v.legendaryZone)
     }
-    // Fixed, like a geocache: the same circle for everyone on every poll, and not centred on the card.
-    expect(new Set(zones.map((z) => JSON.stringify(z))).size).toBe(1)
-    expect(distanceM(zones[0]!, STASH)).toBeGreaterThan(20)
-    now += MIN
-    expect((await run<View>('state', { code: g.code, token: g.aina.token })).legendaryZone).toEqual(zones[0])
     await scan(g, g.hafiz.token)
     for (const token of [g.aina.token, g.hafiz.token, g.ben.token]) {
       expect((await run<View>('state', { code: g.code, token })).legendaryZone).toBeNull()
@@ -4461,7 +4452,7 @@ describe('Bomoh: the hidden stash (chaser-side legendary, mirrors Dato Seri abov
     await report(6)
     now = T0 + 7 * MIN
     let v = await chaserView(g.hafiz.token)
-    expect(v.bomohZone).toMatchObject({ radiusM: expect.any(Number) })
+    expect(v.bomohZone).toBeNull()
     expect(runnerDots(v)).toEqual([])
     // 3. Ben scans the card in reach: instant claim, card retired, one anonymised feed entry.
     const card = (await stash(g))!.card!
@@ -4876,8 +4867,8 @@ describe('setup settings and the packing list', () => {
     const { inviteToken } = await run('createMarshalInvite', { code, organiserToken })
     const m = await run('redeemMarshalInvite', { code, inviteToken, name: 'Siti' })
     await run('setKit', { code, token: m.token, tick: { id: 'tape', on: true } })
-    await rejects(run('setKit', { code, token: m.token, tick: { id: 'dato-card', on: true } }), 403)
-    await rejects(run('setKit', { code, token: m.token, placed: { id: 'dato', on: true } }), 403)
+    await rejects(run('setKit', { code, token: m.token, tick: { id: 'tupperware', on: true } }), 403)
+    await rejects(run('setKit', { code, token: m.token, placed: { id: 'tupper-dikejar', on: true } }), 403)
   })
 
   it('a player cannot touch the kit (403)', async () => {
@@ -5005,41 +4996,41 @@ describe('secret card sets', () => {
     const g = await readyGame({ mode: 'full' })
     const DROP = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
     await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...DROP })
-    await run('setKit', { code: g.code, organiserToken: g.organiserToken, placed: { id: 'dato', on: true } })
+    await run('setKit', { code: g.code, organiserToken: g.organiserToken, placed: { id: 'tupper-dikejar', on: true } })
     const hosted = () => run<View>('state', { code: g.code, organiserToken: g.organiserToken })
-    expect((await hosted()).kit!.placed.dato).toBe(true)
+    expect((await hosted()).kit!.placed['tupper-dikejar']).toBe(true)
     await run('setMode', { code: g.code, organiserToken: g.organiserToken, mode: 'core' })
     const core = await gameOf(g.code)
     expect(core.dato_stash ?? null).toBeNull()
-    expect(core.kit?.placed ?? {}).not.toHaveProperty('dato')
+    expect(core.kit?.placed ?? {}).not.toHaveProperty('tupper-dikejar')
     await run('setMode', { code: g.code, organiserToken: g.organiserToken, mode: 'full' })
     const full = await gameOf(g.code)
     expect(full.dato_stash).toMatchObject({ card: { id: expect.any(String) }, lat: null, lng: null, claimedBy: null })
     const v = await hosted()
     expect(v.datoStash).toBeNull()
-    expect(v.kit!.places.map((p) => p.id)).toContain('dato')
-    expect(v.kit!.placed.dato).toBeUndefined()
+    expect(v.kit!.places.map((p) => p.id)).toContain('tupper-dikejar')
+    expect(v.kit!.placed['tupper-dikejar']).toBeUndefined()
   })
 
   it('the walk counts the secret step done only when the stash is dropped, never from placed.dato alone (ruling R8)', async () => {
     const g = await readyGame({ mode: 'full' })
-    await run('setKit', { code: g.code, organiserToken: g.organiserToken, placed: { id: 'dato', on: true } })
-    expect((await gameOf(g.code)).kit!.placed.dato).toBe(true)
+    await run('setKit', { code: g.code, organiserToken: g.organiserToken, placed: { id: 'tupper-dikejar', on: true } })
+    expect((await gameOf(g.code)).kit!.placed['tupper-dikejar']).toBe(true)
     const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
-    expect(v.kit!.placed.dato).toBeUndefined()
+    expect(v.kit!.placed['tupper-dikejar']).toBeUndefined()
     await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng })
-    expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).kit!.placed.dato).toBe(true)
+    expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).kit!.placed['tupper-dikejar']).toBe(true)
   })
 
   it('a reprint of a dropped lobby card clears the drop too, so the new print must be hidden again (ruling R8)', async () => {
     const g = await readyGame({ mode: 'full' })
     const card = (await cardOf(g.code))!
     await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng })
-    await run('setKit', { code: g.code, organiserToken: g.organiserToken, placed: { id: 'dato', on: true } })
+    await run('setKit', { code: g.code, organiserToken: g.organiserToken, placed: { id: 'tupper-dikejar', on: true } })
     await act(g.organiserToken, 'reprintSecretCard', 'dato', card.letter)
     const game = await gameOf(g.code)
     expect(game.dato_stash).toMatchObject({ card, lat: null, lng: null, code: (await act(g.organiserToken, 'secretCardCode', 'dato', card.letter)).code })
-    expect(game.kit?.placed ?? {}).not.toHaveProperty('dato')
+    expect(game.kit?.placed ?? {}).not.toHaveProperty('tupper-dikejar')
   })
 
   it('setMode to Full with no free card keeps Dato Seri wanted (ruling R9) and says so', async () => {
@@ -5219,12 +5210,12 @@ describe('secret card sets', () => {
     const host = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     expect(host.datoCard).toEqual({ letter: card.letter, code: game.dato_stash!.code })
     expect(host).not.toHaveProperty('datoCode')
-    expect(host.kit!.items.find((i) => i.id === 'dato-card')!.label).toBe(`Yellow card ${card.letter}`)
-    expect(host.kit!.places.map((p) => p.id)).toContain('dato')
+    expect(host.kit!.items.find((i) => i.id === 'tupperware')!.label).toMatch(/red Tupperware/)
+    expect(host.kit!.places.map((p) => p.id)).toContain('tupper-dikejar')
     for (const token of [siti.token, g.aina.token, g.ben.token]) {
       const v = await run<View>('state', { code: g.code, token })
       expect(v).not.toHaveProperty('datoCard')
-      expect(JSON.stringify(v)).not.toContain(`Yellow card ${card.letter}`)
+      expect(v.kit?.items.map((i) => i.id) ?? []).not.toContain('tupperware')
       expect(JSON.stringify(v)).not.toContain(game.dato_stash!.code!)
     }
     // A Core game has datoCard null for the organiser.
@@ -5232,11 +5223,10 @@ describe('secret card sets', () => {
     expect((await run<View>('state', { code: core.code, organiserToken: core.organiserToken })).datoCard).toBeNull()
   })
 
-  it('the organiser can tick the yellow card under its letter', async () => {
+  it('the organiser can tick the Tupperware line under its label', async () => {
     const g = await readyGame({ mode: 'full' })
-    await run('setKit', { code: g.code, organiserToken: g.organiserToken, tick: { id: 'dato-card', on: true } })
-    const letter = (await cardOf(g.code))!.letter
-    expect((await gameOf(g.code)).kit!.ticks).toEqual({ 'dato-card': `Yellow card ${letter}` })
+    await run('setKit', { code: g.code, organiserToken: g.organiserToken, tick: { id: 'tupperware', on: true } })
+    expect((await gameOf(g.code)).kit!.ticks).toEqual({ tupperware: expect.stringMatching(/red Tupperware/) })
   })
 
   it('two phones ticking at once both keep their tick (atomic setKit)', async () => {
@@ -5282,18 +5272,18 @@ describe('secret card sets', () => {
       expect(game.settings.legendaries.bomoh).toBe('stash')
     })
 
-    it("reprinting a dropped lobby's purple card clears the drop and placed.bomoh, same as a yellow reprint (ruling R8)", async () => {
+    it("reprinting a dropped lobby's purple card clears the drop and placed.tupper-kejar, same as a yellow reprint (ruling R8)", async () => {
       const g = await bomohLobby()
       const DROPPED = { lat: CENTER.lat + 50 / 111_195, lng: CENTER.lng }
       const gameId = (await gameOf(g.code)).id
       await store.updateGame(gameId, { bomoh_stash: { ...(await bomohOf(g.code))!, ...DROPPED } })
-      await store.setKitKey(gameId, 'placed', 'bomoh', true)
+      await store.setKitKey(gameId, 'placed', 'tupper-kejar', true)
       const oldCode = (await bomohOf(g.code))!.code
       expect(await act(g.organiserToken, 'reprintSecretCard', 'bomoh', g.card.letter)).toEqual({ ok: true })
       const game = await gameOf(g.code)
       expect(game.bomoh_stash).toMatchObject({ card: { id: g.card.id, letter: g.card.letter }, lat: null, lng: null, claimedBy: null, claimedAt: null })
       expect(game.bomoh_stash!.code).not.toBe(oldCode)
-      expect(game.kit?.placed ?? {}).not.toHaveProperty('bomoh')
+      expect(game.kit?.placed ?? {}).not.toHaveProperty('tupper-kejar')
     })
 
     it("an expired lobby's unused purple card is freed to be reassigned, the same way Dato Seri's yellow card is (ruling R3)", async () => {
@@ -5408,7 +5398,7 @@ describe('secret card sets', () => {
       const g = await readyGame({ mode: 'full' })
       const card = (await cardOf(g.code))!
       await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...DROP })
-      await run('setKit', { code: g.code, organiserToken: g.organiserToken, placed: { id: 'dato', on: true } })
+      await run('setKit', { code: g.code, organiserToken: g.organiserToken, placed: { id: 'tupper-dikejar', on: true } })
       now = T0 + 25 * HOUR
       // Forced: the hidden card is retired behind the lobby's back, while two other cards are free.
       await store.setSecretCard(card.id, { state: 'retired' })
@@ -6214,7 +6204,7 @@ describe('one legendary per side, picked by the app (Plan E2 task 2)', () => {
     expect(v.settings.legendaries).toEqual({ dato: 'off', ring: 'stash', bomoh: 'off', hijau: 'stash' })
     expect(v.ringCard).toEqual({ letter: ring.letter, code: ring.code })
     expect(v.hijauCard).toEqual({ letter: hijau.letter, code: hijau.code })
-    expect(v.kit!.items.filter((i) => i.tone).map((i) => i.label)).toEqual([`Orange card ${ring.letter}`, `Green card ${hijau.letter}`])
+    expect(v.kit!.items.find((i) => i.id === 'tupperware')!.label).toBe('2 red Tupperwares, 1 slip of each side')
     const p = await run<View>('state', { code: g.code, token: g.aina.token })
     expect(p).not.toHaveProperty('ringCard')
     expect(p).not.toHaveProperty('hijauCard')
@@ -6319,11 +6309,11 @@ describe('one legendary per side, picked by the app (Plan E2 task 2)', () => {
     forcedDraws = [0.9, 0.9]
     const g = await readyGame(BOTH)
     await run('dropRing', { code: g.code, organiserToken: g.organiserToken, ...STASH })
-    await run('setKit', { code: g.code, organiserToken: g.organiserToken, placed: { id: 'hijau', on: true } })
+    await run('setKit', { code: g.code, organiserToken: g.organiserToken, placed: { id: 'tupper-kejar', on: true } })
     await run('setMode', { code: g.code, organiserToken: g.organiserToken, mode: 'core' })
     const game = await gameOf(g.code)
     expect(game.ring_stash ?? null).toBeNull()
-    expect(game.kit?.placed?.hijau).toBeUndefined()
+    expect(game.kit?.placed?.['tupper-kejar']).toBeUndefined()
   })
 
   it('dropRing and dropHijau mirror dropBomoh: organiser only, Full only, lobby only, moving it keeps the code', async () => {
@@ -6375,7 +6365,7 @@ describe('one legendary per side, picked by the app (Plan E2 task 2)', () => {
         for (const s of [...secrets, ...names]) expect(text, `${phase}: ${s}`).not.toContain(s)
         expect(v.settings).not.toHaveProperty('legendaries')
         if (phase === 'lobby' && (body as { token?: string }).token === siti.token) {
-          expect(v.kit!.places.map((p) => p.id)).not.toEqual(expect.arrayContaining(['ring']))
+          expect(v.kit!.places.map((p) => p.id)).not.toEqual(expect.arrayContaining(['tupper-dikejar']))
         }
       }
     }
@@ -6385,8 +6375,8 @@ describe('one legendary per side, picked by the app (Plan E2 task 2)', () => {
     const o = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
     expect(o.ringStash).toEqual({ ...RING_AT, claimedBy: null, claimedAt: null })
     expect(o.hijauStash).toEqual({ ...HIJAU_AT, claimedBy: null, claimedAt: null })
-    expect(o.kit!.places.slice(-2).map((p) => p.id)).toEqual(['ring', 'hijau'])
-    expect(o.kit!.placed).toMatchObject({ ring: true, hijau: true })
+    expect(o.kit!.places.slice(-2).map((p) => p.id)).toEqual(['tupper-dikejar', 'tupper-kejar'])
+    expect(o.kit!.placed).toMatchObject({ 'tupper-dikejar': true, 'tupper-kejar': true })
     await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 7 * MIN
     for (const body of [{ token: siti.token }, { token: g.aina.token }, { token: g.ben.token }]) {
@@ -6400,8 +6390,8 @@ describe('one legendary per side, picked by the app (Plan E2 task 2)', () => {
     const g = await readyGame(BOTH)
     const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
     const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
-    await rejects(run('setKit', { code: g.code, token: siti.token, placed: { id: 'ring', on: true } }), 403)
-    await rejects(run('setKit', { code: g.code, token: siti.token, tick: { id: 'hijau-card', on: true } }), 403)
+    await rejects(run('setKit', { code: g.code, token: siti.token, placed: { id: 'tupper-dikejar', on: true } }), 403)
+    await rejects(run('setKit', { code: g.code, token: siti.token, tick: { id: 'tupperware', on: true } }), 403)
   })
 
   it('the kit page lists all four sets, yellow, orange, purple then green, and every card action takes ring and hijau', async () => {
@@ -6579,18 +6569,18 @@ describe('Super Ring and Mak Kau Hijau: the hidden stashes (Plan E2 task 3)', ()
     }
   })
 
-  it('zones appear to runners and chasers, name nothing, and vanish once claimed', async () => {
+  it('no zones reach runners or chasers, before or after a claim', async () => {
     const g = await chasing()
     for (const token of [g.aina.token, g.ben.token]) {
       const v = await run<View>('state', { code: g.code, token })
-      expect(v.ringZone).toMatchObject({ radiusM: expect.any(Number) })
-      expect(v.hijauZone).toMatchObject({ radiusM: expect.any(Number) })
+      expect(v.ringZone).toBeNull()
+      expect(v.hijauZone).toBeNull()
       expect(v.legendaryZone).toBeNull()
       expect(v.bomohZone).toBeNull()
     }
     await ring(g, g.aina.token)
     expect((await run<View>('state', { code: g.code, token: g.chong.token })).ringZone).toBeNull()
-    expect((await run<View>('state', { code: g.code, token: g.chong.token })).hijauZone).not.toBeNull()
+    expect((await run<View>('state', { code: g.code, token: g.chong.token })).hijauZone).toBeNull()
     await hijau(g, g.ben.token)
     expect((await run<View>('state', { code: g.code, token: g.chong.token })).hijauZone).toBeNull()
   })
