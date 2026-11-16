@@ -115,6 +115,20 @@ describe('Settle at Penjara (jail design §4b, §4d)', () => {
     expect(screen.getByText('Turn on location, then scan the Penjara code again')).toBeInTheDocument()
   })
 
+  it('the Settle card has the duit kopi doodle on top, and the settled moment says Duit kopi sampai. with the freed line and Okay', async () => {
+    call.mockResolvedValue({ ok: true, freedIds: ['r1', 'r2'] })
+    const { container } = render(<Jail code="ABC234" view={holder()} />)
+    expect(container.querySelector('.settle svg[aria-hidden="true"] .sd-note')).not.toBeNull()
+    expect(screen.queryByText('Duit kopi sampai.')).toBeNull()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Hafiz' }))
+    await scan('KEJAR:JAIL')
+    expect(screen.getByText('Duit kopi sampai.')).toBeInTheDocument()
+    expect(screen.getByText('Settled! You and Hafiz are free.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Okay' }))
+    expect(screen.queryByText('Duit kopi sampai.')).toBeNull()
+    expect(screen.getByText('Settled! You and Hafiz are free.')).toBeInTheDocument()
+  })
+
   it("scanning anything else isn't a settle", async () => {
     render(<Jail code="ABC234" view={holder()} />)
     await scan('KEJAR:STATION:1')

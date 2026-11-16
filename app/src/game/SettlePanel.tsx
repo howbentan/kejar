@@ -1,8 +1,10 @@
+import { useReducedMotion } from 'motion/react'
 import { useState } from 'react'
 import { penjaraLockedLine } from '../../shared/hijau.js'
 import { JAIL_QR } from '../../shared/ids.js'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
+import SettleDoodle from './doodles/SettleDoodle'
 import { currentCoords } from './here'
 import Scanner from './Scanner'
 import { loadSession } from './session'
@@ -56,6 +58,9 @@ export default function SettlePanel({
   const [picked, setPicked] = useState<string[]>([])
   // Settled: the card is spent, so nothing more to scan (and a second scan can't overwrite the result).
   const [done, setDone] = useState(false)
+  // The "Duit kopi sampai." moment shows until Okay; the freed line stays after it.
+  const [moment, setMoment] = useState(true)
+  const reduce = !!useReducedMotion()
   const [scanning, setScanning] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -102,6 +107,9 @@ export default function SettlePanel({
 
   return (
     <div className="card settle">
+      <div className="settle-art">
+        <SettleDoodle size={done && moment ? 190 : 150} className={done && moment && !reduce ? 'settled-art' : reduce ? undefined : 'wobble-soft'} />
+      </div>
       <p className="eyebrow settle-eyebrow">★ LEGENDARY</p>
       <h2 style={{ margin: 0, fontSize: 26, letterSpacing: '-0.04em' }}>Settle</h2>
       <p className="muted">
@@ -135,7 +143,13 @@ export default function SettlePanel({
           <Busy busy={busy} label="Settling" colour="var(--legendary-ink)">Scan Penjara to settle</Busy>
         </button>
       )}
-      {message && <p role="status">{message}</p>}
+      {done && moment && <p className="settled-title settled-fade">Duit kopi sampai.</p>}
+      {message && <p role="status" className={done && moment ? 'settled-fade' : undefined}>{message}</p>}
+      {done && moment && (
+        <button type="button" className="btn btn-legendary settled-btn" onClick={() => setMoment(false)}>
+          Okay
+        </button>
+      )}
       <ErrorText>{error}</ErrorText>
       {scanning && (
         <div className="scan-overlay">

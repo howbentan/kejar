@@ -617,6 +617,19 @@ select.input option { background: #141614; color: var(--white); }
 .settle-list label { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--hair); border-radius: 12px; }
 .settle-list label.off { opacity: 0.45; }
 .settle-list input { accent-color: var(--legendary-2); width: 18px; height: 18px; }
+/* Dato Seri's Settle doodle, and the settled moment: the card slides in, the note slips away, the words fade up. */
+.settle-art { display: grid; place-items: center; margin: -4px 0 -6px; }
+.wobble-soft { animation: settle-wob 2.4s ease-in-out infinite; transform-origin: 50% 80%; }
+@keyframes settle-wob { 0%, 100% { transform: rotate(-1.5deg); } 50% { transform: rotate(1.5deg); } }
+.settled-art { animation: settle-slidein 5s cubic-bezier(.2,1.2,.4,1) both; }
+@keyframes settle-slidein { 0% { transform: translateX(-160px) rotate(-20deg); opacity: 0; } 14% { transform: none; opacity: 1; } 100% { transform: none; } }
+.settled-art .sd-note { animation: settle-slip 5s ease-in both; transform-box: fill-box; transform-origin: 50% 50%; }
+@keyframes settle-slip { 0%, 26% { transform: rotate(14deg) translate(0, 0); opacity: 1; } 40% { transform: rotate(14deg) translate(18px, 10px); opacity: 1; } 50%, 100% { transform: rotate(14deg) translate(60px, 26px); opacity: 0; } }
+.settled-title { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.05em; text-align: center; }
+.settled-fade { animation: settle-textup 5s both; }
+.settle .btn.settled-btn { animation: settle-textup 5s both; }
+@keyframes settle-textup { 0%, 44% { opacity: 0; transform: translateY(10px); } 56%, 100% { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .wobble-soft, .settled-art, .settled-art .sd-note, .settled-fade, .settle .btn.settled-btn { animation: none; } }
 
 /* The Penjara reel (jail design §3a): a lime window of ten cards, one lime and nine black, a lever underneath. */
 .reel-machine { display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
