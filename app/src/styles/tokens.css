@@ -31,6 +31,8 @@
   --hebat-ink: #3A2410;
   --pkp: #FF5FA2;
   --banjir: #3D8BFD;
+  /* calling a game off (cancel design 2026-11-16) */
+  --danger: #E5484D;
   --black: #0A0A0B;
   --white: #F5F5F3;
   --dim: rgba(245, 245, 243, 0.55);
@@ -64,6 +66,7 @@ body {
 .btn:active { transform: scale(0.98); }
 .btn:disabled { opacity: 0.5; }
 .btn-ghost { background: transparent; color: var(--white); border: 1px solid var(--hair); }
+.btn-danger { background: var(--danger); color: var(--white); }
 .input {
   width: 100%; border: 1px solid var(--hair); border-radius: 14px; padding: 14px 16px;
   background: rgba(255, 255, 255, 0.04); color: var(--white); font: 500 15px var(--font);

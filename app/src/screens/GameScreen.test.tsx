@@ -109,6 +109,28 @@ describe('GameScreen safety routing', () => {
     expect(screen.getByRole('tab', { name: /after game/i })).toBeInTheDocument()
   })
 
+  it('a cancelled game shows Game cancelled to everyone, with no SOS and no results', () => {
+    state.view = testView({ phase: 'ended', cancelled: true, results: null })
+    render(<GameScreen code="ABC234" />)
+    expect(screen.getByRole('heading', { name: 'Game cancelled' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/')
+    expect(screen.queryByRole('button', { name: 'Help and SOS' })).toBeNull()
+    expect(screen.queryByText('Game over')).toBeNull()
+  })
+
+  it('the organiser can cancel a running game from the live screen; a marshal cannot', () => {
+    const base = testView()
+    localStorage.clear()
+    localStorage.setItem('kejar.organiser', JSON.stringify({ organiserToken: 'h1', name: 'Owner' }))
+    state.view = testView({ me: { ...base.me, id: 'host', name: 'Owner', role: 'marshal', tag_id: null } })
+    const { unmount } = render(<GameScreen code="ABC234" />)
+    expect(screen.getByRole('button', { name: 'Cancel game' })).toHaveClass('btn-danger')
+    unmount()
+    state.view = testView({ me: { ...base.me, id: 'm1', role: 'marshal', tag_id: null } })
+    render(<GameScreen code="ABC234" />)
+    expect(screen.queryByRole('button', { name: 'Cancel game' })).toBeNull()
+  })
+
   it('sends a non-marshal to Results once the game has ended', () => {
     state.view = testView({ phase: 'ended', results: { winner: 'runners', survivors: [], longestSurvivor: null, mostCatches: null, jailbreakHero: null } })
     render(<GameScreen code="ABC234" />)

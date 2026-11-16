@@ -26,6 +26,13 @@ export default function ReconnectCard({ href, code, onStatus }: { href: string; 
       try {
         const view = await call<View>('state', { code, ...credentials(code) })
         if (!alive) return
+        // A cancelled game has nothing to go back to: the card goes, like a game that's gone.
+        if (view.cancelled) {
+          latest = null
+          setGone(true)
+          report.current?.(null)
+          return
+        }
         latest = statusFrom(code, view, Date.now())
         setStatus(latest)
         report.current?.(latest)

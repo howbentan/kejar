@@ -110,6 +110,25 @@ describe('HostLobby', () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith('setStartTime', { code: 'ABC234', organiserToken: 'h1', startsAt: null }))
   })
 
+  it('the organiser cancels the game in two taps: the red button, then Yes, cancel game', async () => {
+    render(<HostLobby code="ABC234" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel game' }))
+    expect(screen.getByText('Cancel game ABC234 for everyone?')).toBeInTheDocument()
+    expect(call).not.toHaveBeenCalledWith('cancelGame', expect.anything())
+    fireEvent.click(screen.getByRole('button', { name: 'Keep the game' }))
+    expect(screen.queryByText('Cancel game ABC234 for everyone?')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel game' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, cancel game' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('cancelGame', { code: 'ABC234', organiserToken: 'h1' }))
+  })
+
+  it('a cancelled lobby shows Game cancelled', async () => {
+    call.mockImplementation(async (action: string) => (action === 'state' ? { ...lobbyView, cancelled: true, roster: [] } : {}))
+    render(<HostLobby code="ABC234" />)
+    expect(await screen.findByRole('heading', { name: 'Game cancelled' })).toBeInTheDocument()
+    expect(screen.getByText('You cancelled this game. Nobody gets results this time.')).toBeInTheDocument()
+  })
+
   it('shows the game mode next to the code', async () => {
     render(<HostLobby code="ABC234" />)
     expect(await screen.findByText('CORE')).toBeInTheDocument()

@@ -5,6 +5,7 @@ import { credentials } from '../game/auth'
 import { EndgameStatus } from '../game/EndgameChip'
 import GameMap from '../game/Map'
 import MarshalTools from '../game/MarshalTools'
+import CancelGame from '../game/CancelGame'
 import PingRipple from '../game/PingRipple'
 import RescueBanner from '../game/RescueBanner'
 import SosTakeover from '../game/SosTakeover'
@@ -83,6 +84,7 @@ export default function MarshalLive({ code, view, refresh }: { code: string; vie
           onDismiss={() => setDismissed((ids) => [...ids, openSos.id])}
         />
       )}
+      {view.me.id === 'host' && !ended && <CancelGame code={code} onCancelled={refresh} />}
     </Screen>
   )
 }

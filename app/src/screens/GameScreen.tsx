@@ -17,6 +17,7 @@ import LuarGarisan from './LuarGarisan'
 import MarshalLive from './MarshalLive'
 import Paused from './Paused'
 import Removed from './Removed'
+import Cancelled from './Cancelled'
 import Results from './Results'
 import RunnerChase from './RunnerChase'
 import type { View } from '../../shared/views.js'
@@ -90,6 +91,7 @@ export default function GameScreen({ code }: { code: string }) {
   }, [released])
 
   if (!current || gate.show) return <GameLoading code={code} error={error} {...gate.loader} />
+  if (current.cancelled) return <Cancelled code={code} organiser={current.me.id === 'host'} />
   if (current.me.removed_at) return <Removed />
   if (current.phase === 'lobby') return <Lobby code={code} view={current} refresh={refresh} />
   // The endgame's reveal goes over every chase screen, marshals' too (endgame design §6.4); never over the results.

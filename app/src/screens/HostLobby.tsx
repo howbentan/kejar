@@ -16,6 +16,8 @@ import { ErrorText, ModeBadge, Pills, Screen, tagText } from '../game/ui'
 import { useGameState } from '../game/useGameState'
 import { Busy, FullLoader } from '../game/Runner'
 import { useLoaderGate } from '../game/useLoaderGate'
+import CancelGame from '../game/CancelGame'
+import Cancelled from './Cancelled'
 
 type Side = Extract<Role, 'runner' | 'chaser'>
 
@@ -152,6 +154,7 @@ export default function HostLobby({ code }: { code: string }) {
 
   // Nothing to show before the first view: the full-size loader, then its exit (a load error shows at once).
   if (gate.show) return <FullLoader caption={`SABAR KEJAP, OPENING ${code.toUpperCase()}`} {...gate.loader} />
+  if (view?.cancelled) return <Cancelled code={code} organiser />
 
   // The new-game setup's steps 4 and 5 stand in for the lobby: no join QR yet.
   const setup = new URLSearchParams(window.location.search).get('setup')
@@ -294,6 +297,7 @@ export default function HostLobby({ code }: { code: string }) {
       <button className="btn" disabled={busy} aria-busy={busyOn === 'start' || undefined} onClick={() => act('start', {}, 'start')}>
         <Busy busy={busyOn === 'start'} label="Starting game">Start game</Busy>
       </button>
+      <CancelGame code={code} onCancelled={refresh} />
     </Screen>
   )
 }

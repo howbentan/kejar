@@ -53,6 +53,13 @@ describe('ReconnectCard', () => {
     expect(onStatus).toHaveBeenLastCalledWith(null)
   })
 
+  it('goes away for a cancelled game', async () => {
+    api.call.mockResolvedValue(testView({ phase: 'ended', cancelled: true, arena }))
+    render(<ReconnectCard href="/g/ABC234" code="ABC234" />)
+    await flush()
+    expect(screen.queryByRole('link')).toBeNull()
+  })
+
   it('stays plain on a 500', async () => {
     api.call.mockRejectedValue(new api.ApiError(500, 'down'))
     render(<ReconnectCard href="/g/ABC234" code="ABC234" />)
