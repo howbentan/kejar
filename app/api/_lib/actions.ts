@@ -19,7 +19,7 @@ import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
 import { hebatLive, maskEndgame, pickWanted, pkpClosed, revealDue, rollEndgame, wantedOut } from '../../shared/endgame.js'
-import { FLOOD_GRACE_MS, floodNow, inWater, wetElapsed } from '../../shared/flood.js'
+import { FLOOD_GRACE_MS, floodNow, inWater, wetElapsed, wetSince } from '../../shared/flood.js'
 import { isOut, undoableArrestId, undoableCatchId } from '../../shared/players.js'
 import { ARREST_FIX_FRESH_MS, ARREST_OPEN_MS, arrestEndsAt, insideArrest, releaseVerdict, usableFix } from '../../shared/arrest.js'
 import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
@@ -662,7 +662,7 @@ async function revealEndgame(ctx: Ctx, game: Game): Promise<void> {
       : wanted
         ? `Endgame: Hang Hebat! ${wanted.tag_id !== null ? `#${tag2(wanted.tag_id)} ` : ''}${wanted.name} is wanted.`
         : kind === 'banjir'
-          ? 'Endgame: Banjir kilat! The water rises at 8, 6, 4 and 2 min left.'
+          ? 'Endgame: Banjir kilat! The water rises at 8, 6, 4 and 2 min left. Caught in it for 30 s: Penjara.'
           : 'Endgame: Bomba!'
   try {
     await pushTo(ctx, await store.players(game.id), { type: 'notice', code: game.code, title: 'kejar.', body })
@@ -1475,16 +1475,19 @@ async function floodFix(ctx: Ctx, game: Game, me: Player, fix: { lat: number; ln
   const clear = async () => {
     if (me.flooded_at) await store.updatePlayers([{ id: me.id, patch: { flooded_at: null } }])
   }
-  const live = !game.paused_at && phaseAt(game, now).phase === 'chasing' && floodNow(game, now) !== null
+  // A pause freezes the 30 s: nothing starts, clears or counts until the game resumes.
+  if (game.paused_at) return
+  const live = phaseAt(game, now).phase === 'chasing' && floodNow(game, now) !== null
   if (!live || me.jailed || me.disqualified_at || me.arrest || me.removed_at) return clear()
   if (fix.accuracy_m > LUAR_GARISAN_MAX_ACCURACY_M) return
   if (!inWater(fix, game, now)) return clear()
-  if (!me.flooded_at) {
+  const since = wetSince(me)
+  if (since === null) {
     await store.updatePlayers([{ id: me.id, patch: { flooded_at: iso(now) } }])
     await notify(ctx, game, me, 'Banjir!', FLOOD_WARN)
     return
   }
-  if (wetElapsed(game, Date.parse(me.flooded_at), now) < FLOOD_GRACE_MS) return
+  if (wetElapsed(game, since, now) < FLOOD_GRACE_MS) return
   await store.updatePlayers([{ id: me.id, patch: { flooded_at: null } }])
   if ((await jailOrArrest(ctx, game, me, null, 'banjir')) !== 'jailed') return
   await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: me.id, data: { who: who(me), cause: 'banjir' } })

@@ -378,6 +378,12 @@ export default function GameMap({
         data: collection([{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: ring(arena.boundary) } }]),
       })
       m.addLayer({ id: 'arena', type: 'line', source: 'arena', paint: { 'line-color': WHITE, 'line-width': 1.5, 'line-opacity': 0.6 } })
+      // Banjir Kilat's water sits under every zone and dot; the next waterline is dashed on top of it.
+      const fl = floodFeatures(arena, latestFlood.current)
+      m.addSource('flood', { type: 'geojson', data: fl.water })
+      m.addLayer({ id: 'flood-fill', type: 'fill', source: 'flood', paint: { 'fill-color': BANJIR, 'fill-opacity': 0.32 } })
+      m.addSource('flood-next', { type: 'geojson', data: fl.next })
+      m.addLayer({ id: 'flood-next', type: 'line', source: 'flood-next', paint: { 'line-color': BANJIR, 'line-width': 2.5, 'line-dasharray': [2, 1.5] } })
       if (showJailAndStartRef.current) {
         m.addSource('jail', {
           type: 'geojson',
@@ -429,12 +435,6 @@ export default function GameMap({
       m.addLayer({ id: 'bomoh-legendary-fill', type: 'fill', source: 'bomoh-legendary', paint: { 'fill-color': p.main, 'fill-opacity': 0.12 } })
       m.addLayer({ id: 'bomoh-legendary-line', type: 'line', source: 'bomoh-legendary', paint: { 'line-color': p.main, 'line-width': 2, 'line-dasharray': [2, 2] } })
       const or = legendaryOrange()
-      // Banjir Kilat's water sits under every zone and dot; the next waterline is dashed on top of it.
-      const fl = floodFeatures(arena, latestFlood.current)
-      m.addSource('flood', { type: 'geojson', data: fl.water })
-      m.addLayer({ id: 'flood-fill', type: 'fill', source: 'flood', paint: { 'fill-color': BANJIR, 'fill-opacity': 0.32 } })
-      m.addSource('flood-next', { type: 'geojson', data: fl.next })
-      m.addLayer({ id: 'flood-next', type: 'line', source: 'flood-next', paint: { 'line-color': BANJIR, 'line-width': 2.5, 'line-dasharray': [2, 1.5] } })
       m.addSource('ring-legendary', { type: 'geojson', data: zoneFeatures(latestRingZone.current).zone })
       m.addLayer({ id: 'ring-legendary-fill', type: 'fill', source: 'ring-legendary', paint: { 'fill-color': or.main, 'fill-opacity': 0.12 } })
       m.addLayer({ id: 'ring-legendary-line', type: 'line', source: 'ring-legendary', paint: { 'line-color': or.main, 'line-width': 2, 'line-dasharray': [2, 2] } })

@@ -8,7 +8,7 @@ import { MINUTE_MS, toWall } from './clock.js'
 import { revealed } from './endgame.js'
 import { circlePolygon, distanceM, distanceToEdgeM, hash } from './geo.js'
 import { inPlayArea, ringAreaHa } from './playArea.js'
-import type { Arena, Game, LatLng } from './types.js'
+import type { Arena, Game, LatLng, Player } from './types.js'
 
 /** When the water rises, in minutes left. */
 export const FLOOD_LEFT_MIN = [8, 6, 4, 2] as const
@@ -115,6 +115,17 @@ export function inWater(p: LatLng, game: Game, now: number): boolean {
   const f = floodNow(game, now)
   if (!f || f.step === 0) return false
   return distanceM(p, f.center) > f.radiusM + FLOOD_MARGIN_M
+}
+
+/**
+ * When this runner's current 30 s in the water began, or null. A start from before their latest catch, release or
+ * house arrest belongs to an earlier stretch (a phone in a pocket sends no fix to clear it), so it doesn't count.
+ */
+export function wetSince(p: Pick<Player, 'flooded_at' | 'caught_at' | 'freed_at' | 'arrest'>): number | null {
+  if (!p.flooded_at) return null
+  const since = Date.parse(p.flooded_at)
+  const later = [p.caught_at, p.freed_at, p.arrest?.firedAt].some((t) => !!t && Date.parse(t) >= since)
+  return later ? null : since
 }
 
 /** Time in the water since `since`, leaving out pauses (finished ones and an open one), so a pause freezes the 30 s. */

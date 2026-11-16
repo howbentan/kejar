@@ -2622,6 +2622,7 @@ describe('marshal invites', () => {
 
 describe('Banjir Kilat: the flood (design 2026-11-16)', () => {
   type G = Awaited<ReturnType<typeof banjirGame>>
+  const iso = (ms: number) => new Date(ms).toISOString()
   async function banjirGame() {
     const g = await readyGame({ mode: 'full', endgames: { bomba: 'off', hebat: 'off', pkp: 'off', banjir: 'on' } })
     await run('start', { code: g.code, organiserToken: g.organiserToken })
@@ -2708,6 +2709,42 @@ describe('Banjir Kilat: the flood (design 2026-11-16)', () => {
     expect((await player(g, g.aina.playerId)).jailed).toBe(false)
     await run('location', { code: g.code, token: g.ben.token, ...wet })
     expect((await player(g, g.ben.playerId)).flooded_at ?? null).toBeNull()
+  })
+
+  it('a water timer from before a catch never carries over: a freed runner gets a fresh 30 s', async () => {
+    const g = await banjirGame()
+    await poll(g, T0 + 40 * MIN)
+    const wet = await wetSpot(g)
+    now = FULL
+    await run('location', { code: g.code, token: g.aina.token, ...wet })
+    // Caught and rescued with no fix in between (phone in a pocket).
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: true, caught_at: iso(FULL + 5_000), caught_by: g.ben.playerId } }])
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: false, freed_at: iso(FULL + 20_000) } }])
+    now = FULL + 40_000
+    await run('location', { code: g.code, token: g.aina.token, ...wet })
+    const aina = await player(g, g.aina.playerId)
+    expect(aina.jailed).toBe(false)
+    expect(aina.flooded_at).toBe(iso(FULL + 40_000))
+  })
+
+  it('a pause freezes the 30 s instead of wiping it', async () => {
+    const g = await banjirGame()
+    await poll(g, T0 + 40 * MIN)
+    const wet = await wetSpot(g)
+    now = FULL
+    await run('location', { code: g.code, token: g.aina.token, ...wet })
+    now = FULL + 20_000
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    now = FULL + 60_000
+    await run('location', { code: g.code, token: g.aina.token, ...wet })
+    expect((await player(g, g.aina.playerId)).flooded_at).toBe(iso(FULL))
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    now = FULL + 65_000 // 25 s in the water, not counting the 40 s pause
+    await run('location', { code: g.code, token: g.aina.token, ...wet })
+    expect((await player(g, g.aina.playerId)).jailed).toBe(false)
+    now = FULL + 72_000 // 32 s
+    await run('location', { code: g.code, token: g.aina.token, ...wet })
+    expect((await player(g, g.aina.playerId)).jailed).toBe(true)
   })
 
   it('a station under water is closed', async () => {

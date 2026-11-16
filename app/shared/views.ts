@@ -2,7 +2,7 @@ import { alertLeadFor, checkedIn, checkinsSince, countedCheckIn, countRestartAt,
 import { alertsFrom, type Alert, type ReportReason } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
 import { hebatLive, maskEndgame, revealed, rollEndgame } from './endgame.js'
-import { FLOOD_GRACE_MS, floodNow, floodSteps, wetElapsed, type FloodNow } from './flood.js'
+import { FLOOD_GRACE_MS, floodNow, floodSteps, wetElapsed, wetSince, type FloodNow } from './flood.js'
 import { distanceM, fuzz, hash, offset } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { isTicked, kitOf, packItems, placeItems, SECRET_PLACE_IDS, type KitItem, type PlaceItem, type SecretLetters } from './kit.js'
@@ -1293,9 +1293,11 @@ function fullView(input: ViewInput): View {
 /** The endgame as a player sees it (see `View.endgame`): nothing until the reveal, and nothing for a Hang Hebat with nobody wanted. */
 /** Banjir Kilat: when my 30 s in the water runs out, pauses not counted; null when I'm dry or it isn't on. */
 function wetUntilFor(i: ViewInput): number | null {
-  const since = i.me.flooded_at
-  if (!since || i.me.jailed || !floodNow(i.game, i.now)) return null
-  return i.now + Math.max(0, FLOOD_GRACE_MS - wetElapsed(i.game, Date.parse(since), i.now))
+  const me = i.me
+  const since = wetSince(me)
+  if (since === null || me.role !== 'runner' || me.jailed || me.disqualified_at || me.arrest) return null
+  if (phaseAt(i.game, i.now).phase !== 'chasing' || !floodNow(i.game, i.now)) return null
+  return i.now + Math.max(0, FLOOD_GRACE_MS - wetElapsed(i.game, since, i.now))
 }
 
 /** Banjir Kilat's feed lines: each rise is warned 60 s ahead, then happens. Worked out from the clock, not stored. */
