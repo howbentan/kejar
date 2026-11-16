@@ -58,6 +58,9 @@ export default function BeforeYouStart({ code, view, refresh }: { code: string; 
   const briefing = view.briefing && 'started' in view.briefing ? view.briefing : null
   const briefDone = briefing?.started ?? false
 
+  // A side's box with no spot yet: Start stays allowed, but a Tupperware nobody can find is a dud side quest.
+  const undropped = (['dikejar', 'kejar'] as const).filter((side) => view.tupperware?.[side] && view.tupperware[side]!.dropped === null)
+
   async function tapBrief() {
     const organiser = loadOrganiserSession(localStorage)
     if (!organiser) return
@@ -84,6 +87,15 @@ export default function BeforeYouStart({ code, view, refresh }: { code: string; 
         note={marshals.length > 0 ? `${list(marshals.map((m) => m.name))} · Penjara` : 'Invite a marshal below'}
       />
       <Check label="SOS alerts on" done={sosDone} note={sosNote} />
+      {undropped.map((side) => (
+        <div key={side} style={{ display: 'flex', gap: 10, alignItems: 'baseline', padding: '8px 0', borderBottom: '1px solid #1d1d1d', fontSize: 12.5 }}>
+          <span style={{ width: 19, height: 19, borderRadius: 5, border: '1.5px solid #E63946', flex: 'none', alignSelf: 'flex-start', marginTop: 1 }} />
+          <span>{side === 'dikejar' ? 'Dikejar' : 'Kejar'} Tupperware not dropped yet</span>
+          <a href={`/host/${code}/walk`} style={{ color: 'inherit', textDecoration: 'underline', marginLeft: 'auto' }}>
+            Drop it
+          </a>
+        </div>
+      ))}
       {briefDone ? (
         <>
           <Check label="Brief the players" done note={`${briefing!.ready} of ${briefing!.total} ready`} />

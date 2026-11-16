@@ -77,3 +77,23 @@ describe('Results: the endgame (endgame design §6.4)', () => {
     expect(screen.queryByText(/Endgame:/)).toBeNull()
   })
 })
+
+describe('Results: bring it home', () => {
+  const box = (dropped: { lat: number; lng: number } | null, claimed: boolean) => ({ legendary: 'bomoh' as const, suggested: { lat: 1, lng: 2 }, dropped, claimed })
+
+  it('tells the organiser a dropped, unopened Tupperware is theirs to bring home', () => {
+    const view = testView({ phase: 'ended', roster, results: null, tupperware: { dikejar: box({ lat: 3.1, lng: 101.6 }, false) } })
+    render(<Results code="ABC234" view={view} isHost />)
+    expect(screen.getByText("Dikejar's Tupperware wasn't opened. Bawa balik!")).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /pin/i })).toHaveAttribute('href', expect.stringContaining('3.1'))
+  })
+
+  it('says nothing for a claimed or undropped box, or to anyone without the organiser view', () => {
+    const view = testView({ phase: 'ended', roster, results: null, tupperware: { dikejar: box({ lat: 3, lng: 101 }, true), kejar: box(null, false) } })
+    render(<Results code="ABC234" view={view} isHost />)
+    expect(screen.queryByText(/Bawa balik/)).toBeNull()
+    cleanup()
+    render(<Results code="ABC234" view={testView({ phase: 'ended', roster, results: null })} isHost={false} />)
+    expect(screen.queryByText(/Bawa balik/)).toBeNull()
+  })
+})

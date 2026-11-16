@@ -13,6 +13,38 @@ function EndgameLine({ view }: { view: View }) {
   return <p style={{ color: copy.colour, fontWeight: 700 }}>{text}</p>
 }
 
+/**
+ * Organiser only (the view carries `tupperware` for nobody else): a box that was dropped and never opened is still out
+ * in the park, so say so and link its pin. One line on the results card, so a map link rather than a map.
+ */
+function BringHome({ view }: { view: View }) {
+  const left = (['dikejar', 'kejar'] as const).flatMap((side) => {
+    const box = view.tupperware?.[side]
+    return box && box.dropped && !box.claimed ? [{ side, name: side === 'dikejar' ? 'Dikejar' : 'Kejar', at: box.dropped }] : []
+  })
+  return (
+    <>
+      {left.map(({ side, name, at }) => (
+        <p key={side} style={{ color: '#E63946', fontWeight: 700 }}>
+          {name}'s Tupperware wasn't opened. Bawa balik!{' '}
+          <a
+            href={`https://www.google.com/maps?q=${at.lat},${at.lng}`}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`Map pin for the ${name} Tupperware`}
+            style={{ color: 'inherit' }}
+          >
+            <svg width="14" height="18" viewBox="0 0 14 18" aria-hidden="true" style={{ verticalAlign: '-3px' }}>
+              <path d="M7 0C3.1 0 0 3 0 6.8 0 11.7 7 18 7 18s7-6.3 7-11.2C14 3 10.9 0 7 0z" fill="currentColor" />
+              <circle cx="7" cy="6.8" r="2.4" fill="#0A0A0B" />
+            </svg>
+          </a>
+        </p>
+      ))}
+    </>
+  )
+}
+
 /** "Game over", who won, and the awards card. Shared with MarshalLive, where marshals and the organiser see it post-game. */
 export function ResultsSummary({ view }: { view: View }) {
   const r = view.results
@@ -37,6 +69,7 @@ export function ResultsSummary({ view }: { view: View }) {
         </p>
       )}
       <EndgameLine view={view} />
+      <BringHome view={view} />
       {awards.length > 0 && (
         <div className="card">
           {awards.map((a) => (

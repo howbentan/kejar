@@ -114,3 +114,23 @@ describe('BeforeYouStart', () => {
     expect(screen.getByText('ON THE DAY')).toBeInTheDocument()
   })
 })
+
+describe('BeforeYouStart: Tupperware reminder', () => {
+  const box = (dropped: { lat: number; lng: number } | null) => ({ legendary: 'bomoh', suggested: { lat: 1, lng: 2 }, dropped, claimed: false })
+  const withBoxes = (tupperware: unknown) => ({ ...make(), tupperware }) as unknown as View
+
+  it('reminds the organiser of a side with no dropped Tupperware, linking to the walk', () => {
+    render(<BeforeYouStart code="ABC234" view={withBoxes({ dikejar: box({ lat: 3, lng: 101 }), kejar: box(null) })} refresh={refresh} />)
+    expect(screen.getByText('Kejar Tupperware not dropped yet')).toBeInTheDocument()
+    expect(screen.queryByText('Dikejar Tupperware not dropped yet')).toBeNull()
+    expect(screen.getByRole('link', { name: 'Drop it' })).toHaveAttribute('href', '/host/ABC234/walk')
+  })
+
+  it('shows nothing when both are dropped or the view has no Tupperware', () => {
+    render(<BeforeYouStart code="ABC234" view={withBoxes({ dikejar: box({ lat: 3, lng: 101 }) })} refresh={refresh} />)
+    expect(screen.queryByText(/not dropped yet/)).toBeNull()
+    cleanup()
+    render(<BeforeYouStart code="ABC234" view={make()} refresh={refresh} />)
+    expect(screen.queryByText(/not dropped yet/)).toBeNull()
+  })
+})
