@@ -122,6 +122,8 @@ describe('Home', () => {
     fireEvent.click(screen.getByRole('button', { name: 'join game' }))
     expect(screen.getByRole('heading', { name: 'code?' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'join game' })).toBeNull()
+    // Scanning lives on home's green camera button only; the join step is just the code box.
+    expect(screen.queryByRole('button', { name: 'scan qr' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'back' }))
     expect(screen.getByRole('button', { name: 'join game' })).toBeInTheDocument()
   })
