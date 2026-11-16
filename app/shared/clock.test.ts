@@ -44,9 +44,14 @@ describe('pingTimes', () => {
   it('reveals every ping interval during the chase, never at the end', () => {
     expect(pingTimes(g).map((p) => p.revealAt)).toEqual([10, 15, 20, 25, 30, 35, 40, 45].map((m) => T0 + m * MIN))
   })
-  it('alerts 45 s before each reveal', () => {
+  it('alerts 60 s before each reveal, so a runner can slow down before checking in', () => {
     expect(pingTimes(g)[0]).toEqual({ seq: 1, alertAt: T0 + 10 * MIN - SCHEDULED_ALERT_LEAD_MS, revealAt: T0 + 10 * MIN })
-    expect(SCHEDULED_ALERT_LEAD_MS).toBe(45_000)
+    expect(SCHEDULED_ALERT_LEAD_MS).toBe(60_000)
+    expect(pingTimes(g).every((p) => p.revealAt - p.alertAt === 60_000)).toBe(true)
+  })
+  it('the 2-minute schedule gets the full 60 s too', () => {
+    const t = pingTimes(game({ settings: { ...game().settings, pingMin: 2 } }))
+    expect(t.every((p) => p.revealAt - p.alertAt === 60_000)).toBe(true)
   })
 })
 
@@ -61,8 +66,10 @@ describe("pingTimes with Bomba (endgame design §6.3)", () => {
     // The 10-minute ping stays: its alert at 10:45 left comes before the mark.
     expect(t.map((p) => p.revealAt)).toEqual([40, 35, 30, 25, 20, 15, 10, 8, 6, 5, 4, 3, 2, 1].map(left))
     expect(t.map((p) => p.seq)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])
-    expect(t.every((p) => p.alertAt === p.revealAt - SCHEDULED_ALERT_LEAD_MS)).toBe(true)
-    expect(t.filter((p) => p.lastCall)).toEqual([{ seq: 14, alertAt: left(1) - SCHEDULED_ALERT_LEAD_MS, revealAt: left(1), lastCall: true }])
+    // 60 s windows, except Bomba's pings a minute apart (5, 4, 3, 2 and the last call), which keep 45 s so a 15 s gap
+    // stays between one ping and the next window.
+    expect(t.map((p) => (p.revealAt - p.alertAt) / 1000)).toEqual([60, 60, 60, 60, 60, 60, 60, 60, 60, 45, 45, 45, 45, 45])
+    expect(t.filter((p) => p.lastCall)).toEqual([{ seq: 14, alertAt: left(1) - 45_000, revealAt: left(1), lastCall: true }])
   })
   it('drops every normal ping that alerts after the 10-minute mark', () => {
     const t = pingTimes(game({ endgame: bomba, settings: { ...game().settings, pingMin: 3 } }))
@@ -76,7 +83,7 @@ describe("pingTimes with Bomba (endgame design §6.3)", () => {
   it('a pause moves every Bomba time later by its length', () => {
     const paused = pingTimes(game({ endgame: bomba, pauses: [closed(left(20), left(20) + 2 * MIN)] }))
     expect(paused.slice(-7).map((p) => p.revealAt)).toEqual([8, 6, 5, 4, 3, 2, 1].map((m) => left(m) + 2 * MIN))
-    expect(paused.slice(-7).map((p) => p.alertAt)).toEqual([8, 6, 5, 4, 3, 2, 1].map((m) => left(m) + 2 * MIN - SCHEDULED_ALERT_LEAD_MS))
+    expect(paused.slice(-7).map((p) => p.alertAt)).toEqual([8, 6, 5, 4, 3, 2, 1].map((m) => left(m) + 2 * MIN - (m >= 6 ? 60_000 : 45_000)))
   })
   it('PKP and Hang Hebat keep the normal schedule', () => {
     for (const kind of ['pkp', 'hebat'] as const) {

@@ -38,8 +38,8 @@ describe('checkedIn', () => {
 })
 
 describe('alertLeadFor', () => {
-  it('is 45 s for scheduled pings and 30 s for bonus pings', () => {
-    expect(alertLeadFor(1)).toBe(45_000)
+  it('is 60 s for scheduled pings and 30 s for bonus pings', () => {
+    expect(alertLeadFor(1)).toBe(60_000)
     expect(alertLeadFor(1000)).toBe(30_000)
   })
 })

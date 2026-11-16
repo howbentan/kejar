@@ -258,7 +258,7 @@ describe('lobby cap, location gap and accuracy', () => {
   it('the first fix inside a check-in window always lands, even within 2 s of the last one', async () => {
     const g = await readyGame()
     await run('start', { code: g.code, organiserToken: g.organiserToken })
-    const alertAt = T0 + 10 * MIN - 45_000 // hide 5 + ping 5, minus the 45 s scheduled alert
+    const alertAt = T0 + 10 * MIN - 60_000 // hide 5 + ping 5, minus the 60 s scheduled alert
     now = alertAt - 1_000
     await run('location', { code: g.code, token: g.aina.token, ...at(20) })
     now = alertAt + 500 // the phone re-sends its last fix on the first poll after the alert
@@ -2060,7 +2060,7 @@ describe('late pings and auto-jail', () => {
 
   it('(c) nobody polls between ping 4 alert and reveal: ping 4 is skipped, nobody is jailed there', async () => {
     const g = await onTimeStart()
-    await poll(g, 19.25)
+    await poll(g, 18.9)
     await poll(g, 20)
     await poll(g, 24)
     expect(await hafizJailed(g)).toBe(false)
@@ -3336,10 +3336,10 @@ describe('automatic alerts', () => {
     expect((await store.players(g.gameId)).find((p) => p.id === g.hafiz.playerId)!.jailed).toBe(false)
   })
 
-  it('a location sent before the 45 s window does not count as a check-in', async () => {
+  it('a location sent before the 60 s window does not count as a check-in', async () => {
     const g = await safetyGame({ checkinMode: 'schedule' })
     for (const m of [10, 15]) {
-      now = T0 + m * MIN - 50_000 // 50 s before each reveal: just outside the window
+      now = T0 + m * MIN - 65_000 // 65 s before each reveal: just outside the window
       await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
       now = T0 + m * MIN - 20_000
       await run('location', { code: g.code, token: g.aina.token, ...at(10) })

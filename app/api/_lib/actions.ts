@@ -757,7 +757,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
     const events = (await store.events(game.id)).filter((e) => e.type === 'arrest-ended')
     const sinceFor = (p: Player) => checkinsSince(chaseStartOf(game, now)!, countRestartAt(p, events))
     // With the chaser-snapshot switch on, a scheduled reveal records who checked in (a location inside its
-    // 45 s window, counted under the same release rule as auto-jail), so a runner's view can find the last
+    // check-in window, counted under the same release rule as auto-jail), so a runner's view can find the last
     // window they checked into without loading every reveal's positions (checkins design §5.4).
     const checkedInIds =
       game.settings.chaserSnapshot === true && scheduled
@@ -782,7 +782,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
       const lastTwo = warned({ seq, revealAt }) ? lastThree.slice(-2) : []
       const atReveals = lastTwo.length === 2 ? await store.latestPositions(game.id, lastThree.map((t) => iso(t.revealAt))) : {}
       for (const p of lastTwo.length === 2 ? free : []) {
-        // Only a location inside each ping's 45 s window counts as a check-in (§4.2).
+        // Only a location inside each ping's check-in window counts as a check-in (§4.2).
         const since = sinceFor(p)
         const judged = lastThree.map((t) => {
           const at = latestAtOrBefore(atReveals[p.id], t.revealAt)
@@ -2318,7 +2318,7 @@ const usePowerup: Action = async (ctx, body) => {
 
   // Mat Rempit: one at a time, team-wide, then a 3-minute wait (power-ups §5a). A refusal isn't spent.
   if (u.kind === 'flare') {
-    // No new check-in window may open inside Mak Kau Hijau's 45 s (§6.3): refused from its claim until it settles.
+    // No new check-in window may open inside Mak Kau Hijau's run (§6.3): refused from its claim until it settles.
     if (fresh.hijau && !fresh.hijau.settledAt) return { ok: false, reason: 'hijau-running' }
     const blocked = flareBlocked(pings, ctx.now)
     if (blocked) return { ok: false, ...blocked }

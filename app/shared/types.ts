@@ -198,7 +198,7 @@ export type HijauStash = BomohStash
 export type LegendaryKind = 'dato' | 'bomoh' | 'ring' | 'hijau'
 
 /**
- * Mak Kau Hijau's run (stored on `games.hijau`): who claimed the green card, when the 45 s window opens and closes,
+ * Mak Kau Hijau's run (stored on `games.hijau`): who claimed the green card, when its window opens and closes,
  * when the push went out, when it settled, and which players tapped green in time.
  */
 export interface HijauRun {

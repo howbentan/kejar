@@ -44,7 +44,7 @@ export function useGameState(
       setView({ ...v, now: receivedAt + clockOffset(samples.current) })
       setError(null)
       // A still phone may give no new fix for a long while, so send a position once at each moment the server must judge
-      // where this phone is: when a check-in window opens (45 s to check in), and when Banjir Kilat's 30 s in the water
+      // where this phone is: when a check-in window opens (60 s to check in), and when Banjir Kilat's 30 s in the water
       // runs out. The last fix if it is fresh, otherwise a new one from the phone.
       const resend = (at: number | null | undefined, sent: { current: number | null }) => {
         if (modeRef.current === 'never' || !session.token || at == null || v.now < at || sent.current === at) return

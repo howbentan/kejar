@@ -3,8 +3,13 @@ import type { EndgameKind, Game, Phase, Ping } from './types.js'
 export const MINUTE_MS = 60_000
 /** Bonus pings (Mat Rempit/Flare) keep a 30 s alert lead. */
 export const ALERT_LEAD_MS = 30_000
-/** Check-ins design §4.2: scheduled pings alert 45 s before they reveal, so a late push still leaves time to check in. */
-export const SCHEDULED_ALERT_LEAD_MS = 45_000
+/**
+ * Scheduled pings alert this long before they reveal (safer check-ins design, 2026-11-17; was 45 s in check-ins design
+ * §4.2), so a runner has time to slow down before getting their phone out, and a late push still leaves time.
+ */
+export const SCHEDULED_ALERT_LEAD_MS = 60_000
+/** A check-in window always leaves this much clear after the ping before it, so windows never run into each other. */
+export const WINDOW_GAP_MS = 15_000
 
 /**
  * How long before the end each endgame is revealed (endgame design §6.3, §7.1; Banjir Kilat design 2026-11-16).
@@ -92,10 +97,11 @@ export function pingTimes(game: Game, now?: number): PingTime[] {
   const nominalTimes: { t: number; lastCall?: true }[] = []
   for (let t = hideEnd + step; t < end && t - SCHEDULED_ALERT_LEAD_MS < mark; t += step) nominalTimes.push({ t })
   if (bomba) for (const m of BOMBA_LEFT_MIN) nominalTimes.push(m === 1 ? { t: end - m * MINUTE_MS, lastCall: true } : { t: end - m * MINUTE_MS })
-  // The alert is placed on the wall clock on its own, so a pause after it moves only the reveal.
+  // The alert is placed on the wall clock on its own, so a pause after it moves only the reveal. Each window is 60 s, or
+  // less when the ping before is close (Bomba's pings a minute apart get 45 s), keeping 15 s clear after that ping.
   return nominalTimes.map(({ t, lastCall }, k) => ({
     seq: k + 1,
-    alertAt: toWall(game, t - SCHEDULED_ALERT_LEAD_MS, now),
+    alertAt: toWall(game, t - Math.min(SCHEDULED_ALERT_LEAD_MS, t - (k ? nominalTimes[k - 1].t : hideEnd) - WINDOW_GAP_MS), now),
     revealAt: toWall(game, t, now),
     ...(lastCall ? { lastCall } : {}),
   }))

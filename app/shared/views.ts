@@ -588,7 +588,7 @@ function chaserDots(i: ViewInput): { dots: MapDot[]; notes: { at: string; text: 
     } else {
       dot = { ...dotFor(p, at, 'runner'), ...fuzz(at, FUZZ_RADIUS_M, seed), fuzzy: true }
     }
-    // Missed = no location inside this ping's check-in window (45 s scheduled, 30 s bonus).
+    // Missed = no location inside this ping's check-in window (60 s scheduled, 45 s for Bomba's minute pings, 30 s bonus).
     if (warnedFor(i, last.seq, revealAt) && !checkedIn(alertAt, revealAt, Date.parse(at.at))) dot.missed = true
     dots.push(dot)
   }
@@ -674,7 +674,7 @@ const snapshotOn = (g: Game) => g.settings.mode === 'full' && g.settings.chaserS
 
 /**
  * The scheduled ping whose alert-time snapshot a free runner sees: the most recent one they checked into
- * (checkins design §5.4), the same 45 s window test as auto-jail (`checkedIn`). Mat Rempit's bonus pings
+ * (checkins design §5.4), the same check-in window test as auto-jail (`checkedIn`). Mat Rempit's bonus pings
  * never count. A window still open counts as soon as a location lands in it. Windows already revealed
  * also count when the reveal recorded the runner as checked in (`checkedIn` on the ping event), because a
  * view only loads positions at a few moments. Null with the switch off, or before a first check-in.

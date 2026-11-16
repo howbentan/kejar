@@ -26,7 +26,7 @@ export interface Card {
 
 const RUNNER: Card[] = [
   { scene: 'runner-free', headline: "You're Dikejar", line: 'Hide, keep moving, and <b>stay free until time runs out</b>. Kejar get released after the hide time.' },
-  { scene: 'checkin', headline: 'When it buzzes, check in', line: 'Phone in your pocket. When it buzzes, <b>open Kejar within 45 s</b>. Kejar then see roughly where you were.' },
+  { scene: 'checkin', headline: 'When it buzzes, check in', line: 'Phone in your pocket. When it buzzes, <b>slow down and open Kejar within 60 s</b>. One miss is free, so never check in at a sprint.' },
   { scene: 'miss-two', headline: "Miss two, you're out", line: 'One missed check-in is free. <b>Miss two in a row and you go to Penjara</b> automatically. Outside the play area at two check-ins in a row? You\'re out too.' },
   { scene: 'tag-ripped', headline: 'Tag ripped? Stop', line: 'If a Kejar rips your armband tag, stop and <b>walk to Penjara</b>. No running, no arguing: use SOS. At Penjara you get <b>one pull of the reel</b>. One slot sets you free.' },
   { scene: 'break-out', headline: 'Break them out', line: 'Scan the Penjara card, then <b>stay within 30 m for 10 seconds</b>. Kejar get warned, so be quick. Each person can only be freed once.' },

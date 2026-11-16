@@ -24,7 +24,7 @@ Rules:
 1. **Join:** open the link, enter a name, accept the code of conduct and waiver, and scan your tag to link it.
 2. **Hide** (default 5 min): runners scatter, and chasers stay at the start (marshals are alerted if one leaves early).
 3. **Chase** (default 45 min in total):
-   - **Pings** every 5 min (2, 3 or 5). **45 s before** each ping, every free runner's phone buzzes: open Kejar to **check in**. Only a location sent inside that 45 s window counts.
+   - **Pings** every 5 min (2, 3 or 5). **60 s before** each ping (45 s for Bomba's pings a minute apart), every free runner's phone buzzes: **slow down**, then open Kejar to **check in**. Only a location sent inside that window counts. One miss is free, so nobody should check in at a sprint (safer check-ins design, 2026-11-17).
    - At the ping, chasers see each runner as a **fuzzy circle** (about 15 m) where they checked in. A runner who missed is shown dashed at their last spot.
    - **Two missed check-ins in a row sends a runner to Penjara automatically** (auto-jail). One miss is free. The count restarts after a runner is freed.
    - **Late pings:** a missed check-in only counts if its alert push went out at least 25 s before the reveal. A ping that was sent late or skipped neither adds a miss nor resets the count. Schedule check-in mode treats every ping as warned. Chasers, marshals and the organiser keep their screens awake (Wake Lock) during hide and chase.
@@ -73,7 +73,7 @@ Rules:
 | Game length | 45 min default (15–90) | base design §4.3 |
 | Hide time | 5 min default (1–15) | base §4.3 |
 | Ping interval | 5 min default (2, 3 or 5) | base §4.3 |
-| Check-in window | the 45 s before each scheduled ping (Mat Rempit's extra ping: 30 s) | check-ins design §4.2 |
+| Check-in window | the 60 s before each scheduled ping, 45 s for Bomba's pings a minute apart, always 15 s clear of the ping before (Mat Rempit's extra ping: 30 s) | check-ins design §4.2, safer check-ins design |
 | Auto-jail | 2 missed scheduled check-ins in a row, counted since last freed | check-ins §4 |
 | Runner circle | about 15 m | base §4.5 |
 | Chaser circle at check-in (Full, switch on) | about 30 m, frozen at the alert | check-ins §5 |

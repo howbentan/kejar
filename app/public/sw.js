@@ -23,16 +23,18 @@ self.addEventListener('push', (event) => {
     data = {}
   }
   if (data.type === 'checkin' && data.code) {
-    // Scheduled pings alert 45 s ahead; Mat Rempit bonus pings (seq 1000 and up) alert 30 s ahead (motion §7a).
+    // Scheduled pings alert 60 s ahead (45 s for Bomba's pings a minute apart); Mat Rempit bonus pings (seq 1000 and
+    // up) alert 30 s ahead (motion §7a; safer check-ins design 2026-11-17).
     // A push can go out late (the server works on the next poll), so say the time actually left when we know it.
     const bonus = Number(data.seq) >= 1000
     const at = typeof data.revealAt === 'number' ? new Date(data.revealAt) : null
-    const fixed = bonus ? 30 : 45
+    const fixed = bonus ? 30 : 60
     const lead = at ? Math.min(fixed, Math.max(5, Math.round((at.getTime() - Date.now()) / 5000) * 5)) : fixed
     const when = at ? ` Kejar see you at ${at.getHours() % 12 || 12}:${String(at.getMinutes()).padStart(2, '0')}.` : ''
     event.waitUntil(
-      self.registration.showNotification(`Ping in ${lead}s. Check in!`, {
-        body: `Tap to check in.${when}`,
+      // Slow down first: a check-in is the one time the game asks for the phone, and never at a sprint.
+      self.registration.showNotification(`Ping in ${lead}s. Slow down, then check in.`, {
+        body: `One miss is free. Tap to check in.${when}`,
         tag: 'kejar-ping',
         renotify: true,
         requireInteraction: true,
