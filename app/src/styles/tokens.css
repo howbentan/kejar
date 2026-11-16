@@ -700,9 +700,16 @@ select.input option { background: #141614; color: var(--white); }
 .hl-caption .dots i:nth-child(2) { animation-delay: 0.2s; }
 .hl-caption .dots i:nth-child(3) { animation-delay: 0.4s; }
 @keyframes hl-dot { 0%, 20% { opacity: 0; } 40%, 100% { opacity: 1; } }
+/* loader exits (design 2026-11-16): each caption letter moves on its own, and a kick lands with a flash */
+.hl-ch { display: inline-block; white-space: pre; }
+.kf-burst { position: absolute; z-index: 4; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; border: 3px solid var(--volt); pointer-events: none; animation: kf-burst 0.38s cubic-bezier(0.2, 0.7, 0.3, 1) forwards; }
+.kf-burst::before, .kf-burst::after { content: ''; position: absolute; left: 50%; top: 50%; width: 52px; height: 3px; margin: -1.5px 0 0 -26px; border-radius: 2px; background: var(--volt); transform: rotate(35deg); }
+.kf-burst::after { transform: rotate(-35deg); }
+@keyframes kf-burst { from { transform: scale(0.3); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .hl-flash.on { animation: none; }
   .hl-caption .dots i { animation: none; opacity: 1; }
+  .kf-burst { display: none; }
 }
 
 /* the home screen (design 2026-11-12) */

@@ -141,6 +141,68 @@ describe('HomeLogo', () => {
     expect(onLeft).toHaveBeenCalledTimes(1)
   })
 
+  it('the wipe exit sprints off, gives the chasing letters time to clear, then says so', () => {
+    const onLeft = vi.fn()
+    render(<HomeLogo mode="leaving" exit="wipe" onLeft={onLeft} />)
+    advance(1300)
+    expect(onLeft).not.toHaveBeenCalled()
+    advance(400)
+    expect(onLeft).toHaveBeenCalledTimes(1)
+    expect(x()).toBeGreaterThan(g.stage.w - g.home.x)
+  })
+
+  it('the bulldoze exit back-kicks first, then sprints off', () => {
+    const onLeft = vi.fn()
+    render(<HomeLogo mode="leaving" exit="bulldoze" onLeft={onLeft} />)
+    advance(950)
+    expect(onLeft).not.toHaveBeenCalled()
+    advance(250)
+    expect(onLeft).toHaveBeenCalledTimes(1)
+    expect(x()).toBeGreaterThan(g.stage.w - g.home.x)
+  })
+
+  it('the kung fu exit kicks left with the j itself, then flies off the right edge', () => {
+    const onLeft = vi.fn()
+    render(<HomeLogo mode="leaving" exit="kungfu" onLeft={onLeft} />)
+    advance(300)
+    expect(legL()).toBe('rotate(78deg)')
+    expect(onLeft).not.toHaveBeenCalled()
+    advance(1000)
+    expect(onLeft).toHaveBeenCalledTimes(1)
+    expect(x()).toBeGreaterThan(g.stage.w - g.home.x)
+  })
+
+  it('without motion, every exit finishes at once', () => {
+    reduce.on = true
+    for (const exit of ['wipe', 'bulldoze', 'kungfu'] as const) {
+      const onLeft = vi.fn()
+      render(<HomeLogo mode="leaving" exit={exit} onLeft={onLeft} />)
+      expect(onLeft).toHaveBeenCalledTimes(1)
+      cleanup()
+    }
+  })
+
+  it('every exit still finishes if no frames ever arrive', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      for (const [exit, ms] of [
+        ['wipe', 2800],
+        ['bulldoze', 2400],
+        ['kungfu', 2000],
+      ] as const) {
+        const onLeft = vi.fn()
+        render(<HomeLogo mode="leaving" exit={exit} onLeft={onLeft} />)
+        act(() => void vi.advanceTimersByTime(ms - 50))
+        expect(onLeft).not.toHaveBeenCalled()
+        act(() => void vi.advanceTimersByTime(100))
+        expect(onLeft).toHaveBeenCalledTimes(1)
+        cleanup()
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('without motion, opening and leaving finish at once', () => {
     reduce.on = true
     const onArrived = vi.fn()

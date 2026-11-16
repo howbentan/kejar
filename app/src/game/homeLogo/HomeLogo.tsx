@@ -3,13 +3,15 @@ import { useReducedMotion } from 'motion/react'
 import { stageGeometry, type Geometry } from './geometry'
 import { LETTERS, letterSrc, lettersReady } from './letters'
 import { pose, STRIDE, wholeStride } from './stride'
+import { createExitFx, FOOT, KICK_BACK, KICK_FULL, kickFrame, kickLength, type Exit, type ExitFx, type KickFrame, type KickPlan } from './exits'
 
 /**
  * The home logo with its j as a little runner (design 2026-11-12, the running-j revision):
  * - `home`: runs on the spot in its gap; a tap makes it jump, with a lime flash and a buzz.
  * - `loading`: runs on the spot while a game loads.
  * - `opening`: runs in from off the left edge and stops in its gap, then calls `onArrived`.
- * - `leaving`: sprints off the right edge, then calls `onLeft`.
+ * - `leaving`: sprints off the right edge, then calls `onLeft`. With an `exit` it clears the letters on the way
+ *   (loader exits design, 2026-11-16): wipe, bulldoze or kung fu.
  * The logo sits at exactly the same spot in every mode. One animation-frame loop moves the j by transforms
  * only; the legs follow the distance run, and every stop lands on a whole stride, in the logo's own pose.
  * Fills its parent, which must be `position: relative` with a height.
@@ -36,6 +38,7 @@ export default function HomeLogo({
   caption,
   onArrived,
   onLeft,
+  exit,
 }: {
   mode: HomeLogoMode
   /** Black on lime, for the opening screen; flips back with a colour transition. */
@@ -43,6 +46,8 @@ export default function HomeLogo({
   caption?: ReactNode
   onArrived?: () => void
   onLeft?: () => void
+  /** How `leaving` clears the screen; without it the j just sprints off. */
+  exit?: Exit
 }) {
   const still = !!useReducedMotion()
   const root = useRef<HTMLDivElement>(null)
@@ -53,10 +58,13 @@ export default function HomeLogo({
   const flash = useRef<HTMLDivElement>(null)
   // undefined: not measured yet; null: no size to work with (the j just stands in place).
   const [geo, setGeo] = useState<Geometry | null | undefined>(undefined)
-  const body = useRef({ x: 0, phase: 0, lean: 0, rate: 0, jumpAt: -Infinity, flipAt: -Infinity, flipFrom: 0, taps: [] as number[], now: 0, last: 0 })
+  const body = useRef({ x: 0, phase: 0, lean: 0, rate: 0, jumpAt: -Infinity, flipAt: -Infinity, flipFrom: 0, taps: [] as number[], now: 0, last: 0, kick: null as KickFrame | null })
+  // The exit's effects on the letters, run every frame while `fxOn`.
+  const fx = useRef<ExitFx | null>(null)
+  const fxOn = useRef(false)
   const task = useRef<Task | null>(null)
-  const live = useRef({ geo, still, mode, onArrived, onLeft })
-  live.current = { geo, still, mode, onArrived, onLeft }
+  const live = useRef({ geo, still, mode, onArrived, onLeft, exit })
+  live.current = { geo, still, mode, onArrived, onLeft, exit }
 
   useLayoutEffect(() => {
     const el = root.current
@@ -74,7 +82,12 @@ export default function HomeLogo({
 
   function draw() {
     const s = body.current
-    const p = live.current.still ? pose(0, 0, Infinity) : pose(s.phase, s.lean, s.now - s.jumpAt, s.now - s.flipAt, s.flipFrom)
+    const k = s.kick
+    const p = k
+      ? { legL: k.legL, legR: k.legR, lift: k.lift, tilt: k.tilt, sx: 1, sy: k.sy, spin: 0 }
+      : live.current.still
+        ? pose(0, 0, Infinity)
+        : pose(s.phase, s.lean, s.now - s.jumpAt, s.now - s.flipAt, s.flipFrom)
     if (jEl.current) jEl.current.style.transform = `translateX(${n(s.x)}px)`
     if (runEl.current) runEl.current.style.transform = `translateY(${n(p.lift)}px) rotate(${n(p.tilt)}deg) translateY(-220px) rotate(${n(p.spin)}deg) translateY(220px) scale(${n(p.sx)}, ${n(p.sy)})`
     if (legL.current) legL.current.style.transform = `rotate(${n(p.legL)}deg)`
@@ -117,6 +130,41 @@ export default function HomeLogo({
     }
   }
 
+  /** Hold still for `ms`, counted in frames like everything else, then `done`. */
+  function wait(ms: number, done: () => void): Task {
+    let t0 = -1
+    return (_dt, now) => {
+      if (t0 < 0) t0 = now
+      if (now - t0 < ms) return false
+      done()
+      return true
+    }
+  }
+
+  /** Play a kick timeline on the j itself, landing its strikes on the letters; `off` is the edge it may fly past. */
+  function kick(plan: KickPlan, off: number, done: () => void): Task {
+    const s = body.current
+    const fired = new Set<number>()
+    let t0 = -1
+    return (_dt, now) => {
+      if (t0 < 0) t0 = now
+      const t = now - t0
+      s.kick = kickFrame(plan, t, off)
+      s.x = s.kick.x
+      plan.hits.forEach((h, i) => {
+        if (t < h.t || fired.has(i)) return
+        fired.add(i)
+        const r = jEl.current?.getBoundingClientRect()
+        const foot = FOOT[h.side]
+        if (r) fx.current?.strike(h.side, { x: r.left + (foot.x / 326) * r.width, y: r.top + (foot.y / 519) * r.height })
+      })
+      if (t < kickLength(plan)) return false
+      s.kick = null
+      done()
+      return true
+    }
+  }
+
   // One frame loop for the life of the component; it pauses while the tab is hidden.
   useEffect(() => {
     let raf = 0
@@ -130,8 +178,11 @@ export default function HomeLogo({
       const dt = s.last ? Math.min(0.05, (now - s.last) / 1000) : 1 / 60
       s.last = now
       s.now = now
-      if (task.current && task.current(dt, now)) task.current = null
+      // A task that finishes by starting the next one (a back kick, then the run) keeps the new one.
+      const t = task.current
+      if (t && t(dt, now) && task.current === t) task.current = null
       draw()
+      if (fxOn.current) fx.current?.frame(now)
     }
     raf = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf)
@@ -157,7 +208,7 @@ export default function HomeLogo({
         finished = true
         window.clearTimeout(safety)
         task.current = null
-        Object.assign(s, { x, phase: Math.round(s.phase), lean: 0, rate: 0 })
+        Object.assign(s, { x, phase: Math.round(s.phase), lean: 0, rate: 0, kick: null })
         draw()
         done()
       }
@@ -193,9 +244,40 @@ export default function HomeLogo({
         return
       }
       const off = g.stage.w - g.home.x + 20
-      const end = finishOnce(off, () => live.current.onLeft?.(), 1500)
-      cancel = end.cancel
-      task.current = runTo(off, 700, easeInQuad, 1.5, end.finish)
+      const left = () => live.current.onLeft?.()
+      const ex = live.current.exit
+      if (!ex || !root.current) {
+        const end = finishOnce(off, left, 1500)
+        cancel = end.cancel
+        task.current = runTo(off, 700, easeInQuad, 1.5, end.finish)
+      } else {
+        fx.current = createExitFx(root.current, ex)
+        if (ex === 'wipe') {
+          // The letters behind chase the j off the edge: give them 0.9 s after it's gone.
+          const end = finishOnce(off, left, 2800)
+          cancel = end.cancel
+          fxOn.current = true
+          task.current = runTo(off, 700, easeInQuad, 1.5, () => {
+            task.current = wait(900, end.finish)
+          })
+        } else if (ex === 'bulldoze') {
+          const end = finishOnce(off, left, 2400)
+          cancel = end.cancel
+          task.current = kick(KICK_BACK, 0, () => {
+            fxOn.current = true
+            task.current = runTo(off, 700, easeInQuad, 1.5, end.finish)
+          })
+        } else {
+          const end = finishOnce(off, left, 2000)
+          cancel = end.cancel
+          task.current = kick(KICK_FULL, off, end.finish)
+        }
+        const stop = cancel
+        cancel = () => {
+          stop()
+          fxOn.current = false
+        }
+      }
     } else {
       task.current = still ? null : spot()
     }
