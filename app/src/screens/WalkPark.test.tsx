@@ -203,6 +203,46 @@ describe('WalkPark', () => {
     expect(screen.getByText('NEXT · 2 OF 3')).toBeInTheDocument()
   })
 
+  const TD = { id: 'tupper-dikejar', label: 'Dikejar Tupperware', lat: 3.002, lng: 101.0, tone: 'red' as const }
+  const TK = { id: 'tupper-kejar', label: 'Kejar Tupperware', lat: 3.003, lng: 101.0, tone: 'red' as const }
+
+  it('the organiser walk hides the Dikejar Tupperware, then the Kejar one, each with the hide panel and its own drop', async () => {
+    open(view([S1, TD, TK], { 'station-1': true }))
+    expect(mapCalls.at(-1)!.pins!.slice(-2)).toMatchObject([
+      { id: 'tupper-dikejar', tone: 'red' },
+      { id: 'tupper-kejar', tone: 'red' },
+    ])
+    expect(screen.queryByRole('button', { name: 'Drop it here' })).not.toBeInTheDocument()
+    act(() => onFix!(at(TD, 0, 100)))
+    expect(screen.getByText('SECRET · 2 OF 3')).toBeInTheDocument()
+    expect(screen.getByText('Hide the Dikejar Tupperware')).toBeInTheDocument()
+    expect(screen.getByText('Any unused Dikejar slip inside')).toBeInTheDocument()
+    expect(screen.getByText(/wakaf/)).toBeInTheDocument()
+    expect(screen.getByText(/surau or any place of worship/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Drop it here' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('setKit', { code: 'ABC234', organiserToken: 'h1', placed: { id: 'tupper-dikejar', on: true } }))
+    const drop = call.mock.calls.find((c) => c[0] === 'dropTupperware')!
+    expect(drop[1]).toMatchObject({ code: 'ABC234', organiserToken: 'h1', side: 'dikejar' })
+    expect(drop[1].lat).toBeCloseTo(TD.lat, 6)
+    expect(drop[1].lng).toBeCloseTo(TD.lng + 100 / M_LNG, 6)
+    expect(call.mock.calls.map((c) => c[0])).toEqual(['dropTupperware', 'setKit'])
+    cleanup()
+    call.mockClear()
+    open(view([S1, TD, TK], { 'station-1': true, 'tupper-dikejar': true }))
+    act(() => onFix!(at(TK, 0, 100)))
+    expect(screen.getByText('SECRET · 3 OF 3')).toBeInTheDocument()
+    expect(screen.getByText('Hide the Kejar Tupperware')).toBeInTheDocument()
+    expect(screen.getByText('Any unused Kejar slip inside')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Drop it here' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('dropTupperware', expect.objectContaining({ side: 'kejar' })))
+  })
+
+  it("a marshal's walk shows no Tupperware step", () => {
+    const { container } = open(view([S1, S2, PEN], { 'station-1': true }), { token: 'p1' })
+    act(() => onFix!(at(S2, 0, -210)))
+    expect(container.textContent).not.toMatch(/tupperware|slip|secret/i)
+  })
+
   it('finished: the kit is out, back to the lobby', () => {
     open(view([S1, PEN], { 'station-1': true, penjara: true }))
     expect(screen.getByText("Kit's out.")).toBeInTheDocument()

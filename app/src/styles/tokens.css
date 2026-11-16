@@ -24,6 +24,11 @@
   --hijau-2: #3FA86B;
   --hijau-3: #1B6B3F;
   --hijau-ink: #06240F;
+  /* The Tupperware's red, for both sides' boxes. Map.tsx reads --tupper-1/2/3 and --tupper-ink with these values as fallbacks. */
+  --tupper-1: #FFD3D6;
+  --tupper-2: #E63946;
+  --tupper-3: #A4161A;
+  --tupper-ink: #3A0508;
   /* The endgames' own colours (endgame design §6.4), kept clear of the legendaries' yellow, orange, purple and green.
      Map.tsx reads --bomba, --hebat and --hebat-ink for MapLibre, with these values as its fallbacks. */
   --bomba: #E63946;
@@ -665,6 +670,7 @@ select.input option { background: #141614; color: var(--white); }
 .btn.btn-bomoh { background: var(--bomoh-2); color: var(--bomoh-ink); border-color: var(--bomoh-3); }
 .btn.btn-ring { background: var(--ring-2); color: var(--ring-ink); border-color: var(--ring-3); }
 .btn.btn-hijau { background: var(--hijau-2); color: var(--hijau-ink); border-color: var(--hijau-3); }
+.btn.btn-tupper { background: var(--tupper-2); color: var(--white); border-color: var(--tupper-3); }
 
 /* How to play doodle scenes (motion design 8.8): marker strokes that draw themselves, then stay still. */
 .kd-doodle path, .kd-doodle circle, .kd-doodle rect { fill: none; stroke: var(--volt); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }

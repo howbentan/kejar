@@ -56,8 +56,15 @@ function legendaryGreen() {
 }
 
 export type { SecretTone }
+/** The Tupperware's red, read from tokens.css --tupper-1/2/3 and --tupper-ink; the fallbacks (#FFD3D6, #E63946, #A4161A, #3A0508) must change with them. */
+function tupperRed() {
+  const css = typeof document === 'undefined' ? null : getComputedStyle(document.documentElement)
+  const token = (name: string, fallback: string) => css?.getPropertyValue(name).trim() || fallback
+  return { fill: token('--tupper-1', '#FFD3D6'), main: token('--tupper-2', '#E63946'), deep: token('--tupper-3', '#A4161A'), ink: token('--tupper-ink', '#3A0508') }
+}
+
 const toneColours = (tone: SecretTone) =>
-  tone === 'purple' ? legendaryPurple() : tone === 'orange' ? legendaryOrange() : tone === 'green' ? legendaryGreen() : legendaryYellow()
+  tone === 'red' ? tupperRed() : tone === 'purple' ? legendaryPurple() : tone === 'orange' ? legendaryOrange() : tone === 'green' ? legendaryGreen() : legendaryYellow()
 
 /**
  * The endgames' map colours (endgame design §6.4, §7.4, §8.3): Bomba's red for the last call, Hang Hebat's poster cream
