@@ -25,13 +25,14 @@ import { ARREST_FIX_FRESH_MS, ARREST_OPEN_MS, arrestEndsAt, insideArrest, releas
 import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
 import { HIJAU_FIX_FRESH_MS, HIJAU_MS, hijauCounts, hijauLockEnd, hijauStartsAt, hijauTargets, penjaraLockLeft } from '../../shared/hijau.js'
-import { bomohCodeFromQr, datoCodeFromQr, hijauCodeFromQr, isBomohQr, isDatoQr, isHijauQr, isRingQr, ringCodeFromQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
+import { bomohCodeFromQr, datoCodeFromQr, hijauCodeFromQr, isBomohQr, isDatoQr, isHijauQr, isRingQr, isSlipQr, ringCodeFromQr, slipTokenFromQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, judgeHijauClaim, judgeRingClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS, TOLL_FRESH_MS } from '../../shared/powerups.js'
 import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict, sentDuringPause } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
 import { fallbackFor, LEGENDARY_KINDS, pickLegendaries, SIDE_PAIRS, sidesOf, type SideSwitch } from '../../shared/legendaries.js'
 import { validateTeams } from '../../shared/teams.js'
+import { boxFor, judgeSlip, sideOf as tupperSideOf } from '../../shared/tupperware.js'
 import { DEFAULT_SETTINGS, type Arena, type Arrest, type BomohStash, type DatoStash, type Game, type GameEvent, type HijauFix, type LatLng, type LegendaryKind, type Player, type Position, type PowerUp, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
 import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
@@ -1956,6 +1957,7 @@ const claim: Action = async (ctx, body) => {
   if (isBomohQr(qr)) return claimBomoh(ctx, fresh as GameRow, me, bomohCodeFromQr(qr))
   if (isRingQr(qr)) return claimRing(ctx, fresh as GameRow, me, ringCodeFromQr(qr))
   if (isHijauQr(qr)) return claimHijau(ctx, fresh as GameRow, me, hijauCodeFromQr(qr))
+  if (isSlipQr(qr)) return claimSlip(ctx, fresh as GameRow, me, slipTokenFromQr(qr))
   const station = stationFromQr(str(body.qr))
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const verdict = judgeClaim({
@@ -2148,6 +2150,17 @@ async function claimHijau(ctx: Ctx, game: GameRow, me: Player, scanned: string |
     now: ctx.now,
   })
   if (!verdict.ok) return verdict.reason === 'no-stash' || verdict.reason === 'too-far' ? miss(verdict) : verdict
+  const run = await hijauRunFor(ctx, game)
+  // Losing the race to another chaser isn't a miss.
+  if (!(await ctx.store.claimHijau(game.id, me.id, run))) return NO_STASH
+  if (game.hijau_stash?.card) await ctx.store.setSecretCard(game.hijau_stash.card.id, { state: 'retired', found_at: iso(ctx.now) })
+  await ctx.store.addEvent({ game_id: game.id, type: 'legendary', actor_id: me.id, target_id: null, data: {} })
+  await startHijauRun(ctx, game, run)
+  return { ok: true, kind: 'hijau' }
+}
+
+/** When a Mak Kau Hijau claimed now runs: it starts clear of every check-in window, scheduled or Mat Rempit (§6.3). */
+async function hijauRunFor(ctx: Ctx, game: GameRow): Promise<{ startsAt: string; deadline: string }> {
   const windows = [
     ...pingTimes(game, ctx.now),
     ...(await ctx.store.pings(game.id))
@@ -2155,11 +2168,15 @@ async function claimHijau(ctx: Ctx, game: GameRow, me: Player, scanned: string |
       .map((p) => ({ alertAt: Date.parse(p.alert_at), revealAt: Date.parse(p.reveal_at) })),
   ]
   const startsAt = hijauStartsAt(ctx.now, windows)
-  const run = { startsAt: iso(startsAt), deadline: iso(startsAt + HIJAU_MS) }
-  // Losing the race to another chaser isn't a miss.
-  if (!(await ctx.store.claimHijau(game.id, me.id, run))) return NO_STASH
-  if (game.hijau_stash?.card) await ctx.store.setSecretCard(game.hijau_stash.card.id, { state: 'retired', found_at: iso(ctx.now) })
-  await ctx.store.addEvent({ game_id: game.id, type: 'legendary', actor_id: me.id, target_id: null, data: {} })
+  return { startsAt: iso(startsAt), deadline: iso(startsAt + HIJAU_MS) }
+}
+
+/**
+ * Right after a Mak Kau Hijau claim (a hidden card or a Tupperware slip): one that can't finish before the whistle is
+ * settled void, and one starting now sends its push with the claim instead of waiting for the next poll.
+ */
+async function startHijauRun(ctx: Ctx, game: GameRow, run: { startsAt: string }) {
+  const startsAt = Date.parse(run.startsAt)
   const endsAt = phaseAt(game, ctx.now).endsAt
   if (endsAt !== null && startsAt + HIJAU_MS > endsAt) {
     // It can't run to its deadline before the whistle: the card is spent and does nothing.
@@ -2171,7 +2188,70 @@ async function claimHijau(ctx: Ctx, game: GameRow, me: Player, scanned: string |
     const fresh = await ctx.store.gameByCode(game.code)
     if (fresh?.hijau && !fresh.hijau.settledAt) await stepHijau(ctx, fresh)
   }
-  return { ok: true, kind: 'hijau' }
+}
+
+const SLIP_STASH = { dato: 'dato_stash', ring: 'ring_stash', bomoh: 'bomoh_stash', hijau: 'hijau_stash' } as const
+const TAKEN = { ok: false, reason: 'taken' } as const
+
+/**
+ * Scanning the slip inside a side's Tupperware (Tupperware spec §5.5). One try per player per game: only a wrong slip
+ * (unknown, used, another organisation's or dead from another game) uses it, recorded as a `slip-miss` that no feed or
+ * alert shows. A real slip of this organisation is bound to this game by any scan, before anything is judged, so a
+ * slip taken home unclaimed is dead next time; only a claim uses it up. Then the legendary's own checks (phase, reach,
+ * jail, hand, freeze) and its atomic claim, exactly as a hidden card: losing the race answers `taken`. The feed only
+ * ever says `Something legendary was found.`
+ */
+async function claimSlip(ctx: Ctx, game: GameRow, me: Player, token: string | null) {
+  const organisationId = (await ctx.store.organiserById(game.organiser_id))?.organisation_id ?? null
+  const triedBefore = (await ctx.store.events(game.id)).some((e) => e.type === 'slip-miss' && e.actor_id === me.id)
+  // Nothing is bound or used once the try is gone (Review Focus 3).
+  if (triedBefore) return { ok: false, reason: 'no-try' } as const
+  let slip = token ? await ctx.store.slipByToken(token) : null
+  if (slip && organisationId && slip.organisation_id === organisationId && !slip.used_at && !slip.bound_game_id) {
+    // Two games scanning the same slip at once: the store keeps the first, and the loser sees it as dead here.
+    slip = { ...slip, bound_game_id: await ctx.store.bindSlip(slip.id, game.id, iso(ctx.now)) }
+  }
+  const side = tupperSideOf(me.role)
+  // A marshal or a player with no side has nothing to claim; the scan still bound the slip.
+  if (!side) return { ok: false, reason: 'cannot-claim' } as const
+  const box = boxFor(game, side)
+  const slipVerdict = judgeSlip({ slip, organisationId: organisationId ?? '', gameId: game.id, side, triedBefore, box })
+  if (!slipVerdict.ok) {
+    if (slipVerdict.reason === 'wrong') {
+      await ctx.store.addEvent({ game_id: game.id, type: 'slip-miss', actor_id: me.id, target_id: null, data: {} })
+    }
+    return slipVerdict
+  }
+  const { legendary } = box!
+  const stash = game[SLIP_STASH[legendary]]
+  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
+  const base = { phase: phaseAt(game, ctx.now).phase, me, stash, myPos: latest(positions[me.id]), now: ctx.now }
+  const hand = async () => ({ powerUps: await ctx.store.powerUps(game.id), pings: await ctx.store.pings(game.id) })
+  const verdict =
+    legendary === 'dato'
+      ? judgeDatoClaim({ ...base, ...(await hand()) })
+      : legendary === 'ring'
+        ? judgeRingClaim({ ...base, ...(await hand()) })
+        : legendary === 'bomoh'
+          ? judgeBomohClaim(base)
+          : judgeHijauClaim(base)
+  // The box was there a moment ago (judgeSlip), so a judge's no-stash means someone else just took it.
+  if (!verdict.ok) return verdict.reason === 'no-stash' ? TAKEN : verdict
+  const run = legendary === 'hijau' ? await hijauRunFor(ctx, game) : null
+  const won =
+    legendary === 'dato'
+      ? !!(await ctx.store.claimDato(game.id, me.id))
+      : legendary === 'ring'
+        ? !!(await ctx.store.claimRing(game.id, me.id))
+        : legendary === 'bomoh'
+          ? await ctx.store.claimBomoh(game.id, me.id, new Date(ctx.now))
+          : await ctx.store.claimHijau(game.id, me.id, run!)
+  if (!won) return TAKEN
+  // The slip is this side's and bound to this game, whose one box of this side we just won: no other claim can use it.
+  await ctx.store.useSlip(slip!.id, me.id, iso(ctx.now))
+  await ctx.store.addEvent({ game_id: game.id, type: 'legendary', actor_id: me.id, target_id: null, data: {} })
+  if (run) await startHijauRun(ctx, game, run)
+  return { ok: true, kind: legendary, slip: true } as const
 }
 
 /**

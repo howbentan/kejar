@@ -378,6 +378,8 @@ export type EventType =
   | 'settled'
   /** A stash scan by this player that didn't claim. Three lock them out. Never in a feed or an alert. data: {} */
   | 'stash-miss'
+  /** A wrong Tupperware slip: this player's one try in this game is gone. Never in a feed or an alert. data: {} */
+  | 'slip-miss'
   /** A marshal or the organiser undid a chaser's catch (fair-play §1.4). target: the runner. data: { eventId, who } */
   | 'kejar-undone'
   /** The last free Dikejar went out: the end is held for 60 s (fair-play §1.4). data: {} */

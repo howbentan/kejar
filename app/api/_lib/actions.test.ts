@@ -6,7 +6,7 @@ import { cardAt, deckFor } from '../../shared/deck.js'
 import { distanceM, distanceToEdgeM, offset } from '../../shared/geo.js'
 import { floodPlanOf } from '../../shared/flood.js'
 import { inPlayArea } from '../../shared/playArea.js'
-import { bomohQr, datoQr, hijauQr, JAIL_QR, ringQr, stationQr, tagQr } from '../../shared/ids.js'
+import { bomohQr, datoQr, hijauQr, JAIL_QR, ringQr, slipQr, stationQr, tagQr } from '../../shared/ids.js'
 import { seeded } from '../../shared/testing.js'
 import type { PowerUpKind, Role } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
@@ -8321,5 +8321,180 @@ describe('Tupperware slip sheets and dropping a box', () => {
     await rejects(run('dropTupperware', { code: core.code, organiserToken: core.organiserToken, side: 'dikejar', ...SPOT }), 409, 'Full mode')
     await run('start', { code: g.code, organiserToken: g.organiserToken })
     await rejects(run('dropTupperware', { code: g.code, organiserToken: g.organiserToken, side: 'dikejar', ...SPOT }), 409)
+  })
+})
+
+describe("slip claims: scanning the slip in your side's Tupperware (Tupperware task 4)", () => {
+  const BOX = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const atBox = { lat: BOX.lat, lng: BOX.lng, accuracy_m: 8 }
+  const far = { lat: CENTER.lat, lng: CENTER.lng, accuracy_m: 8 }
+  type SlipRow = { side: 'dikejar' | 'kejar'; number: number; token: string }
+  const stamp = (t: number) => new Date(t).toISOString()
+
+  /** A chasing Full game with Super Ring and Mak Kau Hijau in dropped boxes, and a fresh slip sheet. Runners: Aina, Chong. Chasers: Ben, Hafiz. */
+  async function chasing() {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' } })
+    const chong = await run('join', { code: g.code, name: 'Chong', accepted: true })
+    await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [g.hafiz.playerId]: 'chaser', [chong.playerId]: 'runner' } })
+    await run('linkTag', { code: g.code, token: chong.token, tagId: 5 })
+    await run('dropTupperware', { code: g.code, organiserToken: g.organiserToken, side: 'dikejar', ...BOX })
+    await run('dropTupperware', { code: g.code, organiserToken: g.organiserToken, side: 'kejar', ...BOX })
+    await run('makeSlipSheet', { organiserToken: g.organiserToken })
+    const slips = await run<SlipRow[]>('listSlips', { organiserToken: g.organiserToken })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    const dikejar = slips.filter((s) => s.side === 'dikejar').map((s) => s.token)
+    const kejar = slips.filter((s) => s.side === 'kejar').map((s) => s.token)
+    return { ...g, chong, dikejar, kejar, gameId: (await store.gameByCode(g.code))!.id }
+  }
+  const game = async (g: { code: string }) => (await store.gameByCode(g.code))!
+  const scan = (g: { code: string }, token: string, slipToken: string, where: object = atBox) =>
+    run('claim', { code: g.code, token, qr: slipQr(slipToken), ...where })
+  const slip = async (token: string) => (await store.slipByToken(token))!
+  const slipMisses = async (g: { gameId: string }) => (await store.events(g.gameId)).filter((e) => e.type === 'slip-miss')
+
+  it('a runner at the box with an unused Dikejar slip claims Super Ring: an unused ring in hand, the slip used, the box claimed', async () => {
+    const g = await chasing()
+    expect(await scan(g, g.aina.token, g.dikejar[0])).toEqual({ ok: true, kind: 'ring', slip: true })
+    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'ring')).toEqual([expect.objectContaining({ player_id: g.aina.playerId, used_at: null })])
+    expect(await slip(g.dikejar[0])).toMatchObject({ used_by: g.aina.playerId, used_at: stamp(now), bound_game_id: g.gameId })
+    expect((await game(g)).ring_stash!.claimedBy).toBe(g.aina.playerId)
+  })
+
+  it('a chaser with a Kejar slip claims Mak Kau Hijau and its run starts', async () => {
+    const g = await chasing()
+    expect(await scan(g, g.ben.token, g.kejar[0])).toEqual({ ok: true, kind: 'hijau', slip: true })
+    const after = await game(g)
+    expect(after.hijau_stash!.claimedBy).toBe(g.ben.playerId)
+    expect(after.hijau).toMatchObject({ claimedBy: g.ben.playerId, startsAt: stamp(now), deadline: stamp(now + 20_000), sentAt: stamp(now) })
+    expect(await slip(g.kejar[0])).toMatchObject({ used_by: g.ben.playerId })
+  })
+
+  it("the other side's slip is Not your Tupperware: it binds the slip, uses no try, and a right slip still claims", async () => {
+    const g = await chasing()
+    expect(await scan(g, g.aina.token, g.kejar[0])).toEqual({ ok: false, reason: 'not-yours' })
+    expect(await slip(g.kejar[0])).toMatchObject({ bound_game_id: g.gameId, used_at: null })
+    expect(await slipMisses(g)).toHaveLength(0)
+    expect(await scan(g, g.aina.token, g.dikejar[0])).toEqual({ ok: true, kind: 'ring', slip: true })
+  })
+
+  it('an unknown token uses the try: the next scan is no-try, and the good slip is neither bound nor used (Review Focus 3)', async () => {
+    const g = await chasing()
+    expect(await scan(g, g.aina.token, 'not-a-real-token')).toEqual({ ok: false, reason: 'wrong' })
+    expect(await slipMisses(g)).toEqual([expect.objectContaining({ actor_id: g.aina.playerId, target_id: null, data: {} })])
+    expect(await scan(g, g.aina.token, g.dikejar[0])).toEqual({ ok: false, reason: 'no-try' })
+    expect(await slip(g.dikejar[0])).toMatchObject({ bound_game_id: null, used_at: null, used_by: null })
+    expect((await game(g)).ring_stash!.claimedBy).toBeNull()
+    // No second miss is recorded, and another runner still claims with the same slip.
+    expect(await slipMisses(g)).toHaveLength(1)
+    expect(await scan(g, g.chong.token, g.dikejar[0])).toEqual({ ok: true, kind: 'ring', slip: true })
+  })
+
+  it('a bare slip QR is a wrong slip', async () => {
+    const g = await chasing()
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: 'KEJAR:SLIP', ...atBox })).toEqual({ ok: false, reason: 'wrong' })
+    expect(await slipMisses(g)).toHaveLength(1)
+  })
+
+  it('too far: the slip is bound to this game but not used, and the try is kept', async () => {
+    const g = await chasing()
+    expect(await scan(g, g.aina.token, g.dikejar[0], far)).toEqual({ ok: false, reason: 'too-far' })
+    expect(await slip(g.dikejar[0])).toMatchObject({ bound_game_id: g.gameId, used_at: null })
+    expect(await slipMisses(g)).toHaveLength(0)
+    expect(await scan(g, g.aina.token, g.dikejar[0])).toEqual({ ok: true, kind: 'ring', slip: true })
+  })
+
+  it('a slip bound to another game is dead here (Review Focus 2)', async () => {
+    const g = await chasing()
+    // Game A, by the same organiser: the slip was scanned there and never claimed.
+    const { code: codeA } = await run('create', { arenaId: 'around-me', center: CENTER, settings: { mode: 'full' }, organiserToken: g.organiserToken })
+    const gameA = (await store.gameByCode(codeA))!
+    expect(await store.bindSlip((await slip(g.dikejar[0])).id, gameA.id, stamp(now))).toBe(gameA.id)
+    expect(await scan(g, g.aina.token, g.dikejar[0])).toEqual({ ok: false, reason: 'wrong' })
+    expect(await slip(g.dikejar[0])).toMatchObject({ bound_game_id: gameA.id, used_at: null })
+    expect((await game(g)).ring_stash!.claimedBy).toBeNull()
+  })
+
+  it('two runners, two good slips: the first claims, the second is taken and its slip is bound but not used (Review Focus 1)', async () => {
+    const g = await chasing()
+    expect(await scan(g, g.aina.token, g.dikejar[0])).toEqual({ ok: true, kind: 'ring', slip: true })
+    expect(await scan(g, g.chong.token, g.dikejar[1])).toEqual({ ok: false, reason: 'taken' })
+    expect(await slip(g.dikejar[1])).toMatchObject({ bound_game_id: g.gameId, used_at: null, used_by: null })
+    expect(await slipMisses(g)).toHaveLength(0)
+  })
+
+  it('two runners at the same moment: exactly one gets the box, the other is taken, one slip is used', async () => {
+    const g = await chasing()
+    const answers = await Promise.all([scan(g, g.aina.token, g.dikejar[0]), scan(g, g.chong.token, g.dikejar[1])])
+    expect(answers.filter((a: { ok: boolean }) => a.ok)).toHaveLength(1)
+    expect(answers.filter((a: { reason?: string }) => a.reason === 'taken')).toHaveLength(1)
+    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'ring')).toHaveLength(1)
+    const both = await Promise.all([slip(g.dikejar[0]), slip(g.dikejar[1])])
+    expect(both.filter((s) => s.used_at !== null)).toHaveLength(1)
+  })
+
+  it('the legendary checks still apply: a full hand, a jailed runner, a frozen chaser; none uses the try or the slip', async () => {
+    const g = await chasing()
+    const cloak = await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'cloak', station: 1 })
+    expect(await scan(g, g.aina.token, g.dikejar[0])).toEqual({ ok: false, reason: 'hand-full' })
+    await store.updatePowerUp(cloak.id, { taken_at: stamp(now) })
+    await store.updatePlayers([
+      { id: g.chong.playerId, patch: { jailed: true } },
+      { id: g.ben.playerId, patch: { frozen_until: stamp(now + 60_000) } },
+    ])
+    expect(await scan(g, g.chong.token, g.dikejar[0])).toEqual({ ok: false, reason: 'cannot-claim' })
+    expect(await scan(g, g.ben.token, g.kejar[0])).toMatchObject({ ok: false, reason: 'frozen' })
+    expect(await slipMisses(g)).toHaveLength(0)
+    expect(await slip(g.dikejar[0])).toMatchObject({ used_at: null })
+    expect(await scan(g, g.aina.token, g.dikejar[0])).toEqual({ ok: true, kind: 'ring', slip: true })
+  })
+
+  it("a paused game answers paused; another organisation's slip is wrong; a Core game has no box", async () => {
+    const g = await chasing()
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    expect(await scan(g, g.aina.token, g.dikejar[0])).toEqual({ ok: false, reason: 'paused' })
+    expect(await slip(g.dikejar[0])).toMatchObject({ bound_game_id: null })
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+
+    const other = await createOrganiser()
+    await run('makeSlipSheet', { organiserToken: other })
+    const foreign = (await run<SlipRow[]>('listSlips', { organiserToken: other }))[0].token
+    expect(await scan(g, g.aina.token, foreign)).toEqual({ ok: false, reason: 'wrong' })
+    expect(await slip(foreign)).toMatchObject({ bound_game_id: null })
+
+    const core = await readyGame({ mode: 'core' })
+    await run('makeSlipSheet', { organiserToken: core.organiserToken })
+    const coreSlip = (await run<SlipRow[]>('listSlips', { organiserToken: core.organiserToken }))[0].token
+    await run('start', { code: core.code, organiserToken: core.organiserToken })
+    now += 7 * MIN
+    await run('state', { code: core.code, organiserToken: core.organiserToken })
+    expect(await scan(core, core.aina.token, coreSlip)).toEqual({ ok: false, reason: 'no-box' })
+  })
+
+  it('the feed says something legendary was found, and never names the finder, the card or a slip miss', async () => {
+    const g = await chasing()
+    const tokens = [g.aina.token, g.chong.token, g.ben.token]
+    const viewsNow = async () => [
+      await run<View>('state', { code: g.code, organiserToken: g.organiserToken }),
+      ...(await Promise.all(tokens.map((token) => run<View>('state', { code: g.code, token })))),
+    ]
+    const before = (await viewsNow()).map((v) => v.feed.map((f) => JSON.stringify(f)))
+    await scan(g, g.chong.token, 'nope')
+    expect(await scan(g, g.aina.token, g.dikejar[0])).toEqual({ ok: true, kind: 'ring', slip: true })
+    const views = await viewsNow()
+    const missIds = (await slipMisses(g)).map((e) => e.id)
+    expect(missIds).toHaveLength(1)
+    views.forEach((v, i) => {
+      // The miss added nothing; the claim added exactly one line, naming nobody and no card.
+      const added = v.feed.map((f) => JSON.stringify(f)).filter((t) => !before[i].includes(t))
+      expect(added).toHaveLength(1)
+      expect(added[0]).toContain('Something legendary was found.')
+      expect(added[0]).not.toContain('Aina')
+      expect(added[0]).not.toContain('Ring')
+      expect(JSON.stringify(v)).not.toContain('slip-miss')
+      for (const id of missIds) expect(v.alerts.map((a) => a.id)).not.toContain(id)
+    })
   })
 })
