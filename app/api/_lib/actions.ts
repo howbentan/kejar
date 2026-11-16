@@ -32,7 +32,7 @@ import { computeResults } from '../../shared/results.js'
 import { packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type SecretLetters } from '../../shared/kit.js'
 import { fallbackFor, LEGENDARY_KINDS, pickLegendaries, SIDE_PAIRS, sidesOf, type SideSwitch } from '../../shared/legendaries.js'
 import { validateTeams } from '../../shared/teams.js'
-import { boxFor, judgeSlip, sideOf as tupperSideOf } from '../../shared/tupperware.js'
+import { boxFor, judgeSlip, SIDE_QUEST_RADIUS_M, sideOf as tupperSideOf } from '../../shared/tupperware.js'
 import { DEFAULT_SETTINGS, type Arena, type Arrest, type BomohStash, type DatoStash, type Game, type GameEvent, type HijauFix, type LatLng, type LegendaryKind, type Player, type Position, type PowerUp, type PowerUpKind, type Role, type SecretCard, type Settings } from '../../shared/types.js'
 import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
@@ -1452,7 +1452,27 @@ const location: Action = async (ctx, body) => {
   }
   // Each fix is judged as it lands, so a step outside and back between two polls still counts (rules §9a).
   if (rescuing) await settleRescue(ctx, game, undefined, { ...fix, at: iso(ctx.now) })
+  // Read again: this same fix may just have disqualified them.
+  await sideQuestFix(ctx, game, await requirePlayer(ctx, game, body), fix)
   return { ok: true }
+}
+
+/**
+ * The Tupperware side quest wakes up (spec §5.4): a fix from a free runner or chaser that lands while a scheduled
+ * ping window is open, near their own side's dropped, unclaimed box. Runners send their fix at the check-in and
+ * chasers every 5 s while Kejar is open, so "a fix inside a window" stands in for polling. It happens once per
+ * player; only the one that sets it sends the push. The box's spot never leaves the server.
+ */
+async function sideQuestFix(ctx: Ctx, game: Game, me: Player, fix: { lat: number; lng: number; accuracy_m: number }) {
+  const side = tupperSideOf(me.role)
+  if (!side || me.side_quest_at || isOut(me) || me.removed_at) return
+  if (game.paused_at || phaseAt(game, ctx.now).phase !== 'chasing') return
+  if (openWindowAlert(pingTimes(game, ctx.now), ctx.now) === undefined) return
+  const box = boxFor(game, side)
+  if (!box || box.spot.claimedBy !== null) return
+  if (distanceM(fix, box.spot) > SIDE_QUEST_RADIUS_M + Math.min(fix.accuracy_m, 20)) return
+  if (!(await ctx.store.setSideQuest(me.id, iso(ctx.now)))) return
+  await notify(ctx, game, me, 'Side quest', "Something's nearby…")
 }
 
 /**

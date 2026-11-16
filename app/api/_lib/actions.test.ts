@@ -8498,3 +8498,95 @@ describe("slip claims: scanning the slip in your side's Tupperware (Tupperware t
     })
   })
 })
+
+describe("side quest: a ping near your side's Tupperware wakes it (Tupperware task 5)", () => {
+  const BOX = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const FAR_BOX = { lat: CENTER.lat - 100 / 111_195, lng: CENTER.lng }
+  const nearBox = (dM: number) => ({ lat: BOX.lat - dM / 111_195, lng: BOX.lng, accuracy_m: 8 })
+  const WINDOW = T0 + 9 * MIN + 10_000 // the scheduled ping 1 reveals at +10; its window opens 60 s before
+  const notices = () => pushes.filter((p) => (p.payload as { type: string }).type === 'notice')
+
+  /** A chasing Full game with both boxes dropped (at `spots`), `now` inside ping 1's window. */
+  async function dropped(spots = { dikejar: BOX, kejar: FAR_BOX }) {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' } })
+    await run('dropTupperware', { code: g.code, organiserToken: g.organiserToken, side: 'dikejar', ...spots.dikejar })
+    await run('dropTupperware', { code: g.code, organiserToken: g.organiserToken, side: 'kejar', ...spots.kejar })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = WINDOW
+    return g
+  }
+  const fix = (g: { code: string }, token: string, where: object) => run('location', { code: g.code, token, ...where })
+  const sideQuestAt = async (g: { code: string }, playerId: string) =>
+    (await store.players((await store.gameByCode(g.code))!.id)).find((p) => p.id === playerId)!.side_quest_at ?? null
+
+  it('a runner 30 m from the Dikejar box inside a window wakes it: side_quest_at set, one Side quest push, no second', async () => {
+    const g = await dropped()
+    await fix(g, g.aina.token, nearBox(30))
+    expect(await sideQuestAt(g, g.aina.playerId)).toBe(new Date(now).toISOString())
+    expect(notices().map((n) => [n.endpoint, n.payload])).toEqual([
+      ['https://push/Aina', { type: 'notice', code: g.code, title: 'Side quest', body: "Something's nearby…" }],
+    ])
+    now += 5_000
+    await fix(g, g.aina.token, nearBox(20))
+    expect(notices()).toHaveLength(1)
+  })
+
+  it('nothing outside a window, or 80 m away', async () => {
+    const g = await dropped()
+    now = T0 + 8 * MIN
+    await fix(g, g.aina.token, nearBox(30))
+    expect(await sideQuestAt(g, g.aina.playerId)).toBeNull()
+    now = WINDOW
+    await fix(g, g.aina.token, nearBox(80))
+    expect(await sideQuestAt(g, g.aina.playerId)).toBeNull()
+    expect(notices()).toHaveLength(0)
+  })
+
+  it('a chaser wakes it only near the Kejar box; the Dikejar box is not theirs', async () => {
+    const g = await dropped()
+    await fix(g, g.ben.token, nearBox(30))
+    expect(await sideQuestAt(g, g.ben.playerId)).toBeNull()
+    now = T0
+    const k = await dropped({ dikejar: FAR_BOX, kejar: BOX })
+    await fix(k, k.ben.token, nearBox(30))
+    expect(await sideQuestAt(k, k.ben.playerId)).toBe(new Date(now).toISOString())
+    await fix(k, k.aina.token, nearBox(30))
+    expect(await sideQuestAt(k, k.aina.playerId)).toBeNull()
+  })
+
+  it('nothing for a jailed or disqualified runner', async () => {
+    const g = await dropped()
+    await store.updatePlayers([
+      { id: g.aina.playerId, patch: { jailed: true } },
+      { id: g.hafiz.playerId, patch: { disqualified_at: new Date(now).toISOString() } },
+    ])
+    await fix(g, g.aina.token, nearBox(30))
+    await fix(g, g.hafiz.token, nearBox(30))
+    expect(await sideQuestAt(g, g.aina.playerId)).toBeNull()
+    expect(await sideQuestAt(g, g.hafiz.playerId)).toBeNull()
+    expect(notices()).toHaveLength(0)
+  })
+
+  it('nothing while paused', async () => {
+    const g = await dropped()
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    await fix(g, g.aina.token, nearBox(30))
+    expect(await sideQuestAt(g, g.aina.playerId)).toBeNull()
+  })
+
+  it('nothing when the box is claimed, or was never dropped', async () => {
+    const g = await dropped()
+    const row = (await store.gameByCode(g.code))!
+    const key = row.ring_stash ? 'ring_stash' : 'dato_stash'
+    await store.updateGame(row.id, { [key]: { ...(row as any)[key], claimedBy: g.hafiz.playerId } } as never)
+    await fix(g, g.aina.token, nearBox(30))
+    expect(await sideQuestAt(g, g.aina.playerId)).toBeNull()
+
+    forcedDraws = [0.9, 0.9]
+    const h = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' } })
+    await run('start', { code: h.code, organiserToken: h.organiserToken })
+    await fix(h, h.aina.token, nearBox(30))
+    expect(await sideQuestAt(h, h.aina.playerId)).toBeNull()
+  })
+})

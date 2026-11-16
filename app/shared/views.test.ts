@@ -1503,3 +1503,23 @@ describe('what views carry once an endgame is revealed (Plan E3)', () => {
     })
   })
 })
+
+describe('side quest flag (Tupperware task 5)', () => {
+  const box = (claimedBy: string | null) => ({ lat: 3.004, lng: 101.004, claimedBy, claimedAt: null })
+  const full = (over: Partial<Game> = {}) =>
+    game({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'stash', ring: 'off', bomoh: 'stash', hijau: 'off' } }, dato_stash: box(null), bomoh_stash: box(null), ...over })
+  const awake = { ...aina, side_quest_at: iso(NOW - 1_000) }
+
+  it('is true for the awake runner while the box is unclaimed, false for others', () => {
+    expect(view(awake, { game: full() }).sideQuest).toBe(true)
+    expect(view(aina, { game: full() }).sideQuest).toBe(false)
+    expect(view(chaser, { game: full() }).sideQuest).toBe(false)
+    expect(view({ ...chaser, side_quest_at: iso(NOW - 1_000) }, { game: full() }).sideQuest).toBe(true)
+  })
+
+  it('is false once the side box is claimed, in ended, and without a dropped box', () => {
+    expect(view(awake, { game: full({ dato_stash: box('r2') }) }).sideQuest).toBe(false)
+    expect(view(awake, { game: full({ ended_at: iso(NOW - MIN) }) }).sideQuest).toBe(false)
+    expect(view(awake, { game: full({ dato_stash: null }) }).sideQuest).toBe(false)
+  })
+})

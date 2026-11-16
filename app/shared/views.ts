@@ -11,6 +11,7 @@ import { reelPulledThisStay, RESCUE_HOLD_MS } from './penjara.js'
 import { isOut, undoableArrestId, undoableCatchId } from './players.js'
 import { ARREST_OPEN_MS, arrestEndsAt } from './arrest.js'
 import { hijauCounts, hijauTargets, penjaraLockLeft } from './hijau.js'
+import { boxFor, sideOf } from './tupperware.js'
 import { POWER_NAME } from './powerNames.js'
 import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, shieldArmedAt, slotBusy, TOLL_RADIUS_M } from './powerups.js'
 import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type LegendaryKind, type EndgameKind, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings } from './types.js'
@@ -127,6 +128,8 @@ export interface View {
   /** When the most recent ping revealed runners to chasers (drives the "you've been pinged" moment). */
   lastRevealAt: number | null
   chaserNearby: boolean
+  /** The Tupperware side quest has woken up for me: something is near, and my side's box is still unclaimed. */
+  sideQuest: boolean
   /** Name of the chaser who caught me, while I'm jailed. */
   caughtBy: string | null
   /** Luar Garisan: I've been warned for being outside the play area and have not yet come back or been disqualified. */
@@ -1113,9 +1116,17 @@ export function viewFor(i: ViewInput): View {
   // anything either, and no results.
   const cancelled = !!i.game.cancelled_at
   if (i.me.removed_at || cancelled) {
-    return { ...v, ...(cancelled ? { cancelled: true as const, results: null } : {}), dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, caughtBy: null, jailReason: null, arrest: null, endgame: null, hijau: null, penjaraLockedUntil: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, ringZone: null, hijauZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, ringStash: undefined, ringCard: undefined, hijauStash: undefined, hijauCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
+    return { ...v, ...(cancelled ? { cancelled: true as const, results: null } : {}), dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, sideQuest: false, caughtBy: null, jailReason: null, arrest: null, endgame: null, hijau: null, penjaraLockedUntil: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, ringZone: null, hijauZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, ringStash: undefined, ringCard: undefined, hijauStash: undefined, hijauCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
   }
   return v
+}
+
+/** True only once a ping has woken the side quest for me, and while my side's Tupperware is still there to find. */
+function sideQuestOn(i: ViewInput, phase: Phase): boolean {
+  const side = sideOf(i.me.role)
+  if (!side || !i.me.side_quest_at || phase !== 'chasing') return false
+  const box = boxFor(i.game, side)
+  return !!box && box.spot.claimedBy === null
 }
 
 function fullView(input: ViewInput): View {
@@ -1200,6 +1211,7 @@ function fullView(input: ViewInput): View {
     nextAlertAt: upcoming?.alertAt ?? null,
     lastRevealAt: lastReveal ? Date.parse(lastReveal.reveal_at) : null,
     chaserNearby,
+    sideQuest: sideQuestOn(i, phase),
     caughtBy: i.me.jailed && i.me.caught_by ? (byId.get(i.me.caught_by)?.name ?? null) : null,
     jailReason: jailReasonFor(i),
     wetUntil: wetUntilFor(i),
