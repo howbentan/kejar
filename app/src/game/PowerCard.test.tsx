@@ -64,4 +64,14 @@ describe('PowerCard', () => {
     expect(screen.getByRole('img', { name: 'Mak Kau Hijau' })).toBeInTheDocument()
     expect(hijau.container.querySelector('.power-card')).not.toHaveClass('ring')
   })
+
+  it('Bomoh gets a card: the purple legendary face, his coconut sticker and his line', () => {
+    const { container } = render(<PowerCard kind="bomoh" big />)
+    expect(container.querySelector('.power-card')).toHaveClass('legendary', 'bomoh')
+    expect(screen.getByTestId('scribbles')).toBeInTheDocument()
+    expect(screen.getByText('★ LEGENDARY · ONE PER GAME')).toBeInTheDocument()
+    expect(screen.getByText('Bomoh')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Bomoh' })).toBeInTheDocument()
+    expect(screen.getByText('Every Dikejar shows at the next 2 pings')).toBeInTheDocument()
+  })
 })

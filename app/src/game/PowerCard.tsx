@@ -5,6 +5,8 @@ import Sticker from './Sticker'
 
 /** Mak Kau Hijau's card face words: the chasers' legendary that works on claim. */
 const HIJAU_INFO = { name: 'Mak Kau Hijau', effect: 'Tap green in 20 s or Penjara' }
+/** Bomoh's card face words: the other chasers' legendary that works on claim. His card shows in the Tupperware unlock. */
+const BOMOH_INFO = { name: 'Bomoh', effect: 'Every Dikejar shows at the next 2 pings' }
 
 /** Marker scribbles round a legendary card: a crown on top, stars and rays at the sides. Drawn in the card's colour. */
 function Scribbles({ big }: { big: boolean }) {
@@ -66,14 +68,15 @@ function Scribbles({ big }: { big: boolean }) {
  * A deck card, 96×150 (motion design §7). Face up: the same lime-framed layout for every power-up, no rarity
  * colours. Face down: the ornate brand back, identical for every card, so it gives nothing away.
  * The legendaries are the same dark card in their own colour (Dato Seri yellow, Super Ring cheese orange, Mak Kau Hijau
- * deep green), with marker scribbles round the outside in that colour (owner's direction, 2026-11-13). Mak Kau Hijau never
- * sits in a hand, so INFO doesn't name it.
+ * deep green, Bomoh purple), with marker scribbles round the outside in that colour (owner's direction, 2026-11-13).
+ * Mak Kau Hijau and Bomoh never sit in a hand, so INFO doesn't name them.
  * `big` (150×234) is the revealed card in the lucky dip: laid out bigger, never scaled, so the marker finds its edges.
+ * A big back is the card rising out of the Tupperware before it flips.
  */
-export default function PowerCard({ kind, faceDown = false, wiggle = false, big = false }: { kind?: PowerUpKind | 'hijau'; faceDown?: boolean; wiggle?: boolean; big?: boolean }) {
+export default function PowerCard({ kind, faceDown = false, wiggle = false, big = false }: { kind?: PowerUpKind | 'hijau' | 'bomoh'; faceDown?: boolean; wiggle?: boolean; big?: boolean }) {
   if (faceDown || !kind) {
     return (
-      <div className="power-card back" aria-label="Face-down card" role="img">
+      <div className={`power-card back${big ? ' big' : ''}`} aria-label="Face-down card" role="img">
         <span className="pc-corner tl" />
         <span className="pc-corner tr" />
         <span className="pc-corner bl" />
@@ -82,9 +85,9 @@ export default function PowerCard({ kind, faceDown = false, wiggle = false, big 
       </div>
     )
   }
-  const legendary = kind === 'dato' || kind === 'ring' || kind === 'hijau'
-  const info = kind === 'hijau' ? HIJAU_INFO : INFO[kind]
-  const tone = kind === 'ring' || kind === 'hijau' ? ` ${kind}` : ''
+  const legendary = kind === 'dato' || kind === 'ring' || kind === 'hijau' || kind === 'bomoh'
+  const info = kind === 'hijau' ? HIJAU_INFO : kind === 'bomoh' ? BOMOH_INFO : INFO[kind]
+  const tone = kind === 'ring' || kind === 'hijau' || kind === 'bomoh' ? ` ${kind}` : ''
   return (
     <div className={`power-card front${big ? ' big' : ''}${legendary ? ' legendary' : ''}${tone}`}>
       {legendary && <Scribbles big={big} />}

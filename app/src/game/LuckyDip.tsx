@@ -1,13 +1,14 @@
 import * as m from 'motion/react-m'
 import { useEffect, useRef, useState } from 'react'
 import { isDatoQr, stationFromQr } from '../../shared/ids.js'
-import type { PowerUpKind } from '../../shared/types.js'
+import type { LegendaryKind, PowerUpKind } from '../../shared/types.js'
 import { Shockwave, Sparkles, type Spot } from './Celebrate'
 import Marker from './Marker'
 import PowerCard from './PowerCard'
-import type { ClaimResult } from './PowerUpHand'
+import type { ClaimResult, SlipClaimResult } from './PowerUpHand'
 import { INFO } from './powerInfo'
 import Stamp from './Stamp'
+import TupperwareTakeover from './TupperwareTakeover'
 
 export const CLAIM_STAMP_MS = 900
 export const PICK_MS = 3_000
@@ -36,12 +37,17 @@ export const SPARKLES = SPARKLE_SPOTS.length
 /** The spotlight settles on the middle card. */
 const SWEEP_PICK = 2
 
-/** The dip for a good station scan (Dato Seri's own reveal for the stash), or null (a refusal stays a calm line, no marker). */
+/**
+ * The dip for a good station scan (Dato Seri's own reveal for the stash, the Tupperware unlock for a right slip), or null
+ * (a refusal stays a calm line, no marker).
+ */
 export function dipFor(text: string, r: unknown, deckLeft: number | null, done: () => void) {
-  const c = r as ClaimResult
+  const c = r as ClaimResult | SlipClaimResult
   if (!c.ok) return null
-  // Bomoh has no dip and no reveal of his own (yet): his claim line says what he does. Checked first, since an old
-  // purple card carries a ★ QR.
+  // A right slip opens the box, whichever legendary is in it: checked first, so Bomoh and the others get their moment.
+  if ('slip' in c && c.slip) return <TupperwareTakeover kind={c.kind as LegendaryKind} onDone={done} />
+  // Off any other QR, Bomoh has no dip and no reveal of his own: his claim line says what he does. Checked before
+  // Dato Seri, since an old purple card carries a ★ QR.
   if (c.kind === 'bomoh' || c.kind === 'hijau' || c.kind === 'ring') return null
   if (isDatoQr(text) || c.kind === 'dato') return <LegendaryReveal onDone={done} />
   return <LuckyDip kind={c.kind} station={stationFromQr(text) ?? 0} deckLeft={deckLeft} onDone={done} />
