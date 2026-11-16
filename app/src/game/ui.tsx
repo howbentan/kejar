@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { BusyLabel } from './Runner'
+import { Busy } from './Runner'
 
 /** The hand-drawn kejar logo (the j is a running figure), in volt on the dark screens. `size` is its height in px. */
 export function Wordmark({ size = 64 }: { size?: number }) {
@@ -63,7 +63,7 @@ export function Pills<T extends string>(props: {
           aria-busy={props.busyValue === o.value || undefined}
           onClick={() => props.value !== o.value && props.onChange(o.value)}
         >
-          {props.busyValue === o.value ? <BusyLabel label={o.text} colour="currentColor" height={16} /> : o.text}
+          <Busy busy={props.busyValue === o.value} label={o.text} colour="currentColor" height={16}>{o.text}</Busy>
         </button>
       ))}
     </div>

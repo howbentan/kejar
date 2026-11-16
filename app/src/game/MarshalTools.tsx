@@ -6,7 +6,7 @@ import { currentPushEnv, NotificationsDeniedError, pushSupport, subscribe } from
 import { call } from './api'
 import { credentials } from './auth'
 import { ErrorText, tagText } from './ui'
-import { BusyLabel } from './Runner'
+import { Busy } from './Runner'
 
 const KIND_LABEL: Record<Alert['kind'], string> = {
   sos: 'SOS',
@@ -139,7 +139,7 @@ export default function MarshalTools({
         aria-busy={busyOn === key || undefined}
         onClick={() => act(action, { eventId: a.id }, key)}
       >
-        {busyOn === key ? <BusyLabel label={busyLabel} colour={ghost ? 'var(--volt)' : 'var(--black)'} height={18} /> : label}
+        <Busy busy={busyOn === key} label={busyLabel} colour={ghost ? 'var(--volt)' : 'var(--black)'} height={18}>{label}</Busy>
       </button>
     )
   }

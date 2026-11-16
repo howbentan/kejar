@@ -4,7 +4,8 @@ import { call } from '../game/api'
 import { loadOrganiserSession } from '../game/organiserSession'
 import { printCardUrl } from '../game/printLinks'
 import { ErrorText, Screen } from '../game/ui'
-import { FullLoader, useLoaderGate } from '../game/Runner'
+import { FullLoader } from '../game/Runner'
+import { useLoaderGate } from '../game/useLoaderGate'
 
 type Legendary = LegendaryKind
 interface KitCard {

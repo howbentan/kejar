@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { call } from '../game/api'
 import { saveOrganiserSession } from '../game/organiserSession'
 import { ErrorText, Screen } from '../game/ui'
-import { BusyLabel } from '../game/Runner'
+import { Busy } from '../game/Runner'
 
 export default function OrganiserRedeem({ token }: { token: string }) {
   const [busy, setBusy] = useState(false)
@@ -29,7 +29,7 @@ export default function OrganiserRedeem({ token }: { token: string }) {
       <p className="muted">This link signs this phone in to create and manage games. It only works once.</p>
       <ErrorText>{error}</ErrorText>
       <button className="btn" disabled={busy} aria-busy={busy || undefined} onClick={redeem}>
-        {busy ? <BusyLabel label="Signing in" /> : 'Sign in'}
+        <Busy busy={busy} label="Signing in">Sign in</Busy>
       </button>
     </Screen>
   )

@@ -8,7 +8,7 @@ import { currentCoords } from './here'
 import GameMap, { type SecretTone } from './Map'
 import { printCardUrl } from './printLinks'
 import { ErrorText } from './ui'
-import { BusyLabel } from './Runner'
+import { Busy } from './Runner'
 
 /** Who is dropping: the organiser's token, or a marshal's player token. */
 export type SetupCredentials = { organiserToken: string } | { token: string }
@@ -107,7 +107,7 @@ export function HiddenCard({
       )}
       <GameMap arena={view.arena} dots={[]} height={200} stash={stash ? { lat: stash.lat, lng: stash.lng } : null} stashTone={look.tone} />
       <button type="button" className={`btn ${look.button}`} style={{ alignSelf: 'flex-start' }} disabled={busy} aria-busy={busy || undefined} onClick={drop}>
-        {busy ? <BusyLabel label="Dropping card" colour="currentColor" /> : `Drop the ${look.card} here`}
+        <Busy busy={busy} label="Dropping card" colour="currentColor">{`Drop the ${look.card} here`}</Busy>
       </button>
       <ErrorText>{error}</ErrorText>
     </div>

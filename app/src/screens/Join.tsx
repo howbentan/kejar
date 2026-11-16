@@ -4,7 +4,7 @@ import { currentPushEnv, pushSupport } from '../game/push'
 import { forgetName, loadName, saveName } from '../game/nameMemory'
 import { loadSession, saveSession } from '../game/session'
 import { ErrorText, Screen } from '../game/ui'
-import { BusyLabel } from '../game/Runner'
+import { Busy } from '../game/Runner'
 
 export default function Join({ code }: { code: string }) {
   const [remembered, setRemembered] = useState(() => loadName(localStorage))
@@ -85,7 +85,7 @@ export default function Join({ code }: { code: string }) {
       </label>
       <ErrorText>{error}</ErrorText>
       <button className="btn" disabled={!name.trim() || !conduct || !waiver || busy} aria-busy={busy || undefined} onClick={join}>
-        {busy ? <BusyLabel label="Joining" /> : 'Join game'}
+        <Busy busy={busy} label="Joining">Join game</Busy>
       </button>
     </Screen>
   )

@@ -11,7 +11,7 @@ import { scanTarget, type ScanTarget } from './scan'
 import { loadSession } from './session'
 import Ticker from './Ticker'
 import { clock, useServerNow } from './time'
-import { BusyLabel } from './Runner'
+import { Busy } from './Runner'
 
 export function GameClock({ view }: { view: View }) {
   const ticking = useServerNow(view.now)
@@ -116,7 +116,7 @@ export default function ChaseLayout(props: {
         <div className="dock-row">
           {props.slot}
           <button type="button" className={`scan ${props.scanClass}`} disabled={!!moment || busy} aria-busy={busy || undefined} onClick={() => setScanning(true)}>
-            {busy ? <BusyLabel label="Checking" height={props.scanClass === 'scan-runner' ? 18 : 24} stack={props.scanClass === 'scan-runner'} /> : props.scanLabel}
+            <Busy busy={busy} label="Checking" height={props.scanClass === 'scan-runner' ? 18 : 24} stack={props.scanClass === 'scan-runner'}>{props.scanLabel}</Busy>
           </button>
         </div>
         <Ticker feed={view.feed} />

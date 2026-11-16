@@ -7,7 +7,7 @@ import { currentCoords } from './here'
 import Scanner from './Scanner'
 import { loadSession } from './session'
 import { ErrorText } from './ui'
-import { BusyLabel } from './Runner'
+import { Busy } from './Runner'
 
 /** Settle frees the holder plus up to this many others (rules doc §9c). */
 const MAX_PICKS = 2
@@ -132,7 +132,7 @@ export default function SettlePanel({
       {closed && !done && <p className="muted">Penjara is closed (PKP)</p>}
       {!done && (
         <button type="button" className="btn btn-legendary" disabled={!ready || busy || closed} aria-busy={busy || undefined} onClick={() => setScanning(true)}>
-          {busy ? <BusyLabel label="Settling" colour="var(--legendary-ink)" /> : 'Scan Penjara to settle'}
+          <Busy busy={busy} label="Settling" colour="var(--legendary-ink)">Scan Penjara to settle</Busy>
         </button>
       )}
       {message && <p role="status">{message}</p>}

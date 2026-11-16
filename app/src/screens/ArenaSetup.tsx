@@ -8,7 +8,8 @@ import { call } from '../game/api'
 import { loadOrganiserSession } from '../game/organiserSession'
 import PlaceMap, { type PlaceMode } from '../game/PlaceMap'
 import { ErrorText, Pills } from '../game/ui'
-import { BusyLabel, FullLoader, useLoaderGate, WaitingLine } from '../game/Runner'
+import { Busy, FullLoader, WaitingLine } from '../game/Runner'
+import { useLoaderGate } from '../game/useLoaderGate'
 
 const SIZES = ['150', '200', '300', '500'] as const
 type Size = (typeof SIZES)[number]
@@ -277,7 +278,7 @@ export default function ArenaSetup({
               onKeyDown={(e) => e.key === 'Enter' && query.trim().length >= 3 && void search()}
             />
             <button type="button" className="btn" disabled={busy || query.trim().length < 3} aria-busy={busyOn === 'search' || undefined} onClick={() => void search()}>
-              {busyOn === 'search' ? <BusyLabel label="Searching" /> : 'Search'}
+              <Busy busy={busyOn === 'search'} label="Searching">Search</Busy>
             </button>
           </div>
           {results && results.parks.length === 0 && !results.around && <p className="muted">{NO_PARKS}</p>}
@@ -348,7 +349,7 @@ export default function ArenaSetup({
           <input id="park-name" className="input" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} />
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" className="btn" disabled={busy || !!preview?.problem || !name.trim()} aria-busy={busyOn === 'save' || undefined} onClick={() => void save()}>
-              {busyOn === 'save' ? <BusyLabel label="Saving park" /> : 'Save park'}
+              <Busy busy={busyOn === 'save'} label="Saving park">Save park</Busy>
             </button>
             {source === 'circle' && !initial && (
               <button

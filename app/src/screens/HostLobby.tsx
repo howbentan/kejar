@@ -14,7 +14,8 @@ import { clockOf, nextOccurrence, startsLabel } from '../game/plannedStart'
 import { qrDataUrl } from '../game/qr'
 import { ErrorText, ModeBadge, Pills, Screen, tagText } from '../game/ui'
 import { useGameState } from '../game/useGameState'
-import { BusyLabel, FullLoader, useLoaderGate } from '../game/Runner'
+import { Busy, FullLoader } from '../game/Runner'
+import { useLoaderGate } from '../game/useLoaderGate'
 
 type Side = Extract<Role, 'runner' | 'chaser'>
 
@@ -188,7 +189,7 @@ export default function HostLobby({ code }: { code: string }) {
         {view && <ModeBadge mode={view.settings.mode} />}
         {view && (
           <button type="button" className="btn btn-ghost" style={{ width: 'auto', padding: '4px 10px', fontSize: 12 }} disabled={busy} aria-busy={busyOn === 'mode' || undefined} onClick={changeMode}>
-            {busyOn === 'mode' ? <BusyLabel label={`Switching to ${view.settings.mode === 'full' ? 'Core' : 'Full'}`} colour="var(--volt)" height={16} /> : 'Change'}
+            <Busy busy={busyOn === 'mode'} label={`Switching to ${view.settings.mode === 'full' ? 'Core' : 'Full'}`} colour="var(--volt)" height={16}>Change</Busy>
           </button>
         )}
       </div>
@@ -243,7 +244,7 @@ export default function HostLobby({ code }: { code: string }) {
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <button className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} disabled={busy} aria-busy={busyOn === 'invite' || undefined} onClick={inviteMarshal}>
-          {busyOn === 'invite' ? <BusyLabel label="Inviting marshal" colour="var(--volt)" /> : 'Invite a marshal'}
+          <Busy busy={busyOn === 'invite'} label="Inviting marshal" colour="var(--volt)">Invite a marshal</Busy>
         </button>
         {marshalInviteUrl && (
           <p className="muted" style={{ wordBreak: 'break-all' }}>
@@ -291,7 +292,7 @@ export default function HostLobby({ code }: { code: string }) {
 
       <ErrorText>{error || loadError}</ErrorText>
       <button className="btn" disabled={busy} aria-busy={busyOn === 'start' || undefined} onClick={() => act('start', {}, 'start')}>
-        {busyOn === 'start' ? <BusyLabel label="Starting game" /> : 'Start game'}
+        <Busy busy={busyOn === 'start'} label="Starting game">Start game</Busy>
       </button>
     </Screen>
   )

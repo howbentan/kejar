@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useReducedMotion } from 'motion/react'
 import HomeLogo from './homeLogo/HomeLogo'
 import { pose, STRIDE } from './homeLogo/stride'
-import { pickExit, type Exit } from './homeLogo/exits'
+import type { Exit } from './homeLogo/exits'
 
 const n = (v: number) => String(Math.round(v * 100) / 100)
 
@@ -59,22 +59,103 @@ export function BusyLabel({
   colour = 'var(--black)',
   height = 26,
   stack = false,
+  leaving = false,
 }: {
   label?: ReactNode
   colour?: string
   height?: number
   /** The j above the label, for narrow buttons (the runner's scan button). */
   stack?: boolean
+  /** The wait is over: the j runs right across the label, wiping it, and past the button's edge (see `Busy`). */
+  leaving?: boolean
 }) {
+  const runner = useRef<HTMLSpanElement>(null)
+  const text = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    const r = runner.current
+    if (!leaving || !r) return
+    const box = (r.closest('button') ?? r.parentElement?.parentElement ?? r).getBoundingClientRect()
+    const to = box.right - r.getBoundingClientRect().left + 10
+    let raf = 0
+    let t0 = -1
+    const tick = (now: number) => {
+      if (t0 < 0) t0 = now
+      const k = Math.min(1, (now - t0) / BUTTON_WIPE_MS)
+      r.style.transform = `translateX(${n(to * k * k)}px)`
+      const rr = r.getBoundingClientRect()
+      // The j is clipped where it passes the button's edge; the label is wiped up to the j's back.
+      r.style.clipPath = `inset(0 ${n(Math.max(0, rr.right - box.right))}px 0 0)`
+      const t = text.current
+      if (t) t.style.clipPath = `inset(0 0 0 ${n(Math.max(0, rr.left - t.getBoundingClientRect().left))}px)`
+      if (k < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [leaving])
   // The negative margin keeps the button its usual height, so nothing jumps while it waits.
   const row = { gap: 10, margin: '-6px 0' }
   const column = { flexDirection: 'column', gap: 2 } as const
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', verticalAlign: 'middle', ...(stack ? column : row) }}>
-      <MiniRunner height={height} colour={colour} />
-      {label}
+    <span
+      data-leaving={leaving ? 'true' : undefined}
+      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', verticalAlign: 'middle', ...(stack ? column : row) }}
+    >
+      <span ref={runner} style={{ display: 'inline-flex', position: 'relative', zIndex: 1 }}>
+        <MiniRunner height={height} colour={colour} />
+      </span>
+      <span ref={text}>{label}</span>
     </span>
   )
+}
+
+/** How long a busy button's j takes to wipe its label once the wait is over. */
+const BUTTON_WIPE_MS = 650
+
+/**
+ * A busy button's content (loader exits design, 2026-11-16): `busy` shows the small j and `label`; when the wait
+ * ends, the j wipes the label for a moment, then the button shows `children`, its usual words. Clicks are never held
+ * back. Busy again mid-wipe shows busy at once; with reduced motion there is no wipe.
+ */
+export function Busy({
+  busy,
+  label,
+  colour,
+  height,
+  stack,
+  children,
+}: {
+  busy: boolean
+  label: ReactNode
+  colour?: string
+  height?: number
+  stack?: boolean
+  children: ReactNode
+}) {
+  const still = !!useReducedMotion()
+  const [wiping, setWiping] = useState(false)
+  const [wasBusy, setWasBusy] = useState(busy)
+  if (busy !== wasBusy) {
+    setWasBusy(busy)
+    setWiping(!busy && !still)
+  }
+  useEffect(() => {
+    if (!wiping) return
+    const t = window.setTimeout(() => setWiping(false), BUTTON_WIPE_MS)
+    return () => window.clearTimeout(t)
+  }, [wiping])
+  if (busy) return <BusyLabel key="busy" label={label} colour={colour} height={height} stack={stack} />
+  // The wipe is only for the eyes: the button already says its usual words to everyone else.
+  if (wiping) {
+    return (
+      <>
+        <span aria-hidden="true">
+          <BusyLabel key="wipe" label={label} colour={colour} height={height} stack={stack} leaving />
+        </span>
+        <span className="sr-only">{children}</span>
+      </>
+    )
+  }
+  return <>{children}</>
 }
 
 /** A long wait: the small j beside the line, which keeps its words and loses its "…". */
@@ -140,36 +221,4 @@ export function FullLoader({
       </div>
     </main>
   )
-}
-
-/** How long a loader must have been up before its exit plays; quicker loads just show the screen. */
-export const EXIT_AFTER_MS = 400
-
-/**
- * Holds a screen back while its full loader plays its exit (loader exits design, 2026-11-16). `ready` is "the data is
- * here"; `instant` shows the screen at once (an error). Use it with the other hooks, then
- * `if (gate.show) return <FullLoader caption="…" {...gate.loader} />`.
- * A screen that is ready from the start never shows the loader; one that loses its data shows it again.
- */
-export function useLoaderGate(ready: boolean, instant = false): { show: boolean; loader: { leaving: boolean; exit: Exit; onLeft: () => void } } {
-  const [long, setLong] = useState(false)
-  const [exit, setExit] = useState<Exit>('wipe')
-  const [leaving, setLeaving] = useState(false)
-  // Decided while rendering (not in an effect), so the screen never flashes up for a frame before the exit.
-  const [wasReady, setWasReady] = useState(ready)
-  if (ready !== wasReady) {
-    setWasReady(ready)
-    setLeaving(ready && long && !instant)
-    if (!ready) setLong(false)
-  }
-  useEffect(() => {
-    if (ready) return
-    const t = window.setTimeout(() => {
-      setExit(pickExit())
-      setLong(true)
-    }, EXIT_AFTER_MS)
-    return () => window.clearTimeout(t)
-  }, [ready])
-  const onLeft = useCallback(() => setLeaving(false), [])
-  return { show: !ready || leaving, loader: { leaving, exit, onLeft } }
 }

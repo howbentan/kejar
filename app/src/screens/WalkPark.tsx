@@ -8,7 +8,8 @@ import { loadOrganiserSession } from '../game/organiserSession'
 import GameMap from '../game/Map'
 import { ErrorText, Screen } from '../game/ui'
 import { useGameState } from '../game/useGameState'
-import { FullLoader, useLoaderGate, WaitingLine } from '../game/Runner'
+import { FullLoader, WaitingLine } from '../game/Runner'
+import { useLoaderGate } from '../game/useLoaderGate'
 
 /** Within this distance of a spot, the card turns lime and the button appears. */
 export const WALK_HERE_M = 15

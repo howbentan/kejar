@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -6,7 +6,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const reduce = vi.hoisted(() => ({ on: false }))
 vi.mock('motion/react', async (orig) => ({ ...(await orig<typeof import('motion/react')>()), useReducedMotion: () => reduce.on }))
 
-import { BusyLabel, FullLoader, MiniRunner, useLoaderGate, WaitingLine } from './Runner'
+import { Busy, BusyLabel, FullLoader, MiniRunner, WaitingLine } from './Runner'
+import { useLoaderGate } from './useLoaderGate'
 
 afterEach(() => {
   cleanup()
@@ -78,15 +79,75 @@ describe('FullLoader', () => {
   })
 })
 
+describe('Busy', () => {
+  const button = (busy: boolean) => (
+    <button type="button">
+      <Busy busy={busy} label="Joining">
+        Join game
+      </Busy>
+    </button>
+  )
+  const runner = () => screen.queryByTestId('mini-runner')
+
+  it('shows the small j and the busy label while busy', () => {
+    render(button(true))
+    expect(screen.getByRole('button', { name: 'Joining' })).toContainElement(runner())
+  })
+
+  it('when the wait ends, the j wipes its label for 650 ms, then the button reads as normal', () => {
+    vi.useFakeTimers()
+    const { rerender, container } = render(button(true))
+    rerender(button(false))
+    expect(runner()).toBeInTheDocument()
+    expect(container.querySelector('[data-leaving]')).not.toBeNull()
+    // Only for the eyes: the button is already named for what it does next.
+    expect(screen.getByRole('button', { name: 'Join game' })).toBeInTheDocument()
+    expect(screen.getByText('Join game')).toHaveClass('sr-only')
+    act(() => void vi.advanceTimersByTime(650))
+    expect(screen.getByRole('button', { name: 'Join game' })).toBeInTheDocument()
+    expect(runner()).toBeNull()
+  })
+
+  it('without motion the button reads as normal at once', () => {
+    reduce.on = true
+    const { rerender } = render(button(true))
+    rerender(button(false))
+    expect(screen.getByRole('button', { name: 'Join game' })).toBeInTheDocument()
+  })
+
+  it('busy again mid-wipe shows busy at once', () => {
+    vi.useFakeTimers()
+    const { rerender, container } = render(button(true))
+    rerender(button(false))
+    act(() => void vi.advanceTimersByTime(300))
+    rerender(button(true))
+    expect(screen.getByRole('button', { name: 'Joining' })).toBeInTheDocument()
+    expect(container.querySelector('[data-leaving]')).toBeNull()
+  })
+
+  it('leaving the screen mid-wipe leaves nothing running', () => {
+    vi.useFakeTimers()
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { rerender, unmount } = render(button(true))
+    rerender(button(false))
+    unmount()
+    act(() => void vi.advanceTimersByTime(1000))
+    expect(error).not.toHaveBeenCalled()
+  })
+})
+
 describe('useLoaderGate', () => {
-  let leave = () => {}
-  let exitSeen = ''
   function Probe({ ready, instant }: { ready: boolean; instant?: boolean }) {
     const gate = useLoaderGate(ready, instant)
-    leave = gate.loader.onLeft
-    exitSeen = gate.loader.leaving ? gate.loader.exit : ''
-    if (gate.show) return <FullLoader caption="JAP, LOADING" {...gate.loader} />
-    return <p>the screen</p>
+    return (
+      <>
+        {gate.show ? <FullLoader caption="JAP, LOADING" {...gate.loader} /> : <p>the screen</p>}
+        <span data-testid="exit" data-exit={gate.loader.leaving ? gate.loader.exit : ''} />
+        <button type="button" onClick={gate.loader.onLeft}>
+          end the exit
+        </button>
+      </>
+    )
   }
   const loader = () => screen.queryByRole('status')
 
@@ -110,8 +171,8 @@ describe('useLoaderGate', () => {
     act(() => void vi.advanceTimersByTime(1000))
     rerender(<Probe ready />)
     expect(loader()).toBeInTheDocument()
-    expect(['wipe', 'bulldoze', 'kungfu']).toContain(exitSeen)
-    act(() => leave())
+    expect(['wipe', 'bulldoze', 'kungfu']).toContain(screen.getByTestId('exit').dataset.exit)
+    fireEvent.click(screen.getByText('end the exit'))
     expect(screen.getByText('the screen')).toBeInTheDocument()
   })
 

@@ -14,7 +14,8 @@ import { ErrorText, Pills, Screen } from '../game/ui'
 import { platformOf } from '../game/device'
 import ArenaSetup, { type SavedArenaForEdit } from './ArenaSetup'
 import { noticeParam } from '../game/cardNotice'
-import { BusyLabel, FullLoader, useLoaderGate } from '../game/Runner'
+import { Busy, FullLoader } from '../game/Runner'
+import { useLoaderGate } from '../game/useLoaderGate'
 
 /** A saved park as listArenas returns it. */
 interface SavedPark {
@@ -727,7 +728,7 @@ export default function HostNew() {
           <ErrorText>{error}</ErrorText>
           {buttons(
             <button type="button" className="btn" style={{ flex: 1 }} disabled={busy} aria-busy={creatingGame || undefined} onClick={create}>
-              {creatingGame ? <BusyLabel label="Creating game" /> : 'Create game'}
+              <Busy busy={creatingGame} label="Creating game">Create game</Busy>
             </button>,
             true,
           )}
