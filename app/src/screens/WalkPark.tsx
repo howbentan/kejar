@@ -8,7 +8,7 @@ import { loadOrganiserSession } from '../game/organiserSession'
 import GameMap from '../game/Map'
 import { ErrorText, Screen } from '../game/ui'
 import { useGameState } from '../game/useGameState'
-import { FullLoader, WaitingLine } from '../game/Runner'
+import { FullLoader, useLoaderGate, WaitingLine } from '../game/Runner'
 
 /** Within this distance of a spot, the card turns lime and the button appears. */
 export const WALK_HERE_M = 15
@@ -266,6 +266,7 @@ export default function WalkPark({
 export function HostWalk({ code }: { code: string }) {
   const organiser = loadOrganiserSession(localStorage)
   const { view, error, refresh } = useGameState(code, { sendLocation: 'never' })
+  const gate = useLoaderGate(!!view || !!error, !!error)
   if (!organiser) {
     return (
       <Screen eyebrow="WALK THE PARK">
@@ -273,7 +274,7 @@ export function HostWalk({ code }: { code: string }) {
       </Screen>
     )
   }
-  if (!view && !error) return <FullLoader caption="JOM JALAN, LOADING THE WALK" />
+  if (gate.show) return <FullLoader caption="JOM JALAN, LOADING THE WALK" {...gate.loader} />
   if (!view) {
     return (
       <Screen eyebrow="WALK THE PARK">

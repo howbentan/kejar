@@ -92,9 +92,9 @@ describe('HostNew step 1, the park', () => {
   it('shows the full-size loader while the saved parks load', async () => {
     render(<HostNew />)
     expect(screen.getByRole('status', { name: 'JAP, LOADING YOUR PARKS' })).toBeInTheDocument()
-    expect(screen.getByText('JAP, LOADING YOUR PARKS')).toBeInTheDocument()
+    expect(document.querySelector('.hl-caption')?.textContent).toContain('JAP, LOADING YOUR PARKS')
     await parksLoaded()
-    expect(screen.queryByText('JAP, LOADING YOUR PARKS')).toBeNull()
+    expect(screen.queryByRole('status', { name: 'JAP, LOADING YOUR PARKS' })).toBeNull()
   })
 
   it('shows the step, the heading and the progress bar', async () => {

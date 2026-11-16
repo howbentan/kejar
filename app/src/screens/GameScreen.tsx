@@ -7,6 +7,7 @@ import SosIcon from '../game/SosIcon'
 import { useGameState, type LocationMode } from '../game/useGameState'
 import ChaserChase from './ChaserChase'
 import GameLoading from './GameLoading'
+import { useLoaderGate } from '../game/Runner'
 import Hide from './Hide'
 import HouseArrest from './HouseArrest'
 import { useReelHold } from '../game/PenjaraReel'
@@ -42,8 +43,8 @@ export default function GameScreen({ code }: { code: string }) {
   }, [signedIn, code])
 
   const { view: current, error, refresh, locationOff } = useGameState(code, { sendLocation: locationMode })
-  // Opened with no game yet: show the loading screen, and when the game arrives let the j run off first.
-  const [entering, setEntering] = useState(() => !current)
+  // Opened with no game yet: show the loading screen, and when the game arrives let the j clear it first.
+  const gate = useLoaderGate(!!current)
   const hostInLobby = current?.phase === 'lobby' && current.me.id === 'host'
   useEffect(() => {
     if (hostInLobby) window.location.assign(`/host/${code}`)
@@ -88,7 +89,7 @@ export default function GameScreen({ code }: { code: string }) {
     return () => window.clearTimeout(t)
   }, [released])
 
-  if (!current || entering) return <GameLoading code={code} error={error} leaving={!!current} onLeft={() => setEntering(false)} />
+  if (!current || gate.show) return <GameLoading code={code} error={error} {...gate.loader} />
   if (current.me.removed_at) return <Removed />
   if (current.phase === 'lobby') return <Lobby code={code} view={current} refresh={refresh} />
   // The endgame's reveal goes over every chase screen, marshals' too (endgame design §6.4); never over the results.

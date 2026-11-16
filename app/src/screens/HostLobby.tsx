@@ -14,7 +14,7 @@ import { clockOf, nextOccurrence, startsLabel } from '../game/plannedStart'
 import { qrDataUrl } from '../game/qr'
 import { ErrorText, ModeBadge, Pills, Screen, tagText } from '../game/ui'
 import { useGameState } from '../game/useGameState'
-import { BusyLabel, FullLoader } from '../game/Runner'
+import { BusyLabel, FullLoader, useLoaderGate } from '../game/Runner'
 
 type Side = Extract<Role, 'runner' | 'chaser'>
 
@@ -139,6 +139,7 @@ export default function HostLobby({ code }: { code: string }) {
   const waitingForCard = !!view && LEGENDARY_KINDS.some((l) => waitingFor(view, l))
   const cardsSettled = !!view && view.settings.mode === 'full' && !waitingForCard
   const shownNotice = notice === NO_CARD_LINE && cardsSettled ? '' : notice || (waitingForCard ? NO_CARD_LINE : '')
+  const gate = useLoaderGate(!!view || !!loadError, !!loadError)
 
   if (!organiser) {
     return (
@@ -148,8 +149,8 @@ export default function HostLobby({ code }: { code: string }) {
     )
   }
 
-  // Nothing to show before the first view: the full-size loader (a load error still shows as before).
-  if (!view && !loadError) return <FullLoader caption={`SABAR KEJAP, OPENING ${code.toUpperCase()}`} />
+  // Nothing to show before the first view: the full-size loader, then its exit (a load error shows at once).
+  if (gate.show) return <FullLoader caption={`SABAR KEJAP, OPENING ${code.toUpperCase()}`} {...gate.loader} />
 
   // The new-game setup's steps 4 and 5 stand in for the lobby: no join QR yet.
   const setup = new URLSearchParams(window.location.search).get('setup')

@@ -1,7 +1,8 @@
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useReducedMotion } from 'motion/react'
 import HomeLogo from './homeLogo/HomeLogo'
 import { pose, STRIDE } from './homeLogo/stride'
+import { pickExit, type Exit } from './homeLogo/exits'
 
 const n = (v: number) => String(Math.round(v * 100) / 100)
 
@@ -89,23 +90,43 @@ export function WaitingLine({ children, className = 'muted', style }: { children
 /**
  * The full-size loader: the home logo at its home spot with the j running on the spot and a caption under it.
  * The hidden block below holds the same space as home's buttons (with reconnect showing), which keeps the logo
- * where it sits on home. `leaving` sends the j off the right edge (opening a game); `children` show under the logo.
+ * where it sits on home. `leaving` sends the j off the right edge, clearing the screen its `exit` way (see
+ * `useLoaderGate`); `children` show under the logo. The caption is one span per letter, so the j can clear each.
  */
-export function FullLoader({ caption, leaving = false, onLeft, children }: { caption: string; leaving?: boolean; onLeft?: () => void; children?: ReactNode }) {
+export function FullLoader({
+  caption,
+  leaving = false,
+  exit,
+  onLeft,
+  children,
+}: {
+  caption: string
+  leaving?: boolean
+  exit?: Exit
+  onLeft?: () => void
+  children?: ReactNode
+}) {
   return (
     <main className="home" role="status" aria-label={caption}>
       <div className="home-play">
         <HomeLogo
           mode={leaving ? 'leaving' : 'loading'}
+          exit={exit}
           onLeft={onLeft}
           caption={
             <>
-              {caption}
-              <span className="dots" aria-hidden="true">
-                <i>.</i>
-                <i>.</i>
-                <i>.</i>
-              </span>
+              {[...caption].map((c, i) => (
+                <span key={i} className="hl-ch">
+                  {c}
+                </span>
+              ))}
+              {!leaving && (
+                <span className="dots" aria-hidden="true">
+                  <i>.</i>
+                  <i>.</i>
+                  <i>.</i>
+                </span>
+              )}
             </>
           }
         />
@@ -119,4 +140,36 @@ export function FullLoader({ caption, leaving = false, onLeft, children }: { cap
       </div>
     </main>
   )
+}
+
+/** How long a loader must have been up before its exit plays; quicker loads just show the screen. */
+export const EXIT_AFTER_MS = 400
+
+/**
+ * Holds a screen back while its full loader plays its exit (loader exits design, 2026-11-16). `ready` is "the data is
+ * here"; `instant` shows the screen at once (an error). Use it with the other hooks, then
+ * `if (gate.show) return <FullLoader caption="…" {...gate.loader} />`.
+ * A screen that is ready from the start never shows the loader; one that loses its data shows it again.
+ */
+export function useLoaderGate(ready: boolean, instant = false): { show: boolean; loader: { leaving: boolean; exit: Exit; onLeft: () => void } } {
+  const [long, setLong] = useState(false)
+  const [exit, setExit] = useState<Exit>('wipe')
+  const [leaving, setLeaving] = useState(false)
+  // Decided while rendering (not in an effect), so the screen never flashes up for a frame before the exit.
+  const [wasReady, setWasReady] = useState(ready)
+  if (ready !== wasReady) {
+    setWasReady(ready)
+    setLeaving(ready && long && !instant)
+    if (!ready) setLong(false)
+  }
+  useEffect(() => {
+    if (ready) return
+    const t = window.setTimeout(() => {
+      setExit(pickExit())
+      setLong(true)
+    }, EXIT_AFTER_MS)
+    return () => window.clearTimeout(t)
+  }, [ready])
+  const onLeft = useCallback(() => setLeaving(false), [])
+  return { show: !ready || leaving, loader: { leaving, exit, onLeft } }
 }

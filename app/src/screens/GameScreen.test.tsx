@@ -32,7 +32,7 @@ describe('GameScreen loading', () => {
     state.view = null
     render(<GameScreen code="ABC234" />)
     expect(screen.getByRole('img', { name: 'kejar.' })).toBeInTheDocument()
-    expect(screen.getByText(/JOM, LOADING GAME ABC234/)).toBeInTheDocument()
+    expect(document.querySelector('.hl-caption')?.textContent).toContain('JOM, LOADING GAME ABC234')
     expect(screen.getByRole('status', { name: 'JOM, LOADING GAME ABC234' })).toBeInTheDocument()
   })
 
@@ -43,7 +43,7 @@ describe('GameScreen loading', () => {
     rerender(<GameScreen code="ABC234" />)
     // Without a measured screen (jsdom) the run-off finishes at once.
     expect(screen.getByText('Game paused')).toBeInTheDocument()
-    expect(screen.queryByText(/LOADING GAME/)).toBeNull()
+    expect(screen.queryByRole('status', { name: /LOADING GAME/ })).toBeNull()
   })
 })
 

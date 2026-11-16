@@ -14,7 +14,7 @@ import { ErrorText, Pills, Screen } from '../game/ui'
 import { platformOf } from '../game/device'
 import ArenaSetup, { type SavedArenaForEdit } from './ArenaSetup'
 import { noticeParam } from '../game/cardNotice'
-import { BusyLabel, FullLoader } from '../game/Runner'
+import { BusyLabel, FullLoader, useLoaderGate } from '../game/Runner'
 
 /** A saved park as listArenas returns it. */
 interface SavedPark {
@@ -353,6 +353,8 @@ export default function HostNew() {
     }
   }
 
+  const parksGate = useLoaderGate(!(step === 1 && !setup && parks === null && organiserToken && !error), !!error)
+
   if (!organiser) {
     return (
       <Screen eyebrow="kejar. · organise">
@@ -390,8 +392,8 @@ export default function HostNew() {
     </>
   )
 
-  // Nothing to show on step 1 until the saved parks arrive: the full-size loader (errors still show as before).
-  if (step === 1 && !setup && parks === null && organiserToken && !error) return <FullLoader caption="JAP, LOADING YOUR PARKS" />
+  // Nothing to show on step 1 until the saved parks arrive: the full-size loader, then its exit (errors show at once).
+  if (parksGate.show) return <FullLoader caption="JAP, LOADING YOUR PARKS" {...parksGate.loader} />
 
   return (
     <Screen>

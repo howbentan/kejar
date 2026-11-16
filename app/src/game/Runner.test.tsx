@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -6,10 +6,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const reduce = vi.hoisted(() => ({ on: false }))
 vi.mock('motion/react', async (orig) => ({ ...(await orig<typeof import('motion/react')>()), useReducedMotion: () => reduce.on }))
 
-import { BusyLabel, FullLoader, MiniRunner, WaitingLine } from './Runner'
+import { BusyLabel, FullLoader, MiniRunner, useLoaderGate, WaitingLine } from './Runner'
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
   reduce.on = false
   vi.restoreAllMocks()
 })
@@ -66,7 +68,69 @@ describe('FullLoader', () => {
     render(<FullLoader caption="JAP, LOADING YOUR PARKS" />)
     expect(screen.getByRole('status', { name: 'JAP, LOADING YOUR PARKS' })).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'kejar.' })).toBeInTheDocument()
-    expect(screen.getByText('JAP, LOADING YOUR PARKS')).toBeInTheDocument()
+  })
+
+  it('splits the caption into one letter each, so the j can clear them one by one', () => {
+    const { container } = render(<FullLoader caption="JAP, LOADING" />)
+    const chars = container.querySelectorAll('.hl-caption .hl-ch')
+    expect(chars).toHaveLength('JAP, LOADING'.length)
+    expect([...chars].map((c) => c.textContent).join('')).toBe('JAP, LOADING')
+  })
+})
+
+describe('useLoaderGate', () => {
+  let leave = () => {}
+  let exitSeen = ''
+  function Probe({ ready, instant }: { ready: boolean; instant?: boolean }) {
+    const gate = useLoaderGate(ready, instant)
+    leave = gate.loader.onLeft
+    exitSeen = gate.loader.leaving ? gate.loader.exit : ''
+    if (gate.show) return <FullLoader caption="JAP, LOADING" {...gate.loader} />
+    return <p>the screen</p>
+  }
+  const loader = () => screen.queryByRole('status')
+
+  it('shows the loader while waiting, and the screen at once when the wait was short', () => {
+    vi.useFakeTimers()
+    const { rerender } = render(<Probe ready={false} />)
+    expect(loader()).toBeInTheDocument()
+    act(() => void vi.advanceTimersByTime(200))
+    rerender(<Probe ready />)
+    expect(loader()).toBeNull()
+    expect(screen.getByText('the screen')).toBeInTheDocument()
+  })
+
+  it('after a real wait, the loader plays a random exit and only then shows the screen', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    // The logo needs a size and frames that never come, so the exit stays on until the test ends it.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ width: 290, height: 430, top: 0, left: 0, right: 290, bottom: 430, x: 0, y: 0, toJSON: () => ({}) })
+    vi.stubGlobal('requestAnimationFrame', () => 1)
+    vi.stubGlobal('cancelAnimationFrame', () => {})
+    const { rerender } = render(<Probe ready={false} />)
+    act(() => void vi.advanceTimersByTime(1000))
+    rerender(<Probe ready />)
+    expect(loader()).toBeInTheDocument()
+    expect(['wipe', 'bulldoze', 'kungfu']).toContain(exitSeen)
+    act(() => leave())
+    expect(screen.getByText('the screen')).toBeInTheDocument()
+  })
+
+  it('shows the screen at once when told to (an error), and never when ready from the start', () => {
+    vi.useFakeTimers()
+    const { rerender } = render(<Probe ready={false} />)
+    act(() => void vi.advanceTimersByTime(1000))
+    rerender(<Probe ready instant />)
+    expect(screen.getByText('the screen')).toBeInTheDocument()
+    cleanup()
+    render(<Probe ready />)
+    expect(screen.getByText('the screen')).toBeInTheDocument()
+  })
+
+  it('brings the loader back if the screen loses its data', () => {
+    vi.useFakeTimers()
+    const { rerender } = render(<Probe ready />)
+    rerender(<Probe ready={false} />)
+    expect(loader()).toBeInTheDocument()
   })
 })
 

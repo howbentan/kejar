@@ -8,7 +8,7 @@ import { call } from '../game/api'
 import { loadOrganiserSession } from '../game/organiserSession'
 import PlaceMap, { type PlaceMode } from '../game/PlaceMap'
 import { ErrorText, Pills } from '../game/ui'
-import { BusyLabel, FullLoader, WaitingLine } from '../game/Runner'
+import { BusyLabel, FullLoader, useLoaderGate, WaitingLine } from '../game/Runner'
 
 const SIZES = ['150', '200', '300', '500'] as const
 type Size = (typeof SIZES)[number]
@@ -74,6 +74,9 @@ export default function ArenaSetup({
   // lakes loading (`mapping`, its name: the full-size loader over the setup).
   const [busyOn, setBusyOn] = useState<'search' | 'save' | null>(null)
   const [mapping, setMapping] = useState<string | null>(null)
+  // The park's name stays for the loader's exit, which plays after `mapping` is cleared.
+  const [mapName, setMapName] = useState('')
+  const mapGate = useLoaderGate(mapping === null)
   const [error, setError] = useState('')
 
   const circleOn = source === 'circle' || usePart
@@ -173,6 +176,7 @@ export default function ArenaSetup({
     setBusy(true)
     setBusyOn(null)
     setMapping(hit.name)
+    setMapName(hit.name)
     setPark({ osmRef: hit.osmRef, outline: hit.outline, pieces: hit.pieces })
     setResults(null)
     setJail(null)
@@ -360,9 +364,9 @@ export default function ArenaSetup({
         </>
       )}
       <ErrorText>{error}</ErrorText>
-      {mapping !== null && (
+      {mapGate.show && (
         <div className="loader-overlay">
-          <FullLoader caption={`KEJAP JE, MAPPING ${mapping.toUpperCase()}`} />
+          <FullLoader caption={`KEJAP JE, MAPPING ${mapName.toUpperCase()}`} {...mapGate.loader} />
         </div>
       )}
     </div>

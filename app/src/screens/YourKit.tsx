@@ -4,7 +4,7 @@ import { call } from '../game/api'
 import { loadOrganiserSession } from '../game/organiserSession'
 import { printCardUrl } from '../game/printLinks'
 import { ErrorText, Screen } from '../game/ui'
-import { FullLoader } from '../game/Runner'
+import { FullLoader, useLoaderGate } from '../game/Runner'
 
 type Legendary = LegendaryKind
 interface KitCard {
@@ -64,6 +64,7 @@ export default function YourKit() {
     if (organiserToken) load().catch((e) => setError(e instanceof Error ? e.message : String(e)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organiserToken])
+  const gate = useLoaderGate(cards !== null || !!error, !!error)
 
   if (!organiser) {
     return (
@@ -73,8 +74,8 @@ export default function YourKit() {
     )
   }
 
-  // Nothing to show until the cards arrive: the full-size loader (a load error still shows as before).
-  if (cards === null && !error) return <FullLoader caption="TUNGGU JAP, PACKING YOUR KIT" />
+  // Nothing to show until the cards arrive: the full-size loader, then its exit (a load error shows at once).
+  if (gate.show) return <FullLoader caption="TUNGGU JAP, PACKING YOUR KIT" {...gate.loader} />
 
   /**
    * Runs a card action. When it prints, the tab opens blank straight away, inside the tap, because a browser blocks
