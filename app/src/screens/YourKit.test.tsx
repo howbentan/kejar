@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const call = vi.hoisted(() => vi.fn())
@@ -6,43 +6,27 @@ vi.mock('../game/api', () => ({ call, ApiError: class extends Error {} }))
 
 import YourKit from './YourKit'
 
-type Kind = 'dato' | 'ring' | 'bomoh' | 'hijau'
-type Card = { legendary: Kind; letter: string; state: string; foundAt: string | null; inGame: boolean }
-const set = (over: Record<string, Partial<Card>> = {}): Card[] =>
-  ['dato', 'ring', 'bomoh', 'hijau'].flatMap((legendary) =>
-    ['A', 'B', 'C'].map((letter) => ({
-      legendary: legendary as Kind,
-      letter,
-      state: 'ready',
-      foundAt: null,
-      inGame: false,
-      ...over[`${legendary}${letter}`],
-    })),
+type Slip = { side: 'dikejar' | 'kejar'; number: number; token: string; state: 'unused' | 'bound' | 'used' }
+const sheet = (over: Record<string, Slip['state']> = {}): Slip[] =>
+  (['dikejar', 'kejar'] as const).flatMap((side) =>
+    Array.from({ length: 10 }, (_, i) => ({ side, number: i + 1, token: `${side}${i + 1}`, state: over[`${side}${i + 1}`] ?? 'unused' })),
   )
 
-let cards: Card[]
+let slips: Slip[]
 let open: ReturnType<typeof vi.spyOn>
-let tab: { location: { href: string }; close: ReturnType<typeof vi.fn> }
 
 beforeEach(() => {
   localStorage.setItem('kejar.organiser', JSON.stringify({ organiserToken: 'ot1', name: 'Owner' }))
-  cards = set()
+  slips = sheet()
   call.mockReset()
-  call.mockImplementation(async (action: string) => {
-    if (action === 'listSecretCards') return cards
-    if (action === 'secretCardCode') return { code: 'CODE123' }
-    return { ok: true }
-  })
-  tab = { location: { href: '' }, close: vi.fn() }
-  open = vi.spyOn(window, 'open').mockImplementation(() => tab as unknown as Window)
+  call.mockImplementation(async (action: string) => (action === 'listSlips' ? slips : { ok: true }))
+  open = vi.spyOn(window, 'open').mockImplementation(() => null)
 })
 afterEach(() => {
   cleanup()
   localStorage.clear()
   open.mockRestore()
 })
-
-const row = (name: string) => screen.getByText(name).closest('[data-testid="card-row"]') as HTMLElement
 
 describe('YourKit', () => {
   it('asks for an invite link with no organiser session', () => {
@@ -52,7 +36,7 @@ describe('YourKit', () => {
     expect(call).not.toHaveBeenCalled()
   })
 
-  it('shows the full-size loader until the cards arrive', async () => {
+  it('shows the full-size loader until the slips arrive', async () => {
     render(<YourKit />)
     expect(screen.getByRole('status', { name: 'TUNGGU JAP, PACKING YOUR KIT' })).toBeTruthy()
     expect(await screen.findByRole('heading', { name: 'Print once.' })).toBeTruthy()
@@ -72,120 +56,57 @@ describe('YourKit', () => {
     expect(open).toHaveBeenCalledWith('/print/tags', '_blank')
   })
 
-  it('lists the four secret sets: yellow, orange, purple and green, A to C each, in that order', async () => {
+  it('counts the unused slips of each side and has no old card section', async () => {
     render(<YourKit />)
-    expect(await screen.findByText('Yellow A')).toBeTruthy()
-    expect(screen.getByText('SECRET CARDS · FULL MODE')).toBeTruthy()
-    const names = screen.getAllByTestId('card-row').map((r) => r.querySelector('b')!.textContent)
-    expect(names).toEqual(['Yellow', 'Orange', 'Purple', 'Green'].flatMap((c) => ['A', 'B', 'C'].map((l) => `${c} ${l}`)))
-    expect(call).toHaveBeenCalledWith('listSecretCards', { organiserToken: 'ot1' })
+    expect(await screen.findByText('Dikejar: 10 unused · Kejar: 10 unused')).toBeTruthy()
+    expect(screen.getByText('TUPPERWARE SLIPS')).toBeTruthy()
+    expect(screen.queryByText('SECRET CARDS · FULL MODE')).toBeNull()
+    expect(call).toHaveBeenCalledWith('listSlips', { organiserToken: 'ot1' })
+    expect(screen.queryByText('Print a new slip sheet')).toBeNull()
   })
 
-  it.each([
-    ['Orange B', 'ring', 'var(--ring-2)'],
-    ['Green C', 'hijau', 'var(--hijau-2)'],
-  ])('%s prints through its own print link, in its own colour', async (name, legendary, colour) => {
+  it('counts only unused: bound and used slips do not count', async () => {
+    slips = sheet({ dikejar1: 'bound', dikejar2: 'used', kejar1: 'used' })
     render(<YourKit />)
-    await screen.findByText(name)
-    expect((screen.getByText(name) as HTMLElement).style.color).toBe(colour)
-    fireEvent.click(within(row(name)).getByRole('button', { name: 'PRINT' }))
-    await waitFor(() => expect(tab.location.href).toBe(`/print/card#${legendary}/CODE123`))
-    expect(call).toHaveBeenCalledWith('secretCardCode', { organiserToken: 'ot1', legendary, letter: name.slice(-1) })
+    expect(await screen.findByText('Dikejar: 8 unused · Kejar: 9 unused')).toBeTruthy()
   })
 
-  it('a ready card prints through its code, and can be retired', async () => {
+  it('says to print a new sheet when either side is down to 2', async () => {
+    slips = sheet(Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`kejar${i + 1}`, 'used' as const])))
     render(<YourKit />)
-    await screen.findByText('Yellow A')
-    const r = row('Yellow A')
-    expect(within(r).getByText(/^Ready/)).toBeTruthy()
-    fireEvent.click(within(r).getByRole('button', { name: 'PRINT' }))
-    // The tab opens blank inside the tap, then points at the card once the code arrives.
-    expect(open).toHaveBeenCalledWith('', '_blank')
-    await waitFor(() => expect(tab.location.href).toBe('/print/card#CODE123'))
-    expect(call).toHaveBeenCalledWith('secretCardCode', { organiserToken: 'ot1', legendary: 'dato', letter: 'A' })
-    fireEvent.click(within(r).getByRole('button', { name: 'Retire' }))
-    await waitFor(() => expect(call).toHaveBeenCalledWith('retireSecretCard', { organiserToken: 'ot1', legendary: 'dato', letter: 'A' }))
+    expect(await screen.findByText('Dikejar: 10 unused · Kejar: 2 unused')).toBeTruthy()
+    expect(screen.getByText('Print a new slip sheet')).toBeTruthy()
   })
 
-  it('a purple card prints through the Bomoh print link', async () => {
+  it('Print slips opens the print page', async () => {
     render(<YourKit />)
-    await screen.findByText('Purple A')
-    fireEvent.click(within(row('Purple A')).getByRole('button', { name: 'PRINT' }))
-    await waitFor(() => expect(tab.location.href).toBe('/print/card#bomoh/CODE123'))
-    expect(call).toHaveBeenCalledWith('secretCardCode', { organiserToken: 'ot1', legendary: 'bomoh', letter: 'A' })
+    await screen.findByText('Dikejar: 10 unused · Kejar: 10 unused')
+    fireEvent.click(screen.getByRole('button', { name: 'Print slips' }))
+    expect(open).toHaveBeenCalledWith('/print/slips', '_blank')
   })
 
-  it('says when a ready card is in the game today', async () => {
-    cards = set({ datoB: { inGame: true } })
+  it('Make a new sheet makes it, then reloads the counts', async () => {
     render(<YourKit />)
-    await screen.findByText('Yellow B')
-    expect(within(row('Yellow B')).getByText(/In today's game/)).toBeTruthy()
-  })
-
-  it('a found card reads retired with its date, and reprint then prints', async () => {
-    cards = set({ datoA: { state: 'retired', foundAt: '2026-11-02T10:00:00.000Z' }, bomohB: { state: 'retired' } })
-    render(<YourKit />)
-    await screen.findByText('Yellow A')
-    expect(within(row('Yellow A')).getByText('Found on 2 Nov · retired')).toBeTruthy()
-    expect(within(row('Purple B')).getByText('Retired')).toBeTruthy()
-    fireEvent.click(within(row('Yellow A')).getByRole('button', { name: 'REPRINT' }))
-    expect(open).toHaveBeenCalledWith('', '_blank')
-    await waitFor(() => expect(tab.location.href).toBe('/print/card#CODE123'))
+    await screen.findByText('Dikejar: 10 unused · Kejar: 10 unused')
+    call.mockImplementation(async (action: string) => {
+      if (action === 'listSlips') return [...slips, ...slips.map((s) => ({ ...s, number: s.number + 10, token: `n${s.token}` }))]
+      return { ok: true }
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Make a new sheet' }))
+    expect(await screen.findByText('Dikejar: 20 unused · Kejar: 20 unused')).toBeTruthy()
+    expect(call).toHaveBeenCalledWith('makeSlipSheet', { organiserToken: 'ot1' })
     const names = call.mock.calls.map((c) => c[0])
-    expect(names.indexOf('reprintSecretCard')).toBeLessThan(names.indexOf('secretCardCode'))
+    expect(names.indexOf('makeSlipSheet')).toBeLessThan(names.lastIndexOf('listSlips'))
   })
 
-  it('a printing card waits for the organiser to confirm', async () => {
-    cards = set({ datoC: { state: 'printing' } })
+  it('shows a failed new sheet in plain text', async () => {
     render(<YourKit />)
-    await screen.findByText('Yellow C')
-    const r = row('Yellow C')
-    expect(within(r).getByText('New code · print it, then confirm')).toBeTruthy()
-    fireEvent.click(within(r).getByRole('button', { name: "I'VE PRINTED IT" }))
-    await waitFor(() => expect(call).toHaveBeenCalledWith('confirmSecretCardPrinted', { organiserToken: 'ot1', legendary: 'dato', letter: 'C' }))
-  })
-
-  it("hides Retire on a card in today's game", async () => {
-    cards = set({ datoB: { inGame: true } })
-    render(<YourKit />)
-    await screen.findByText('Yellow B')
-    expect(within(row('Yellow B')).queryByRole('button', { name: 'Retire' })).toBeNull()
-    expect(within(row('Yellow A')).getByRole('button', { name: 'Retire' })).toBeTruthy()
-  })
-
-  it('closes the blank tab and shows the error when the code can not be fetched', async () => {
+    await screen.findByText('Dikejar: 10 unused · Kejar: 10 unused')
     call.mockImplementation(async (action: string) => {
-      if (action === 'listSecretCards') return cards
-      throw new Error('No connection')
+      if (action === 'makeSlipSheet') throw new Error('No connection')
+      return slips
     })
-    render(<YourKit />)
-    await screen.findByText('Yellow A')
-    fireEvent.click(within(row('Yellow A')).getByRole('button', { name: 'PRINT' }))
-    await waitFor(() => expect(within(row('Yellow A')).getByText('No connection')).toBeTruthy())
-    expect(tab.close).toHaveBeenCalled()
-  })
-
-  it('prints in the same tab when the browser blocks the new one', async () => {
-    open.mockImplementation(() => null)
-    const assign = vi.fn()
-    const loc = window.location
-    Object.defineProperty(window, 'location', { configurable: true, value: { ...loc, assign } })
-    render(<YourKit />)
-    await screen.findByText('Yellow A')
-    fireEvent.click(within(row('Yellow A')).getByRole('button', { name: 'PRINT' }))
-    await waitFor(() => expect(assign).toHaveBeenCalledWith('/print/card#CODE123'))
-    Object.defineProperty(window, 'location', { configurable: true, value: loc })
-  })
-
-  it('shows a 409 in plain text on the row', async () => {
-    call.mockImplementation(async (action: string) => {
-      if (action === 'listSecretCards') return cards
-      throw new Error('That card is in a game right now.')
-    })
-    render(<YourKit />)
-    await screen.findByText('Yellow A')
-    fireEvent.click(within(row('Yellow A')).getByRole('button', { name: 'Retire' }))
-    await waitFor(() => expect(within(row('Yellow A')).getByText('That card is in a game right now.')).toBeTruthy())
-    expect(within(row('Yellow B')).queryByText('That card is in a game right now.')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Make a new sheet' }))
+    expect(await screen.findByText('No connection')).toBeTruthy()
   })
 })

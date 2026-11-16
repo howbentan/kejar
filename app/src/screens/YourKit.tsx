@@ -1,36 +1,15 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
-import type { LegendaryKind } from '../../shared/types.js'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { call } from '../game/api'
 import { loadOrganiserSession } from '../game/organiserSession'
-import { printCardUrl } from '../game/printLinks'
+import { type Slip, unusedCounts } from '../game/slips'
 import { ErrorText, Screen } from '../game/ui'
 import { FullLoader } from '../game/Runner'
 import { useLoaderGate } from '../game/useLoaderGate'
 
-type Legendary = LegendaryKind
-interface KitCard {
-  legendary: Legendary
-  letter: string
-  state: 'ready' | 'retired' | 'printing'
-  foundAt: string | null
-  inGame: boolean
-}
-interface CardId {
-  organiserToken: string | undefined
-  legendary: Legendary
-  letter: string
-}
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const dayMonth = (iso: string) => {
-  const d = new Date(iso)
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}`
-}
-const COLOUR_NAME: Record<Legendary, string> = { dato: 'Yellow', ring: 'Orange', bomoh: 'Purple', hijau: 'Green' }
-const COLOUR_VAR: Record<Legendary, string> = { dato: 'var(--legendary-2)', ring: 'var(--ring-2)', bomoh: 'var(--bomoh-2)', hijau: 'var(--hijau-2)' }
-const cardName = (c: KitCard) => `${COLOUR_NAME[c.legendary]} ${c.letter}`
-const keyOf = (c: KitCard) => `${c.legendary}${c.letter}`
 const openSheet = () => window.open('/print/tags', '_blank')
+const openSlips = () => window.open('/print/slips', '_blank')
+/** At this many unused slips or fewer on a side, the organiser is nudged to print more. */
+const LOW_SLIPS = 2
 
 const pill: CSSProperties = {
   marginLeft: 'auto',
@@ -46,26 +25,24 @@ const pill: CSSProperties = {
   cursor: 'pointer',
 }
 const rowStyle: CSSProperties = { display: 'flex', gap: 10, alignItems: 'flex-start', padding: '10px 0', borderBottom: '1px solid var(--hair)' }
-const linkBtn: CSSProperties = { background: 'none', border: 0, padding: 0, color: 'inherit', font: 'inherit', textDecoration: 'underline', cursor: 'pointer' }
 
-/** Print once: the kit that never changes between games, and the organiser's secret card sets. */
+/** Print once: the kit that never changes between games, and the Tupperware slips each game uses up. */
 export default function YourKit() {
   const organiser = loadOrganiserSession(localStorage)
   const organiserToken = organiser?.organiserToken
-  const [cards, setCards] = useState<KitCard[] | null>(null)
-  const [busy, setBusy] = useState('')
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [slips, setSlips] = useState<Slip[] | null>(null)
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   async function load() {
-    setCards(await call<KitCard[]>('listSecretCards', { organiserToken }))
+    setSlips(await call<Slip[]>('listSlips', { organiserToken }))
   }
 
   useEffect(() => {
     if (organiserToken) load().catch((e) => setError(e instanceof Error ? e.message : String(e)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organiserToken])
-  const gate = useLoaderGate(cards !== null || !!error, !!error)
+  const gate = useLoaderGate(slips !== null || !!error, !!error)
 
   if (!organiser) {
     return (
@@ -75,35 +52,24 @@ export default function YourKit() {
     )
   }
 
-  // Nothing to show until the cards arrive: the full-size loader, then its exit (a load error shows at once).
+  // Nothing to show until the slips arrive: the full-size loader, then its exit (a load error shows at once).
   if (gate.show) return <FullLoader caption="TUNGGU JAP, PACKING YOUR KIT" {...gate.loader} />
 
-  /**
-   * Runs a card action. When it prints, the tab opens blank straight away, inside the tap, because a browser blocks
-   * a window opened after an await. It's pointed at the card once the code arrives, and closed if anything fails.
-   */
-  async function act(c: KitCard, fn: (id: CardId, print: () => Promise<void>) => Promise<void>, prints = false) {
-    const k = keyOf(c)
-    const w = prints ? window.open('', '_blank') : null
-    setBusy(k)
-    setErrors((e) => ({ ...e, [k]: '' }))
+  async function makeSheet() {
+    setBusy(true)
+    setError('')
     try {
-      const id = { organiserToken, legendary: c.legendary, letter: c.letter }
-      await fn(id, async () => {
-        const { code } = await call<{ code: string }>('secretCardCode', id)
-        const url = printCardUrl(c.legendary, code)
-        // Blocked anyway: print from this tab instead.
-        if (w) w.location.href = url
-        else window.location.assign(url)
-      })
+      await call('makeSlipSheet', { organiserToken })
       await load()
     } catch (e) {
-      w?.close()
-      setErrors((x) => ({ ...x, [k]: e instanceof Error ? e.message : String(e) }))
+      setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setBusy('')
+      setBusy(false)
     }
   }
+
+  const counts = unusedCounts(slips ?? [])
+  const low = slips !== null && (counts.dikejar <= LOW_SLIPS || counts.kejar <= LOW_SLIPS)
 
   return (
     <Screen eyebrow="ORGANISER · YOUR KIT">
@@ -122,68 +88,24 @@ export default function YourKit() {
         ))}
       </div>
 
-      <p className="eyebrow">SECRET CARDS · FULL MODE</p>
+      <p className="eyebrow">TUPPERWARE SLIPS</p>
       <ErrorText>{error}</ErrorText>
-      <div>
-        {(cards ?? []).map((c) => {
-          const k = keyOf(c)
-          const colour = COLOUR_VAR[c.legendary]
-          const retire = c.inGame ? null : (
-            <>
-              {' · '}
-              <button type="button" style={linkBtn} disabled={busy === k} onClick={() => void act(c, async (id) => void (await call('retireSecretCard', id)))}>
-                Retire
-              </button>
-            </>
-          )
-          let status: ReactNode
-          let action: { label: string; run: () => void }
-          if (c.state === 'retired') {
-            status = c.foundAt ? `Found on ${dayMonth(c.foundAt)} · retired` : 'Retired'
-            action = {
-              label: 'REPRINT',
-              run: () =>
-                void act(
-                  c,
-                  async (id, print) => {
-                    await call('reprintSecretCard', id)
-                    await print()
-                  },
-                  true,
-                ),
-            }
-          } else if (c.state === 'printing') {
-            status = 'New code · print it, then confirm'
-            action = { label: "I'VE PRINTED IT", run: () => void act(c, async (id) => void (await call('confirmSecretCardPrinted', id))) }
-          } else {
-            status = (
-              <>
-                {c.inGame ? "In today's game" : 'Ready'}
-                {retire}
-              </>
-            )
-            action = { label: 'PRINT', run: () => void act(c, (_id, print) => print(), true) }
-          }
-          return (
-            <div key={k} data-testid="card-row" style={{ ...rowStyle, flexWrap: 'wrap' }}>
-              <div>
-                <b style={{ color: colour }}>{cardName(c)}</b>
-                <small className="muted" style={{ display: 'block', fontSize: 12 }}>
-                  {status}
-                </small>
-              </div>
-              <button type="button" style={pill} disabled={busy === k} onClick={action.run}>
-                {action.label}
-              </button>
-              {errors[k] && (
-                <p role="alert" style={{ flexBasis: '100%', fontSize: 13, fontWeight: 600 }}>
-                  {errors[k]}
-                </p>
-              )}
-            </div>
-          )
-        })}
-      </div>
+      {slips && (
+        <div style={{ ...rowStyle, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div>
+            <b>{`Dikejar: ${counts.dikejar} unused · Kejar: ${counts.kejar} unused`}</b>
+            {low && (
+              <small style={{ display: 'block', fontSize: 12, fontWeight: 600 }}>Print a new slip sheet</small>
+            )}
+          </div>
+          <button type="button" style={pill} onClick={openSlips}>
+            Print slips
+          </button>
+          <button type="button" style={{ ...pill, marginLeft: 0 }} disabled={busy} onClick={() => void makeSheet()}>
+            Make a new sheet
+          </button>
+        </div>
+      )}
       <a className="muted" href="/host/new" style={{ textDecoration: 'underline' }}>
         Back to new game
       </a>

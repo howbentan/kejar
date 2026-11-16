@@ -13,6 +13,7 @@ import { parsePrintCardHash } from './game/printLinks'
 import PrintCard from './screens/PrintCard'
 import YourKit from './screens/YourKit'
 import { HostWalk } from './screens/WalkPark'
+import PrintSlips from './screens/PrintSlips'
 import PrintTags from './screens/PrintTags'
 
 export default function App() {
@@ -45,6 +46,8 @@ function Routed() {
     case 'print-card':
       const printed = parsePrintCardHash(window.location.hash)
       return <PrintCard cardCode={printed.code} legendary={printed.legendary} />
+    case 'print-slips':
+      return <PrintSlips />
     case 'organiser-redeem':
       return <OrganiserRedeem token={token!} />
     case 'marshal-redeem':
