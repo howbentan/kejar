@@ -4992,7 +4992,7 @@ describe('secret card sets', () => {
     expect((await gameOf(code)).dato_stash).toMatchObject({ card: { id: expect.any(String) }, lat: null, lng: null })
   })
 
-  it('Full, drop, Core, Full (ruling R8): the new card is not dropped, placed.dato is gone and the walk shows the secret step again', async () => {
+  it('Full, drop, Core, Full (ruling R8): the new card is not dropped, placed.tupper-dikejar is gone and the walk shows the secret step again', async () => {
     const g = await readyGame({ mode: 'full' })
     const DROP = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
     await run('dropDatoSeri', { code: g.code, organiserToken: g.organiserToken, ...DROP })
@@ -5012,7 +5012,7 @@ describe('secret card sets', () => {
     expect(v.kit!.placed['tupper-dikejar']).toBeUndefined()
   })
 
-  it('the walk counts the secret step done only when the stash is dropped, never from placed.dato alone (ruling R8)', async () => {
+  it('the walk counts the secret step done only when the stash is dropped, never from placed.tupper-dikejar alone (ruling R8)', async () => {
     const g = await readyGame({ mode: 'full' })
     await run('setKit', { code: g.code, organiserToken: g.organiserToken, placed: { id: 'tupper-dikejar', on: true } })
     expect((await gameOf(g.code)).kit!.placed['tupper-dikejar']).toBe(true)
@@ -5406,7 +5406,7 @@ describe('secret card sets', () => {
       const game = await gameOf(g.code)
       expect(game.dato_stash).toMatchObject({ lat: null, lng: null })
       expect(game.dato_stash!.card!.id).not.toBe(card.id)
-      expect(game.kit?.placed ?? {}).not.toHaveProperty('dato')
+      expect(game.kit?.placed ?? {}).not.toHaveProperty('tupper-dikejar')
     })
 
     it('the ghost-card guard with no other card free: the stash goes, and start runs with Dato Seri off and the notice', async () => {
