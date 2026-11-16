@@ -1171,3 +1171,47 @@ describe('MemoryStore legendaries: Super Ring and Mak Kau Hijau', () => {
     expect(JSON.stringify(run)).not.toContain('3.987')
   })
 })
+
+describe('MemoryStore Tupperware slips', () => {
+  it('makes sheets of 10 + 10 whose numbers continue, per organisation', async () => {
+    await store.makeSlipSheet('org1')
+    await store.makeSlipSheet('org1')
+    const all = await store.slips('org1')
+    expect(all).toHaveLength(40)
+    const nums = (side: string) => all.filter((s) => s.side === side).map((s) => s.number).sort((a, b) => a - b)
+    const one20 = Array.from({ length: 20 }, (_, i) => i + 1)
+    expect(nums('dikejar')).toEqual(one20)
+    expect(nums('kejar')).toEqual(one20)
+    expect(new Set(all.map((s) => s.token)).size).toBe(40)
+    expect(await store.slips('org2')).toEqual([])
+  })
+
+  it('finds a slip by token across organisations, or null', async () => {
+    const [s] = await store.makeSlipSheet('org1')
+    expect((await store.slipByToken(s.token))!.id).toBe(s.id)
+    expect(await store.slipByToken('nope')).toBeNull()
+  })
+
+  it('binds a slip to the first game only', async () => {
+    const [s] = await store.makeSlipSheet('org1')
+    expect(await store.bindSlip(s.id, 'g1', iso(T0))).toBe('g1')
+    expect(await store.bindSlip(s.id, 'g2', iso(T0))).toBe('g1')
+    expect((await store.slipByToken(s.token))!.bound_at).toBe(iso(T0))
+  })
+
+  it('lets one player use a slip', async () => {
+    const [s] = await store.makeSlipSheet('org1')
+    expect(await store.useSlip(s.id, 'p1', iso(T0))).toBe(true)
+    expect(await store.useSlip(s.id, 'p2', iso(T0))).toBe(false)
+    expect((await store.slipByToken(s.token))!.used_by).toBe('p1')
+  })
+
+  it('starts a side quest once', async () => {
+    const g = await startedGame()
+    const p = await newPlayer(g.id, 'ali')
+    expect(await store.setSideQuest(p.id, iso(T0))).toBe(true)
+    expect(await store.setSideQuest(p.id, iso(T0 + MIN))).toBe(false)
+    const row = (await store.players(g.id)).find((x) => x.id === p.id)!
+    expect(row.side_quest_at).toBe(iso(T0))
+  })
+})

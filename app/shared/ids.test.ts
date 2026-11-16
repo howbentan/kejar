@@ -11,10 +11,13 @@ import {
   isDatoQr,
   isHijauQr,
   isRingQr,
+  isSlipQr,
   JAIL_QR,
   newGameCode,
   ringCodeFromQr,
   ringQr,
+  slipQr,
+  slipTokenFromQr,
   stationFromQr,
   stationQr,
   tagIdFromQr,
@@ -137,5 +140,19 @@ describe('arenaAroundPoint with stations', () => {
   })
   it('allows at most 8 stations', () => {
     expect(() => arenaAroundPoint(C, 200, Array(9).fill(near))).toThrow('At most 8 stations')
+  })
+})
+
+describe('slip QR', () => {
+  it('round-trips a token', () => {
+    expect(slipTokenFromQr(slipQr('abc_DEF-123'))).toBe('abc_DEF-123')
+  })
+  it('recognises a bare slip as a slip but not as a token', () => {
+    expect(isSlipQr('KEJAR:SLIP')).toBe(true)
+    expect(slipTokenFromQr('KEJAR:SLIP')).toBeNull()
+    expect(slipTokenFromQr('KEJAR:SLIP:has space')).toBeNull()
+  })
+  it('is not another card', () => {
+    expect(isSlipQr('KEJAR:DATO:x')).toBe(false)
   })
 })

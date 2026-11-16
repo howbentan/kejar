@@ -1,10 +1,10 @@
 import { LUAR_GARISAN_GRACE_MS } from '../../shared/alerts.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Arrest, Game, GameEvent, HijauFix, HijauRun, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard } from '../../shared/types.js'
-import { newDatoCode } from './secrets.js'
+import type { Arrest, Game, GameEvent, HijauFix, HijauRun, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard, Slip } from '../../shared/types.js'
+import { newDatoCode, newToken } from './secrets.js'
 import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PhoneMoveRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, RedeemPhoneMoveResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
-const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, reel_pulled_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at, brief_opened_at, brief_ready_at, frozen_until, arrest, flooded_at'
+const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, reel_pulled_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at, brief_opened_at, brief_ready_at, frozen_until, arrest, flooded_at, side_quest_at'
 const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, final_whistle_at, rescue, five_warned_at, wiped_at, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit, briefed_at, endgame'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
@@ -75,6 +75,33 @@ export class SupabaseStore implements GameStore {
   }
   async setSecretCard(id: string, patch: Partial<Pick<SecretCard, 'code' | 'state' | 'found_at'>>) {
     check(await this.db.from('secret_cards').update(patch).eq('id', id))
+  }
+  async slips(organisationId: string): Promise<Slip[]> {
+    return (check(await this.db.from('slips').select('*').eq('organisation_id', organisationId)) ?? []) as Slip[]
+  }
+  async slipByToken(token: string): Promise<Slip | null> {
+    return (check(await this.db.from('slips').select('*').eq('token', token).maybeSingle()) ?? null) as Slip | null
+  }
+  async makeSlipSheet(organisationId: string): Promise<Slip[]> {
+    const have = await this.slips(organisationId)
+    const rows = (['dikejar', 'kejar'] as const).flatMap((side) => {
+      const top = Math.max(0, ...have.filter((s) => s.side === side).map((s) => s.number))
+      return Array.from({ length: 10 }, (_, i) => ({ organisation_id: organisationId, side, number: top + i + 1, token: newToken() }))
+    })
+    return check(await this.db.from('slips').insert(rows).select('*')) as Slip[]
+  }
+  async bindSlip(slipId: string, gameId: string, at: string) {
+    check(await this.db.from('slips').update({ bound_game_id: gameId, bound_at: at }).eq('id', slipId).is('bound_game_id', null))
+    const row = check(await this.db.from('slips').select('bound_game_id').eq('id', slipId).maybeSingle())
+    return (row as { bound_game_id: string | null } | null)?.bound_game_id ?? gameId
+  }
+  async useSlip(slipId: string, playerId: string, at: string) {
+    const rows = check(await this.db.from('slips').update({ used_at: at, used_by: playerId }).eq('id', slipId).is('used_at', null).select('id'))
+    return (rows ?? []).length > 0
+  }
+  async setSideQuest(playerId: string, at: string) {
+    const rows = check(await this.db.from('players').update({ side_quest_at: at }).eq('id', playerId).is('side_quest_at', null).select('id'))
+    return (rows ?? []).length > 0
   }
   async addPlayer(p: Omit<PlayerRow, 'id'>): Promise<Player> {
     return check(await this.db.from('players').insert(p).select(PLAYER_COLUMNS).single()) as Player

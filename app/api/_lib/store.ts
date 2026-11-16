@@ -1,7 +1,7 @@
 import { LUAR_GARISAN_GRACE_MS } from '../../shared/alerts.js'
 import type { ArenaDraft } from '../../shared/arenaDraft.js'
-import type { Arena, Arrest, Game, GameEvent, HijauFix, HijauRun, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard } from '../../shared/types.js'
-import { newDatoCode } from './secrets.js'
+import type { Arena, Arrest, Game, GameEvent, HijauFix, HijauRun, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard, Slip } from '../../shared/types.js'
+import { newDatoCode, newToken } from './secrets.js'
 
 export type GameRow = Game & { organiser_id: string; host_push?: PushSubscriptionJSON | null }
 export type PlayerRow = Player & { token_hash: string }
@@ -84,6 +84,18 @@ export interface GameStore {
   /** The organisation's twelve secret cards, A-C each of yellow, orange, purple and green; missing ones are made `ready`, with fresh codes, on first read. */
   secretCards(organisationId: string): Promise<SecretCard[]>
   setSecretCard(id: string, patch: Partial<Pick<SecretCard, 'code' | 'state' | 'found_at'>>): Promise<void>
+  /** Every Tupperware slip the organisation has printed. */
+  slips(organisationId: string): Promise<Slip[]>
+  /** The slip with this token, from any organisation (the caller checks `organisation_id`). */
+  slipByToken(token: string): Promise<Slip | null>
+  /** Makes a new sheet: 10 slips for Dikejar and 10 for Kejar, numbers continuing from each side's highest. */
+  makeSlipSheet(organisationId: string): Promise<Slip[]>
+  /** Binds the slip to a game only if it has none yet; returns the game it is bound to after the call. */
+  bindSlip(slipId: string, gameId: string, at: string): Promise<string>
+  /** Marks the slip used only if it wasn't; true for the caller that did it. */
+  useSlip(slipId: string, playerId: string, at: string): Promise<boolean>
+  /** Spends the player's one side-quest try only if it wasn't spent; true when newly set. */
+  setSideQuest(playerId: string, at: string): Promise<boolean>
   addPlayer(p: Omit<PlayerRow, 'id'>): Promise<Player>
   /** Includes removed players, so their page can tell them they were removed. */
   playerByToken(gameId: string, tokenHash: string): Promise<Player | null>
@@ -376,6 +388,7 @@ export class MemoryStore implements GameStore {
   private arenaRows: SavedArenaRow[] = []
   private osmCacheRows = new Map<string, { body: unknown; fetched_at: number }>()
   private secretCardRows: SecretCard[] = []
+  private slipRows: Slip[] = []
   private rateRows = new Map<string, number>()
 
   constructor(clock: () => number) {
@@ -998,6 +1011,47 @@ export class MemoryStore implements GameStore {
       p.reveal_at = shift(p.reveal_at)
     }
     return d
+  }
+  async slips(organisationId: string) {
+    return this.slipRows.filter((s) => s.organisation_id === organisationId).map((s) => ({ ...s }))
+  }
+  async slipByToken(token: string) {
+    const s = this.slipRows.find((x) => x.token === token)
+    return s ? { ...s } : null
+  }
+  async makeSlipSheet(organisationId: string) {
+    const made: Slip[] = []
+    for (const side of ['dikejar', 'kejar'] as const) {
+      const top = Math.max(0, ...this.slipRows.filter((s) => s.organisation_id === organisationId && s.side === side).map((s) => s.number))
+      for (let i = 1; i <= 10; i++) {
+        const slip: Slip = { id: this.id('slip'), organisation_id: organisationId, side, number: top + i, token: newToken(), bound_game_id: null, bound_at: null, used_at: null, used_by: null }
+        this.slipRows.push(slip)
+        made.push({ ...slip })
+      }
+    }
+    return made
+  }
+  async bindSlip(slipId: string, gameId: string, at: string) {
+    const s = this.slipRows.find((x) => x.id === slipId)
+    if (!s) return gameId
+    if (!s.bound_game_id) {
+      s.bound_game_id = gameId
+      s.bound_at = at
+    }
+    return s.bound_game_id
+  }
+  async useSlip(slipId: string, playerId: string, at: string) {
+    const s = this.slipRows.find((x) => x.id === slipId)
+    if (!s || s.used_at) return false
+    s.used_at = at
+    s.used_by = playerId
+    return true
+  }
+  async setSideQuest(playerId: string, at: string) {
+    const p = this.playerRows.find((x) => x.id === playerId)
+    if (!p || p.side_quest_at) return false
+    p.side_quest_at = at
+    return true
   }
   async setFlag(playerId: string, field: 'outside' | 'left_start', value: boolean) {
     const p = this.playerRows.find((x) => x.id === playerId)

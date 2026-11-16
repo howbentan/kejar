@@ -259,6 +259,25 @@ export interface SecretCard {
   found_at: string | null
 }
 
+/** Which side a Tupperware slip is printed for. */
+export type TupperSide = 'dikejar' | 'kejar'
+
+/**
+ * A printed single-use slip for the Tupperware side quest. The token is stored as-is so the print page can redraw
+ * the sheet; it only ever reaches the organiser. `bound_game_id` is the one game it was first scanned in.
+ */
+export interface Slip {
+  id: string
+  organisation_id: string
+  side: TupperSide
+  number: number
+  token: string
+  bound_game_id: string | null
+  bound_at: string | null
+  used_at: string | null
+  used_by: string | null
+}
+
 /** A stash that has been dropped somewhere, without its secret code. */
 export interface PlacedStash {
   lat: number
@@ -300,6 +319,8 @@ export interface Player {
   disqualified_at?: string | null
   /** Banjir Kilat: when this runner's 30 s in the water started (ISO), cleared once they're back on dry land or in Penjara. */
   flooded_at?: string | null
+  /** Tupperware side quest: when this player's one try was spent (ISO), set once. */
+  side_quest_at?: string | null
   /** How to play: when this player opened the story, and when they tapped I'm ready (ISO). Each is set once. */
   brief_opened_at?: string | null
   brief_ready_at?: string | null

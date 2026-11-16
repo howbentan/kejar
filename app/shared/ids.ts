@@ -79,6 +79,18 @@ export function hijauCodeFromQr(text: string): string | null {
   return m ? m[1] : null
 }
 
+/** The printed single-use Tupperware slip: `KEJAR:SLIP:<token>`. The token is a long random string; the side is on the paper, not in the code. */
+export const slipQr = (token: string) => `KEJAR:SLIP:${token}`
+
+/** Any slip, this organisation's or not, including a bare `KEJAR:SLIP`: all go to the server as a scan. */
+export const isSlipQr = (text: string) => /^KEJAR:SLIP(:|$)/.test(text.trim())
+
+/** The token on a slip, or null for a bare or malformed one. */
+export function slipTokenFromQr(text: string): string | null {
+  const m = /^KEJAR:SLIP:([A-Za-z0-9_-]{1,64})$/.exec(text.trim())
+  return m ? m[1] : null
+}
+
 export const MAX_STATIONS = 8
 /** Most players one game takes; the lobby refuses more. Armbands #01 to this are always printed. */
 export const MAX_PLAYERS_PER_GAME = 40
