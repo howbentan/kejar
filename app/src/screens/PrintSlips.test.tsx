@@ -31,7 +31,7 @@ describe('PrintSlips', () => {
     expect(await screen.findByText('Dikejar #04')).toBeInTheDocument()
     expect(screen.getAllByText(/^(Dikejar|Kejar) #\d\d$/)).toHaveLength(20)
     expect(screen.getByText('Kejar #10')).toBeInTheDocument()
-    expect(screen.getByText(/Any unused slip of the right side works\./)).toBeInTheDocument()
+    expect(screen.getByText('Any unused slip of the right side works.')).toBeInTheDocument()
     await waitFor(() => expect(encoded).toHaveLength(20))
     expect(encoded).toContain('KEJAR:SLIP:dikejar4')
     expect(call).toHaveBeenCalledWith('listSlips', { organiserToken: 'ot1' })
@@ -46,6 +46,13 @@ describe('PrintSlips', () => {
     expect(screen.getAllByText(/^(Dikejar|Kejar) #\d\d$/)).toHaveLength(18)
     await waitFor(() => expect(encoded).toHaveLength(18))
     expect(encoded).not.toContain('KEJAR:SLIP:dikejar1')
+  })
+
+  it('says so instead of printing a blank sheet when no slip is unused', async () => {
+    call.mockImplementation(async () => sheet().map((s) => ({ ...s, state: 'used' })))
+    render(<PrintSlips />)
+    expect(await screen.findByText('No unused slips. Make a new sheet in Your Kit.')).toBeInTheDocument()
+    expect(screen.queryAllByText(/^(Dikejar|Kejar) #\d\d$/)).toHaveLength(0)
   })
 
   it('asks for an organiser phone with no session', () => {

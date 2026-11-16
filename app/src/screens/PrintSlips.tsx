@@ -16,6 +16,7 @@ export default function PrintSlips() {
   const [slips, setSlips] = useState<Slip[]>([])
   const [codes, setCodes] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     if (!organiserToken) return
@@ -27,6 +28,7 @@ export default function PrintSlips() {
         if (!live) return
         setSlips(unused)
         setCodes(Object.fromEntries(pairs))
+        setLoaded(true)
       })
       .catch((e) => live && setError(e instanceof Error ? e.message : String(e)))
     return () => {
@@ -57,7 +59,8 @@ export default function PrintSlips() {
               </div>
             ))}
           </div>
-          <p style={{ marginTop: 12, fontSize: 12 }}>Any unused slip of the right side works. ✂</p>
+          {loaded && slips.length === 0 && !error && <p>No unused slips. Make a new sheet in Your Kit.</p>}
+          <p style={{ marginTop: 12, fontSize: 12 }}>Any unused slip of the right side works.</p>
         </>
       )}
     </div>
