@@ -1,13 +1,13 @@
 import { useCallback, useEffect } from 'react'
 import type { CatchJudgement } from '../../shared/catch.js'
-import { isBomohQr, isDatoQr, isHijauQr, isRingQr, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
+import { isBomohQr, isDatoQr, isHijauQr, isRingQr, isSlipQr, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
 import CatchMoment from '../game/CatchMoment'
 import ChaseLayout from '../game/ChaseLayout'
 import { EndgameStatus } from '../game/EndgameChip'
 import { dipFor } from '../game/LuckyDip'
-import PowerUpHand, { claimMessage, stashMessage, type ClaimResult } from '../game/PowerUpHand'
+import PowerUpHand, { claimMessage, slipMessage, stashMessage, type SlipClaimResult, type ClaimResult } from '../game/PowerUpHand'
 import { clock, useServerNow } from '../game/time'
 import { useWakeLock } from '../game/useWakeLock'
 
@@ -60,7 +60,9 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
     (s: { action: string }, text: string, r: unknown) =>
       s.action === 'catch'
         ? catchMessage(text, r as CatchJudgement)
-        : isDatoQr(text) || isBomohQr(text) || isRingQr(text) || isHijauQr(text)
+        : isSlipQr(text)
+          ? slipMessage(r as SlipClaimResult)
+          : isDatoQr(text) || isBomohQr(text) || isRingQr(text) || isHijauQr(text)
           ? stashMessage(r as ClaimResult, 'chaser')
           : claimMessage(r as ClaimResult, stationFromQr(text)),
     [],

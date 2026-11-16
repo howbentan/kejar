@@ -16,6 +16,10 @@ describe('scanTarget', () => {
     expect(scanTarget('KEJAR:BOMOH', 'runner')).toEqual({ action: 'claim', body: { qr: 'KEJAR:BOMOH' } })
     expect(scanTarget('KEJAR:BOMOH:Zx9_q-4', 'chaser')).toEqual({ action: 'claim', body: { qr: 'KEJAR:BOMOH:Zx9_q-4' } })
   })
+  it('a Tupperware slip claims, for either side', () => {
+    expect(scanTarget('KEJAR:SLIP:abc123', 'runner')).toEqual({ action: 'claim', body: { qr: 'KEJAR:SLIP:abc123' } })
+    expect(scanTarget('KEJAR:SLIP:abc123', 'chaser')).toEqual({ action: 'claim', body: { qr: 'KEJAR:SLIP:abc123' } })
+  })
   it('the Penjara code breaks runners out', () => {
     expect(scanTarget('KEJAR:JAIL', 'runner')).toEqual({ action: 'jailbreak', body: { qr: 'KEJAR:JAIL' } })
   })

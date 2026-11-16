@@ -811,3 +811,22 @@ html { -webkit-tap-highlight-color: transparent; }
 
 /* Banjir Kilat: a runner in the water (design 2026-11-16) */
 .flood-banner { align-self: stretch; margin: 0 0 8px; padding: 10px 14px; border-radius: 14px; background: var(--banjir); color: var(--black); font-weight: 800; font-size: 15px; text-align: center; box-shadow: 0 6px 20px rgba(61, 139, 253, 0.35); }
+
+/* Side quest: the private Tupperware card (red badge, buzzing dot), over the chase screen. */
+.sq { position: fixed; inset: 0; z-index: 30; background: rgba(5, 5, 5, 0.55); display: flex; align-items: center; justify-content: center; padding: 18px; box-sizing: border-box; }
+.sq-card { position: relative; width: 100%; max-width: 360px; background: var(--white); color: #0A0A0B; border-radius: 26px; padding: 20px 18px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6); animation: sq-pop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+@keyframes sq-pop { from { transform: scale(0.7) translateY(20px); opacity: 0; } to { transform: none; opacity: 1; } }
+.sq-eyebrow { margin: 0; font: 500 10px var(--mono); letter-spacing: 0.22em; color: #fff; background: var(--tupper-2); padding: 4px 9px; border-radius: 999px; }
+.sq-card h2 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.05em; line-height: 1.05; }
+.sq-cipher { min-height: 2.1em; display: grid; place-items: center; }
+.decrypt { font-variant-ligatures: none; }
+.sq-art { padding: 4px 0; }
+.sq-tub { animation: sq-wob 1.4s ease-in-out infinite; transform-origin: 50% 90%; }
+@keyframes sq-wob { 0%, 70%, 100% { transform: rotate(0); } 75% { transform: rotate(-7deg); } 82% { transform: rotate(6deg); } 89% { transform: rotate(-3deg); } }
+.sq-buzz { margin: 2px 0 4px; font: 500 10.5px var(--mono); letter-spacing: 0.06em; color: #555; display: flex; align-items: center; gap: 6px; }
+.sq-buzz .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tupper-2); animation: sq-blink 1.4s infinite; }
+@keyframes sq-blink { 50% { opacity: 0.25; } }
+.sq-card .sq-found { width: 100%; background: var(--tupper-2); color: #fff; border-color: var(--tupper-3); }
+.sq-close { position: absolute; top: 8px; right: 10px; width: 36px; height: 36px; border: 0; background: none; font-size: 26px; line-height: 1; color: #444; cursor: pointer; }
+.chip.chip-quest { pointer-events: auto; cursor: pointer; color: var(--white); border-color: var(--tupper-2); }
+@media (prefers-reduced-motion: reduce) { .sq-card, .sq-tub, .sq-buzz .dot { animation: none; } }

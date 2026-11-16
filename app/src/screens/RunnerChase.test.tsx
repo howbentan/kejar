@@ -16,10 +16,13 @@ vi.mock('../game/Map', () => ({
 const here = vi.hoisted(() => ({ coords: {} as Record<string, number>, pending: null as null | Promise<Record<string, number>> }))
 vi.mock('../game/here', () => ({ currentCoords: () => here.pending ?? Promise.resolve(here.coords) }))
 vi.mock('../game/Scanner', () => ({
-  default: ({ onResult }: { onResult: (t: string) => void }) => (
-    <button type="button" onClick={() => onResult(scanned.text)}>
-      fake camera
-    </button>
+  default: ({ onResult, hint }: { onResult: (t: string) => void; hint?: string }) => (
+    <>
+      <p>{hint}</p>
+      <button type="button" onClick={() => onResult(scanned.text)}>
+        fake camera
+      </button>
+    </>
   ),
 }))
 vi.mock('../game/useWakeLock', () => ({ useWakeLock }))
@@ -339,5 +342,41 @@ describe('RunnerChase: alerts after New phone', () => {
   it('does not in schedule mode', () => {
     render(<RunnerChase code="ABC234" view={withMode('schedule', null)} />)
     expect(screen.queryByRole('button', { name: 'Turn on alerts' })).toBeNull()
+  })
+
+  describe('side quest', () => {
+    const quest = () => testView({ sideQuest: true })
+    it('shows the card; closing hides it and leaves a chip that reopens it, and the close is remembered', () => {
+      render(<RunnerChase code="ABC234" view={quest()} />)
+      expect(screen.getByRole('dialog', { name: 'Side quest' })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(localStorage.getItem('sidequest-closed:ABC234')).toBe('1')
+      fireEvent.click(screen.getByRole('button', { name: 'Side quest' }))
+      expect(screen.getByRole('dialog', { name: 'Side quest' })).toBeInTheDocument()
+    })
+    it('stays closed after a reload', () => {
+      localStorage.setItem('sidequest-closed:ABC234', '1')
+      render(<RunnerChase code="ABC234" view={quest()} />)
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(screen.getByRole('button', { name: 'Side quest' })).toBeInTheDocument()
+    })
+    it('is absent when the view has no side quest', () => {
+      render(<RunnerChase code="ABC234" view={testView()} />)
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Side quest' })).toBeNull()
+    })
+    it('Found opens the scanner with the slip hint, and a wrong slip answers in plain words', async () => {
+      call.mockResolvedValue({ ok: false, reason: 'wrong' })
+      scanned.text = 'KEJAR:SLIP:tok'
+      render(<RunnerChase code="ABC234" view={quest()} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Found' }))
+      expect(screen.getByText('Scan the slip inside')).toBeInTheDocument()
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'fake camera' }))
+      })
+      expect(call).toHaveBeenCalledWith('claim', expect.objectContaining({ qr: 'KEJAR:SLIP:tok' }))
+      expect(screen.getByText('Bukan ini. That was your try.')).toBeInTheDocument()
+    })
   })
 })

@@ -8,6 +8,7 @@ import HowToPlayLink from './HowToPlayLink'
 import { stationQr, tagQr } from '../../shared/ids.js'
 import { rippleOrigin } from './ripple'
 import Scanner from './Scanner'
+import SideQuest from './SideQuest'
 import { scanTarget, type ScanTarget } from './scan'
 import { loadSession } from './session'
 import Ticker from './Ticker'
@@ -20,6 +21,16 @@ export function GameClock({ view }: { view: View }) {
   const now = view.paused ? view.now : ticking
   // '5 minutes left' (rules §2.7): lime for the rest of the game, on the chase top bar and the marshal's clock alike.
   return <span className={view.fiveLeft ? 'mono clock-lime' : 'mono'}>{clock((view.endsAt ?? now) - now)}</span>
+}
+
+/** Remembered per game so a closed side quest stays closed after a reload. Storage may be blocked: then it just reopens. */
+const closedKey = (code: string) => `sidequest-closed:${code}`
+function wasClosed(code: string): boolean {
+  try {
+    return localStorage.getItem(closedKey(code)) === '1'
+  } catch {
+    return false
+  }
 }
 
 type Scanned = Exclude<ScanTarget, { error: string }>
@@ -47,7 +58,9 @@ export default function ChaseLayout(props: {
   onScanned?: () => void
 }) {
   const { code, view, side, describe, momentFor, onScanned } = props
-  const [scanning, setScanning] = useState(false)
+  // The scanner's hint: the usual one, or the side quest's while the player is looking for the slip.
+  const [scanning, setScanning] = useState<{ hint?: string } | null>(null)
+  const [questClosed, setQuestClosed] = useState(() => wasClosed(code))
   const [result, setResult] = useState('')
   const [moment, setMoment] = useState<ReactNode | null>(null)
   // A scan still on its way: no second scan until it answers (a slow claim mustn't let another through).
@@ -55,7 +68,7 @@ export default function ChaseLayout(props: {
 
   const onScan = useCallback(
     async (text: string) => {
-      setScanning(false)
+      setScanning(null)
       const target = scanTarget(text, side)
       if ('error' in target) return setResult(target.error)
       setBusy(true)
@@ -74,6 +87,16 @@ export default function ChaseLayout(props: {
     },
     [code, side, describe, momentFor, onScanned],
   )
+
+  const openScanner = (hint?: string) => setScanning({ hint })
+  const closeQuest = () => {
+    setQuestClosed(true)
+    try {
+      localStorage.setItem(closedKey(code), '1')
+    } catch {
+      // Private mode: it reopens next load, which is harmless.
+    }
+  }
 
   return (
     <main className="chase">
@@ -103,6 +126,11 @@ export default function ChaseLayout(props: {
           <FloodBanner view={view} />
           <div className="chase-chips">
             {props.chips}
+            {view.sideQuest && questClosed && (
+              <button type="button" className="chip chip-quest" onClick={() => setQuestClosed(false)}>
+                Side quest
+              </button>
+            )}
             <HowToPlayLink code={code} view={view} />
           </div>
           {props.overlay}
@@ -118,19 +146,29 @@ export default function ChaseLayout(props: {
         )}
         <div className="dock-row">
           {props.slot}
-          <button type="button" className={`scan ${props.scanClass}`} disabled={!!moment || busy} aria-busy={busy || undefined} onClick={() => setScanning(true)}>
+          <button type="button" className={`scan ${props.scanClass}`} disabled={!!moment || busy} aria-busy={busy || undefined} onClick={() => openScanner()}>
             <Busy busy={busy} label="Checking" height={props.scanClass === 'scan-runner' ? 18 : 24} stack={props.scanClass === 'scan-runner'}>{props.scanLabel}</Busy>
           </button>
         </div>
         <Ticker feed={view.feed} />
       </footer>
       {moment}
+      {view.sideQuest && !questClosed && (
+        <SideQuest
+          gameCode={code}
+          onClose={closeQuest}
+          onFound={() => {
+            closeQuest()
+            openScanner('Scan the slip inside')
+          }}
+        />
+      )}
       {scanning && (
         <div className="scan-overlay">
           <Scanner
             onResult={onScan}
-            onCancel={() => setScanning(false)}
-            hint={side === 'runner' ? 'Point at the station or Penjara card' : 'Point at the tag or station card'}
+            onCancel={() => setScanning(null)}
+            hint={scanning.hint ?? (side === 'runner' ? 'Point at the station or Penjara card' : 'Point at the tag or station card')}
             // No camera (blocked or broken): type the number printed on the card. The server still checks reach.
             numberFallback={
               side === 'runner'

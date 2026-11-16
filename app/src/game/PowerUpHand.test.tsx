@@ -7,7 +7,7 @@ const call = vi.hoisted(() => vi.fn())
 vi.mock('./api', () => ({ call, ApiError: class extends Error {} }))
 vi.mock('./Scanner', () => ({ default: () => null }))
 
-import PowerUpHand, { claimMessage } from './PowerUpHand'
+import PowerUpHand, { claimMessage, slipMessage, stashMessage } from './PowerUpHand'
 
 const decoy: PowerUp = {
   id: 'u1',
@@ -343,5 +343,19 @@ describe('claimMessage', () => {
     expect(claimMessage({ ok: false, reason: 'unknown-station' })).toBe("That's not a station code")
     // The hidden stash (rules doc §9): a full slot, without naming what's in it.
     expect(claimMessage({ ok: false, reason: 'hand-full' })).toBe('Use or lose your power-up first')
+  })
+})
+
+describe('slipMessage', () => {
+  it('says each answer in plain words', () => {
+    expect(slipMessage({ ok: false, reason: 'wrong' })).toBe('Bukan ini. That was your try.')
+    expect(slipMessage({ ok: false, reason: 'no-try' })).toBe("You've used your try this game.")
+    expect(slipMessage({ ok: false, reason: 'not-yours' })).toBe('Not your Tupperware.')
+    expect(slipMessage({ ok: false, reason: 'taken' })).toBe('Dah kena ambil.')
+    expect(slipMessage({ ok: false, reason: 'too-far' })).toBe('Get closer.')
+    expect(slipMessage({ ok: false, reason: 'no-box' })).toBe('Nothing here.')
+    expect(slipMessage({ ok: false, reason: 'paused' })).toBe('Game is paused')
+    expect(slipMessage({ ok: false, reason: 'frozen', frozenForMs: 65_000 })).toBe('Brain freeze! Wait 1:05.')
+    expect(slipMessage({ ok: true, kind: 'dato', slip: true })).toBe(stashMessage({ ok: true, kind: 'dato' }))
   })
 })

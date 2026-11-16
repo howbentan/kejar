@@ -84,6 +84,21 @@ export function stashMessage(r: ClaimResult | { ok: false; reason: 'no-stash' | 
   return 'Nothing here.'
 }
 
+/** What a slip scan answers: the box's legendary on a right slip, or why not. */
+export type SlipClaimResult = { ok: true; kind: ClaimedKind; slip: true } | { ok: false; reason: string; frozenForMs?: number }
+
+/** Plain words for a Tupperware slip scan. A wrong slip is the player's one try; nothing here says where the box is. */
+export function slipMessage(r: SlipClaimResult): string {
+  if (r.ok) return stashMessage(r)
+  if (r.reason === 'wrong') return 'Bukan ini. That was your try.'
+  if (r.reason === 'no-try') return "You've used your try this game."
+  if (r.reason === 'not-yours') return 'Not your Tupperware.'
+  if (r.reason === 'taken') return 'Dah kena ambil.'
+  if (r.reason === 'too-far') return 'Get closer.'
+  if (r.reason === 'no-box') return 'Nothing here.'
+  return stashMessage(r as ClaimResult)
+}
+
 /** Plain words for a claim; refusals name the station when the scan said which one (motion design §7). */
 export function claimMessage(r: ClaimResult, station?: number | null): string {
   if (r.ok) return claimedLine(r.kind, r.double)
