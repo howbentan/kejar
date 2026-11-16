@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { MIN, T0 } from '../../shared/fixtures.js'
 import { BONUS_SEQ_BASE } from '../../shared/clock.js'
 import { cardAt, deckFor } from '../../shared/deck.js'
-import { distanceM } from '../../shared/geo.js'
+import { distanceM, distanceToEdgeM, offset } from '../../shared/geo.js'
+import { floodPlanOf } from '../../shared/flood.js'
+import { inPlayArea } from '../../shared/playArea.js'
 import { bomohQr, datoQr, hijauQr, JAIL_QR, ringQr, stationQr, tagQr } from '../../shared/ids.js'
 import { seeded } from '../../shared/testing.js'
 import type { PowerUpKind, Role } from '../../shared/types.js'
@@ -2126,19 +2128,19 @@ describe('game mode', () => {
   describe('endgame switches', () => {
     const stored = async (settings: object) => (await store.gameByCode((await readyGame(settings)).code))!.settings.endgames
 
-    it('default to all three on, with Banjir Kilat off', async () => {
-      expect(await stored({ mode: 'full' })).toEqual({ bomba: 'on', hebat: 'on', pkp: 'on', banjir: 'off' })
+    it('default to all four on, Banjir Kilat included', async () => {
+      expect(await stored({ mode: 'full' })).toEqual({ bomba: 'on', hebat: 'on', pkp: 'on', banjir: 'on' })
     })
 
     it("keep Core's hidden switches as given, since rollEndgame ignores them there", async () => {
-      expect(await stored({ mode: 'core', endgames: { bomba: 'off', hebat: 'on', pkp: 'off' } })).toEqual({ bomba: 'off', hebat: 'on', pkp: 'off', banjir: 'off' })
-      expect(await stored({ mode: 'core' })).toEqual({ bomba: 'on', hebat: 'on', pkp: 'on', banjir: 'off' })
+      expect(await stored({ mode: 'core', endgames: { bomba: 'off', hebat: 'on', pkp: 'off' } })).toEqual({ bomba: 'off', hebat: 'on', pkp: 'off', banjir: 'on' })
+      expect(await stored({ mode: 'core' })).toEqual({ bomba: 'on', hebat: 'on', pkp: 'on', banjir: 'on' })
     })
 
     it('a Core game switched to Full keeps Hang Hebat and PKP on', async () => {
       const g = await readyGame({ mode: 'core' })
       await run('setMode', { code: g.code, organiserToken: g.organiserToken, mode: 'full' })
-      expect((await store.gameByCode(g.code))!.settings.endgames).toEqual({ bomba: 'on', hebat: 'on', pkp: 'on', banjir: 'off' })
+      expect((await store.gameByCode(g.code))!.settings.endgames).toEqual({ bomba: 'on', hebat: 'on', pkp: 'on', banjir: 'on' })
     })
 
     /** A lobby game stored before the switches existed: its settings have no `endgames` at all. */
@@ -2167,11 +2169,12 @@ describe('game mode', () => {
     })
 
     it('store what a Full game asks for, and only the four keys', async () => {
-      expect(await stored({ mode: 'full', endgames: { bomba: 'off', hebat: 'on', pkp: 'off', extra: 'on' } })).toEqual({ bomba: 'off', hebat: 'on', pkp: 'off', banjir: 'off' })
+      expect(await stored({ mode: 'full', endgames: { bomba: 'off', hebat: 'on', pkp: 'off', extra: 'on' } })).toEqual({ bomba: 'off', hebat: 'on', pkp: 'off', banjir: 'on' })
     })
 
-    it('store Banjir Kilat as off even when sent on', async () => {
-      expect((await stored({ mode: 'full', endgames: { banjir: 'on' } }))!.banjir).toBe('off')
+    it('store Banjir Kilat as sent, on or off', async () => {
+      expect((await stored({ mode: 'full', endgames: { banjir: 'off' } }))!.banjir).toBe('off')
+      expect((await stored({ mode: 'full', endgames: { banjir: 'on' } }))!.banjir).toBe('on')
     })
 
     it('reject a bad value', async () => {
@@ -2614,6 +2617,109 @@ describe('marshal invites', () => {
     // The invite must still be unredeemed and work on the correct game.
     const joined = await run('redeemMarshalInvite', { code: gameA.code, inviteToken, name: 'Siti' })
     expect(joined.token).toHaveLength(43)
+  })
+})
+
+describe('Banjir Kilat: the flood (design 2026-11-16)', () => {
+  type G = Awaited<ReturnType<typeof banjirGame>>
+  async function banjirGame() {
+    const g = await readyGame({ mode: 'full', endgames: { bomba: 'off', hebat: 'off', pkp: 'off', banjir: 'on' } })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    const gameId = (await store.gameByCode(g.code))!.id
+    return { ...g, gameId }
+  }
+  const poll = (g: G, ms: number, who: object = { organiserToken: g.organiserToken }) => {
+    now = ms
+    return run<View>('state', { code: g.code, ...who })
+  }
+  const row = async (g: G) => (await store.gameByCode(g.code))!
+  const player = async (g: G, id: string) => (await store.players(g.gameId)).find((p) => p.id === id)!
+  /** A spot inside the play area but in the water once the water has fully risen (well clear of the edge). */
+  async function wetSpot(g: G) {
+    const game = await row(g)
+    const plan = floodPlanOf(game)
+    for (let k = 0; k < 16; k++) {
+      const p = offset(plan.center, plan.rf + 40, (k * Math.PI) / 8)
+      if (inPlayArea(p, game.arena) && distanceToEdgeM(p, game.arena.boundary) > 40) return { lat: p.lat, lng: p.lng, accuracy_m: 8 }
+    }
+    throw new Error('no wet spot')
+  }
+  const dry = async (g: G) => {
+    const c = floodPlanOf(await row(g)).center
+    return { lat: c.lat, lng: c.lng, accuracy_m: 8 }
+  }
+  const FULL = T0 + 48 * MIN + 10_000 // all four rises done (2:00 left was the last)
+
+  it('rolls when it is the only one on, reveals at 10 minutes left, and shows the flood', async () => {
+    const g = await banjirGame()
+    expect((await row(g)).endgame!.kind).toBe('banjir')
+    expect((await poll(g, T0 + 39 * MIN)).endgame).toBeNull()
+    pushes = []
+    const v = await poll(g, T0 + 40 * MIN)
+    expect(v.endgame?.kind).toBe('banjir')
+    expect(v.endgame?.flood?.step).toBe(0)
+    expect(v.endgame?.flood?.next?.at).toBe(T0 + 42 * MIN)
+    expect(pushes.some((p) => /Banjir kilat/.test((p.payload as { body?: string }).body ?? ''))).toBe(true)
+    const later = await poll(g, FULL)
+    expect(later.endgame?.flood?.step).toBe(4)
+    expect(later.feed.map((f) => f.text)).toEqual(expect.arrayContaining(['The water rose.', "The water's rising. Dry land shrinks in 60 s."]))
+  })
+
+  it('a runner in the water gets 30 s, then goes to Penjara for the flood', async () => {
+    const g = await banjirGame()
+    await poll(g, T0 + 40 * MIN)
+    const wet = await wetSpot(g)
+    now = FULL
+    pushes = []
+    await run('location', { code: g.code, token: g.aina.token, ...wet })
+    expect((await player(g, g.aina.playerId)).flooded_at).toBeTruthy()
+    expect(pushes.map((p) => p.endpoint)).toContain('https://push/Aina')
+    expect((await poll(g, FULL + 5_000, { token: g.aina.token })).wetUntil).toBe(FULL + 30_000)
+    now = FULL + 20_000
+    await run('location', { code: g.code, token: g.aina.token, ...wet })
+    expect((await player(g, g.aina.playerId)).jailed).toBe(false)
+    now = FULL + 31_000
+    await run('location', { code: g.code, token: g.aina.token, ...wet })
+    const aina = await player(g, g.aina.playerId)
+    expect(aina.jailed).toBe(true)
+    expect(aina.flooded_at ?? null).toBeNull()
+    const v = await poll(g, FULL + 32_000, { token: g.aina.token })
+    expect(v.jailReason).toBe('banjir')
+    const marshal = await poll(g, FULL + 32_000)
+    expect(marshal.feed.map((f) => f.text)).toContain('#07 got caught in the flood, sent to Penjara.')
+  })
+
+  it('getting back on dry land clears the 30 s; chasers and the water before the first rise never count', async () => {
+    const g = await banjirGame()
+    await poll(g, T0 + 40 * MIN)
+    const wet = await wetSpot(g)
+    now = T0 + 41 * MIN // revealed, but no rise yet
+    await run('location', { code: g.code, token: g.aina.token, ...wet })
+    expect((await player(g, g.aina.playerId)).flooded_at ?? null).toBeNull()
+    now = FULL
+    await run('location', { code: g.code, token: g.aina.token, ...wet })
+    now = FULL + 10_000
+    await run('location', { code: g.code, token: g.aina.token, ...(await dry(g)) })
+    expect((await player(g, g.aina.playerId)).flooded_at ?? null).toBeNull()
+    now = FULL + 40_000
+    await run('location', { code: g.code, token: g.aina.token, ...wet })
+    expect((await player(g, g.aina.playerId)).jailed).toBe(false)
+    await run('location', { code: g.code, token: g.ben.token, ...wet })
+    expect((await player(g, g.ben.playerId)).flooded_at ?? null).toBeNull()
+  })
+
+  it('a station under water is closed', async () => {
+    const g = await banjirGame()
+    await poll(g, T0 + 40 * MIN)
+    const wet = await wetSpot(g)
+    const game = await row(g)
+    await store.updateGame(game.id, { arena: { ...game.arena, stations: [{ lat: wet.lat, lng: wet.lng }] } })
+    now = FULL
+    await run('location', { code: g.code, token: g.aina.token, ...wet })
+    const r = await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...wet })
+    expect(r).toEqual(expect.objectContaining({ ok: false, reason: 'flooded' }))
   })
 })
 

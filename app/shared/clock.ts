@@ -7,13 +7,14 @@ export const ALERT_LEAD_MS = 30_000
 export const SCHEDULED_ALERT_LEAD_MS = 45_000
 
 /**
- * How long before the end each endgame is revealed (endgame design §6.3, §7.1). Banjir Kilat is never rolled.
+ * How long before the end each endgame is revealed (endgame design §6.3, §7.1; Banjir Kilat design 2026-11-16).
  * Kept here, not in endgame.ts, so `pingTimes` can read Bomba's times without an import cycle; endgame.ts re-exports.
  */
-export const ENDGAME_LEFT_MS: Record<Exclude<EndgameKind, 'banjir'>, number> = {
+export const ENDGAME_LEFT_MS: Record<EndgameKind, number> = {
   bomba: 10 * MINUTE_MS,
   hebat: 10 * MINUTE_MS,
   pkp: 5 * MINUTE_MS,
+  banjir: 10 * MINUTE_MS,
 }
 
 /** Bomba's pings, in minutes left. The last one is the last call. */

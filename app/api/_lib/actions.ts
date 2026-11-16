@@ -19,6 +19,7 @@ import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
 import { hebatLive, maskEndgame, pickWanted, pkpClosed, revealDue, rollEndgame, wantedOut } from '../../shared/endgame.js'
+import { FLOOD_GRACE_MS, floodNow, inWater, wetElapsed } from '../../shared/flood.js'
 import { isOut, undoableArrestId, undoableCatchId } from '../../shared/players.js'
 import { ARREST_FIX_FRESH_MS, ARREST_OPEN_MS, arrestEndsAt, insideArrest, releaseVerdict, usableFix } from '../../shared/arrest.js'
 import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
@@ -529,8 +530,7 @@ function legendariesFrom(input: object, pick?: () => number): Settings['legendar
 }
 
 /**
- * The endgame switches a request asks for. Missing ones take the defaults. Banjir Kilat is "coming soon", so it is
- * stored off whatever is sent. Core's hidden switches (Hang Hebat, PKP) are kept as given, not forced off: `setMode`
+ * The endgame switches a request asks for. Missing ones take the defaults. Core's hidden switches (Hang Hebat, PKP) are kept as given, not forced off: `setMode`
  * re-reads the stored settings, so a Core game switched to Full must still have them. `rollEndgame` ignores them in
  * Core. Only the four known keys are stored.
  */
@@ -538,10 +538,11 @@ function endgamesFrom(input: object): NonNullable<Settings['endgames']> {
   const { endgames: given } = input as { endgames?: unknown }
   if (given !== undefined && (typeof given !== 'object' || given === null || Array.isArray(given))) throw new ActionError(400, 'Unknown endgame setting')
   const merged = { ...DEFAULT_SETTINGS.endgames, ...(given ?? {}) } as Record<string, unknown>
-  for (const kind of ['bomba', 'hebat', 'pkp'] as const) {
+  for (const kind of ['bomba', 'hebat', 'pkp', 'banjir'] as const) {
     if (merged[kind] !== 'on' && merged[kind] !== 'off') throw new ActionError(400, 'Unknown endgame setting')
   }
-  return { bomba: merged.bomba as 'on' | 'off', hebat: merged.hebat as 'on' | 'off', pkp: merged.pkp as 'on' | 'off', banjir: 'off' }
+  const sw = (k: string) => merged[k] as 'on' | 'off'
+  return { bomba: sw('bomba'), hebat: sw('hebat'), pkp: sw('pkp'), banjir: sw('banjir') }
 }
 
 /**
@@ -660,7 +661,9 @@ async function revealEndgame(ctx: Ctx, game: Game): Promise<void> {
       ? '5 minutes left · PKP!'
       : wanted
         ? `Endgame: Hang Hebat! ${wanted.tag_id !== null ? `#${tag2(wanted.tag_id)} ` : ''}${wanted.name} is wanted.`
-        : 'Endgame: Bomba!'
+        : kind === 'banjir'
+          ? 'Endgame: Banjir kilat! The water rises at 8, 6, 4 and 2 min left.'
+          : 'Endgame: Bomba!'
   try {
     await pushTo(ctx, await store.players(game.id), { type: 'notice', code: game.code, title: 'kejar.', body })
   } catch {
@@ -851,7 +854,7 @@ async function settleRescue(ctx: Ctx, game: Game, phase = phaseAt(game, ctx.now)
 }
 
 /** What put the last free Dikejar out: it picks the feed line (views.ts). */
-type WhistleCause = 'catch' | 'auto-jail' | 'removed' | 'luar-garisan' | 'hijau' | 'bounty'
+type WhistleCause = 'catch' | 'auto-jail' | 'removed' | 'luar-garisan' | 'hijau' | 'bounty' | 'banjir'
 
 /**
  * Hang Hebat's state moves under a `game` read earlier in the request (a reveal or a bounty claimed in this call or
@@ -1009,8 +1012,8 @@ async function jailOrArrest(
 async function arrestToPenjara(ctx: Ctx, game: Game, runner: Player, a: Arrest, why: 'revoked' | 'no-show', data: Record<string, unknown> = {}): Promise<boolean> {
   const { store } = ctx
   if (!(await store.endArrest(runner.id, a.firedAt, { waiting: why === 'no-show' }))) return false
-  const cause = why === 'revoked' || a.route === 'catch' ? 'revoked' : a.route === 'hijau' ? 'hijau' : 'no-show'
-  const extra = cause === 'hijau' ? { arrest: true } : cause === 'no-show' ? data : {}
+  const cause = why === 'revoked' || a.route === 'catch' ? 'revoked' : a.route === 'hijau' ? 'hijau' : a.route === 'banjir' ? 'banjir' : 'no-show'
+  const extra = cause === 'hijau' || cause === 'banjir' ? { arrest: true } : cause === 'no-show' ? data : {}
   if (await store.catchRunner(runner.id, null)) {
     if (why === 'revoked') await notify(ctx, game, runner, 'Penjara', BAIL_REVOKED)
     await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: runner.id, data: { who: who(runner), cause, ...extra } })
@@ -1439,6 +1442,8 @@ const location: Action = async (ctx, body) => {
     }
   }
   await checkWhere(ctx, game, me, { lat, lng }, accuracy)
+  // Banjir Kilat judges every fix too. Read again: this same fix may just have disqualified them.
+  if (me.role === 'runner' && game.endgame?.kind === 'banjir') await floodFix(ctx, game, await requirePlayer(ctx, game, body), fix)
   // Super Ring's house arrest freezes with the game, like Luar Garisan. Luar Garisan above still applies to it, so
   // they're read again: this same fix may just have disqualified them.
   if (me.arrest && !game.paused_at && phaseAt(game, ctx.now).phase === 'chasing') {
@@ -1456,6 +1461,34 @@ const location: Action = async (ctx, body) => {
 function openWindowAlert(windows: { alertAt: number; revealAt: number }[], now: number): number | undefined {
   const open = windows.filter((w) => w.alertAt <= now && now <= w.revealAt).map((w) => w.alertAt)
   return open.length ? Math.max(...open) : undefined
+}
+
+const FLOOD_WARN = "Banjir! You're in the water. Get to dry land in 30 s or it's Penjara."
+
+/**
+ * Banjir Kilat (design 2026-11-16): a usable fix from a free runner in the water starts their 30 s; one back on dry
+ * land clears it; one still in the water 30 s on (pauses not counted) sends them to Penjara, or house arrest with a
+ * Super Ring. A quiet phone is never jailed for its silence: only a fix in the water does it.
+ */
+async function floodFix(ctx: Ctx, game: Game, me: Player, fix: { lat: number; lng: number; accuracy_m: number }) {
+  const { store, now } = ctx
+  const clear = async () => {
+    if (me.flooded_at) await store.updatePlayers([{ id: me.id, patch: { flooded_at: null } }])
+  }
+  const live = !game.paused_at && phaseAt(game, now).phase === 'chasing' && floodNow(game, now) !== null
+  if (!live || me.jailed || me.disqualified_at || me.arrest || me.removed_at) return clear()
+  if (fix.accuracy_m > LUAR_GARISAN_MAX_ACCURACY_M) return
+  if (!inWater(fix, game, now)) return clear()
+  if (!me.flooded_at) {
+    await store.updatePlayers([{ id: me.id, patch: { flooded_at: iso(now) } }])
+    await notify(ctx, game, me, 'Banjir!', FLOOD_WARN)
+    return
+  }
+  if (wetElapsed(game, Date.parse(me.flooded_at), now) < FLOOD_GRACE_MS) return
+  await store.updatePlayers([{ id: me.id, patch: { flooded_at: null } }])
+  if ((await jailOrArrest(ctx, game, me, null, 'banjir')) !== 'jailed') return
+  await store.addEvent({ game_id: game.id, type: 'auto-jailed', actor_id: null, target_id: me.id, data: { who: who(me), cause: 'banjir' } })
+  await allOutCheck(ctx, game, 'banjir')
 }
 
 const LUAR_GARISAN_COPY = {
@@ -1933,6 +1966,9 @@ const claim: Action = async (ctx, body) => {
     now: ctx.now,
   })
   if (!verdict.ok) return verdict
+  // Banjir Kilat: a station under water is closed (a hidden legendary card under water can still be scanned).
+  const spot = station === null ? undefined : game.arena.stations?.[station - 1]
+  if (spot && inWater(spot, fresh as Game, ctx.now)) return { ok: false, reason: 'flooded' as const }
   // The top card of this side's shared deck (power-ups §5b). The draw number is taken atomically, so two
   // claims at the same moment never get the same card.
   const side = sideOf(me)

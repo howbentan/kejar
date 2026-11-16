@@ -173,21 +173,18 @@ function Legendary(props: { side: 'runner' | 'chaser'; title: ReactNode; seg: Re
 type Switches = NonNullable<Settings['endgames']>
 
 /**
- * One endgame's switch (endgame design §6.1): its logo and name in its colour, and an Off / On choice. Banjir Kilat
- * isn't built yet, so its row says "Coming soon" and stays off.
+ * One endgame's switch (endgame design §6.1): its logo and name in its colour, and an Off / On choice.
  */
 function EndgameRow(props: { kind: keyof Switches; value: 'on' | 'off'; onChange: (v: 'on' | 'off') => void }) {
   const copy = ENDGAME_COPY[props.kind]
-  const soon = props.kind === 'banjir'
   return (
     <div
       data-endgame={props.kind}
-      style={{ borderRadius: 14, padding: '8px 11px', border: '1.5px solid rgba(245,245,243,.18)', display: 'flex', alignItems: 'center', gap: 10, opacity: soon ? 0.6 : 1 }}
+      style={{ borderRadius: 14, padding: '8px 11px', border: '1.5px solid rgba(245,245,243,.18)', display: 'flex', alignItems: 'center', gap: 10 }}
     >
       <EndgameLogo kind={props.kind} size={36} tilt={-4} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <b style={{ fontSize: 15, color: copy.colour }}>{copy.name}</b>
-        {soon && <small style={{ display: 'block', font: '500 9px var(--mono)', letterSpacing: '0.12em' }}>Coming soon</small>}
       </div>
       <div style={{ width: 132, flex: 'none' }}>
         <Seg<'off' | 'on'>
@@ -195,7 +192,7 @@ function EndgameRow(props: { kind: keyof Switches; value: 'on' | 'off'; onChange
           value={props.value}
           options={[
             { value: 'off', text: 'Off' },
-            { value: 'on', text: 'On', disabled: soon },
+            { value: 'on', text: 'On' },
           ]}
           onChange={props.onChange}
           on={{ background: copy.colour, color: copy.ink }}

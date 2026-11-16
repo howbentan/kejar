@@ -46,7 +46,7 @@ export interface Settings {
    * Which endgames the organiser allows (endgame design §3). Core only reads Bomba; Banjir Kilat is "coming soon", so
    * its switch is always off. Older games have none: read them as all off, so they never get an endgame.
    */
-  endgames?: { bomba: 'on' | 'off'; hebat: 'on' | 'off'; pkp: 'on' | 'off'; banjir: 'off' }
+  endgames?: { bomba: 'on' | 'off'; hebat: 'on' | 'off'; pkp: 'on' | 'off'; banjir: 'on' | 'off' }
 }
 
 /** Spec §4.3 defaults. */
@@ -60,7 +60,7 @@ export const DEFAULT_SETTINGS: Settings = {
   chaserSnapshot: false,
   playersBand: 20,
   legendaries: { dato: 'stash', bomoh: 'off', ring: 'off', hijau: 'off' },
-  endgames: { bomba: 'on', hebat: 'on', pkp: 'on', banjir: 'off' },
+  endgames: { bomba: 'on', hebat: 'on', pkp: 'on', banjir: 'on' },
 }
 
 export type EndgameKind = 'bomba' | 'hebat' | 'pkp' | 'banjir'
@@ -233,7 +233,7 @@ export interface HijauFix {
  */
 export interface Arrest {
   firedAt: string
-  route: 'catch' | 'auto-jail' | 'hijau'
+  route: 'catch' | 'auto-jail' | 'hijau' | 'banjir'
   by: string | null
   center: LatLng | null
   startedAt: string | null
@@ -298,6 +298,8 @@ export interface Player {
   out_warned_at?: string | null
   /** Luar Garisan: when this player was disqualified for leaving the play area twice in a row (ISO). Permanent for the round. */
   disqualified_at?: string | null
+  /** Banjir Kilat: when this runner's 30 s in the water started (ISO), cleared once they're back on dry land or in Penjara. */
+  flooded_at?: string | null
   /** How to play: when this player opened the story, and when they tapped I'm ready (ISO). Each is set once. */
   brief_opened_at?: string | null
   brief_ready_at?: string | null

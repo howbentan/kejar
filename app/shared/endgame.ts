@@ -14,12 +14,12 @@ export function endgamesOf(s: Settings): Switches {
 
 /**
  * The endgame a new game gets, or null. Core only knows Bomba. Full picks evenly among the kinds that are switched
- * on; Banjir Kilat never rolls, whatever its switch says.
+ * on: one endgame per game.
  */
 export function rollEndgame(s: Settings, rng: () => number): EndgameKind | null {
   const on = endgamesOf(s)
   if (s.mode === 'core') return on.bomba === 'on' ? 'bomba' : null
-  const kinds = (['bomba', 'hebat', 'pkp'] as const).filter((k) => on[k] === 'on')
+  const kinds = (['bomba', 'hebat', 'pkp', 'banjir'] as const).filter((k) => on[k] === 'on')
   return kinds.length ? kinds[Math.floor(rng() * kinds.length)]! : null
 }
 
@@ -30,7 +30,7 @@ export function rollEndgame(s: Settings, rng: () => number): EndgameKind | null 
  */
 export function revealDue(game: Game, now: number): boolean {
   const e = game.endgame
-  if (!e || e.revealedAt || e.kind === 'banjir') return false
+  if (!e || e.revealedAt) return false
   if (game.paused_at || game.final_whistle_at || game.ended_at) return false
   const { phase, endsAt } = phaseAt(game, now)
   return phase === 'chasing' && endsAt !== null && endsAt - now <= ENDGAME_LEFT_MS[e.kind]

@@ -2,6 +2,7 @@ import { alertLeadFor, checkedIn, checkinsSince, countedCheckIn, countRestartAt,
 import { alertsFrom, type Alert, type ReportReason } from './alerts.js'
 import { BONUS_SEQ_BASE, chaseStartOf, MINUTE_MS, nextReveal, phaseAt, pingTimes } from './clock.js'
 import { hebatLive, maskEndgame, revealed, rollEndgame } from './endgame.js'
+import { FLOOD_GRACE_MS, floodNow, floodSteps, wetElapsed, type FloodNow } from './flood.js'
 import { distanceM, fuzz, hash, offset } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { isTicked, kitOf, packItems, placeItems, SECRET_PLACE_IDS, type KitItem, type PlaceItem, type SecretLetters } from './kit.js'
@@ -135,7 +136,9 @@ export interface View {
    * arrest (`bail-revoked`: a fix outside the circle, or no fresh fix inside it at the end), or by Mak Kau Hijau
    * (`hijau`: didn't tap green in time).
    */
-  jailReason: 'caught' | 'missed-checkins' | 'bail-revoked' | 'hijau' | null
+  jailReason: 'caught' | 'missed-checkins' | 'bail-revoked' | 'hijau' | 'banjir' | null
+  /** Banjir Kilat: when my 30 s in the water runs out (server ms), or null when I'm not in the water. */
+  wetUntil?: number | null
   /**
    * My Super Ring house arrest, while it lasts (null otherwise): when it ends (held still while paused), the
    * circle's centre, and while it waits for me to open Kejar, the deadline to start it (both others null then).
@@ -176,7 +179,7 @@ export interface View {
    * runners get it live too: the takeover is a game event every player needs. `label` is the wanted runner's tag and
    * `name` their name, both public from the reveal (the feed line names them too), for the wanted poster.
    */
-  endgame: { kind: EndgameKind; revealedAt: number; wanted: { id: string; label: string; name: string } | null; bountyCaught: boolean } | null
+  endgame: { kind: EndgameKind; revealedAt: number; wanted: { id: string; label: string; name: string } | null; bountyCaught: boolean; flood?: FloodNow | null } | null
   feed: FeedItem[]
   counts: { runnersFree: number; runnersJailed: number; runnersLuarGarisan: number; chasers: number }
   /** Everyone in the game: shown in the lobby and to marshals; empty for players mid-game. */
@@ -830,7 +833,7 @@ function jailReasonFor(i: ViewInput): View['jailReason'] {
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0]
   if (latest?.type !== 'auto-jailed') return 'caught'
   if (latest.data.cause === 'revoked') return 'bail-revoked'
-  return latest.data.cause === 'hijau' ? 'hijau' : 'missed-checkins'
+  return latest.data.cause === 'hijau' ? 'hijau' : latest.data.cause === 'banjir' ? 'banjir' : 'missed-checkins'
 }
 
 /** My house arrest for my own screen (see `View.arrest`). While paused, both deadlines move with the clock. */
@@ -996,6 +999,8 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
       // holder it sent to house arrest who never opened Kejar comes later, outside that count: players get the plain
       // Penjara line, so the card stays a secret.
       if (e.data.cause === 'hijau') return ctx.side === null ? plain(`${tag} missed Mak kau hijau, sent to Penjara.`) : e.data.arrest === true ? revoked : null
+      // Banjir Kilat: everyone sees who the water got; a Super Ring house arrest that ended there stays a secret.
+      if (e.data.cause === 'banjir') return e.data.arrest === true && ctx.side !== null ? revoked : plain(`${tag} got caught in the flood, sent to Penjara.`)
       return two(
         `${tag} missed 2 check-ins in a row.`,
         '2×',
@@ -1087,7 +1092,7 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
     case 'final-whistle':
       if (e.data.cause === 'bounty') return 'Hang Hebat caught! Final whistle in 60 s.'
       // A removal or Luar Garisan put the last runner out without a catch; older events carry no cause (a catch).
-      return e.data.cause === 'removed' || e.data.cause === 'luar-garisan' || e.data.cause === 'hijau'
+      return e.data.cause === 'removed' || e.data.cause === 'luar-garisan' || e.data.cause === 'hijau' || e.data.cause === 'banjir'
         ? 'No Dikejar left free! Final whistle in 60 s.'
         : 'Last Dikejar caught! Final whistle in 60 s.'
     case 'arrested':
@@ -1095,6 +1100,7 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
     case 'auto-jailed':
       if (e.data.cause === 'revoked') return target ? `${tagLabel(target)} sent to Penjara` : 'A runner was sent to Penjara'
       if (e.data.cause === 'hijau') return target ? `${tagLabel(target)} missed Mak kau hijau, sent to Penjara` : 'A runner missed Mak kau hijau, sent to Penjara'
+      if (e.data.cause === 'banjir') return target ? `${tagLabel(target)} got caught in the flood, sent to Penjara` : 'A runner got caught in the flood, sent to Penjara'
       return target ? `${tagLabel(target)} missed 2 check-ins, sent to Penjara` : 'A runner missed 2 check-ins, sent to Penjara'
     default:
       return null
@@ -1165,7 +1171,7 @@ function fullView(input: ViewInput): View {
       const line = feedLine(e, byId, feedContext)
       return (Array.isArray(line) ? line : line ? [line] : []).map((l) => ({ at: e.at, ...l }))
     }),
-    ...[...notes, ...snapshotLines(i, phase, endsAt)].map((n) => ({ ...n, means: null, act: false, label: null })),
+    ...[...notes, ...snapshotLines(i, phase, endsAt), ...floodNotes(i)].map((n) => ({ ...n, means: null, act: false, label: null })),
   ]
     .map((entry, order) => ({ entry, order }))
     .sort((a, b) => Date.parse(b.entry.at) - Date.parse(a.entry.at) || b.order - a.order)
@@ -1196,6 +1202,7 @@ function fullView(input: ViewInput): View {
     chaserNearby,
     caughtBy: i.me.jailed && i.me.caught_by ? (byId.get(i.me.caught_by)?.name ?? null) : null,
     jailReason: jailReasonFor(i),
+    wetUntil: wetUntilFor(i),
     arrest: arrestFor(i),
     hijau: hijauFor(i, phase),
     penjaraLockedUntil: penjaraLockedUntilFor(i, phase),
@@ -1284,6 +1291,22 @@ function fullView(input: ViewInput): View {
 }
 
 /** The endgame as a player sees it (see `View.endgame`): nothing until the reveal, and nothing for a Hang Hebat with nobody wanted. */
+/** Banjir Kilat: when my 30 s in the water runs out, pauses not counted; null when I'm dry or it isn't on. */
+function wetUntilFor(i: ViewInput): number | null {
+  const since = i.me.flooded_at
+  if (!since || i.me.jailed || !floodNow(i.game, i.now)) return null
+  return i.now + Math.max(0, FLOOD_GRACE_MS - wetElapsed(i.game, Date.parse(since), i.now))
+}
+
+/** Banjir Kilat's feed lines: each rise is warned 60 s ahead, then happens. Worked out from the clock, not stored. */
+function floodNotes(i: ViewInput): { at: string; text: string }[] {
+  if (!floodNow(i.game, i.now)) return []
+  return floodSteps(i.game, i.now).flatMap((s) => [
+    ...(s.warnAt <= i.now ? [{ at: new Date(s.warnAt).toISOString(), text: "The water's rising. Dry land shrinks in 60 s." }] : []),
+    ...(s.at <= i.now ? [{ at: new Date(s.at).toISOString(), text: 'The water rose.' }] : []),
+  ])
+}
+
 function endgameFor(i: ViewInput, byId: Map<string, Player>): View['endgame'] {
   const e = i.game.endgame
   if (!e || !revealed(i.game)) return null
@@ -1293,7 +1316,7 @@ function endgameFor(i: ViewInput, byId: Map<string, Player>): View['endgame'] {
     if (!w) return null
     wanted = { id: w.id, label: tagLabel(w), name: w.name }
   }
-  return { kind: e.kind, revealedAt: Date.parse(e.revealedAt!), wanted, bountyCaught: !!e.bountyAt }
+  return { kind: e.kind, revealedAt: Date.parse(e.revealedAt!), wanted, bountyCaught: !!e.bountyAt, ...(e.kind === 'banjir' ? { flood: floodNow(i.game, i.now) } : {}) }
 }
 
 /** The briefing view (see `View.briefing`): the organiser's tally, a player's open/ready, nothing for marshals. */

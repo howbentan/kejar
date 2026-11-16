@@ -14,7 +14,7 @@ const arrest = { firedAt: iso(T0), route: 'catch', by: null, center: null, start
 
 describe('the exact values', () => {
   it('holds the reveal times and Bomba calls', () => {
-    expect(ENDGAME_LEFT_MS).toEqual({ bomba: 10 * MIN, hebat: 10 * MIN, pkp: 5 * MIN })
+    expect(ENDGAME_LEFT_MS).toEqual({ bomba: 10 * MIN, hebat: 10 * MIN, pkp: 5 * MIN, banjir: 10 * MIN })
     expect([...BOMBA_LEFT_MIN]).toEqual([8, 6, 5, 4, 3, 2, 1])
   })
 })
@@ -41,13 +41,12 @@ describe('rollEndgame', () => {
   it('gives nothing in Full with everything off', () => {
     expect(rollEndgame(settings('full', sw({})), seeded(1))).toBeNull()
   })
-  it('never gives Banjir Kilat, and uses every switched-on kind', () => {
+  it('uses every switched-on kind, Banjir Kilat included', () => {
     const rng = seeded(7)
     const seen = new Set<EndgameKind | null>()
     const all = { bomba: 'on', hebat: 'on', pkp: 'on', banjir: 'on' } as unknown as Settings['endgames']
     for (let i = 0; i < 1000; i++) seen.add(rollEndgame(settings('full', all), rng))
-    expect(seen.has('banjir')).toBe(false)
-    expect(seen).toEqual(new Set(['bomba', 'hebat', 'pkp']))
+    expect(seen).toEqual(new Set(['bomba', 'hebat', 'pkp', 'banjir']))
   })
   it('gives nothing for settings stored before endgames existed', () => {
     expect(rollEndgame(settings('full'), seeded(1))).toBeNull()
