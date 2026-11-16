@@ -345,8 +345,15 @@ export default function HostNew() {
         ...(chosen ? { savedArenaId: chosen.id, overrides } : { draft: oneOff }),
       })
       const param = noticeParam(notice)
-      // Replace, not push: the phone's back gesture from step 4 must never land on a fresh step 1 and make a second game.
-      window.location.replace(`/host/${code}?setup=crew${param ? `&notice=${param}` : ''}`)
+      // The phone's back gesture from step 4 must never land on a fresh step 1 and make a second game. Each forward step
+      // left a history entry, so step back over them first, then replace the first one: back from step 4 then leaves.
+      const crew = `/host/${code}?setup=crew${param ? `&notice=${param}` : ''}`
+      const depth = Math.max(0, ((window.history.state as { newGameStep?: number } | null)?.newGameStep ?? 1) - 1)
+      if (depth > 0) {
+        ownPop.current = true
+        window.addEventListener('popstate', () => window.location.replace(crew), { once: true })
+        window.history.go(-depth)
+      } else window.location.replace(crew)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setBusy(false)

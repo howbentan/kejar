@@ -64,8 +64,12 @@ beforeEach(() => {
   Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign: vi.fn() } })
   setUa('Mozilla/5.0 (Linux; Android 14)')
 })
-afterEach(() => {
+afterEach(async () => {
+  // Each step is a history entry, and jsdom moves through history a moment later: let any move still on its way land
+  // here, on this test's screen, so it can't arrive in the next test and jump that one to another step.
+  await new Promise((r) => setTimeout(r, 20))
   cleanup()
+  window.history.replaceState(null, '')
   localStorage.clear()
 })
 
@@ -436,6 +440,18 @@ describe('HostNew creating', () => {
     next()
     createGame()
     await waitFor(() => createdWith({ savedArenaId: 'ar2' }))
+  })
+
+  it("creating steps back over the steps' history first, so the back gesture from step 4 never reaches a fresh step 1", async () => {
+    const replace = vi.fn()
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign: vi.fn(), replace } })
+    const go = vi.spyOn(window.history, 'go')
+    render(<HostNew />)
+    await toStep3()
+    createGame()
+    await waitFor(() => expect(go).toHaveBeenCalledWith(-2))
+    await waitFor(() => expect(replace).toHaveBeenCalledWith('/host/ABC234?setup=crew'))
+    go.mockRestore()
   })
 
   it('goes to the crew step of the new game', async () => {
