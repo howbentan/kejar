@@ -118,7 +118,8 @@ export interface Game {
   five_warned_at: string | null
   /**
    * When the organiser cancelled the game (cancel design, 2026-11-16): it also set `ended_at`, so everything that
-   * stops on an ended game stops, but there are no results. Null or missing for every other game.
+   * stops on an ended game stops, but there are no results. Null or missing for every other game. A cancelled lobby
+   * still reads as phase 'lobby' (phaseAt checks started_at first): check this, or the view's `cancelled`, first.
    */
   cancelled_at?: string | null
   /** When this game's personal data was wiped (fair-play §1.8), 30 days after it ended. Null until then. */

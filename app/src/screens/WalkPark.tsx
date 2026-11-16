@@ -10,6 +10,7 @@ import { ErrorText, Screen } from '../game/ui'
 import { useGameState } from '../game/useGameState'
 import { FullLoader, WaitingLine } from '../game/Runner'
 import { useLoaderGate } from '../game/useLoaderGate'
+import Cancelled from './Cancelled'
 
 /** Within this distance of a spot, the card turns lime and the button appears. */
 export const WALK_HERE_M = 15
@@ -276,6 +277,7 @@ export function HostWalk({ code }: { code: string }) {
     )
   }
   if (gate.show) return <FullLoader caption="JOM JALAN, LOADING THE WALK" {...gate.loader} />
+  if (view?.cancelled) return <Cancelled code={code} organiser />
   if (!view) {
     return (
       <Screen eyebrow="WALK THE PARK">
