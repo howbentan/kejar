@@ -36,11 +36,14 @@ export function legendaryOn(game: Game, side: TupperSide): LegendaryKind | null 
 /**
  * The side's Tupperware: its legendary that is on a hidden stash (Full mode only), with the spot it was dropped at.
  * Null when the side is off or the box hasn't been dropped yet. Older games may lack legendary keys, so they're read
- * with the defaults.
+ * with the defaults. A stash with a `code` is a printed colour card dropped before the Tupperware (spec §6, release
+ * ruling), never a box: no side quest or slip claim goes to it, and it still claims by its own KEJAR:* card.
  */
 export function boxFor(game: Game, side: TupperSide): { legendary: LegendaryKind; spot: PlacedStash } | null {
   const legendary = legendaryOn(game, side)
-  const spot = legendary ? placedStash(stashOf(game, legendary)) : null
+  const stash = legendary ? stashOf(game, legendary) : null
+  if (stash?.code) return null
+  const spot = placedStash(stash)
   return legendary && spot ? { legendary, spot } : null
 }
 

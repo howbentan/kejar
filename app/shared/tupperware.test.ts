@@ -40,6 +40,10 @@ describe('boxFor', () => {
     expect(boxFor(g, 'dikejar')).toBeNull()
     expect(boxFor(g, 'kejar')?.legendary).toBe('bomoh')
   })
+  it('is null for a legacy colour card dropped before the Tupperware (a stash with a code)', () => {
+    const g = full({ dato_stash: { ...dropped, code: 'legacy-card-code', card: { id: 'sc1', letter: 'A' } } }, { dato: 'stash' })
+    expect(boxFor(g, 'dikejar')).toBeNull()
+  })
   it('reads older games that lack legendary keys', () => {
     const g = full({ hijau_stash: dropped })
     g.settings.legendaries = { hijau: 'stash' } as never

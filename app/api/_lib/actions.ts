@@ -216,7 +216,7 @@ function writeStash(ctx: Ctx, gameId: string, legendary: LegendaryKind, stash: D
 
 /**
  * A lobby forgets a legendary's box: no stash, and its side's walk step is no longer placed, so the box has to be
- * dropped again. Used when a mode switch takes that legendary out of the game.
+ * dropped again. Used when the lobby switches to Core.
  */
 async function liftBox(ctx: Ctx, game: GameRow, legendary: LegendaryKind): Promise<void> {
   if (stashOf(game, legendary)) await writeStash(ctx, game.id, legendary, null)
@@ -2716,7 +2716,7 @@ const setKit: Action = async (ctx, body) => {
 /**
  * The organiser switches between Core and Full while still in the lobby; never after the start (rules doc §1).
  * Core lifts every box: no stash, and the walk's Tupperware steps are no longer placed. A switch to Full re-picks
- * each side's legendary, and a box still saved for one the pick left out is lifted too, so it's dropped again.
+ * each side's legendary; there is no box to lift then, as only a Full lobby can drop one and leaving Full lifted it.
  */
 const setMode: Action = async (ctx, body) => {
   const loaded = await loadGame(ctx, body)
@@ -2730,7 +2730,6 @@ const setMode: Action = async (ctx, body) => {
     for (const kind of LEGENDARY_KINDS) await liftBox(ctx, loaded, kind)
     return { ok: true }
   }
-  if (toFull) for (const kind of LEGENDARY_KINDS) if (settings.legendaries[kind] !== 'stash') await liftBox(ctx, loaded, kind)
   return { ok: true }
 }
 

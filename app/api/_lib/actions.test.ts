@@ -7665,6 +7665,47 @@ describe('the secret colour cards are retired (Tupperware task 11)', () => {
     const code = (await store.gameByCode(g.code))!.dato_stash!.code!
     expect(await run('claim', { code: g.code, token: g.aina.token, qr: `KEJAR:DATO:${code}`, lat: SPOT.lat, lng: SPOT.lng, accuracy_m: 8 })).toEqual({ ok: true, kind: 'dato' })
   })
+
+  const WINDOW = T0 + 9 * MIN + 10_000 // inside ping 1's side quest window
+  const near = { lat: SPOT.lat - 30 / 111_195, lng: SPOT.lng, accuracy_m: 8 }
+  const notices = () => pushes.filter((p) => (p.payload as { type: string }).type === 'notice')
+  const firstSlip = async (organiserToken: string, side: 'dikejar' | 'kejar') => {
+    await run('makeSlipSheet', { organiserToken })
+    return (await run<{ side: string; token: string }[]>('listSlips', { organiserToken })).find((s) => s.side === side)!.token
+  }
+
+  it('a colour card dropped before release is never a Tupperware: no side quest or slip claim near it, and KEJAR:DATO still claims', async () => {
+    const g = await readyGame({ mode: 'full' })
+    const slipToken = await firstSlip(g.organiserToken, 'dikejar')
+    await legacyCard(g.code, 'dato', SPOT)
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = WINDOW
+    await run('location', { code: g.code, token: g.aina.token, ...near })
+    const aina = (await store.players((await store.gameByCode(g.code))!.id)).find((p) => p.id === g.aina.playerId)!
+    expect(aina.side_quest_at ?? null).toBeNull()
+    expect(notices()).toHaveLength(0)
+    expect((await run<View>('state', { code: g.code, token: g.aina.token })).sideQuest).toBe(false)
+    const atSpot = { lat: SPOT.lat, lng: SPOT.lng, accuracy_m: 8 }
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: slipQr(slipToken), ...atSpot })).toEqual({ ok: false, reason: 'no-box' })
+    const code = (await store.gameByCode(g.code))!.dato_stash!.code!
+    expect(await run('claim', { code: g.code, token: g.hafiz.token, qr: `KEJAR:DATO:${code}`, ...atSpot })).toEqual({ ok: true, kind: 'dato' })
+  })
+
+  it('Full with both sides on starts without a box dropped: legendaries kept, no stash, no side quest, a slip finds no box', async () => {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' } })
+    const slipToken = await firstSlip(g.organiserToken, 'dikejar')
+    const before = (await store.gameByCode(g.code))!.settings.legendaries
+    expect(await run('start', { code: g.code, organiserToken: g.organiserToken })).toEqual({ startedAt: expect.any(String) })
+    const game = (await store.gameByCode(g.code))!
+    expect(game.settings.legendaries).toEqual(before)
+    expect(before).toEqual({ dato: 'off', ring: 'stash', bomoh: 'off', hijau: 'stash' })
+    for (const field of STASHES) expect(game[field] ?? null).toBeNull()
+    now = WINDOW
+    await run('location', { code: g.code, token: g.aina.token, ...near })
+    expect((await run<View>('state', { code: g.code, token: g.aina.token })).sideQuest).toBe(false)
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: slipQr(slipToken), ...near })).toEqual({ ok: false, reason: 'no-box' })
+  })
 })
 
 describe('lifting a box when the mode changes, and the Tupperware on the kit (Tupperware task 11)', () => {

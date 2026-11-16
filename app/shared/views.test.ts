@@ -1430,7 +1430,8 @@ describe('side quest flag (Tupperware task 5)', () => {
 })
 
 describe('Tupperware in the views (task 6)', () => {
-  const stash = (over: object = {}) => ({ lat: 3.00417, lng: 101.00583, claimedBy: null, claimedAt: null, code: 'Secret-slip-token-123', ...over })
+  // A Tupperware's stash has no code: a stash with one is a legacy colour card, never a box (boxFor).
+  const stash = (over: object = {}) => ({ lat: 3.00417, lng: 101.00583, claimedBy: null, claimedAt: null, ...over })
   const full = (over: Partial<Game> = {}) =>
     game({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'stash', ring: 'off', bomoh: 'stash', hijau: 'off' } }, dato_stash: stash(), bomoh_stash: stash({ lat: 3.0071234 }), ...over })
 
@@ -1444,7 +1445,6 @@ describe('Tupperware in the views (task 6)', () => {
       const json = JSON.stringify(v)
       expect(json).not.toContain('3.00417')
       expect(json).not.toContain('3.0071234')
-      expect(json).not.toContain('Secret-slip-token-123')
       expect(json).not.toContain('side_quest_at')
     }
     expect(view({ ...aina, side_quest_at: iso(NOW - 1_000) }, { game: full() }).sideQuest).toBe(true)
