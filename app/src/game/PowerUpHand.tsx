@@ -25,6 +25,8 @@ type UseResult =
 
 const CLAIM_REJECTIONS: Record<string, string> = {
   'too-far': 'Get within 30 m of the station.',
+  // Banjir Kilat: a station under water is closed.
+  flooded: 'That station is under water.',
   'already-claimed': "You've used this station this game. Try another one.",
   'unknown-station': "That's not a station code",
   'not-chasing': 'Stations open when the chase starts',

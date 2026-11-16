@@ -20,12 +20,13 @@ type Variant =
   | { kind: 'catch'; caughtBy: string; caughtAtMs: number | null }
   | { kind: 'auto'; lastSeenMs: number | null }
   /** Sent in without a catch or a missed check-in: Mak Kau Hijau, or leaving Super Ring's house arrest. */
-  | { kind: 'hijau' | 'bail-revoked'; caughtAtMs: number | null }
+  | { kind: 'hijau' | 'bail-revoked' | 'banjir'; caughtAtMs: number | null }
 
 /** What each way in says under STATUS. */
 const REASON_STATUS = {
   hijau: "DIDN'T TOUCH GREEN",
   'bail-revoked': 'LEFT HOUSE ARREST',
+  banjir: 'CAUGHT IN THE FLOOD',
 } as const
 
 export default function PenjaraTicket({
@@ -46,7 +47,7 @@ export default function PenjaraTicket({
   settled: boolean
 }) {
   const number = pick(TICKET_NUMBERS, playerId)
-  const reason = variant.kind === 'hijau' || variant.kind === 'bail-revoked' ? REASON_STATUS[variant.kind] : null
+  const reason = variant.kind === 'hijau' || variant.kind === 'bail-revoked' || variant.kind === 'banjir' ? REASON_STATUS[variant.kind] : null
   const status = settled ? 'FREE' : outForGood ? 'NO EXIT THIS ROUND' : reason ? reason : variant.kind === 'catch' ? 'NOT PAID, WALK TO THE GATE' : 'SESSION TIMED OUT'
   const toGate = distanceM !== null ? `${Math.round(distanceM / 10) * 10} M` : '-'
 

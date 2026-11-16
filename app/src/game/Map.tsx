@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import * as m from 'motion/react-m'
 import { useReducedMotion } from 'motion/react'
 import { circlePolygon, distanceM } from '../../shared/geo.js'
+import { clipToCircle, type FloodNow } from '../../shared/flood.js'
 import type { SecretTone } from '../../shared/kit.js'
 import type { Arena, LatLng } from '../../shared/types.js'
 import { CHASER_SNAPSHOT_FUZZ_M, FUZZ_RADIUS_M, type ChaserSnapshot, type MapDot } from '../../shared/views.js'
@@ -159,6 +160,26 @@ function stashFeatures(s: LatLng | null): FeatureCollection {
 }
 
 /** The hint zone's circle (no names anywhere: secret, jail design §4c). */
+/** Banjir Kilat's colour, as the CSS token --banjir. */
+const BANJIR = '#3D8BFD'
+
+/**
+ * Banjir Kilat on the map (design 2026-11-16): the flooded part of the play area in blue (the play area with the dry
+ * land cut out), and, in the 60 s before a rise, the next waterline dashed.
+ */
+function floodFeatures(arena: Arena, f: Pick<FloodNow, 'center' | 'radiusM' | 'step' | 'next' | 'warning'> | null) {
+  const water: Feature[] = []
+  const next: Feature[] = []
+  if (f && f.step > 0) {
+    const dry = clipToCircle(arena.boundary, f.center, f.radiusM)
+    water.push({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring(arena.boundary), ring([...dry].reverse())] } })
+  }
+  if (f?.warning && f.next) {
+    next.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: ring(circlePolygon(f.center, f.next.radiusM, 64)) } })
+  }
+  return { water: collection(water), next: collection(next) }
+}
+
 function zoneFeatures(z: LegendaryZone | null) {
   return {
     zone: collection(z ? [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring(circlePolygon(z, z.radiusM))] } }] : []),
@@ -254,6 +275,7 @@ export default function GameMap({
   ringZone = null,
   hijauZone = null,
   circle = null,
+  flood = null,
   snapshot = null,
   stash = null,
   stashTone = 'yellow',
@@ -289,6 +311,8 @@ export default function GameMap({
   ringZone?: LegendaryZone | null
   /** Mak Kau Hijau's hint zone: the same unlabelled ? circle, deep green. */
   hijauZone?: LegendaryZone | null
+  /** Banjir Kilat: the water over the flooded part of the play area, and the next waterline before a rise. */
+  flood?: FloodNow | null
   /** Super Ring's house arrest: a solid orange circle (26 m), and the camera framed on it. */
   circle?: LegendaryZone | null
   /** Runners: where the chasers were at their last check-in's alert. Frozen: redrawn only when it changes. */
@@ -314,6 +338,8 @@ export default function GameMap({
   latestHijauZone.current = hijauZone
   const latestCircle = useRef(circle)
   latestCircle.current = circle
+  const latestFlood = useRef(flood)
+  latestFlood.current = flood
   const latestSnapshot = useRef(snapshot)
   latestSnapshot.current = snapshot
   const latestStash = useRef(stash)
@@ -422,6 +448,12 @@ export default function GameMap({
       m.addLayer({ id: 'bomoh-legendary-fill', type: 'fill', source: 'bomoh-legendary', paint: { 'fill-color': p.main, 'fill-opacity': 0.12 } })
       m.addLayer({ id: 'bomoh-legendary-line', type: 'line', source: 'bomoh-legendary', paint: { 'line-color': p.main, 'line-width': 2, 'line-dasharray': [2, 2] } })
       const or = legendaryOrange()
+      // Banjir Kilat's water sits under every zone and dot; the next waterline is dashed on top of it.
+      const fl = floodFeatures(arena, latestFlood.current)
+      m.addSource('flood', { type: 'geojson', data: fl.water })
+      m.addLayer({ id: 'flood-fill', type: 'fill', source: 'flood', paint: { 'fill-color': BANJIR, 'fill-opacity': 0.32 } })
+      m.addSource('flood-next', { type: 'geojson', data: fl.next })
+      m.addLayer({ id: 'flood-next', type: 'line', source: 'flood-next', paint: { 'line-color': BANJIR, 'line-width': 2.5, 'line-dasharray': [2, 1.5] } })
       m.addSource('ring-legendary', { type: 'geojson', data: zoneFeatures(latestRingZone.current).zone })
       m.addLayer({ id: 'ring-legendary-fill', type: 'fill', source: 'ring-legendary', paint: { 'fill-color': or.main, 'fill-opacity': 0.12 } })
       m.addLayer({ id: 'ring-legendary-line', type: 'line', source: 'ring-legendary', paint: { 'line-color': or.main, 'line-width': 2, 'line-dasharray': [2, 2] } })
@@ -760,6 +792,17 @@ export default function GameMap({
     ;(mp.getSource('house') as GeoJSONSource | undefined)?.setData(zoneFeatures(latestCircle.current).zone)
     fitTo(mp, circleBox(latestCircle.current), HOUSE_MAX_ZOOM, HOUSE_PADDING)
   }, [circleKey, loaded])
+
+  // The water follows the flood: a rise, or the next waterline showing. Rounded so a poll's tiny changes don't redraw.
+  const floodKey = flood ? `${flood.step}:${flood.warning}:${Math.round(flood.radiusM)}` : ''
+  useEffect(() => {
+    const mp = map.current
+    if (!ready.current || !mp) return
+    const fl = floodFeatures(arena, latestFlood.current)
+    ;(mp.getSource('flood') as GeoJSONSource | undefined)?.setData(fl.water)
+    ;(mp.getSource('flood-next') as GeoJSONSource | undefined)?.setData(fl.next)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floodKey, loaded])
 
   const fitKey = JSON.stringify(fit)
   useEffect(() => {

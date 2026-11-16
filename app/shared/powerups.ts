@@ -25,7 +25,7 @@ export type ClaimJudgement =
   | { ok: true }
   | {
       ok: false
-      reason: 'not-chasing' | 'cannot-claim' | 'unknown-station' | 'too-far' | 'already-claimed' | 'locked' | 'hand-full' | 'frozen'
+      reason: 'not-chasing' | 'cannot-claim' | 'unknown-station' | 'too-far' | 'already-claimed' | 'locked' | 'hand-full' | 'frozen' | 'flooded'
       lockedForMs?: number
       /** For frozen: how long the chaser's slot stays frozen. */
       frozenForMs?: number

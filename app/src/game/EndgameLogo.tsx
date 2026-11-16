@@ -53,8 +53,8 @@ export const ENDGAME_COPY: Record<EndgameKind, { name: string; title: string; co
     colour: 'var(--banjir)',
     ink: 'var(--black)',
     when: '10 MINUTES LEFT · ENDGAME',
-    rule: 'The park floods inward every few minutes until only a small dry patch is left.',
-    line: 'Caught in the water? You get 60 s to get back inside the line.',
+    rule: 'The water rises at 8, 6, 4 and 2 minutes left. Watch the dry land shrink on your map.',
+    line: "Caught in the water? Get to dry land in 30 s or it's Penjara.",
   },
   bomba: {
     name: 'Bomba',

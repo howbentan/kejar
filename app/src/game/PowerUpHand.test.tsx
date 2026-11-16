@@ -191,6 +191,7 @@ describe('PowerUpHand', () => {
     it('claim messages: a doubled claim, and a frozen chaser at a station', () => {
       expect(claimMessage({ ok: true, kind: 'shield', double: true })).toBe('Combo! Durian x2.')
       expect(claimMessage({ ok: false, reason: 'frozen', frozenForMs: 65_000 })).toBe('Brain freeze! Wait 1:05.')
+      expect(claimMessage({ ok: false, reason: 'flooded' }, 2)).toBe('That station is under water.')
     })
   })
 

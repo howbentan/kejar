@@ -71,15 +71,17 @@ function Settle({ code, view, onSettled }: { code: string; view: View; onSettled
 }
 
 /** The auto-jailed variants: missed check-ins, Mak Kau Hijau's missed tap, or Super Ring's bail revoked. */
-type AutoReason = 'missed-checkins' | 'hijau' | 'bail-revoked'
+type AutoReason = 'missed-checkins' | 'hijau' | 'bail-revoked' | 'banjir'
 
 const HIJAU_LINES = ['Should have touched green, bossku.', 'Hijau where, bro?', 'Mak kau hijau no joke one.']
 const REVOKED_LINES = ['Should have stayed home, boss.', 'Out of the circle, bro.']
+const BANJIR_LINES = ['Kena banjir, bossku.', 'Should have stayed dry, bro.', 'Air naik, you tak lari.']
 
 const AUTO: Record<AutoReason, { plate: string; title: string; lines: string[] }> = {
   'missed-checkins': { plate: '2× MISSED', title: 'Missed two check-ins', lines: MISSED_LINES },
   hijau: { plate: 'MAK KAU HIJAU', title: 'Mak kau hijau got you', lines: HIJAU_LINES },
   'bail-revoked': { plate: 'BAIL REVOKED', title: 'Bail revoked. To Penjara', lines: REVOKED_LINES },
+  banjir: { plate: 'BANJIR KILAT', title: 'The flood got you', lines: BANJIR_LINES },
 }
 
 /**
@@ -133,7 +135,7 @@ function AutoJailed({ code, view, reason = 'missed-checkins' }: { code: string; 
       <PenjaraTicket
         playerId={view.me.id}
         variant={
-          reason === 'hijau' || reason === 'bail-revoked'
+          reason === 'hijau' || reason === 'bail-revoked' || reason === 'banjir'
             ? { kind: reason, caughtAtMs: view.me.caught_at ? Date.parse(view.me.caught_at) : null }
             : { kind: 'auto', lastSeenMs: lastOk?.at ?? null }
         }
@@ -195,7 +197,7 @@ function WalkThenWatch({
       {/* No GPS fix (none, denied, or none in 10 s): the spectator view, with the Penjara pin on it. */}
       {arrived || lost || spectate || !navigator.geolocation ? (
         <>
-          <GameMap arena={view.arena} dots={view.dots} height={240} />
+          <GameMap arena={view.arena} dots={view.dots} height={240} flood={view.endgame?.flood ?? null} />
           <p className="eyebrow" style={{ textAlign: 'center' }}>
             {`Spectator view · ${view.settings.spectatorDelayMin} min delayed`}
           </p>
@@ -267,6 +269,6 @@ export default function Jail({ code, view }: { code: string; view: View }) {
   const lastReason = useRef<View['jailReason']>(view.jailReason)
   if (view.jailReason) lastReason.current = view.jailReason
   const reason = view.me.jailed ? view.jailReason : lastReason.current
-  if (reason === 'missed-checkins' || reason === 'hijau' || reason === 'bail-revoked') return <AutoJailed code={code} view={view} reason={reason} />
+  if (reason === 'missed-checkins' || reason === 'hijau' || reason === 'bail-revoked' || reason === 'banjir') return <AutoJailed code={code} view={view} reason={reason} />
   return <Caught code={code} view={view} />
 }

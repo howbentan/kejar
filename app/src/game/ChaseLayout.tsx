@@ -3,6 +3,7 @@ import type { View } from '../../shared/views.js'
 import { call } from './api'
 import { currentCoords } from './here'
 import GameMap from './Map'
+import FloodBanner from './FloodBanner'
 import HowToPlayLink from './HowToPlayLink'
 import { stationQr, tagQr } from '../../shared/ids.js'
 import { rippleOrigin } from './ripple'
@@ -95,9 +96,11 @@ export default function ChaseLayout(props: {
           hijauZone={view.hijauZone}
           snapshot={view.chaserSnapshot}
           tollGates={view.tollGates}
+          flood={view.endgame?.flood ?? null}
           ripple={view.lastRevealAt ? { at: view.lastRevealAt, origin: rippleOrigin(view.dots, view.arena) } : null}
         />
         <div className="chase-over">
+          <FloodBanner view={view} />
           <div className="chase-chips">
             {props.chips}
             <HowToPlayLink code={code} view={view} />

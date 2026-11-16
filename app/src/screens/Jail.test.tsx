@@ -232,6 +232,14 @@ describe('Jail', () => {
     expect(screen.getByRole('button', { name: 'Phone died or no buzz? Tell a marshal →' })).toBeInTheDocument()
   })
 
+  it('Banjir Kilat: says the flood got you, with its ticket line and no check-ins list', () => {
+    const view = testView({ caughtBy: null, jailReason: 'banjir', jailCheckins: null })
+    const { container } = render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true } }} />)
+    expect(screen.getByRole('heading', { name: 'The flood got you.' })).toBeInTheDocument()
+    expect(screen.getByText('CAUGHT IN THE FLOOD')).toBeInTheDocument()
+    expect(container.querySelector('.checkin-row')).toBeNull()
+  })
+
   it('a fresh Mak Kau Hijau jailing drops the bars with its own plate', () => {
     const view = testView({ caughtBy: null, jailReason: 'hijau' })
     render(<Jail code="ABC234" view={{ ...view, me: { ...view.me, jailed: true, caught_at: new Date(97_000).toISOString() } }} />)
