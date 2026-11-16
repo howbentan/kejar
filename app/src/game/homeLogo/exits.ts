@@ -202,7 +202,8 @@ export function createExitFx(stage: HTMLElement, exit: Exit): ExitFx {
           )
         })
     }
-    // The flash where the foot connects, and a jolt of the whole screen.
+    // The flash where the foot connects, and a jolt of the logo and caption (inside the stage, which clips, so the
+    // page itself never moves or grows a scrollbar).
     const sr = stage.getBoundingClientRect()
     const burst = document.createElement('span')
     burst.className = 'kf-burst'
@@ -210,13 +211,13 @@ export function createExitFx(stage: HTMLElement, exit: Exit): ExitFx {
     burst.style.top = `${foot.y - sr.top}px`
     stage.appendChild(burst)
     window.setTimeout(() => burst.remove(), 450)
-    const shake = stage.closest<HTMLElement>('main.home')
-    if (shake && typeof shake.animate === 'function') {
-      shake.animate(
-        [{ transform: 'translateX(0)' }, { transform: `translateX(${dir * 5}px)` }, { transform: `translateX(${-dir * 3}px)` }, { transform: 'translateX(0)' }],
+    stage.querySelectorAll<HTMLElement>('.hl-logo, .hl-caption').forEach((el) => {
+      if (typeof el.animate !== 'function') return
+      el.animate(
+        [{ translate: '0 0' }, { translate: `${dir * 5}px 0` }, { translate: `${-dir * 3}px 0` }, { translate: '0 0' }],
         { duration: 140, easing: 'linear' },
       )
-    }
+    })
   }
 
   return { frame, strike }
