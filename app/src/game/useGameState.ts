@@ -26,6 +26,7 @@ export function useGameState(
   // The latest fix, and the check-in window it was last re-sent for (one send per window, even if the phone is still).
   const lastFix = useRef<GeolocationPosition | null>(null)
   const sentForAlert = useRef<number | null>(null)
+  const sentForWet = useRef<number | null>(null)
   const fetchingFresh = useRef(false)
   const modeRef = useRef<LocationMode>('never')
   const samples = useRef<ClockSample[]>([])
@@ -42,14 +43,15 @@ export function useGameState(
       // Re-express "now" on this phone's clock, corrected for network delay, so every device's timers agree.
       setView({ ...v, now: receivedAt + clockOffset(samples.current) })
       setError(null)
-      // A still phone may give no new fix inside the 45 s window, so send a position once per window:
-      // the last fix if it is fresh, otherwise a new one from the phone.
-      const fix = lastFix.current
-      const alertAt = v.nextAlertAt
-      if (modeRef.current !== 'never' && session.token && alertAt != null && v.now >= alertAt && sentForAlert.current !== alertAt) {
+      // A still phone may give no new fix for a long while, so send a position once at each moment the server must judge
+      // where this phone is: when a check-in window opens (45 s to check in), and when Banjir Kilat's 30 s in the water
+      // runs out. The last fix if it is fresh, otherwise a new one from the phone.
+      const resend = (at: number | null | undefined, sent: { current: number | null }) => {
+        if (modeRef.current === 'never' || !session.token || at == null || v.now < at || sent.current === at) return
         const token = session.token
+        const fix = lastFix.current
         const sendFix = (p: GeolocationPosition) => {
-          sentForAlert.current = alertAt
+          sent.current = at
           lastSent.current = Date.now()
           void call('location', { code, token, lat: p.coords.latitude, lng: p.coords.longitude, accuracy_m: p.coords.accuracy }).catch(
             () => undefined,
@@ -63,7 +65,7 @@ export function useGameState(
             (p) => {
               fetchingFresh.current = false
               lastFix.current = p
-              if (sentForAlert.current !== alertAt) sendFix(p)
+              if (sent.current !== at) sendFix(p)
             },
             () => {
               fetchingFresh.current = false
@@ -72,6 +74,8 @@ export function useGameState(
           )
         }
       }
+      resend(v.nextAlertAt, sentForAlert)
+      resend(v.wetUntil, sentForWet)
     } catch (e) {
       // Limited for a moment: say nothing and let the next poll try again.
       if ((e as { status?: number }).status === 429) return

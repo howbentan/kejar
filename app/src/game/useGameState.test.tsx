@@ -75,6 +75,34 @@ describe('useGameState', () => {
     expect(locationCalls()).toBe(2) // once per window
   })
 
+  it('Banjir Kilat: sends a location once when the 30 s in the water runs out, even if the phone gave no new fix', async () => {
+    let onFix: (p: unknown) => void = () => {}
+    Object.defineProperty(navigator, 'geolocation', {
+      configurable: true,
+      value: {
+        watchPosition: (ok: (p: unknown) => void) => ((onFix = ok), 1),
+        clearWatch: () => {},
+        getCurrentPosition: (ok: (p: unknown) => void) => ok({ timestamp: Date.now(), coords: { latitude: 3, longitude: 101, accuracy: 8 } }),
+      },
+    })
+    const wetUntil = Date.now() + 30_000
+    call.mockImplementation(async (action: string) => (action === 'state' ? { phase: 'chasing', now: Date.now(), wetUntil } : { ok: true }))
+    renderHook(() => useGameState('ABC234', { sendLocation: 'when-open' }))
+    await act(async () => {})
+    act(() => onFix({ timestamp: Date.now(), coords: { latitude: 3, longitude: 101, accuracy: 8 } }))
+    const locationCalls = () => call.mock.calls.filter(([a]) => a === 'location').length
+    expect(locationCalls()).toBe(1)
+    // Standing still in the water: no more fixes. The 30 s runs out at +30 s.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(33_000)
+    })
+    expect(locationCalls()).toBe(2)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(9_000)
+    })
+    expect(locationCalls()).toBe(2) // once per run-out
+  })
+
   it('reports location off when the phone refuses or fails to give a position, and clears it on a fix', async () => {
     let onFix: (p: unknown) => void = () => {}
     let onError: (e: unknown) => void = () => {}
