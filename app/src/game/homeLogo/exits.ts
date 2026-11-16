@@ -179,7 +179,9 @@ export function createExitFx(stage: HTMLElement, exit: Exit): ExitFx {
     if (logo && j) {
       const lr = logo.getBoundingClientRect()
       const jr = j.getBoundingClientRect()
-      const jx = jr.left + jr.width / 2
+      // The same split as the run's: the mouth. A letter between the j's middle and its mouth would otherwise be
+      // neither kicked back nor shoved, and stay put.
+      const jx = jr.left + jr.width * 0.62
       const all: [HTMLElement, number][] = [
         ...letters.map((el, i): [HTMLElement, number] => [el, lr.left + lr.width * LETTER_MID[i]]),
         ...chars.map((el): [HTMLElement, number] => [el, restOf(el).left + restOf(el).width / 2]),

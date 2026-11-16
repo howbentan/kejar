@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createExitFx, KICK_BACK, KICK_FULL, kickFrame, kickLength, pickExit } from './exits'
 
 describe('pickExit', () => {
@@ -29,6 +29,26 @@ describe('kick timelines', () => {
 })
 
 describe('createExitFx', () => {
+  it("the back kick and the shove split at the same point, so no caption letter is left behind", () => {
+    const rect = (left: number, width: number) => () => ({ left, width, right: left + width, top: 0, bottom: 10, height: 10, x: left, y: 0, toJSON: () => ({}) })
+    const stage = document.createElement('div')
+    const logo = document.createElement('div')
+    logo.className = 'hl-logo'
+    logo.getBoundingClientRect = rect(0, 300)
+    const j = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+    j.setAttribute('class', 'hl-j')
+    j.getBoundingClientRect = rect(100, 70) // middle 135, mouth 143.4
+    const ch = document.createElement('span')
+    ch.className = 'hl-ch'
+    ch.getBoundingClientRect = rect(135, 10) // middle 140: past the j's middle, behind its mouth
+    const animate = vi.fn()
+    ch.animate = animate
+    logo.append(j)
+    stage.append(logo, ch)
+    createExitFx(stage, 'bulldoze').strike('l', { x: 0, y: 0 })
+    expect(animate).toHaveBeenCalled()
+  })
+
   it('copes with a stage that has nothing in it yet', () => {
     const fx = createExitFx(document.createElement('div'), 'wipe')
     expect(() => {
