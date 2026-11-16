@@ -4,7 +4,6 @@ import type { View } from '../../shared/views.js'
 import { call } from './api'
 import SetupSteps from './SetupSteps'
 import { ErrorText } from './ui'
-import { noticeLegendaries } from './cardNotice'
 import { MiniRunner } from './Runner'
 
 interface Row {
@@ -122,8 +121,7 @@ export default function CrewStep({ code, view, organiserToken }: { code: string;
   }
 
   function next() {
-    const notice = noticeLegendaries(window.location.search).join(',')
-    window.location.assign(`/host/${code}?setup=pack${notice ? `&notice=${notice}` : ''}`)
+    window.location.assign(`/host/${code}?setup=pack`)
   }
 
   const person = (av: string, bg: string, fg: string, title: string, note: string, status: ReactNode, key?: number, errorText?: string) => (

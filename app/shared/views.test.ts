@@ -928,9 +928,10 @@ describe("Dato Seri's hint zone (jail design §4b)", () => {
   const stash = { lat: 3.004, lng: 101.004, claimedBy: null, claimedAt: null }
   const full = (id: string) => game({ id, settings: { ...DEFAULT_SETTINGS, mode: 'full' }, dato_stash: stash })
 
-  it("the card is for the organiser only, never in a player's or a marshal's view (ruling R15, rules doc §9b)", () => {
+  it("a legacy card's code reaches no view, the organiser's included; the stash is the organiser's only (rules doc §9b)", () => {
     const g = { ...full('g1'), dato_stash: { ...stash, code: 'Secret-card-code-12345', card: { id: 'sc1', letter: 'B' } } }
-    expect(view(organiserMe, { game: g }).datoCard).toEqual({ letter: 'B', code: 'Secret-card-code-12345' })
+    expect(view(organiserMe, { game: g })).not.toHaveProperty('datoCard')
+    expect(JSON.stringify(view(organiserMe, { game: g }))).not.toContain('Secret-card-code-12345')
     expect(view(organiserMe, { game: g }).datoStash).toEqual(stash)
     expect(view(organiserMe, { game: g }).settings.legendaries).toEqual(g.settings.legendaries)
     for (const me of [siti, aina, chaser, { ...aina, jailed: true }]) {
@@ -942,11 +943,10 @@ describe("Dato Seri's hint zone (jail design §4b)", () => {
     }
   })
 
-  it('a stash made with the game but not dropped yet has no zone, and no pin for the organiser', () => {
+  it('a legacy card not dropped yet has no zone, and no pin for the organiser', () => {
     const g = { ...full('g1'), dato_stash: { code: 'c0de', card: { id: 'sc1', letter: 'A' }, lat: null, lng: null, claimedBy: null, claimedAt: null } }
-    expect(view(aina, { game: g }).legendaryZone).toBeNull()
+    expect(view(aina, { game: g })).not.toHaveProperty('legendaryZone')
     expect(view(organiserMe, { game: g }).datoStash).toBeNull()
-    expect(view(organiserMe, { game: g }).datoCard).toEqual({ letter: 'A', code: 'c0de' })
   })
 
   it("the Settle picker is offered only during the chase, and not while paused", () => {
@@ -961,7 +961,7 @@ describe("Dato Seri's hint zone (jail design §4b)", () => {
 
   it('is gone once claimed', () => {
     const claimed = game({ settings: { ...DEFAULT_SETTINGS, mode: 'full' }, dato_stash: { ...stash, claimedBy: 'r2', claimedAt: iso(NOW) } })
-    expect(view(aina, { game: claimed }).legendaryZone).toBeNull()
+    expect(view(aina, { game: claimed })).not.toHaveProperty('legendaryZone')
   })
 })
 
@@ -974,9 +974,10 @@ describe("Bomoh's hint zone (jail design §2e)", () => {
     expect(view(siti, { game: full('g1') })).not.toHaveProperty('bomohStash')
   })
 
-  it("the Bomoh card is for the organiser only, never in a player's or a marshal's view (ruling R15, rules doc §9b)", () => {
+  it("a legacy purple card's code reaches no view; the Bomoh stash is the organiser's only (rules doc §9b)", () => {
     const g = { ...full('g1'), bomoh_stash: { ...stash, code: 'Secret-purple-code-98765', card: { id: 'sc2', letter: 'A' } } }
-    expect(view(organiserMe, { game: g }).bomohCard).toEqual({ letter: 'A', code: 'Secret-purple-code-98765' })
+    expect(view(organiserMe, { game: g })).not.toHaveProperty('bomohCard')
+    expect(JSON.stringify(view(organiserMe, { game: g }))).not.toContain('Secret-purple-code-98765')
     expect(view(organiserMe, { game: g }).bomohStash).toEqual(stash)
     for (const me of [siti, aina, chaser, { ...aina, jailed: true }]) {
       const v = view(me, { game: g })
@@ -1283,7 +1284,7 @@ describe("Super Ring's and Mak Kau Hijau's hint zones (Plan E2)", () => {
     const g = full({ dato_stash: stash, bomoh_stash: stash })
     for (const me of [aina, chaser, organiserMe, siti]) {
       const v = view(me, { game: g })
-      expect([v.legendaryZone, v.bomohZone, v.ringZone, v.hijauZone]).toEqual([null, null, null, null])
+      for (const zone of ['legendaryZone', 'bomohZone', 'ringZone', 'hijauZone']) expect(v).not.toHaveProperty(zone)
     }
     expect(view(organiserMe, { game: full() }).ringStash).toEqual(stash)
   })
@@ -1437,7 +1438,7 @@ describe('Tupperware in the views (task 6)', () => {
     const awake = { ...aina, side_quest_at: iso(NOW - 1_000) }
     for (const me of [awake, chaser]) {
       const v = view(me, { game: full() })
-      expect([v.legendaryZone, v.bomohZone, v.ringZone, v.hijauZone]).toEqual([null, null, null, null])
+      for (const zone of ['legendaryZone', 'bomohZone', 'ringZone', 'hijauZone']) expect(v).not.toHaveProperty(zone)
       expect(v).not.toHaveProperty('tupperware')
       expect(v.me).not.toHaveProperty('side_quest_at')
       const json = JSON.stringify(v)

@@ -140,21 +140,10 @@ describe('CrewStep', () => {
     expect(screen.getByText('Links copied.')).toBeInTheDocument()
   })
 
-  it('Next goes to the pack step, keeping a yellow card notice', () => {
-    const { unmount } = render(<CrewStep code="ABC234" view={view()} organiserToken="h1" />)
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
-    expect(assign).toHaveBeenCalledWith('/host/ABC234?setup=pack')
-    unmount()
+  it('Next goes to the pack step, carrying no card notice (the colour cards are retired)', () => {
     Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, search: '?setup=crew&notice=dato', assign } })
     render(<CrewStep code="ABC234" view={view()} organiserToken="h1" />)
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
-    expect(assign).toHaveBeenLastCalledWith('/host/ABC234?setup=pack&notice=dato')
-  })
-
-  it('Next keeps a purple card notice too', () => {
-    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, search: '?setup=crew&notice=dato,bomoh', assign } })
-    render(<CrewStep code="ABC234" view={view()} organiserToken="h1" />)
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }))
-    expect(assign).toHaveBeenLastCalledWith('/host/ABC234?setup=pack&notice=dato,bomoh')
+    expect(assign).toHaveBeenLastCalledWith('/host/ABC234?setup=pack')
   })
 })

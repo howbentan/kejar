@@ -5,8 +5,8 @@ import { DEFAULT_SETTINGS, placedStash, type Game, type LegendaryKind, type Tupp
 /** The Tupperware's colour: the red box everyone's mak has, the same for both sides. */
 export type TupperTone = 'red'
 
-/** A secret card's colour: Dato Seri's yellow, Super Ring's orange, Bomoh's purple or Mak Kau Hijau's green; or the box's red. */
-export type SecretTone = 'yellow' | 'orange' | 'purple' | 'green' | TupperTone
+/** A secret line's or step's colour: the box's red, the only one since the colour cards were retired. */
+export type SecretTone = TupperTone
 
 /** One line on the organiser's packing list or event-day list. */
 export interface KitItem {

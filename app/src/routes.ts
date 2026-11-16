@@ -7,7 +7,6 @@ export type Route =
   | 'game'
   | 'join'
   | 'print-tags'
-  | 'print-card'
   | 'print-slips'
   | 'organiser-redeem'
   | 'marshal-redeem'
@@ -19,7 +18,6 @@ const FIXED: Record<string, Route> = {
   '/host/new': 'host-new',
   '/host/kit': 'host-kit',
   '/print/tags': 'print-tags',
-  '/print/card': 'print-card',
   '/print/slips': 'print-slips',
 }
 

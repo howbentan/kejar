@@ -25,9 +25,6 @@ const arena = { id: 'a', name: 'Park', boundary: [], start: BASE, jail: BASE }
 const S1 = { id: 'station-1', label: 'Station 1', ...BASE }
 const S2 = { id: 'station-2', label: 'Station 2', lat: 3.0, lng: 101.002 }
 const PEN = { id: 'penjara', label: 'Penjara', lat: 3.001, lng: 101.0 }
-const DATO = { id: 'dato', label: 'Yellow card', lat: 3.002, lng: 101.0, tone: 'yellow' as const }
-
-const BOMOH = { id: 'bomoh', label: 'Purple card', lat: 3.003, lng: 101.0, tone: 'purple' as const }
 
 const view = (places: object[], placed: Record<string, boolean> = {}, extra: object = {}) =>
   ({ arena, kit: { items: [], places, placed }, ...extra }) as unknown as View
@@ -108,90 +105,6 @@ describe('WalkPark', () => {
     await waitFor(() => expect(call).toHaveBeenCalledWith('setKit', { code: 'ABC234', token: 'p1', placed: { id: 'station-1', on: true } }))
   })
 
-  it('the organiser walk ends with the yellow secret step', async () => {
-    open(view([S1, DATO], { 'station-1': true }, { datoCard: { letter: 'B', code: 'secretcode' } }))
-    expect(mapCalls.at(-1)!.pins!.at(-1)).toMatchObject({ id: 'dato', label: '?' })
-    // No fix yet: the card is there, but there is nothing to drop at.
-    expect(screen.queryByRole('button', { name: 'Drop Dato Seri here' })).not.toBeInTheDocument()
-    // 100 m from the hint spot: still the whole secret step and the drop button, with no distance or compass.
-    act(() => onFix!(at(DATO, 0, 100)))
-    expect(screen.getByText('SECRET · 2 OF 2')).toBeInTheDocument()
-    expect(screen.getByText('Hide yellow card B.')).toBeInTheDocument()
-    expect(screen.getByText('Secret. Only you see this. Pick any spot nearby.')).toBeInTheDocument()
-    expect(screen.getByText('Hide it somewhere sneaky. Under a bench, behind a sign.')).toBeInTheDocument()
-    expect(screen.queryByText(/ M · /)).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Drop Dato Seri here' }))
-    await waitFor(() => expect(call).toHaveBeenCalledWith('setKit', { code: 'ABC234', organiserToken: 'h1', placed: { id: 'dato', on: true } }))
-    const drop = call.mock.calls.find((c) => c[0] === 'dropDatoSeri')!
-    expect(drop[1]).toMatchObject({ code: 'ABC234', organiserToken: 'h1' })
-    expect(drop[1].lat).toBeCloseTo(DATO.lat, 6)
-    expect(drop[1].lng).toBeCloseTo(DATO.lng + 100 / M_LNG, 6)
-    expect(call.mock.calls.map((c) => c[0])).toEqual(['dropDatoSeri', 'setKit'])
-  })
-
-  it('the organiser walk puts Bomoh last, with the purple step and its own drop', async () => {
-    open(view([S1, DATO, BOMOH], { 'station-1': true, dato: true }, { datoCard: { letter: 'B', code: 'x' }, bomohCard: { letter: 'C', code: 'y' } }))
-    expect(mapCalls.at(-1)!.pins!.at(-1)).toMatchObject({ id: 'bomoh', label: '?', tone: 'purple' })
-    act(() => onFix!(at(BOMOH, 0, 100)))
-    expect(screen.getByText('SECRET · 3 OF 3')).toBeInTheDocument()
-    expect(screen.getByText('Hide purple card C.')).toBeInTheDocument()
-    expect(screen.getByText('Somewhere quiet, away from the yellow one. Behind a tree, under a bin.')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Drop Dato Seri here' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Drop Bomoh here' }))
-    await waitFor(() => expect(call).toHaveBeenCalledWith('setKit', { code: 'ABC234', organiserToken: 'h1', placed: { id: 'bomoh', on: true } }))
-    const drop = call.mock.calls.find((c) => c[0] === 'dropBomoh')!
-    expect(drop[1]).toMatchObject({ code: 'ABC234', organiserToken: 'h1' })
-    expect(drop[1].lat).toBeCloseTo(BOMOH.lat, 6)
-    expect(call.mock.calls.map((c) => c[0])).toEqual(['dropBomoh', 'setKit'])
-  })
-
-  it("with Dato Seri off, the purple step doesn't mention a yellow card (M9)", () => {
-    open(view([S1, BOMOH], { 'station-1': true }, { bomohCard: { letter: 'C', code: 'y' } }))
-    act(() => onFix!(at(BOMOH, 0, 100)))
-    expect(screen.getByText('Hide purple card C.')).toBeInTheDocument()
-    expect(screen.getByText('Somewhere quiet. Behind a tree, under a bin.')).toBeInTheDocument()
-    expect(document.body.textContent).not.toMatch(/yellow/i)
-  })
-
-  const RING = { id: 'ring', label: 'Orange card', lat: 3.002, lng: 101.0, tone: 'orange' as const }
-  const HIJAU = { id: 'hijau', label: 'Green card', lat: 3.003, lng: 101.0, tone: 'green' as const }
-
-  it('the organiser walk takes the orange step with its own drop, then the green one away from the orange card', async () => {
-    open(view([S1, RING, HIJAU], { 'station-1': true }, { ringCard: { letter: 'A', code: 'x' }, hijauCard: { letter: 'B', code: 'y' } }))
-    expect(mapCalls.at(-1)!.pins!.slice(-2)).toMatchObject([
-      { id: 'ring', label: '?', tone: 'orange' },
-      { id: 'hijau', label: '?', tone: 'green' },
-    ])
-    act(() => onFix!(at(RING, 0, 100)))
-    expect(screen.getByText('SECRET · 2 OF 3')).toBeInTheDocument()
-    expect(screen.getByText('Hide orange card A.')).toBeInTheDocument()
-    expect(screen.getByText('Hide it somewhere sneaky. Under a bench, behind a sign.')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Drop Super Ring here' }))
-    await waitFor(() => expect(call).toHaveBeenCalledWith('setKit', { code: 'ABC234', organiserToken: 'h1', placed: { id: 'ring', on: true } }))
-    expect(call.mock.calls.map((c) => c[0])).toEqual(['dropRing', 'setKit'])
-    cleanup()
-    call.mockClear()
-    open(view([S1, RING, HIJAU], { 'station-1': true, ring: true }, { ringCard: { letter: 'A', code: 'x' }, hijauCard: { letter: 'B', code: 'y' } }))
-    act(() => onFix!(at(HIJAU, 0, 100)))
-    expect(screen.getByText('SECRET · 3 OF 3')).toBeInTheDocument()
-    expect(screen.getByText('Hide green card B.')).toBeInTheDocument()
-    expect(screen.getByText('Somewhere quiet, away from the orange one. Behind a tree, under a bin.')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Drop Mak Kau Hijau here' }))
-    await waitFor(() => expect(call).toHaveBeenCalledWith('setKit', { code: 'ABC234', organiserToken: 'h1', placed: { id: 'hijau', on: true } }))
-    expect(call.mock.calls.map((c) => c[0])).toEqual(['dropHijau', 'setKit'])
-  })
-
-  it('a green step with Dato Seri picked mentions the yellow card; without location the list names the colours', () => {
-    open(view([S1, DATO, HIJAU], { 'station-1': true, dato: true }, { datoCard: { letter: 'C', code: 'x' }, hijauCard: { letter: 'B', code: 'y' } }))
-    act(() => onFix!(at(HIJAU, 0, 100)))
-    expect(screen.getByText('Somewhere quiet, away from the yellow one. Behind a tree, under a bin.')).toBeInTheDocument()
-    cleanup()
-    open(view([S1, RING, HIJAU], {}, { ringCard: { letter: 'A', code: 'x' }, hijauCard: { letter: 'B', code: 'y' } }))
-    act(() => onErr!({}))
-    expect(screen.getByText('Hide orange card A')).toBeInTheDocument()
-    expect(screen.getByText('Hide green card B')).toBeInTheDocument()
-  })
-
   it("the helper's walk has no secret pin, step, letter or count", () => {
     // The server leaves the secret place and card out of a marshal's view; the screen adds nothing of its own.
     const { container } = open(view([S1, S2, PEN], { 'station-1': true, 'station-2': true, penjara: true }), { token: 'p1' })
@@ -235,6 +148,15 @@ describe('WalkPark', () => {
     expect(screen.getByText('Any unused Kejar slip inside')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Drop it here' }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('dropTupperware', expect.objectContaining({ side: 'kejar' })))
+  })
+
+  it('without location the list names each Tupperware, which waits for a fix', () => {
+    open(view([S1, TD, TK]))
+    act(() => onErr!({}))
+    expect(screen.getByText('Hide the Dikejar Tupperware')).toBeInTheDocument()
+    expect(screen.getByText('Hide the Kejar Tupperware')).toBeInTheDocument()
+    expect(screen.getAllByText('Needs location')).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: 'Drop it here' })).not.toBeInTheDocument()
   })
 
   it("a marshal's walk shows no Tupperware step", () => {

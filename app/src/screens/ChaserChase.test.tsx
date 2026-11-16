@@ -150,10 +150,9 @@ describe('ChaserChase', () => {
     expect(document.body.textContent).not.toMatch(/Station \d|the station|within 30 m/i)
   })
 
-  it('the ? zone shows on the chaser map too', () => {
-    const legendaryZone = { lat: 3, lng: 101, radiusM: 150 }
-    render(<ChaserChase code="ABC234" view={{ ...chaser(), legendaryZone }} refresh={() => {}} />)
-    expect(mapProps.last?.legendaryZone).toEqual(legendaryZone)
+  it('the chaser map draws no ? zone (the Tupperware side quest replaced it)', () => {
+    render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    expect(mapProps.last).not.toHaveProperty('legendaryZone')
   })
 
   it('Scan tag with the Penjara code says so and calls nothing', async () => {

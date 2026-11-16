@@ -11,7 +11,7 @@ const items = (ticked: string[] = []) =>
   [
     { id: 'armbands', group: 'pack', label: 'Armbands #01–#40' },
     { id: 'vests-kejar', group: 'pack', label: '4 lime vests' },
-    { id: 'dato-card', group: 'pack', label: 'Yellow card B', tone: 'yellow', note: '(secret)' },
+    { id: 'tupperware', group: 'pack', label: '1 red Tupperware, 1 Dikejar slip', tone: 'red', note: '(secret)' },
     { id: 'walk', group: 'day', label: 'Walk the park' },
     { id: 'brief-helper', group: 'day', label: 'Brief your helper', note: 'Penjara, dares, SOS' },
   ].map((i) => ({ ...i, ticked: ticked.includes(i.id) }))
@@ -51,9 +51,9 @@ describe('PackList', () => {
     expect(screen.getByText('Penjara, dares, SOS')).toBeInTheDocument()
   })
 
-  it('shows the secret card in yellow with its note', () => {
+  it('shows the Tupperware line in red with its note', () => {
     render(<PackList code="ABC234" view={view()} refresh={refresh} />)
-    expect(screen.getByText('Yellow card B')).toHaveStyle({ color: 'var(--legendary-2)' })
+    expect(screen.getByText('1 red Tupperware, 1 Dikejar slip').style.color).toBe('rgb(230, 57, 70)')
     expect(screen.getByText('(secret)')).toBeInTheDocument()
   })
 
@@ -81,7 +81,7 @@ describe('PackList', () => {
   it('circles Ready for event day once everything is ticked', () => {
     const { rerender } = render(<PackList code="ABC234" view={view(['armbands'])} refresh={refresh} />)
     expect(screen.queryByText('Ready for event day')).toBeNull()
-    rerender(<PackList code="ABC234" view={view(['armbands', 'vests-kejar', 'dato-card', 'walk', 'brief-helper'])} refresh={refresh} />)
+    rerender(<PackList code="ABC234" view={view(['armbands', 'vests-kejar', 'tupperware', 'walk', 'brief-helper'])} refresh={refresh} />)
     expect(screen.getByText('Ready for event day')).toBeInTheDocument()
   })
 
@@ -112,75 +112,15 @@ describe('PackList', () => {
     expect(screen.queryByRole('button', { name: 'Back' })).toBeNull()
   })
 
-  it('tells the organiser to reprint a yellow card after a notice', () => {
-    at('?setup=pack&notice=dato')
-    render(<PackList code="ABC234" view={view()} refresh={refresh} />)
-    expect(screen.getByText('Reprint a yellow card to use Dato Seri.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Your kit' }).getAttribute('href')).toBe('/host/kit')
-  })
-
-  it('keeps the reprint notice while the game still has no card, and drops it once one is assigned (ruling R9)', () => {
-    const full = { mode: 'full', legendaries: { dato: 'stash', bomoh: 'off' } }
-    const { unmount } = render(<PackList code="ABC234" view={{ ...view(), settings: full, datoCard: null } as unknown as View} refresh={refresh} />)
-    expect(screen.getByText('Reprint a yellow card to use Dato Seri.')).toBeInTheDocument()
-    unmount()
-    at('?setup=pack&notice=dato')
-    render(<PackList code="ABC234" view={{ ...view(), settings: full, datoCard: { letter: 'A', code: 'x' } } as unknown as View} refresh={refresh} />)
-    expect(screen.queryByText('Reprint a yellow card to use Dato Seri.')).toBeNull()
-  })
-
-  it('a purple card shortage says to reprint a purple card, not a yellow one (I4)', () => {
-    at('?setup=pack&notice=bomoh')
-    const { unmount } = render(<PackList code="ABC234" view={view()} refresh={refresh} />)
-    expect(screen.getByText('Reprint a purple card to use Bomoh.')).toBeInTheDocument()
-    expect(screen.queryByText('Reprint a yellow card to use Dato Seri.')).toBeNull()
-    unmount()
+  it('never says to reprint a card, whatever an old notice param says (the colour cards are retired)', () => {
     at('?setup=pack&notice=dato,bomoh')
-    const { unmount: unmount2 } = render(<PackList code="ABC234" view={view()} refresh={refresh} />)
-    expect(screen.getByText('Reprint a yellow card to use Dato Seri.')).toBeInTheDocument()
-    expect(screen.getByText('Reprint a purple card to use Bomoh.')).toBeInTheDocument()
-    unmount2()
-    at('?setup=pack')
-    const full = { mode: 'full', legendaries: { dato: 'stash', bomoh: 'stash' } }
-    render(<PackList code="ABC234" view={{ ...view(), settings: full, datoCard: { letter: 'A', code: 'x' }, bomohCard: null } as unknown as View} refresh={refresh} />)
-    expect(screen.getByText('Reprint a purple card to use Bomoh.')).toBeInTheDocument()
-    expect(screen.queryByText('Reprint a yellow card to use Dato Seri.')).toBeNull()
-  })
-
-  it('an orange or green shortage says so, from the view or the create notice, and those cards show in their colour', () => {
-    const full = { mode: 'full', legendaries: { dato: 'off', ring: 'stash', bomoh: 'off', hijau: 'stash' } }
-    const withCards = (ringCard: unknown, hijauCard: unknown) =>
-      ({ ...view(), settings: full, datoCard: null, bomohCard: null, ringCard, hijauCard }) as unknown as View
-    const { unmount } = render(<PackList code="ABC234" view={withCards(null, null)} refresh={refresh} />)
-    expect(screen.getByText('Reprint an orange card to use Super Ring.')).toBeInTheDocument()
-    expect(screen.getByText('Reprint a green card to use Mak Kau Hijau.')).toBeInTheDocument()
-    expect(screen.queryByText('Reprint a yellow card to use Dato Seri.')).toBeNull()
-    unmount()
-    at('?setup=pack&notice=ring,hijau')
-    const { unmount: u2 } = render(<PackList code="ABC234" view={view()} refresh={refresh} />)
-    expect(screen.getByText('Reprint an orange card to use Super Ring.')).toBeInTheDocument()
-    u2()
-    at('?setup=pack')
-    const coloured = {
-      ...withCards({ letter: 'A', code: 'x' }, { letter: 'B', code: 'y' }),
-      kit: {
-        items: [
-          { id: 'ring-card', group: 'pack', label: 'Orange card A', tone: 'orange', note: '(secret)', ticked: false },
-          { id: 'hijau-card', group: 'pack', label: 'Green card B', tone: 'green', note: '(secret)', ticked: false },
-        ],
-        places: [],
-        placed: {},
-      },
-    } as unknown as View
-    render(<PackList code="ABC234" view={coloured} refresh={refresh} />)
-    expect(screen.getByText('Orange card A').style.color).toBe('var(--ring-2)')
-    expect(screen.getByText('Green card B').style.color).toBe('var(--hijau-2)')
+    render(<PackList code="ABC234" view={view()} refresh={refresh} />)
     expect(screen.queryByText(/Reprint/)).toBeNull()
   })
 
-  it('draws a yellow tick on the yellow card', () => {
-    render(<PackList code="ABC234" view={view(['dato-card'])} refresh={refresh} />)
-    expect(document.querySelector('.marker path')?.getAttribute('stroke')).toBe('#FFD60A')
+  it('draws a lime tick on the Tupperware line', () => {
+    render(<PackList code="ABC234" view={view(['tupperware'])} refresh={refresh} />)
+    expect(document.querySelector('.marker path')?.getAttribute('stroke')).toBe('#C6FF3D')
   })
 
   it('Walk the park cannot be tapped; it ticks itself', () => {

@@ -65,18 +65,11 @@ function useHere(): { here: LatLng | null; lost: boolean } {
 }
 
 /**
- * Each secret card's step: its CSS token prefix, its button, its drop action and button words (the walk is the
- * organiser's own screen, so it names the legendary), and whether it's Dikejar's card (hidden somewhere sneaky) or
- * Kejar's (somewhere quiet, away from Dikejar's).
+ * The secret step's look and drop: its CSS token prefix, its button, its drop action and button words. It is the
+ * Tupperware (one box per side); the side comes from the place id (see sideOfBox).
  */
-const SECRET: Record<SecretTone, { token: string; button: string; drop: string; dropText: string; runner: boolean; letter: (v: View) => string | undefined }> = {
-  yellow: { token: 'legendary', button: 'btn-legendary', drop: 'dropDatoSeri', dropText: 'Drop Dato Seri here', runner: true, letter: (v) => v.datoCard?.letter },
-  orange: { token: 'ring', button: 'btn-ring', drop: 'dropRing', dropText: 'Drop Super Ring here', runner: true, letter: (v) => v.ringCard?.letter },
-  purple: { token: 'bomoh', button: 'btn-bomoh', drop: 'dropBomoh', dropText: 'Drop Bomoh here', runner: false, letter: (v) => v.bomohCard?.letter },
-  // The Tupperware (one box per side). The yellow, orange, purple and green entries above stay only because SecretTone
-  // still lists them; Task 11 removes both. The side comes from the place id (see sideOfBox).
-  red: { token: 'tupper', button: 'btn-tupper', drop: 'dropTupperware', dropText: 'Drop it here', runner: false, letter: () => undefined },
-  green: { token: 'hijau', button: 'btn-hijau', drop: 'dropHijau', dropText: 'Drop Mak Kau Hijau here', runner: false, letter: (v) => v.hijauCard?.letter },
+const SECRET: Record<SecretTone, { token: string; button: string; drop: string; dropText: string }> = {
+  red: { token: 'tupper', button: 'btn-tupper', drop: 'dropTupperware', dropText: 'Drop it here' },
 }
 
 /** Which side's box a `tupper-*` step hides. */
@@ -128,17 +121,11 @@ export default function WalkPark({
   const tone: SecretTone | null = next?.tone ?? null
   const secret = tone !== null
   const look = tone ? SECRET[tone] : null
-  // Kejar's step only mentions Dikejar's card when this game has one to keep away from.
-  const runnerTone = places.find((p) => p.tone && SECRET[p.tone].runner)?.tone
   const metres = here && next ? distanceM(here, next) : null
   // The secret step has no spot to reach: any place nearby will do, so only stations and Penjara use the 15 m rule.
   const isHere = !secret && metres !== null && metres <= WALK_HERE_M
   // The server only sends a secret place to the organiser, so a step shows up here only when it's theirs to see.
-  const hideLineFor = (t: SecretTone, id: string) => {
-    if (t === 'red') return `Hide the ${sideName(id)} Tupperware`
-    const letter = SECRET[t].letter(view)
-    return letter ? `Hide ${t} card ${letter}.` : `Hide the ${t} card.`
-  }
+  const hideLineFor = (id: string) => `Hide the ${sideName(id)} Tupperware`
 
   async function mark(id: string, beforeSave?: () => Promise<unknown>) {
     if (busy) return
@@ -195,7 +182,7 @@ export default function WalkPark({
             {places.map((p) => (
               <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '6px 0' }}>
                 <span style={p.tone ? { color: `var(--${SECRET[p.tone].token}-2)`, fontWeight: 700 } : undefined}>
-                  {p.tone ? hideLineFor(p.tone, p.id).replace(/\.$/, '') : p.label}
+                  {p.tone ? hideLineFor(p.id) : p.label}
                 </span>
                 {done(p.id) ? (
                   <span className="muted">Placed</span>
@@ -218,29 +205,14 @@ export default function WalkPark({
             {tone && look ? (
               <>
                 <p className="eyebrow" style={here ? { color: 'inherit', opacity: 0.6 } : { color: `var(--${look.token}-2)` }}>{`SECRET · ${count}`}</p>
-                <p style={{ fontWeight: 800, fontSize: 21, letterSpacing: '-0.04em' }}>{hideLineFor(tone, next!.id)}</p>
-                {tone === 'red' ? (
-                  <>
-                    <p>{`Any unused ${sideName(next!.id)} slip inside`}</p>
-                    <p>
-                      <b>Good spots</b> under a wakaf bench · behind the park map board · in the roots of a big angsana · by the outdoor gym
-                    </p>
-                    <p>
-                      <b>Not there</b> surau or any place of worship · drains · private property · bins (the cleaner will take it)
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p>Secret. Only you see this. Pick any spot nearby.</p>
-                    <p>
-                      {look.runner
-                        ? 'Hide it somewhere sneaky. Under a bench, behind a sign.'
-                        : runnerTone
-                          ? `Somewhere quiet, away from the ${runnerTone} one. Behind a tree, under a bin.`
-                          : 'Somewhere quiet. Behind a tree, under a bin.'}
-                    </p>
-                  </>
-                )}
+                <p style={{ fontWeight: 800, fontSize: 21, letterSpacing: '-0.04em' }}>{hideLineFor(next!.id)}</p>
+                <p>{`Any unused ${sideName(next!.id)} slip inside`}</p>
+                <p>
+                  <b>Good spots</b> under a wakaf bench · behind the park map board · in the roots of a big angsana · by the outdoor gym
+                </p>
+                <p>
+                  <b>Not there</b> surau or any place of worship · drains · private property · bins (the cleaner will take it)
+                </p>
               </>
             ) : isHere ? (
               <>
@@ -270,7 +242,7 @@ export default function WalkPark({
               type="button"
               className={`btn ${look.button}`}
               disabled={busy}
-              onClick={() => void mark(next!.id, () => call(look.drop, { code, ...credentials, ...(tone === 'red' ? { side: sideOfBox(next!.id) } : {}), lat: here!.lat, lng: here!.lng }))}
+              onClick={() => void mark(next!.id, () => call(look.drop, { code, ...credentials, side: sideOfBox(next!.id), lat: here!.lat, lng: here!.lng }))}
             >
               {look.dropText}
             </button>

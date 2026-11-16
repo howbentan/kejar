@@ -380,156 +380,45 @@ describe('GameMap', () => {
       expect(created.data.snapshot).toMatchObject({ features: [] })
     })
 
-    it("the organiser's stash pin is legendary yellow at the exact spot", () => {
+    it("the organiser's stash pin is the Tupperware's red at the exact spot", () => {
       created.layers = []
       created.data = {}
       const { rerender } = render(<GameMap arena={arena} dots={[]} stash={{ lat: 3.03, lng: 101.03 }} />)
       act(() => created.load!())
       expect(created.data.stash).toMatchObject({ features: [{ geometry: { type: 'Point', coordinates: [101.03, 3.03] } }] })
-      expect(layer('stash').paint['circle-color']).toBe('#FFD60A')
+      expect(layer('stash').paint['circle-color']).toBe('#E63946')
+      expect(layer('stash').paint['circle-stroke-color']).toBe('#A4161A')
       rerender(<GameMap arena={arena} dots={[]} stash={null} />)
       expect(created.data.stash).toMatchObject({ features: [] })
     })
 
-    it("Bomoh's stash pin is purple (M8)", () => {
-      created.layers = []
-      created.data = {}
-      render(<GameMap arena={arena} dots={[]} stash={{ lat: 3.03, lng: 101.03 }} stashTone="purple" />)
-      act(() => created.load!())
-      expect(layer('stash').paint['circle-color']).toBe('#C9A4FF')
-      expect(layer('stash').paint['circle-stroke-color']).toBe('#9B5DE5')
-    })
-
-    it.each([
-      ['orange', '#FFA94D', '#E8590C'],
-      ['green', '#3FA86B', '#1B6B3F'],
-    ] as const)("Super Ring's and Mak Kau Hijau's stash pins are %s", (tone, main, deep) => {
-      created.layers = []
-      created.data = {}
-      render(<GameMap arena={arena} dots={[]} stash={{ lat: 3.03, lng: 101.03 }} stashTone={tone} />)
-      act(() => created.load!())
-      expect(layer('stash').paint['circle-color']).toBe(main)
-      expect(layer('stash').paint['circle-stroke-color']).toBe(deep)
-    })
-
-    it('walk pins carry their tone, and the pin colours have a case for each of the four', () => {
+    it('walk pins carry their tone, and a Tupperware pin is red', () => {
       created.layers = []
       created.data = {}
       const pins = [
-        { id: 'ring', lat: 3.1, lng: 101.1, label: '?', tone: 'orange' as const },
-        { id: 'hijau', lat: 3.2, lng: 101.2, label: '?', tone: 'green' as const },
+        { id: 'tupper-dikejar', lat: 3.1, lng: 101.1, label: '?', tone: 'red' as const },
+        { id: 'penjara', lat: 3.2, lng: 101.2, label: 'PENJARA' },
       ]
       render(<GameMap arena={arena} dots={[]} pins={pins} />)
       act(() => created.load!())
-      expect(created.data.pins).toMatchObject({
-        features: [{ properties: { orange: true, green: false, yellow: false, purple: false } }, { properties: { green: true, orange: false } }],
-      })
-      const colours = JSON.stringify(layer('pins').paint['circle-color'])
-      for (const hex of ['#FFD60A', '#FFA94D', '#C9A4FF', '#3FA86B']) expect(colours).toContain(hex)
+      expect(created.data.pins).toMatchObject({ features: [{ properties: { red: true } }, { properties: { red: false } }] })
+      expect(JSON.stringify(layer('pins').paint['circle-color'])).toContain('#E63946')
+    })
+
+    it('draws no hint zone layers: the ? zones are gone since the Tupperware', () => {
+      created.layers = []
+      created.data = {}
+      created.markers = []
+      render(<GameMap arena={arena} dots={[]} />)
+      act(() => created.load!())
+      const ids = created.layers.map((l) => l.id)
+      for (const id of ['legendary-line', 'bomoh-legendary-line', 'ring-legendary-line', 'hijau-legendary-line']) expect(ids).not.toContain(id)
+      expect(created.markers).toEqual([])
     })
   })
 
-  describe("Dato Seri's hint zone", () => {
-    const zone = { lat: 3.1, lng: 101.1, radiusM: 150 }
-    const layer = (id: string) => created.layers.find((l) => l.id === id) as unknown as { paint: Record<string, unknown>; layout?: Record<string, unknown> }
-
-    it('is a dashed legendary-yellow circle, never lime, with an unlabelled ? marker', () => {
-      created.layers = []
-      created.data = {}
-      created.markers = []
-      render(<GameMap arena={arena} dots={[]} legendaryZone={zone} />)
-      act(() => created.load!())
-      expect(layer('legendary-line').paint['line-color']).toBe('#FFD60A')
-      expect(layer('legendary-line').paint['line-dasharray']).toBeTruthy()
-      for (const id of ['legendary-fill', 'legendary-line']) expect(JSON.stringify(layer(id).paint)).not.toMatch(/C6FF3D/i)
-      expect(created.data.legendary).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
-      const mk = created.markers.at(-1)!
-      expect(mk.lngLat).toEqual([101.1, 3.1])
-      expect(mk.el.textContent).toBe('?')
-      expect(mk.el).toHaveAttribute('aria-hidden', 'true')
-      expect(mk.el.getAttribute('title')).toBeNull()
-      // Secret (§4c): nothing in the zone names it.
-      expect(JSON.stringify(created.data.legendary) + mk.el.outerHTML.replace(/legendary-/g, '')).not.toMatch(/dato|legendary|seri/i)
-    })
-
-    it('draws nothing with no zone, and follows the prop when it appears and goes', () => {
-      created.layers = []
-      created.data = {}
-      const { rerender } = render(<GameMap arena={arena} dots={[]} />)
-      act(() => created.load!())
-      expect(created.data.legendary).toMatchObject({ features: [] })
-      rerender(<GameMap arena={arena} dots={[]} legendaryZone={zone} />)
-      expect(created.data.legendary).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
-      rerender(<GameMap arena={arena} dots={[]} legendaryZone={null} />)
-      expect(created.data.legendary).toMatchObject({ features: [] })
-    })
-
-    it('is animated by CSS only; reduced motion marks it still, also when it flips mid-session', () => {
-      created.layers = []
-      created.data = {}
-      created.markers = []
-      reduce.on = false
-      const { rerender } = render(<GameMap arena={arena} dots={[]} legendaryZone={zone} />)
-      act(() => created.load!())
-      expect(created.markers.at(-1)!.el.dataset.still).toBeUndefined()
-      reduce.on = true
-      rerender(<GameMap arena={arena} dots={[]} legendaryZone={{ ...zone }} />)
-      const first = created.markers[0]
-      expect(first.removed).toBe(true)
-      expect(created.markers.at(-1)!.el.dataset.still).toBe('true')
-      expect(layer('legendary-line').paint['line-color']).toBe('#FFD60A')
-      reduce.on = false
-    })
-
-    it('removes the marker when the zone goes', () => {
-      created.markers = []
-      const { rerender } = render(<GameMap arena={arena} dots={[]} legendaryZone={zone} />)
-      act(() => created.load!())
-      rerender(<GameMap arena={arena} dots={[]} legendaryZone={null} />)
-      expect(created.markers.every((m) => m.removed)).toBe(true)
-    })
-  })
-
-  describe("Bomoh's hint zone and reveal ring", () => {
-    const zone = { lat: 3.1, lng: 101.1, radiusM: 150 }
-    const bomohZone = { lat: 3.2, lng: 101.2, radiusM: 120 }
+  describe("Bomoh's and Mak Kau Hijau's reveal rings", () => {
     const layer = (id: string) => created.layers.find((l) => l.id === id) as unknown as { paint: Record<string, unknown>; filter?: unknown }
-
-    it('is a dashed purple circle with an unlabelled ? marker, distinct from a simultaneous Dato zone', () => {
-      created.layers = []
-      created.data = {}
-      created.markers = []
-      render(<GameMap arena={arena} dots={[]} legendaryZone={zone} bomohZone={bomohZone} />)
-      act(() => created.load!())
-      expect(layer('bomoh-legendary-line').paint['line-color']).toBe('#C9A4FF')
-      expect(layer('bomoh-legendary-line').paint['line-dasharray']).toBeTruthy()
-      expect(layer('legendary-line').paint['line-color']).toBe('#FFD60A')
-      for (const id of ['bomoh-legendary-fill', 'bomoh-legendary-line']) expect(JSON.stringify(layer(id).paint)).not.toMatch(/C6FF3D|FFD60A/i)
-      expect(created.data['bomoh-legendary']).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
-      expect(created.data.legendary).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
-      expect(created.data['bomoh-legendary']).not.toEqual(created.data.legendary)
-      const mk = created.markers.find((m) => m.lngLat?.[0] === 101.2)!
-      expect(mk.lngLat).toEqual([101.2, 3.2])
-      expect(mk.el.textContent).toBe('?')
-      expect(mk.el).toHaveAttribute('aria-hidden', 'true')
-      expect(mk.el.getAttribute('title')).toBeNull()
-      expect(JSON.stringify(created.data['bomoh-legendary']) + mk.el.outerHTML.replace(/(legendary|bomoh)-/g, '')).not.toMatch(/bomoh|dato|legendary|seri/i)
-      expect(created.markers.some((m) => m.lngLat?.[0] === 101.1)).toBe(true)
-    })
-
-    it('draws nothing with no zone, follows the prop, and removes the marker when it goes', () => {
-      created.layers = []
-      created.data = {}
-      created.markers = []
-      const { rerender } = render(<GameMap arena={arena} dots={[]} />)
-      act(() => created.load!())
-      expect(created.data['bomoh-legendary']).toMatchObject({ features: [] })
-      rerender(<GameMap arena={arena} dots={[]} bomohZone={bomohZone} />)
-      expect(created.data['bomoh-legendary']).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
-      rerender(<GameMap arena={arena} dots={[]} bomohZone={null} />)
-      expect(created.data['bomoh-legendary']).toMatchObject({ features: [] })
-      expect(created.markers.every((m) => m.removed)).toBe(true)
-    })
 
     it("draws a purple ring only around dots revealed by Bomoh, not Pak Guard's Focus", () => {
       created.layers = []
@@ -564,52 +453,6 @@ describe('GameMap', () => {
       expect(ring.filter).toEqual(['==', ['get', 'revealedBy'], 'hijau'])
       expect(ring.paint['circle-stroke-color']).toBe('#3FA86B')
       expect(layer('bomoh-reveal-ring').filter).toEqual(['==', ['get', 'revealedBy'], 'bomoh'])
-    })
-  })
-
-  describe("Super Ring's and Mak Kau Hijau's hint zones (Plan E2)", () => {
-    const ringZone = { lat: 3.4, lng: 101.4, radiusM: 140 }
-    const hijauZone = { lat: 3.5, lng: 101.5, radiusM: 160 }
-    const layer = (id: string) => created.layers.find((l) => l.id === id) as unknown as { paint: Record<string, unknown> }
-
-    it('draws an orange and a green dashed circle, each with an unlabelled ? marker', () => {
-      created.layers = []
-      created.data = {}
-      created.markers = []
-      render(<GameMap arena={arena} dots={[]} ringZone={ringZone} hijauZone={hijauZone} />)
-      act(() => created.load!())
-      expect(layer('ring-legendary-line').paint['line-color']).toBe('#FFA94D')
-      expect(layer('hijau-legendary-line').paint['line-color']).toBe('#3FA86B')
-      for (const id of ['ring-legendary-line', 'hijau-legendary-line']) expect(layer(id).paint['line-dasharray']).toBeTruthy()
-      for (const id of ['ring-legendary-fill', 'ring-legendary-line', 'hijau-legendary-fill', 'hijau-legendary-line'])
-        expect(JSON.stringify(layer(id).paint)).not.toMatch(/C6FF3D|FFD60A|C9A4FF/i)
-      expect(created.data['ring-legendary']).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
-      expect(created.data['hijau-legendary']).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
-      const ring = created.markers.find((m) => m.lngLat?.[0] === 101.4)!
-      const hijau = created.markers.find((m) => m.lngLat?.[0] === 101.5)!
-      expect(ring.el.className).toContain('ring-marker')
-      expect(hijau.el.className).toContain('hijau-marker')
-      for (const mk of [ring, hijau]) {
-        expect(mk.el.textContent).toBe('?')
-        expect(mk.el.getAttribute('title')).toBeNull()
-      }
-      const said = JSON.stringify(created.data['ring-legendary']) + JSON.stringify(created.data['hijau-legendary'])
-      expect(said).not.toMatch(/ring|hijau|super|legendary/i)
-    })
-
-    it('follows the props and removes the markers when they go', () => {
-      created.layers = []
-      created.data = {}
-      created.markers = []
-      const { rerender } = render(<GameMap arena={arena} dots={[]} />)
-      act(() => created.load!())
-      expect(created.data['ring-legendary']).toMatchObject({ features: [] })
-      expect(created.data['hijau-legendary']).toMatchObject({ features: [] })
-      rerender(<GameMap arena={arena} dots={[]} ringZone={ringZone} hijauZone={hijauZone} />)
-      expect(created.data['hijau-legendary']).toMatchObject({ features: [{ geometry: { type: 'Polygon' } }] })
-      rerender(<GameMap arena={arena} dots={[]} />)
-      expect(created.data['ring-legendary']).toMatchObject({ features: [] })
-      expect(created.markers.every((m) => m.removed)).toBe(true)
     })
   })
 

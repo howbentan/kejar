@@ -1,27 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
-import { LEGENDARY_KINDS } from '../../shared/legendaries.js'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
 import Marker from './Marker'
 import { loadOrganiserSession } from './organiserSession'
 import SetupSteps from './SetupSteps'
 import { ErrorText } from './ui'
-import { noticeLegendaries, REPRINT_LINE, waitingForCard, type Legendary } from './cardNotice'
 
 type Item = NonNullable<View['kit']>['items'][number]
 
-/** A secret card's line in its own colour (the organiser's list only ever has these). */
+/** A secret line in its own colour: the Tupperware's red (the organiser's list only ever has these). */
 const TONE_COLOUR: Record<NonNullable<Item['tone']>, string> = {
-  yellow: 'var(--legendary-2)',
-  orange: 'var(--ring-2)',
-  purple: 'var(--bomoh-2)',
-  green: 'var(--hijau-2)',
   red: '#E63946',
 }
 
 function Row({ item, done, code, onTap }: { item: Item; done: boolean; code: string; onTap?: () => void }) {
   const box = useRef<HTMLDivElement>(null)
-  const yellow = item.tone === 'yellow'
   const toneColour = item.tone ? TONE_COLOUR[item.tone] : null
   return (
     <div
@@ -64,7 +57,7 @@ function Row({ item, done, code, onTap }: { item: Item; done: boolean; code: str
           OPEN
         </a>
       )}
-      {done && <Marker marks={[{ shape: 'tick', target: box }]} colour={yellow ? 'yellow' : 'lime'} />}
+      {done && <Marker marks={[{ shape: 'tick', target: box }]} colour="lime" />}
     </div>
   )
 }
@@ -81,7 +74,7 @@ function Ready() {
 
 /**
  * The organiser's packing list (setup step 5, and the lobby's "Before you start"). Tapping a line saves its tick.
- * `compact` leaves out the heading, progress bar, notice and lobby button, for use inside the lobby.
+ * `compact` leaves out the heading, progress bar and lobby button, for use inside the lobby.
  */
 export default function PackList({ code, view, refresh, compact = false }: { code: string; view: View; refresh: () => void; compact?: boolean }) {
   const [local, setLocal] = useState<Record<string, boolean>>({})
@@ -97,13 +90,6 @@ export default function PackList({ code, view, refresh, compact = false }: { cod
   }, [items])
   const doneOf = (i: Item) => local[i.id] ?? i.ticked
   const ready = items.length > 0 && items.every(doneOf)
-  // Each legendary's notice stays while the game wants its card but has none yet, and goes once one is assigned
-  // (ruling R9). A view without the cards (not the organiser's) falls back to the notice the create step passed on.
-  const notices: Legendary[] = compact
-    ? []
-    : view.datoCard === undefined
-      ? noticeLegendaries(window.location.search)
-      : LEGENDARY_KINDS.filter((l) => waitingForCard(view, l))
 
   async function tap(item: Item) {
     // No organiser session on this phone: the rows are read-only.
@@ -138,14 +124,6 @@ export default function PackList({ code, view, refresh, compact = false }: { cod
       {!compact && <SetupSteps step={5} />}
       {!compact && <h1>Pack.</h1>}
       {!compact && <p className="muted">From your printed kit. Nothing to print today.</p>}
-      {notices.map((l) => (
-        <p key={l} className="muted">
-          {REPRINT_LINE[l]}{' '}
-          <a href="/host/kit" style={{ textDecoration: 'underline' }}>
-            Your kit
-          </a>
-        </p>
-      ))}
       {group('pack', 'PACK')}
       {group('day', 'ON THE DAY')}
       {ready && <Ready />}

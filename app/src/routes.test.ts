@@ -11,7 +11,8 @@ describe('routeFor', () => {
     expect(routeFor('/g/abc234')).toEqual({ route: 'game', code: 'ABC234' })
     expect(routeFor('/join/ABC234/')).toEqual({ route: 'join', code: 'ABC234' })
     expect(routeFor('/print/tags')).toEqual({ route: 'print-tags' })
-    expect(routeFor('/print/card')).toEqual({ route: 'print-card' })
+    // The colour cards are retired: their print page is gone.
+    expect(routeFor('/print/card')).toEqual({ route: 'not-found' })
     expect(routeFor('/print/slips')).toEqual({ route: 'print-slips' })
   })
 

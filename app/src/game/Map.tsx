@@ -22,19 +22,9 @@ const VOLT = '#C6FF3D'
 const WHITE = '#F5F5F3'
 const BLACK = '#0A0A0B'
 
-type LegendaryZone = { lat: number; lng: number; radiusM: number }
+type MapCircle = { lat: number; lng: number; radiusM: number }
 
-/**
- * Dato Seri's yellow. MapLibre can't read CSS variables, so read tokens.css --legendary-1/2/3 and --legendary-ink
- * once; the fallback hex values mirror those tokens (#FFF27A, #FFD60A, #F5B800, #1A1400) and must change with them.
- */
-function legendaryYellow() {
-  const css = typeof document === 'undefined' ? null : getComputedStyle(document.documentElement)
-  const token = (name: string, fallback: string) => css?.getPropertyValue(name).trim() || fallback
-  return { fill: token('--legendary-1', '#FFF27A'), main: token('--legendary-2', '#FFD60A'), deep: token('--legendary-3', '#F5B800'), ink: token('--legendary-ink', '#1A1400') }
-}
-
-/** Bomoh's purple, read from tokens.css --bomoh-1/2/3 and --bomoh-ink; the fallbacks (#F0E0FF, #C9A4FF, #9B5DE5, #2B0B45) must change with them. */
+/** Bomoh's purple (MapLibre can't read CSS variables), read from tokens.css --bomoh-1/2/3 and --bomoh-ink; the fallbacks (#F0E0FF, #C9A4FF, #9B5DE5, #2B0B45) must change with them. */
 function legendaryPurple() {
   const css = typeof document === 'undefined' ? null : getComputedStyle(document.documentElement)
   const token = (name: string, fallback: string) => css?.getPropertyValue(name).trim() || fallback
@@ -63,8 +53,8 @@ function tupperRed() {
   return { fill: token('--tupper-1', '#FFD3D6'), main: token('--tupper-2', '#E63946'), deep: token('--tupper-3', '#A4161A'), ink: token('--tupper-ink', '#3A0508') }
 }
 
-const toneColours = (tone: SecretTone) =>
-  tone === 'red' ? tupperRed() : tone === 'purple' ? legendaryPurple() : tone === 'orange' ? legendaryOrange() : tone === 'green' ? legendaryGreen() : legendaryYellow()
+/** A secret pin's colours by its tone. The Tupperware's red is the only one since the colour cards were retired. */
+const toneColours = (_tone: SecretTone) => tupperRed()
 
 /**
  * The endgames' map colours (endgame design §6.4, §7.4, §8.3): Bomba's red for the last call, Hang Hebat's poster cream
@@ -124,7 +114,7 @@ function stationFeatures(stations: StationMark[]): FeatureCollection {
 
 /**
  * A pin. The walk-the-park guide sets a `label` (drawn on the pin), a `state` (todo is outlined, next pulses, placed is
- * filled) and, for a secret card's step, its colour as `tone`. Plain pins (safety alerts) leave them out and draw as filled lime.
+ * filled) and, for a Tupperware's step, its colour as `tone`. Plain pins (safety alerts) leave them out and draw as filled lime.
  */
 type Pin = { id: string; lat: number; lng: number; label?: string; state?: 'todo' | 'next' | 'placed'; tone?: SecretTone }
 
@@ -136,10 +126,7 @@ function pinFeatures(pins: Pin[]): FeatureCollection {
         id: p.id,
         label: p.label ?? '',
         state: p.state ?? 'placed',
-        yellow: p.tone === 'yellow',
-        orange: p.tone === 'orange',
-        purple: p.tone === 'purple',
-        green: p.tone === 'green',
+        red: p.tone === 'red',
       },
       geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
     })),
@@ -167,11 +154,9 @@ function stashFeatures(s: LatLng | null): FeatureCollection {
   return collection(s ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [s.lng, s.lat] } }] : [])
 }
 
-/** The hint zone's circle (no names anywhere: secret, jail design §4c). */
-function zoneFeatures(z: LegendaryZone | null) {
-  return {
-    zone: collection(z ? [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring(circlePolygon(z, z.radiusM))] } }] : []),
-  }
+/** A circle on the map: Super Ring's house arrest. */
+function circleFeatures(z: MapCircle | null): FeatureCollection {
+  return collection(z ? [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring(circlePolygon(z, z.radiusM))] } }] : [])
 }
 
 function routeFeatures(route: { from: LatLng; to: LatLng } | null) {
@@ -203,7 +188,7 @@ const HOUSE_MAX_ZOOM = 19
 const HOUSE_PADDING = 12
 
 /** Two corners a little outside a circle, so `fitTo` frames the whole of it (about 1.3× its radius each way). */
-function circleBox(c: LegendaryZone | null): LatLng[] | null {
+function circleBox(c: MapCircle | null): LatLng[] | null {
   if (!c) return null
   const dLat = (c.radiusM * 1.3) / 111_320
   const dLng = dLat / Math.max(0.2, Math.cos((c.lat * Math.PI) / 180))
@@ -211,41 +196,6 @@ function circleBox(c: LegendaryZone | null): LatLng[] | null {
     { lat: c.lat - dLat, lng: c.lng - dLng },
     { lat: c.lat + dLat, lng: c.lng + dLng },
   ]
-}
-
-/**
- * A secret hint zone after the first one (Bomoh, Super Ring, Mak Kau Hijau): its source follows the prop, and its
- * unlabelled ? badge is an HTML marker tinted by `markerClass` in CSS, marked still under reduced motion.
- */
-function useHintZone(
-  map: { current: maplibregl.Map | null },
-  ready: { current: boolean },
-  loaded: boolean,
-  reduce: boolean | null,
-  source: string,
-  markerClass: string,
-  zone: LegendaryZone | null,
-) {
-  const latest = useRef(zone)
-  latest.current = zone
-  const key = JSON.stringify(zone)
-  useEffect(() => {
-    const mp = map.current
-    if (!ready.current || !mp) return
-    ;(mp.getSource(source) as GeoJSONSource | undefined)?.setData(zoneFeatures(latest.current).zone)
-    const z = latest.current
-    if (!z) return
-    const el = document.createElement('div')
-    el.className = `legendary-marker ${markerClass}`
-    el.setAttribute('aria-hidden', 'true')
-    if (reduce) el.dataset.still = 'true'
-    el.innerHTML = '<i class="legendary-ring"></i><b>?</b>'
-    const marker = new maplibregl.Marker({ element: el }).setLngLat([z.lng, z.lat]).addTo(mp)
-    return () => {
-      marker.remove()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key, reduce, loaded])
 }
 
 export default function GameMap({
@@ -258,15 +208,11 @@ export default function GameMap({
   ripple = null,
   showJailAndStart = true,
   fit = null,
-  legendaryZone = null,
-  bomohZone = null,
-  ringZone = null,
-  hijauZone = null,
   circle = null,
   flood = null,
   snapshot = null,
   stash = null,
-  stashTone = 'yellow',
+  stashTone = 'red',
   tollGates = [],
 }: {
   arena: Arena
@@ -291,23 +237,15 @@ export default function GameMap({
    * Re-framed as they move, without rebuilding the map.
    */
   fit?: LatLng[] | null
-  /** Dato Seri's hint zone: a dashed yellow circle with a twinkling ? and a slow ripple, never a name (jail design §4a, §4c). */
-  legendaryZone?: LegendaryZone | null
-  /** Bomoh's hint zone: the same unlabelled ? circle as Dato Seri's, only purple. */
-  bomohZone?: LegendaryZone | null
-  /** Super Ring's hint zone: the same unlabelled ? circle, cheese orange. */
-  ringZone?: LegendaryZone | null
-  /** Mak Kau Hijau's hint zone: the same unlabelled ? circle, deep green. */
-  hijauZone?: LegendaryZone | null
   /** Banjir Kilat: the water over the flooded part of the play area, and the next waterline before a rise. */
   flood?: FloodNow | null
   /** Super Ring's house arrest: a solid orange circle (26 m), and the camera framed on it. */
-  circle?: LegendaryZone | null
+  circle?: MapCircle | null
   /** Runners: where the chasers were at their last check-in's alert. Frozen: redrawn only when it changes. */
   snapshot?: ChaserSnapshot | null
-  /** Organiser and marshals before the start: the exact spot a legendary's card was dropped, as a pin. */
+  /** The organiser's own map: the exact spot a box was dropped, as a pin. */
   stash?: LatLng | null
-  /** The stash pin's colour: the secret card's (yellow, orange, purple or green). Read once, when the map loads. */
+  /** The stash pin's colour: the Tupperware's red. Read once, when the map loads. */
   stashTone?: SecretTone
   /** Chasers: where Tee And Gee's hidden toll gates stand. */
   tollGates?: LatLng[]
@@ -316,14 +254,6 @@ export default function GameMap({
   const [loaded, setLoaded] = useState(false)
   // The tiles' small j gives up on a map error or after MAP_LOADER_MS, so a map that never loads isn't covered for good.
   const [gaveUp, setGaveUp] = useState(false)
-  const latestZone = useRef(legendaryZone)
-  latestZone.current = legendaryZone
-  const latestBomohZone = useRef(bomohZone)
-  latestBomohZone.current = bomohZone
-  const latestRingZone = useRef(ringZone)
-  latestRingZone.current = ringZone
-  const latestHijauZone = useRef(hijauZone)
-  latestHijauZone.current = hijauZone
   const latestCircle = useRef(circle)
   latestCircle.current = circle
   const latestFlood = useRef(flood)
@@ -431,35 +361,14 @@ export default function GameMap({
         source: 'holes',
         paint: { 'line-color': WHITE, 'line-width': 1.2, 'line-opacity': 0.6, 'line-dasharray': [2, 2] },
       })
-      // Dato Seri's hint zone sits under the players and station marks. Unlabelled on purpose.
-      const y = legendaryYellow()
-      const zone = zoneFeatures(latestZone.current)
-      m.addSource('legendary', { type: 'geojson', data: zone.zone })
-      m.addLayer({ id: 'legendary-fill', type: 'fill', source: 'legendary', paint: { 'fill-color': y.main, 'fill-opacity': 0.12 } })
-      m.addLayer({ id: 'legendary-line', type: 'line', source: 'legendary', paint: { 'line-color': y.main, 'line-width': 2, 'line-dasharray': [2, 2] } })
-      const p = legendaryPurple()
-      m.addSource('bomoh-legendary', { type: 'geojson', data: zoneFeatures(latestBomohZone.current).zone })
-      m.addLayer({ id: 'bomoh-legendary-fill', type: 'fill', source: 'bomoh-legendary', paint: { 'fill-color': p.main, 'fill-opacity': 0.12 } })
-      m.addLayer({ id: 'bomoh-legendary-line', type: 'line', source: 'bomoh-legendary', paint: { 'line-color': p.main, 'line-width': 2, 'line-dasharray': [2, 2] } })
+      // Super Ring's house-arrest circle: solid orange, under the players and station marks.
       const or = legendaryOrange()
-      m.addSource('ring-legendary', { type: 'geojson', data: zoneFeatures(latestRingZone.current).zone })
-      m.addLayer({ id: 'ring-legendary-fill', type: 'fill', source: 'ring-legendary', paint: { 'fill-color': or.main, 'fill-opacity': 0.12 } })
-      m.addLayer({ id: 'ring-legendary-line', type: 'line', source: 'ring-legendary', paint: { 'line-color': or.main, 'line-width': 2, 'line-dasharray': [2, 2] } })
-      const g = legendaryGreen()
-      m.addSource('hijau-legendary', { type: 'geojson', data: zoneFeatures(latestHijauZone.current).zone })
-      m.addLayer({ id: 'hijau-legendary-fill', type: 'fill', source: 'hijau-legendary', paint: { 'fill-color': g.main, 'fill-opacity': 0.12 } })
-      m.addLayer({ id: 'hijau-legendary-line', type: 'line', source: 'hijau-legendary', paint: { 'line-color': g.main, 'line-width': 2, 'line-dasharray': [2, 2] } })
-      // Super Ring's house-arrest circle: solid, so it never reads as a hint zone.
-      m.addSource('house', { type: 'geojson', data: zoneFeatures(latestCircle.current).zone })
+      m.addSource('house', { type: 'geojson', data: circleFeatures(latestCircle.current) })
       m.addLayer({ id: 'house-fill', type: 'fill', source: 'house', paint: { 'fill-color': or.main, 'fill-opacity': 0.14 } })
       m.addLayer({ id: 'house-line', type: 'line', source: 'house', paint: { 'line-color': or.main, 'line-width': 2.5 } })
-      // A walk pin's colour by its tone, as `case` pairs: yellow, orange, purple, then green.
-      const o = legendaryOrange()
-      const gr = legendaryGreen()
-      const toned = (shade: 'main' | 'deep' | 'ink'): [ExpressionSpecification, string, ExpressionSpecification, string, ExpressionSpecification, string, ExpressionSpecification, string] => [
-        ['get', 'yellow'], y[shade], ['get', 'orange'], o[shade], ['get', 'purple'], p[shade], ['get', 'green'], gr[shade],
-      ]
-      // The ? badge and its ripple are an HTML marker animated by CSS (the compositor), so the map idles.
+      // A walk pin's colour by its tone, as a `case` pair: the Tupperware's red.
+      const red = tupperRed()
+      const toned = (shade: 'main' | 'deep' | 'ink'): [ExpressionSpecification, string] => [['get', 'red'], red[shade]]
       m.addSource('toilets', {
         type: 'geojson',
         data: collection(
@@ -747,37 +656,12 @@ export default function GameMap({
     ;(map.current.getSource('route') as GeoJSONSource | undefined)?.setData(routeFeatures(latestRoute.current))
   }, [routeKey])
 
-  // The hint zone follows the prop. Its ?-badge is an HTML marker whose twinkle and ripple are pure CSS; under
-  // reduced motion (rebuilt if that flips mid-session) it is simply marked still.
-  const zoneKey = JSON.stringify(legendaryZone)
-  useEffect(() => {
-    const mp = map.current
-    if (!ready.current || !mp) return
-    ;(mp.getSource('legendary') as GeoJSONSource | undefined)?.setData(zoneFeatures(latestZone.current).zone)
-    const z = latestZone.current
-    if (!z) return
-    const el = document.createElement('div')
-    el.className = 'legendary-marker'
-    el.setAttribute('aria-hidden', 'true')
-    if (reduce) el.dataset.still = 'true'
-    el.innerHTML = '<i class="legendary-ring"></i><b>?</b>'
-    const marker = new maplibregl.Marker({ element: el }).setLngLat([z.lng, z.lat]).addTo(mp)
-    return () => {
-      marker.remove()
-    }
-  }, [zoneKey, reduce, loaded])
-
-  // Bomoh's, Super Ring's and Mak Kau Hijau's hint zones: the same unlabelled ? badge, tinted by CSS.
-  useHintZone(map, ready, loaded, reduce, 'bomoh-legendary', 'bomoh-marker', bomohZone)
-  useHintZone(map, ready, loaded, reduce, 'ring-legendary', 'ring-marker', ringZone)
-  useHintZone(map, ready, loaded, reduce, 'hijau-legendary', 'hijau-marker', hijauZone)
-
   // Super Ring's house arrest: the circle follows the prop, and the camera frames it.
   const circleKey = JSON.stringify(circle)
   useEffect(() => {
     const mp = map.current
     if (!ready.current || !mp) return
-    ;(mp.getSource('house') as GeoJSONSource | undefined)?.setData(zoneFeatures(latestCircle.current).zone)
+    ;(mp.getSource('house') as GeoJSONSource | undefined)?.setData(circleFeatures(latestCircle.current))
     fitTo(mp, circleBox(latestCircle.current), HOUSE_MAX_ZOOM, HOUSE_PADDING)
   }, [circleKey, loaded])
 

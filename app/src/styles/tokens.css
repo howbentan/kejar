@@ -345,26 +345,10 @@ select.input option { background: #141614; color: var(--white); }
 @media (prefers-reduced-motion: reduce) {
   .power-card.legendary, .pc-foil { animation: none; }
 }
-.legendary-marker { position: relative; width: 24px; height: 24px; pointer-events: none; }
-.legendary-marker b {
-  position: absolute; inset: 0; display: grid; place-items: center; border-radius: 50%; background: var(--legendary-2);
-  border: 2px solid var(--legendary-3); color: var(--legendary-ink); font: 800 14px var(--font); animation: legendary-twinkle 1.6s ease-in-out infinite;
-}
-.legendary-ring { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--legendary-2); animation: legendary-ripple 3.2s ease-out infinite; }
-@keyframes legendary-twinkle { 50% { opacity: 0.75; transform: scale(0.92); } }
-@keyframes legendary-ripple { from { transform: scale(1); opacity: 0.6; } to { transform: scale(4.5); opacity: 0; } }
-.bomoh-marker b { background: var(--bomoh-2); border-color: var(--bomoh-3); color: var(--bomoh-ink); }
-.bomoh-marker .legendary-ring { border-color: var(--bomoh-2); }
-.legendary-marker[data-still='true'] b, .legendary-marker[data-still='true'] .legendary-ring { animation: none; }
-.legendary-marker[data-still='true'] .legendary-ring { display: none; }
 
-/* Plan E2: Super Ring's cheese orange and Mak Kau Hijau's deep green, on the same legendary face, slot and ? marker. */
+/* Plan E2: Super Ring's cheese orange and Mak Kau Hijau's deep green, on the same legendary face and slot. */
 .slot.legendary.ring { --leg: var(--ring-2); }
 @keyframes ring-glow { 50% { box-shadow: 0 0 24px rgba(255, 169, 77, 0.85); } }
-.ring-marker b { background: var(--ring-2); border-color: var(--ring-3); color: var(--ring-ink); }
-.ring-marker .legendary-ring { border-color: var(--ring-2); }
-.hijau-marker b { background: var(--hijau-2); border-color: var(--hijau-3); color: var(--hijau-ink); }
-.hijau-marker .legendary-ring { border-color: var(--hijau-2); }
 
 /* Mak Kau Hijau's takeover (tap screen A): flat green fills the runner's screen, black type, a black countdown panel
    and one black pill, like the SOS takeover fills lime. No gradients, shine or glow. */

@@ -13,7 +13,6 @@ import type { StickerKind } from '../game/stickerArt'
 import { ErrorText, Pills, Screen } from '../game/ui'
 import { platformOf } from '../game/device'
 import ArenaSetup, { type SavedArenaForEdit } from './ArenaSetup'
-import { noticeParam } from '../game/cardNotice'
 import { Busy, FullLoader } from '../game/Runner'
 import { useLoaderGate } from '../game/useLoaderGate'
 
@@ -339,15 +338,14 @@ export default function HostNew() {
         if (!same(stations, chosen.arena.stations ?? [])) overrides.stations = stations
       }
       const { legendaries: _picked, ...rest } = settings
-      const { code, notice } = await call<{ code: string; notice?: string }>('create', {
+      const { code } = await call<{ code: string }>('create', {
         settings: { ...rest, legendarySides: sides },
         organiserToken,
         ...(chosen ? { savedArenaId: chosen.id, overrides } : { draft: oneOff }),
       })
-      const param = noticeParam(notice)
       // The phone's back gesture from step 4 must never land on a fresh step 1 and make a second game. Each forward step
       // left a history entry, so step back over them first, then replace the first one: back from step 4 then leaves.
-      const crew = `/host/${code}?setup=crew${param ? `&notice=${param}` : ''}`
+      const crew = `/host/${code}?setup=crew`
       const depth = Math.max(0, ((window.history.state as { newGameStep?: number } | null)?.newGameStep ?? 1) - 1)
       if (depth > 0) {
         ownPop.current = true

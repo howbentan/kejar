@@ -80,11 +80,9 @@ describe('RunnerChase: Mak Kau Hijau and the new hint zones (Plan E2)', () => {
     }
   })
 
-  it('passes the orange and green hint zones to the map', () => {
-    const ringZone = { lat: 3.1, lng: 101.1, radiusM: 150 }
-    const hijauZone = { lat: 3.2, lng: 101.2, radiusM: 120 }
-    render(<RunnerChase code="ABC234" view={testView({ ringZone, hijauZone })} />)
-    expect(mapProps.last).toMatchObject({ ringZone, hijauZone })
+  it('passes no hint zones to the map (the Tupperware side quest replaced them)', () => {
+    render(<RunnerChase code="ABC234" view={testView()} />)
+    for (const zone of ['legendaryZone', 'bomohZone', 'ringZone', 'hijauZone']) expect(mapProps.last).not.toHaveProperty(zone)
   })
 })
 
@@ -207,12 +205,10 @@ describe('RunnerChase', () => {
     expect(document.body.textContent).not.toMatch(/Station \d|the station|within 30 m/i)
   })
 
-  it("draws the chasers' frozen snapshot and the ? zone on the map", () => {
+  it("draws the chasers' frozen snapshot on the map", () => {
     const chaserSnapshot = { positions: [{ name: 'Ben', lat: 3.001, lng: 101.001, stale: false }] }
-    const legendaryZone = { lat: 3, lng: 101, radiusM: 150 }
-    render(<RunnerChase code="ABC234" view={testView({ chaserSnapshot, legendaryZone })} />)
+    render(<RunnerChase code="ABC234" view={testView({ chaserSnapshot })} />)
     expect(mapProps.last?.snapshot).toEqual(chaserSnapshot)
-    expect(mapProps.last?.legendaryZone).toEqual(legendaryZone)
   })
 
   it('scanning anything else says so and calls nothing', async () => {

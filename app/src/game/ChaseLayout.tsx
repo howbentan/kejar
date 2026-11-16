@@ -116,10 +116,6 @@ export default function ChaseLayout(props: {
           dots={view.dots}
           stations={view.stations}
           height="100%"
-          legendaryZone={view.legendaryZone}
-          bomohZone={view.bomohZone}
-          ringZone={view.ringZone}
-          hijauZone={view.hijauZone}
           snapshot={view.chaserSnapshot}
           tollGates={view.tollGates}
           flood={view.endgame?.flood ?? null}

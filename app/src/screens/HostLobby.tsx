@@ -5,9 +5,7 @@ import BeforeYouStart from '../game/BeforeYouStart'
 import CrewStep from '../game/CrewStep'
 import { AlertsOnPhone } from '../game/MarshalTools'
 import PackList from '../game/PackList'
-import { stashIn, waitingForCard as waitingFor } from '../game/cardNotice'
-import { LEGENDARY_KINDS } from '../../shared/legendaries.js'
-import SetupMap, { OrganiserTools } from '../game/SetupMap'
+import SetupMap from '../game/SetupMap'
 import { saveLastGame } from '../game/lastGame'
 import { loadOrganiserSession } from '../game/organiserSession'
 import { clockOf, nextOccurrence, startsLabel } from '../game/plannedStart'
@@ -21,11 +19,6 @@ import Cancelled from './Cancelled'
 
 type Side = Extract<Role, 'runner' | 'chaser'>
 
-// Players look at this screen to scan the join code, so its notices never name the secret card (the full
-// wording sits behind Organiser tools).
-const NO_CARD_LINE = 'Hidden card is off for now. Reprint a card to use it.'
-const PICK_UP_LINE = 'Hidden card is off for this game. Pick it up.'
-const STARTED_NO_CARD_LINE = 'Started without the hidden card. Reprint a card for next time.'
 const SIDES: { value: Side; text: string }[] = [
   { value: 'runner', text: 'Dikejar' },
   { value: 'chaser', text: 'Kejar' },
@@ -40,8 +33,6 @@ export default function HostLobby({ code }: { code: string }) {
   // Which button was tapped ('start', 'mode', 'invite', or `role:<player id>`), so only it shows the running j.
   const [busyOn, setBusyOn] = useState<string | null>(null)
   const [marshalInviteUrl, setMarshalInviteUrl] = useState('')
-  const [notice, setNotice] = useState('')
-  const [startNotice, setStartNotice] = useState('')
   const joinUrl = `${window.location.origin}/join/${code}`
   // The planned start's time field: shows the saved time, and only sends once the organiser leaves it (or presses
   // Enter), never on each keystroke, where a half-typed 07:30 reads as 07:03.
@@ -61,9 +52,8 @@ export default function HostLobby({ code }: { code: string }) {
   }, [code])
 
   useEffect(() => {
-    // A notice from the start waits for the organiser to read it before going to the game.
-    if (view && view.phase !== 'lobby' && !startNotice) window.location.assign(`/g/${code}`)
-  }, [view, code, startNotice])
+    if (view && view.phase !== 'lobby') window.location.assign(`/g/${code}`)
+  }, [view, code])
 
   function commitStart() {
     if (!startText || (savedStart && clockOf(Date.parse(savedStart)) === startText)) return
@@ -75,8 +65,7 @@ export default function HostLobby({ code }: { code: string }) {
     setBusyOn(tapped)
     setError('')
     try {
-      const res = await call<{ notice?: string } | undefined>(action, { code, organiserToken: organiser!.organiserToken, ...body })
-      if (action === 'start' && res?.notice) setStartNotice(STARTED_NO_CARD_LINE)
+      await call(action, { code, organiserToken: organiser!.organiserToken, ...body })
       refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -92,16 +81,12 @@ export default function HostLobby({ code }: { code: string }) {
     setBusy(true)
     setBusyOn('mode')
     setError('')
-    setNotice('')
     try {
-      const res = await call<{ notice?: string }>('setMode', {
+      await call('setMode', {
         code,
         organiserToken: organiser!.organiserToken,
         mode: view.settings.mode === 'full' ? 'core' : 'full',
       })
-      if (res?.notice) setNotice(NO_CARD_LINE)
-      // Either card already dropped in the park: the organiser has to go and fetch it.
-      else if (view.settings.mode === 'full' && LEGENDARY_KINDS.some((l) => stashIn(view, l))) setNotice(PICK_UP_LINE)
       refresh()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -136,12 +121,6 @@ export default function HostLobby({ code }: { code: string }) {
   const runners = players.filter((p) => p.role === 'runner').length
   const chasers = players.filter((p) => p.role === 'chaser').length
   const suggested = Math.max(1, Math.round(players.length / 4))
-  // Full and wanting either hidden card, but none was free yet: the lobby keeps trying (ruling R9), so this stays
-  // until every wanted card is assigned. `legendaries` and the cards are in the organiser's own view only. setMode's
-  // own no-card line goes once the refreshed Full view has every card it wants.
-  const waitingForCard = !!view && LEGENDARY_KINDS.some((l) => waitingFor(view, l))
-  const cardsSettled = !!view && view.settings.mode === 'full' && !waitingForCard
-  const shownNotice = notice === NO_CARD_LINE && cardsSettled ? '' : notice || (waitingForCard ? NO_CARD_LINE : '')
   const gate = useLoaderGate(!!view || !!loadError, !!loadError)
 
   if (!organiser) {
@@ -168,17 +147,6 @@ export default function HostLobby({ code }: { code: string }) {
         ) : (
           <PackList code={code} view={view} refresh={refresh} />
         )}
-      </Screen>
-    )
-  }
-
-  if (startNotice) {
-    return (
-      <Screen eyebrow={`kejar. · game ${code}`}>
-        <p className="muted">{startNotice}</p>
-        <button className="btn" onClick={() => window.location.assign(`/g/${code}`)}>
-          Go to the game
-        </button>
       </Screen>
     )
   }
@@ -228,7 +196,6 @@ export default function HostLobby({ code }: { code: string }) {
           )}
         </div>
       )}
-      {shownNotice && <p className="muted">{shownNotice}</p>}
       {view && <AlertsOnPhone code={code} view={view} refresh={refresh} />}
       {view && <BeforeYouStart code={code} view={view} refresh={refresh} />}
       {view && <SetupMap view={view} />}
@@ -241,9 +208,6 @@ export default function HostLobby({ code }: { code: string }) {
           </p>
         </div>
       </div>
-      {/* Below the join card, closed by default: players look at this screen to scan the join code. One toggle for
-          both hidden cards, so how many buttons there are says nothing about which legendaries are on. */}
-      {view && <OrganiserTools view={view} code={code} credentials={{ organiserToken: organiser.organiserToken }} refresh={refresh} />}
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <button className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} disabled={busy} aria-busy={busyOn === 'invite' || undefined} onClick={inviteMarshal}>

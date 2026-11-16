@@ -24,8 +24,6 @@ export const FRESH_MS = 60_000
 export const CHASER_SNAPSHOT_FUZZ_M = 30
 /** Focus shows runners this close to the chaser exactly. */
 export const FOCUS_M = 75
-/** Dato Seri's hint zone radius, inside the jail design's 100–200 m band (§4b). */
-export const LEGENDARY_ZONE_M = 150
 const FEED_MAX = 20
 
 export interface MapDot {
@@ -206,20 +204,6 @@ export interface View {
   /** My power-up whose effect is still running, which keeps my one slot busy (§5a). */
   activePowerUp: PowerUpKind | null
   /**
-   * The unlabelled `?` zone around Dato Seri's hidden stash (jail design §4b, §4c): every runner and chaser in
-   * a Full game, during the chase, until someone claims it. Fixed for the game, with the stash somewhere inside.
-   */
-  legendaryZone: { lat: number; lng: number; radiusM: number } | null
-  /**
-   * The unlabelled `?` zone around Bomoh's hidden stash (jail design §2e): the same shape and rules as
-   * `legendaryZone`, seeded independently so the two zones never land at the same offset.
-   */
-  bomohZone: { lat: number; lng: number; radiusM: number } | null
-  /** Super Ring's hint zone (Plan E2): same shape and rules as `legendaryZone`, seeded apart. No name. */
-  ringZone: { lat: number; lng: number; radiusM: number } | null
-  /** Mak Kau Hijau's hint zone (Plan E2): same shape and rules as `bomohZone`, seeded apart. No name. */
-  hijauZone: { lat: number; lng: number; radiusM: number } | null
-  /**
    * What Settle could do, for a jailed runner holding an unused Dato Seri (jail design §4b, §4d); null for
    * everyone else. `options` are the other runners in Penjara; those who already used their one escape are
    * listed as not eligible (greyed out).
@@ -252,27 +236,14 @@ export interface View {
    */
   datoStash?: PlacedStash | null
   /**
-   * The organiser only: the letter and the code of the yellow card assigned to this game (the code its stash
-   * claims with, so the print link and the claim always agree), for the packing list and the organiser-only print
-   * link (ruling R15, R2); null if the game has none. Left out of every other view entirely, like `datoStash`.
-   */
-  datoCard?: { letter: string; code: string } | null
-  /**
-   * The organiser only: Bomoh's stash and card, the same shape and secrecy as `datoStash`/`datoCard`. Left out
-   * of players' and marshals' views entirely, like its Dato Seri counterpart.
+   * The organiser only: Bomoh's, Super Ring's and Mak Kau Hijau's stashes, the same shape and secrecy as
+   * `datoStash`. Left out of players' and marshals' views entirely.
    */
   bomohStash?: PlacedStash | null
-  bomohCard?: { letter: string; code: string } | null
-  /**
-   * The organiser only: Super Ring's and Mak Kau Hijau's stashes and cards, the same shape and secrecy as Bomoh's.
-   * Left out of players' and marshals' views entirely.
-   */
   ringStash?: PlacedStash | null
-  ringCard?: { letter: string; code: string } | null
   hijauStash?: PlacedStash | null
-  hijauCard?: { letter: string; code: string } | null
   /**
-   * The organiser's and marshals' packing list. The yellow card and its place are in the organiser's own view
+   * The organiser's and marshals' packing list. The Tupperware and its places are in the organiser's own view
    * only (rules doc §9b); players never get this field.
    */
   kit?: KitView
@@ -1076,7 +1047,7 @@ export function viewFor(i: ViewInput): View {
   // anything either, and no results.
   const cancelled = !!i.game.cancelled_at
   if (i.me.removed_at || cancelled) {
-    return { ...v, ...(cancelled ? { cancelled: true as const, results: null } : {}), dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, sideQuest: false, caughtBy: null, jailReason: null, arrest: null, endgame: null, hijau: null, penjaraLockedUntil: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, legendaryZone: null, bomohZone: null, ringZone: null, hijauZone: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, datoCard: undefined, bomohStash: undefined, bomohCard: undefined, ringStash: undefined, ringCard: undefined, hijauStash: undefined, hijauCard: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
+    return { ...v, ...(cancelled ? { cancelled: true as const, results: null } : {}), dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, sideQuest: false, caughtBy: null, jailReason: null, arrest: null, endgame: null, hijau: null, penjaraLockedUntil: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, bomohStash: undefined, ringStash: undefined, hijauStash: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
   }
   return v
 }
@@ -1257,10 +1228,6 @@ function fullView(input: ViewInput): View {
       const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now, i.me)
       return busy?.running ? busy.kind : null
     })(),
-    legendaryZone: null,
-    bomohZone: null,
-    ringZone: null,
-    hijauZone: null,
     settle: settleFor(i, phase),
     rescue: rescueFor(i, phase),
     fiveLeft: Boolean(i.game.five_warned_at),
@@ -1269,18 +1236,14 @@ function fullView(input: ViewInput): View {
     frozenUntil: frozenForMs(i.me, i.now) > 0 ? Date.parse(i.me.frozen_until as string) : null,
     comboReady: comboReady(i.powerUps, i.me.id),
     tollGates: tollGatesFor(i),
-    // The stash and the card go only to the organiser, who prints and hides it (ruling R15). Marshals are the
-    // helper, and never see either (rules doc §9b).
+    // The stashes go only to the organiser, who hides the boxes. Marshals are the helper, and never see them
+    // (rules doc §9b).
     ...(organiser
       ? {
           datoStash: placedStash(i.game.dato_stash),
-          datoCard: datoCardOf(i),
           bomohStash: placedStash(i.game.bomoh_stash),
-          bomohCard: bomohCardOf(i),
           ringStash: placedStash(i.game.ring_stash),
-          ringCard: cardOf(i.game.ring_stash),
           hijauStash: placedStash(i.game.hijau_stash),
-          hijauCard: cardOf(i.game.hijau_stash),
           tupperware: tupperwareFor(i),
         }
       : {}),
@@ -1335,23 +1298,6 @@ function briefingFor(i: ViewInput, organiser: boolean): BriefingPlayerView | Bri
   if (i.me.role !== 'runner' && i.me.role !== 'chaser') return null
   const ready = Boolean(i.me.brief_ready_at)
   return { open: started && !ready, ready }
-}
-
-/** The organiser's card: the stash's letter and the code it claims with. */
-function datoCardOf(i: ViewInput): { letter: string; code: string } | null {
-  const s = i.game.dato_stash
-  return s?.card && s.code ? { letter: s.card.letter, code: s.code } : null
-}
-
-/** The organiser's card for Bomoh: the stash's letter and the code it claims with. */
-function bomohCardOf(i: ViewInput): { letter: string; code: string } | null {
-  const s = i.game.bomoh_stash
-  return s?.card && s.code ? { letter: s.card.letter, code: s.code } : null
-}
-
-/** The organiser's card for any legendary's stash: its letter and the code it claims with. */
-function cardOf(s: Game['bomoh_stash']): { letter: string; code: string } | null {
-  return s?.card && s.code ? { letter: s.card.letter, code: s.code } : null
 }
 
 /** Players' and marshals' settings: the legendaries and the endgame switches stay with the organiser. */
