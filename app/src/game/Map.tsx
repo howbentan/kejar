@@ -5,7 +5,8 @@ import { useEffect, useRef, useState } from 'react'
 import * as m from 'motion/react-m'
 import { useReducedMotion } from 'motion/react'
 import { circlePolygon, distanceM } from '../../shared/geo.js'
-import { clipToCircle, type FloodNow } from '../../shared/flood.js'
+import type { FloodNow } from '../../shared/flood.js'
+import { BANJIR, floodFeatures } from './floodMap'
 import type { SecretTone } from '../../shared/kit.js'
 import type { Arena, LatLng } from '../../shared/types.js'
 import { CHASER_SNAPSHOT_FUZZ_M, FUZZ_RADIUS_M, type ChaserSnapshot, type MapDot } from '../../shared/views.js'
@@ -160,26 +161,6 @@ function stashFeatures(s: LatLng | null): FeatureCollection {
 }
 
 /** The hint zone's circle (no names anywhere: secret, jail design §4c). */
-/** Banjir Kilat's colour, as the CSS token --banjir. */
-const BANJIR = '#3D8BFD'
-
-/**
- * Banjir Kilat on the map (design 2026-11-16): the flooded part of the play area in blue (the play area with the dry
- * land cut out), and, in the 60 s before a rise, the next waterline dashed.
- */
-function floodFeatures(arena: Arena, f: Pick<FloodNow, 'center' | 'radiusM' | 'step' | 'next' | 'warning'> | null) {
-  const water: Feature[] = []
-  const next: Feature[] = []
-  if (f && f.step > 0) {
-    const dry = clipToCircle(arena.boundary, f.center, f.radiusM)
-    water.push({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring(arena.boundary), ring([...dry].reverse())] } })
-  }
-  if (f?.warning && f.next) {
-    next.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: ring(circlePolygon(f.center, f.next.radiusM, 64)) } })
-  }
-  return { water: collection(water), next: collection(next) }
-}
-
 function zoneFeatures(z: LegendaryZone | null) {
   return {
     zone: collection(z ? [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring(circlePolygon(z, z.radiusM))] } }] : []),
