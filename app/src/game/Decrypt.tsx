@@ -22,5 +22,10 @@ export default function Decrypt({ text, delay = 0, duration = 900 }: { text: str
     }, 45)
     return () => window.clearInterval(id)
   }, [text, delay, duration, reduce])
-  return <span className="decrypt" aria-label={text}>{shown}</span>
+  return (
+    <>
+      <span className="sr-only">{text}</span>
+      <span className="decrypt" aria-hidden="true">{shown}</span>
+    </>
+  )
 }

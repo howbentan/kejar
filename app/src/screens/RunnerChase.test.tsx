@@ -361,6 +361,15 @@ describe('RunnerChase: alerts after New phone', () => {
       expect(screen.queryByRole('dialog')).toBeNull()
       expect(screen.getByRole('button', { name: 'Side quest' })).toBeInTheDocument()
     })
+    it('Found hides the card for now but does not remember it: a remount shows it again', () => {
+      const { unmount } = render(<RunnerChase code="ABC234" view={quest()} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Found' }))
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(localStorage.getItem('sidequest-closed:ABC234')).toBeNull()
+      unmount()
+      render(<RunnerChase code="ABC234" view={quest()} />)
+      expect(screen.getByRole('dialog', { name: 'Side quest' })).toBeInTheDocument()
+    })
     it('is absent when the view has no side quest', () => {
       render(<RunnerChase code="ABC234" view={testView()} />)
       expect(screen.queryByRole('dialog')).toBeNull()

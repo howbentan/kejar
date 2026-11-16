@@ -56,6 +56,14 @@ async function scan(text: string) {
 }
 
 describe('ChaserChase', () => {
+  it('a slip scan shows the slip answer line', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'taken' })
+    render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    await scan('KEJAR:SLIP:tok')
+    expect(call).toHaveBeenCalledWith('claim', expect.objectContaining({ qr: 'KEJAR:SLIP:tok' }))
+    expect(screen.getByText('Dah kena ambil.')).toBeInTheDocument()
+  })
+
   it('keeps the screen awake during the chase', () => {
     render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
     expect(useWakeLock).toHaveBeenCalledWith(true)

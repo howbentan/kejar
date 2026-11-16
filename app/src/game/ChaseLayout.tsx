@@ -61,6 +61,9 @@ export default function ChaseLayout(props: {
   // The scanner's hint: the usual one, or the side quest's while the player is looking for the slip.
   const [scanning, setScanning] = useState<{ hint?: string } | null>(null)
   const [questClosed, setQuestClosed] = useState(() => wasClosed(code))
+  // Found hides the card for now only: after a reload it shows again while the side quest is on.
+  const [questAside, setQuestAside] = useState(false)
+  const questHidden = questClosed || questAside
   const [result, setResult] = useState('')
   const [moment, setMoment] = useState<ReactNode | null>(null)
   // A scan still on its way: no second scan until it answers (a slow claim mustn't let another through).
@@ -126,8 +129,8 @@ export default function ChaseLayout(props: {
           <FloodBanner view={view} />
           <div className="chase-chips">
             {props.chips}
-            {view.sideQuest && questClosed && (
-              <button type="button" className="chip chip-quest" onClick={() => setQuestClosed(false)}>
+            {view.sideQuest && questHidden && (
+              <button type="button" className="chip chip-quest" onClick={() => { setQuestClosed(false); setQuestAside(false) }}>
                 Side quest
               </button>
             )}
@@ -153,12 +156,12 @@ export default function ChaseLayout(props: {
         <Ticker feed={view.feed} />
       </footer>
       {moment}
-      {view.sideQuest && !questClosed && (
+      {view.sideQuest && !questHidden && (
         <SideQuest
           gameCode={code}
           onClose={closeQuest}
           onFound={() => {
-            closeQuest()
+            setQuestAside(true)
             openScanner('Scan the slip inside')
           }}
         />

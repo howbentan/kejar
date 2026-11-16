@@ -51,8 +51,8 @@ export default function SideQuest({ onFound, onClose }: { gameCode: string; onFo
         <div className="sq-art">
           <Tupper />
         </div>
-        <p className="sq-buzz">
-          <span className="dot" /> BUZZING
+        <p className="sq-buzz" aria-hidden="true">
+          <span className="dot" aria-hidden="true" />
         </p>
         <button type="button" className="btn sq-found" onClick={onFound}>
           Found
