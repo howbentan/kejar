@@ -29,7 +29,7 @@ const RUNNER: Card[] = [
   { scene: 'checkin', headline: 'When it buzzes, check in', line: 'Phone in your pocket. When it buzzes, <b>slow down and open Kejar within 60 s</b>. One miss is free, so never check in at a sprint.' },
   { scene: 'miss-two', headline: "Miss two, you're out", line: 'One missed check-in is free. <b>Miss two in a row and you go to Penjara</b> automatically. Outside the play area at two check-ins in a row? You\'re out too.' },
   { scene: 'tag-ripped', headline: 'Tag ripped? Stop', line: 'If a Kejar rips your armband tag, stop and <b>walk to Penjara</b>. No running, no arguing: use SOS. At Penjara you get <b>one pull of the reel</b>. One slot sets you free.' },
-  { scene: 'break-out', headline: 'Break them out', line: 'Scan the Penjara card, then <b>hold the key for 20 s</b> within 30 m. Let go and it waits 5 s, then resets. One rescuer at a time, and Kejar get warned. Anyone freed gets a <b>10 s head start</b>, once per person.' },
+  { scene: 'break-out', headline: 'Break them out', line: 'Scan the Penjara card, then <b>hold the key for 20 s</b> within 30 m. Let go and it waits 5 s, then resets. One rescuer at a time, and Kejar get warned. Everyone gets out once a game, with a <b>10 s head start</b>.' },
   { scene: 'runner-powerups', headline: 'Grab power-ups', line: 'Scan a <b>station</b> to draw a power-up. You hold <b>one at a time</b>, so use it before you grab another.' },
   { scene: 'sos', headline: 'Anything wrong? SOS', line: 'Hurt, lost, or a dispute? <b>Tap the ! in the corner, then hold for 1 second.</b> A marshal comes to you.' },
 ]
