@@ -39,6 +39,8 @@ export type CatchJudgement =
         | 'already-out'
         | 'durian-locked'
         | 'durian-head-start'
+        /** The runner was just freed from Penjara and has a head start (rules §9a); `leftMs` says how long is left. */
+        | 'head-start'
         /** Super Ring fired on this catch: house arrest instead of Penjara, and this chaser is locked off (catch action). */
         | 'ring'
         /** This chaser's catch once fired the runner's Super Ring: locked off them for the game. */
@@ -47,6 +49,8 @@ export type CatchJudgement =
         | 'arrest'
       /** The runner's name, on the Durian and Super Ring refusals (added by the catch action). */
       name?: string
+      /** On the `head-start` refusal: how long the runner's head start has left, in ms. */
+      leftMs?: number
     }
 
 /** After a Durian blocks a catch, no other chaser can catch that runner for this long (fair play §1.5). */
@@ -73,6 +77,9 @@ export function judgeCatch(i: {
   if (!runner) return { ok: false, reason: 'unknown-tag' }
   if (runner.jailed) return { ok: false, reason: 'already-caught' }
   if (runner.disqualified_at) return { ok: false, reason: 'already-out' }
+  // A runner just freed from Penjara gets a head start: no tag scan can catch them until it is over.
+  const headStartLeft = runner.head_start_until ? Date.parse(runner.head_start_until) - i.now : 0
+  if (headStartLeft > 0) return { ok: false, reason: 'head-start', leftMs: headStartLeft }
   // Durian can't be camped: a stung chaser is off this runner for the game, and everyone waits out a head start.
   const stings = i.shieldings.filter((s) => s.runnerId === runner.id)
   if (stings.some((s) => s.chaserId === i.chaser.id)) return { ok: false, reason: 'durian-locked' }

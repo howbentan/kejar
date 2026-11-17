@@ -1148,10 +1148,10 @@ describe('the packing list in organiser and marshal views', () => {
 })
 
 describe('the live rescue (rules §9a)', () => {
-  const rescue = { by: 'r3', startedAt: iso(NOW - 3_000), joiners: ['r1'] }
+  const rescue = { by: 'r3', startedAt: iso(NOW - 3_000), heldMs: 0, holdSince: iso(NOW - 3_000), lastBeat: iso(NOW), releasedAt: null }
   it('every role sees who is breaking them out and when the hold ends', () => {
     for (const me of [aina, hafiz, siti, organiserMe]) {
-      expect(view(me, { game: { ...g, rescue } }).rescue).toEqual({ by: 'r3', byName: 'Wei', endsAt: NOW + 7_000, joiners: ['r1'] })
+      expect(view(me, { game: { ...g, rescue } }).rescue).toEqual({ by: 'r3', byName: 'Wei', endsAt: NOW + 7_000 })
     }
   })
   it('a chaser sees only when the hold ends, never who is breaking them out', () => {

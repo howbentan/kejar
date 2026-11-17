@@ -2,10 +2,16 @@ import { JAIL_RADIUS_M } from './catch.js'
 import { phaseAt } from './clock.js'
 import { distanceM } from './geo.js'
 import { isOut } from './players.js'
-import type { Game, LatLng, Player, Position } from './types.js'
+import type { Game, LatLng, Player, Position, RescueRecord } from './types.js'
 
-/** How long a rescuer must stay close to Penjara before everyone eligible is freed (rules §9a). */
-export const RESCUE_HOLD_MS = 10_000
+/** How long a rescuer must keep a thumb on the key, in all, before everyone eligible is freed (rules §9a). */
+export const RESCUE_HOLD_MS = 20_000
+/** Let go, and the key waits this long for the thumb to come back before the whole hold resets. */
+export const RESCUE_RESET_MS = 5_000
+/** A thumb that sends no heartbeat for this long counts as let go, at the last beat (the phone died or lost signal). */
+export const RESCUE_BEAT_LAPSE_MS = 2_000
+/** A freed runner cannot be tagged again for this long (rules §9a); see `judgeCatch`. */
+export const HEAD_START_MS = 10_000
 /** A rescue's reach: the same as a jailbreak scan's. */
 export const RESCUE_RADIUS_M = JAIL_RADIUS_M
 /** How often the rescuer's phone sends its location during the hold. */
@@ -14,30 +20,77 @@ export const RESCUE_PING_MS = 1_500
 export const RESCUE_MAX_ACCURACY_M = 20
 
 /**
- * Where a live rescue stands (rules §9a). It fails if the rescuer is out, or if any fix they sent during the hold
- * is clearly outside Penjara's 30 m plus its GPS error. A fix sent during a pause is ignored. A poor fix (over 20 m accuracy) is ignored, so one bad
- * reading never fails it. Otherwise it succeeds once the 10 s are up.
+ * Reads a rescue stored in the old shape (`{ by, startedAt }` only, from before the held key) as a key already let
+ * go at its start with nothing held. Such a rescue just waits out the reset window; it never frees anyone.
+ */
+export function legacyRescue(r: { by: string; startedAt: string } & Partial<RescueRecord>): RescueRecord {
+  const holdSince = r.holdSince ?? null
+  return {
+    by: r.by,
+    startedAt: r.startedAt,
+    heldMs: r.heldMs ?? 0,
+    holdSince,
+    lastBeat: r.lastBeat ?? null,
+    releasedAt: r.releasedAt ?? (holdSince ? null : r.startedAt),
+  }
+}
+
+/**
+ * How much of the key is turned at `now`. Only the server's clock counts. While the thumb is down, held time counts
+ * up to `min(now, lastBeat + RESCUE_BEAT_LAPSE_MS)`; a thumb that has gone quiet past the
+ * lapse counts as lifted at its last beat, so held time stops there and the reset window runs from that beat.
+ * `offSince` is when the thumb came off (ms), or null while it is on.
+ */
+export function rescueProgress(r: RescueRecord, now: number): { heldMs: number; holding: boolean; offSince: number | null } {
+  if (!r.holdSince) return { heldMs: r.heldMs, holding: false, offSince: Date.parse(r.releasedAt ?? r.startedAt) }
+  const since = Date.parse(r.holdSince)
+  const beat = Math.max(since, Date.parse(r.lastBeat ?? r.holdSince))
+  if (now > beat + RESCUE_BEAT_LAPSE_MS) return { heldMs: r.heldMs + (beat - since), holding: false, offSince: beat }
+  return { heldMs: r.heldMs + Math.max(0, now - since), holding: true, offSince: null }
+}
+
+export type RescueVerdict = { kind: 'holding' | 'paused' | 'success' } | { kind: 'failed'; reason: 'left' | 'removed' } | { kind: 'reset' }
+
+/**
+ * Where a live rescue stands (rules §9a). It fails if the rescuer is gone or out, or if any fix they sent since the
+ * rescue began is clearly outside Penjara's 30 m plus its GPS error. A fix sent during a pause is ignored, and so
+ * is a poor fix (over 20 m accuracy), so one bad reading never fails it. Otherwise it succeeds at 20 s held, resets
+ * once the thumb has been off for 5 s, and is `holding` or `paused` in between.
  */
 export function rescueVerdict(i: {
-  rescue: { by: string; startedAt: number }
-  rescuer: Player
+  rescue: RescueRecord
+  rescuer: Player | undefined
   fixes: Position[]
   jail: LatLng
   now: number
   /** The game's finished pauses and the open one: a fix sent during a pause is ignored (rules §9a). */
   pauses?: { from: string; to: string }[]
   pausedAt?: string | null
-}): 'holding' | 'success' | 'failed' {
-  if (isOut(i.rescuer)) return 'failed'
-  const endsAt = i.rescue.startedAt + RESCUE_HOLD_MS
+}): RescueVerdict {
+  if (!i.rescuer || isOut(i.rescuer)) return { kind: 'failed', reason: 'removed' }
+  const startedAt = Date.parse(i.rescue.startedAt)
   const away = i.fixes.some((f) => {
     const at = Date.parse(f.at)
-    if (at < i.rescue.startedAt || at > endsAt || !(f.accuracy_m <= RESCUE_MAX_ACCURACY_M)) return false
+    if (at < startedAt || !(f.accuracy_m <= RESCUE_MAX_ACCURACY_M)) return false
     if (sentDuringPause(at, i.pauses, i.pausedAt)) return false
     return distanceM(f, i.jail) > RESCUE_RADIUS_M + Math.max(f.accuracy_m, 0)
   })
-  if (away) return 'failed'
-  return i.now >= endsAt ? 'success' : 'holding'
+  if (away) return { kind: 'failed', reason: 'left' }
+  const { heldMs, holding, offSince } = rescueProgress(i.rescue, i.now)
+  if (heldMs >= RESCUE_HOLD_MS) return { kind: 'success' }
+  if (offSince !== null && i.now - offSince >= RESCUE_RESET_MS) return { kind: 'reset' }
+  return { kind: holding ? 'holding' : 'paused' }
+}
+
+/** The clicks on the key: one per 5 s of held time. */
+export const RESCUE_NOTCHES = 4
+/** Where the lock's key sits after `heldMs` of holding: four clicks (`notch` 0 to 4), one per 5 s, a quarter turn in all. */
+export const keyTurn = (heldMs: number): { notch: number; angle: number } => {
+  const notch = Math.min(RESCUE_NOTCHES, Math.floor((heldMs / RESCUE_HOLD_MS) * RESCUE_NOTCHES + 1e-9))
+  // Between clicks the key strains a little toward the next one, so a held thumb always shows movement.
+  const into = ((heldMs / RESCUE_HOLD_MS) * RESCUE_NOTCHES) % 1
+  const strain = notch < RESCUE_NOTCHES ? Math.min(4, into * 5) : 0
+  return { notch, angle: notch * 22.5 + strain }
 }
 
 /**

@@ -564,7 +564,7 @@ export class MemoryStore implements GameStore {
   async startRescue(gameId: string, by: string, atIso: string) {
     const g = this.games.find((x) => x.id === gameId)
     if (!g || g.ended_at || g.rescue) return false
-    g.rescue = { by, startedAt: atIso, joiners: [] }
+    g.rescue = { by, startedAt: atIso, heldMs: 0, holdSince: atIso, lastBeat: atIso, releasedAt: null }
     return true
   }
   async pullReel(playerId: string, atIso: string) {
@@ -585,10 +585,9 @@ export class MemoryStore implements GameStore {
     return true
   }
   async joinRescue(gameId: string, playerId: string) {
-    const g = this.games.find((x) => x.id === gameId)
-    if (!g?.rescue || g.rescue.by === playerId || g.rescue.joiners.includes(playerId)) return
-    // A fresh object: gameByCode hands out shallow copies that share the old one.
-    g.rescue = { ...g.rescue, joiners: [...g.rescue.joiners, playerId] }
+    // Joining is gone with the held key (rules §9a: one rescuer); Task 3 removes this method and its callers.
+    void gameId
+    void playerId
   }
   async catchRunner(id: string, by: string | null) {
     const p = this.playerRows.find((x) => x.id === id)

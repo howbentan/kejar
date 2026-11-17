@@ -749,7 +749,7 @@ function rescueFor(i: ViewInput, phase: Phase): View['rescue'] {
   const endsAt = started + RESCUE_HOLD_MS + Math.max(0, frozen)
   if (i.me.role === 'chaser') return { endsAt }
   const byName = i.players.find((p) => p.id === r.by)?.name ?? 'A Dikejar'
-  return { by: r.by, byName, endsAt, joiners: [...r.joiners] }
+  return { by: r.by, byName, endsAt }
 }
 
 function jailCheckinsFor(i: ViewInput, reason: View['jailReason']): View['jailCheckins'] {

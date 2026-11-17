@@ -579,7 +579,10 @@ async function settleRescue(ctx: Ctx, game: Game, phase = phaseAt(game, ctx.now)
   }
   // A removed rescuer has left the game: the same as being caught. A hold that ends with Penjara locked after Mak
   // Kau Hijau can't free anyone either.
-  const judged = rescuer ? rescueVerdict({ rescue: { by: r.by, startedAt }, rescuer, fixes, jail: game.arena.jail, now, pauses: game.pauses, pausedAt: game.paused_at }) : 'failed'
+  // Until the held-key flow lands, a live rescue is read as one unbroken hold since its scan.
+  const held = { by: r.by, startedAt: r.startedAt, heldMs: 0, holdSince: r.startedAt, lastBeat: iso(now), releasedAt: null }
+  const kind = rescueVerdict({ rescue: held, rescuer, fixes, jail: game.arena.jail, now, pauses: game.pauses, pausedAt: game.paused_at }).kind
+  const judged = kind === 'failed' ? 'failed' : kind === 'success' ? 'success' : 'holding'
   // PKP shuts Penjara for good: a hold that ends once it is revealed frees nobody. `advance` settles the rescue
   // before it claims the reveal, so a reveal that is due but not yet posted counts too.
   const holdEnd = Math.min(now, startedAt + RESCUE_HOLD_MS)

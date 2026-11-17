@@ -176,3 +176,19 @@ describe('jailbreak and Settle skip a disqualified player', () => {
     })
   })
 })
+
+describe('judgeCatch and the head start', () => {
+  const freed = (ahead: number) => ({ ...aina, head_start_until: new Date(NOW + ahead).toISOString() })
+  const judge = (runner: typeof aina) => judgeCatch({ ...base, players: [ben, runner, hafiz] })
+  it('refuses a catch while the runner is inside the head start, and says how long is left', () => {
+    expect(judge(freed(4_000))).toEqual({ ok: false, reason: 'head-start', leftMs: 4_000 })
+  })
+  it('catches once the head start is over (1 ms past, or exactly at its end)', () => {
+    expect(judge(freed(0))).toMatchObject({ ok: true, runnerId: 'r1' })
+    expect(judge(freed(-1))).toMatchObject({ ok: true, runnerId: 'r1' })
+  })
+  it('is checked right after already-caught and already-out', () => {
+    expect(judge({ ...freed(4_000), jailed: true })).toEqual({ ok: false, reason: 'already-caught' })
+    expect(judge({ ...freed(4_000), disqualified_at: new Date(NOW).toISOString() })).toEqual({ ok: false, reason: 'already-out' })
+  })
+})

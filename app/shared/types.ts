@@ -90,6 +90,20 @@ export interface Arena {
   toilets?: LatLng[]
 }
 
+/**
+ * A live rescue (rules §9a). Only the server's clock counts held time. `heldMs` is the time banked from earlier
+ * stretches; while the thumb is down `holdSince` is when this stretch began and `lastBeat` the latest heartbeat.
+ * Once let go, `holdSince` and `lastBeat` are null and `releasedAt` starts the 5 s reset window. Every time is ISO.
+ */
+export interface RescueRecord {
+  by: string
+  startedAt: string
+  heldMs: number
+  holdSince: string | null
+  lastBeat: string | null
+  releasedAt: string | null
+}
+
 export interface Game {
   id: string
   code: string
@@ -110,10 +124,10 @@ export interface Game {
    */
   final_whistle_at: string | null
   /**
-   * The live 10-second rescue at Penjara (rules §9a): who scanned first, when the hold started (ISO, moved later
-   * by a pause), and who joined it since. Null when no rescue is going.
+   * The live held-key rescue at Penjara (rules §9a): one rescuer holds a button for 20 s in all. Null when no
+   * rescue is going.
    */
-  rescue: { by: string; startedAt: string; joiners: string[] } | null
+  rescue: RescueRecord | null
   /** When the one '5 minutes left!' warning went out (rules §2.7). Null until then; set once per game. */
   five_warned_at: string | null
   /**
@@ -289,6 +303,8 @@ export interface Player {
   freed_once: boolean
   /** When this runner was last released from Penjara (ISO), or null if never. */
   freed_at: string | null
+  /** Until when this just-freed runner cannot be tagged (ISO; rules §9a head start). Null or absent when none. */
+  head_start_until?: string | null
   /** When this runner last pulled the Penjara reel (ISO), or null. One pull per jail stay: a pull older than `caught_at` is spent. */
   reel_pulled_at: string | null
   push: PushSubscriptionJSON | null
@@ -366,9 +382,9 @@ export type EventType =
   | 'kejar-undone'
   /** The last free Dikejar went out: the end is held for 60 s (fair-play §1.4). data: {} */
   | 'final-whistle'
-  /** A free runner scanned Penjara and the 10-second hold began (rules §9a). actor: the rescuer. data: { who } */
+  /** A free runner scanned Penjara and the held-key rescue began (rules §9a). actor: the rescuer. data: { who } */
   | 'rescue-started'
-  /** The rescuer was caught, went out, or left Penjara during the hold: nobody gets out. actor: the rescuer. data: {} */
+  /** The rescue ended with nobody out. actor: the rescuer. data: { reason: 'caught' | 'left' | 'removed' | 'locked' | 'reset' } */
   | 'rescue-failed'
   /** A jailed runner landed on the reel's free slot and walked out. actor: the runner. data: { who } */
   | 'reel-free'
