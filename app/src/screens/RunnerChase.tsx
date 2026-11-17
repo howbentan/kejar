@@ -131,7 +131,7 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
   const banner = !!checkin && (checkin.state !== 'early' || openedByPush)
   // While paused the hold is frozen: count from the server's moment, not the ticking clock.
   const rescue = view.rescue
-  const inHold = !!rescue && !view.me.jailed && (rescue.by === view.me.id || !!rescue.joiners?.includes(view.me.id))
+  const inHold = !!rescue && !view.me.jailed && rescue.by === view.me.id
   const holdNow = view.paused ? view.now : now
   useRescuePings(code, !!rescue && rescue.by === view.me.id && !view.me.jailed && !view.paused)
 
@@ -199,7 +199,7 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
                 <p className="muted">Turn on location for this site in your browser settings.</p>
               </div>
             )}
-            {inHold && <HoldRing endsAt={rescue.endsAt} now={holdNow} />}
+            {inHold && <HoldRing endsAt={holdNow + RESCUE_HOLD_MS - rescue.heldMs - (rescue.holdSince ? Math.max(0, holdNow - rescue.holdSince) : 0)} now={holdNow} />}
             {view.me.role === 'runner' && <AlertsCard code={code} view={view} />}
             {banner && <CheckinBanner checkin={checkin} now={now} openedByPush={openedByPush} />}
           </>

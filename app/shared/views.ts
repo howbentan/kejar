@@ -7,7 +7,7 @@ import { distanceM, fuzz } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { isTicked, kitOf, packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type KitItem, type PlaceItem } from './kit.js'
 import { MOMENT_WINDOW_MS } from './moments.js'
-import { reelPulledThisStay, RESCUE_HOLD_MS } from './penjara.js'
+import { legacyRescue, reelPulledThisStay, RESCUE_RESET_MS, rescueProgress } from './penjara.js'
 import { isOut, undoableArrestId, undoableCatchId } from './players.js'
 import { ARREST_OPEN_MS, arrestEndsAt } from './arrest.js'
 import { hijauCounts, hijauTargets, penjaraLockLeft } from './hijau.js'
@@ -210,10 +210,11 @@ export interface View {
    */
   settle: { canFreeSelf: boolean; options: { id: string; name: string; eligible: boolean }[] } | null
   /**
-   * The live 10-second rescue at Penjara (rules §9a): when the hold ends (held still while paused). Everyone but a
-   * chaser also gets who scanned first and who joined it; a chaser is never told who is rescuing. Null when none is going.
+   * The live key-hold rescue at Penjara (rules §9a): held time so far, when the thumb went down (null when it is
+   * off), and when the rescue resets (null while the thumb is down). Everyone but a chaser also gets who is holding;
+   * a chaser is never told who is rescuing. Null when none is going.
    */
-  rescue: { endsAt: number; by?: string; byName?: string; joiners?: string[] } | null
+  rescue: { by?: string; byName?: string; heldMs: number; holdSince: number | null; resetAt: number | null } | null
   /** The one '5 minutes left!' warning has gone out (rules §2.7): the clock stays lime for the rest of the game. */
   fiveLeft: boolean
   /**
@@ -740,16 +741,23 @@ function reelFor(i: ViewInput): View['reel'] {
   return { pulled, result: pulled ? 'black' : null }
 }
 
-/** The live rescue as players see it: its end moves later while the game is paused, as resuming will move it. */
+/**
+ * The live rescue as players see it: how long the key has been held and, once the thumb is off, when it resets.
+ * While the game is paused the progress is read at the pause, so nothing counts (or lapses) until it resumes.
+ */
 function rescueFor(i: ViewInput, phase: Phase): View['rescue'] {
-  const r = i.game.rescue
-  if (!r || phase !== 'chasing' || i.game.ended_at) return null
-  const started = Date.parse(r.startedAt)
-  const frozen = i.game.paused_at ? i.now - Math.max(Date.parse(i.game.paused_at), started) : 0
-  const endsAt = started + RESCUE_HOLD_MS + Math.max(0, frozen)
-  if (i.me.role === 'chaser') return { endsAt }
+  if (!i.game.rescue || phase !== 'chasing' || i.game.ended_at) return null
+  const r = legacyRescue(i.game.rescue)
+  const at = i.game.paused_at ? Math.min(i.now, Date.parse(i.game.paused_at)) : i.now
+  const p = rescueProgress(r, at)
+  const progress = {
+    heldMs: p.heldMs,
+    holdSince: p.holding ? Date.parse(r.holdSince!) : null,
+    resetAt: p.offSince === null ? null : p.offSince + RESCUE_RESET_MS,
+  }
+  if (i.me.role === 'chaser') return progress
   const byName = i.players.find((p) => p.id === r.by)?.name ?? 'A Dikejar'
-  return { by: r.by, byName, endsAt }
+  return { by: r.by, byName, ...progress }
 }
 
 function jailCheckinsFor(i: ViewInput, reason: View['jailReason']): View['jailCheckins'] {
@@ -906,13 +914,19 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
       )
     case 'reel-free':
       return plain(`${actor?.name ?? String(e.data.who ?? 'A Dikejar')} pulled the free slot. Keluar penjara!`)
-    case 'rescue-failed':
-      return two(
-        'Rescue failed. Nobody gets out.',
-        'RESCUE',
-        'The rescuer can try again if they are still free.',
-        'Penjara holds. Nice.',
-      )
+    case 'rescue-failed': {
+      // The server says why (caught, walked away, ...); an event without a reason is an old one.
+      const who = actor?.name ?? 'The rescuer'
+      const why: Record<string, string> = {
+        caught: `The rescue failed: ${who} was caught.`,
+        left: `The rescue failed: ${who} walked away.`,
+        reset: 'The rescue reset.',
+        locked: 'The rescue failed: Penjara is locked.',
+        removed: 'The rescue failed.',
+      }
+      const text = why[String(e.data.reason ?? '')] ?? 'Rescue failed. Nobody gets out.'
+      return two(text, 'RESCUE', 'The rescuer can try again if they are still free.', 'Penjara holds. Nice.')
+    }
     case 'jailbreak': {
       const n = Number(e.data.freed ?? 0)
       return two(

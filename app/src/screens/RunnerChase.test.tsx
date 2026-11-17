@@ -239,7 +239,7 @@ describe('RunnerChase', () => {
 })
 
 describe('RunnerChase: the 10-second rescue (rules §9a)', () => {
-  const holding = (by = 'r1', joiners: string[] = []) => testView({ rescue: { by, byName: by === 'r1' ? 'Aina' : 'Wei', endsAt: 107_000, joiners } })
+  const holding = (by = 'r1') => testView({ rescue: { by, byName: by === 'r1' ? 'Aina' : 'Wei', heldMs: 13_000, holdSince: 100_000, resetAt: null } })
   beforeEach(() => {
     here.coords = { lat: 3, lng: 101, accuracy_m: 5 }
   })
@@ -251,8 +251,8 @@ describe('RunnerChase: the 10-second rescue (rules §9a)', () => {
     expect(screen.getByRole('status', { name: 'Rescue hold' })).toHaveTextContent('Stay close · 7 s')
   })
 
-  it('shows a joiner the ring too, and nobody else', () => {
-    render(<RunnerChase code="ABC234" view={holding('r3', ['r1'])} />)
+  it('shows the ring to the rescuer only', () => {
+    render(<RunnerChase code="ABC234" view={holding()} />)
     expect(screen.getByText('Stay close · 7 s')).toBeInTheDocument()
     cleanup()
     render(<RunnerChase code="ABC234" view={holding('r3')} />)
@@ -270,10 +270,10 @@ describe('RunnerChase: the 10-second rescue (rules §9a)', () => {
     expect(locationCalls()[0][1]).toEqual({ code: 'ABC234', token: 't1', lat: 3, lng: 101, accuracy_m: 5 })
   })
 
-  it('a joiner, or a runner with no rescue going, sends no extra fixes', async () => {
+  it('a runner with no rescue of their own sends no extra fixes', async () => {
     vi.useFakeTimers()
     call.mockResolvedValue({ ok: true })
-    render(<RunnerChase code="ABC234" view={holding('r3', ['r1'])} />)
+    render(<RunnerChase code="ABC234" view={holding('r3')} />)
     await act(async () => {
       await vi.advanceTimersByTimeAsync(4_600)
     })

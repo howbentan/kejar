@@ -256,10 +256,19 @@ describe('two-part feed', () => {
     expect(runner).toMatchObject({ text: 'Rescue starting at Penjara!', act: false, label: 'RESCUE' })
     expect(line(siti, { actor_id: 'r3' }, 'rescue-started')).toMatchObject({ text: 'Rescue starting at Penjara!', means: null, act: false })
   })
-  it('a rescue failing', () => {
+  it('a rescue failing with no reason keeps the old line', () => {
     const { runner, chaser: c } = both('rescue-failed', { actor_id: 'r3' })
     expect(runner).toMatchObject({ text: 'Rescue failed. Nobody gets out.', label: 'RESCUE' })
     expect(c).toMatchObject({ text: 'Rescue failed. Nobody gets out.', act: false })
+  })
+  it('a rescue failing says why', () => {
+    const why = (reason: string) => both('rescue-failed', { actor_id: 'r3', data: { reason } })
+    expect(why('caught').runner).toMatchObject({ text: 'The rescue failed: Wei was caught.', label: 'RESCUE' })
+    expect(why('caught').chaser).toMatchObject({ text: 'The rescue failed: Wei was caught.' })
+    expect(why('left').runner.text).toBe('The rescue failed: Wei walked away.')
+    expect(why('reset').runner.text).toBe('The rescue reset.')
+    expect(why('locked').runner.text).toBe('The rescue failed: Penjara is locked.')
+    expect(why('removed').runner.text).toBe('The rescue failed.')
   })
   it('auto-jail', () => {
     const { runner, chaser: c } = both('auto-jailed', { target_id: 'r2' })
@@ -1148,19 +1157,42 @@ describe('the packing list in organiser and marshal views', () => {
 })
 
 describe('the live rescue (rules §9a)', () => {
-  const rescue = { by: 'r3', startedAt: iso(NOW - 3_000), heldMs: 0, holdSince: iso(NOW - 3_000), lastBeat: iso(NOW), releasedAt: null }
-  it('every role sees who is breaking them out and when the hold ends', () => {
+  const rescue = { by: 'r3', startedAt: iso(NOW - 7_000), heldMs: 0, holdSince: iso(NOW - 7_000), lastBeat: iso(NOW), releasedAt: null }
+  it('every role sees who is breaking them out and how long the key has been held', () => {
     for (const me of [aina, hafiz, siti, organiserMe]) {
-      expect(view(me, { game: { ...g, rescue } }).rescue).toEqual({ by: 'r3', byName: 'Wei', endsAt: NOW + 7_000 })
+      expect(view(me, { game: { ...g, rescue } }).rescue).toEqual({
+        by: 'r3',
+        byName: 'Wei',
+        heldMs: 7_000,
+        holdSince: NOW - 7_000,
+        resetAt: null,
+      })
     }
   })
-  it('a chaser sees only when the hold ends, never who is breaking them out', () => {
-    expect(view(chaser, { game: { ...g, rescue } }).rescue).toEqual({ endsAt: NOW + 7_000 })
+  it('a chaser sees the progress, never who is breaking them out', () => {
+    expect(view(chaser, { game: { ...g, rescue } }).rescue).toEqual({ heldMs: 7_000, holdSince: NOW - 7_000, resetAt: null })
+  })
+  it('after a let go it shows the held time banked and when it resets', () => {
+    const released = { ...rescue, heldMs: 7_000, holdSince: null, lastBeat: null, releasedAt: iso(NOW - 2_000) }
+    expect(view(aina, { game: { ...g, rescue: released } }).rescue).toMatchObject({ heldMs: 7_000, holdSince: null, resetAt: NOW + 3_000 })
+  })
+  it('a thumb that went quiet counts as let go at its last beat', () => {
+    const quiet = { ...rescue, lastBeat: iso(NOW - 4_000) }
+    expect(view(aina, { game: { ...g, rescue: quiet } }).rescue).toMatchObject({ heldMs: 3_000, holdSince: null, resetAt: NOW - 4_000 + 5_000 })
+  })
+  it('reads an old record (no hold fields) as released at its start', () => {
+    const old = { by: 'r3', startedAt: iso(NOW - 1_000) }
+    expect(view(aina, { game: { ...g, rescue: old as typeof rescue } }).rescue).toMatchObject({ heldMs: 0, holdSince: null, resetAt: NOW + 4_000 })
   })
   it('is null with no rescue, and frozen while paused', () => {
     expect(view(aina).rescue).toBeNull()
     const paused = { ...g, rescue, paused_at: iso(NOW - 1_000) }
-    expect(view(aina, { game: paused }).rescue!.endsAt).toBe(NOW + 8_000)
+    expect(view(aina, { game: paused }).rescue).toMatchObject({ heldMs: 6_000, holdSince: NOW - 7_000 })
+  })
+  it('a chaser never sees another player\'s head start; a runner sees their own', () => {
+    const freed = { ...aina, head_start_until: iso(NOW + 8_000) }
+    expect(view(freed).me.head_start_until).toBe(iso(NOW + 8_000))
+    expect(JSON.stringify(view(chaser, { players: [chaser, freed] }))).not.toContain('head_start_until')
   })
   it('is null for a removed player and once the game has ended', () => {
     expect(view({ ...aina, removed_at: iso(NOW) }, { game: { ...g, rescue } }).rescue).toBeNull()

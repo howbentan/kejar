@@ -201,7 +201,7 @@ describe('ChaserChase: a rescue at Penjara (rules §9a)', () => {
   const rescueLine = { at: new Date(99_000).toISOString(), text: 'Rescue starting at Penjara!', means: 'Catch them in 10 s and nobody gets out.', act: true, label: 'RESCUE' }
   afterEach(() => vi.restoreAllMocks())
   it('shows both chaser lines in the ticker', () => {
-    render(<ChaserChase code="ABC234" view={{ ...chaser(), feed: [rescueLine], rescue: { by: 'r3', byName: 'Wei', endsAt: 107_000, joiners: [] } }} refresh={() => {}} />)
+    render(<ChaserChase code="ABC234" view={{ ...chaser(), feed: [rescueLine], rescue: { by: 'r3', byName: 'Wei', heldMs: 13_000, holdSince: 100_000, resetAt: null } }} refresh={() => {}} />)
     const ticker = screen.getByRole('button', { name: /^Feed:/ })
     expect(ticker).toHaveTextContent('Rescue starting at Penjara!')
     expect(ticker).toHaveTextContent('Catch them in 10 s and nobody gets out.')
@@ -211,7 +211,7 @@ describe('ChaserChase: a rescue at Penjara (rules §9a)', () => {
     Object.defineProperty(navigator, 'vibrate', { value: vibrate, configurable: true })
     const { rerender } = render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
     expect(vibrate).not.toHaveBeenCalled()
-    const live = { ...chaser(), feed: [rescueLine], rescue: { by: 'r3', byName: 'Wei', endsAt: 107_000, joiners: [] } }
+    const live = { ...chaser(), feed: [rescueLine], rescue: { by: 'r3', byName: 'Wei', heldMs: 13_000, holdSince: 100_000, resetAt: null } }
     rerender(<ChaserChase code="ABC234" view={live} refresh={() => {}} />)
     rerender(<ChaserChase code="ABC234" view={{ ...live, now: 101_000 }} refresh={() => {}} />)
     // The ticker adds its own short buzz for a line that needs you; the rescue's own pattern comes once.

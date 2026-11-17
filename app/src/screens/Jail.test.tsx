@@ -381,7 +381,7 @@ describe('Jail: alerts after New phone', () => {
 })
 
 describe('a rescue at Penjara (rules §9a)', () => {
-  const rescue = { by: 'r3', byName: 'Hafiz', endsAt: 107_000, joiners: [] }
+  const rescue = { by: 'r3', byName: 'Hafiz', heldMs: 13_000, holdSince: 100_000, resetAt: null }
   it('tells a jailed runner who is breaking them out, counting down', () => {
     render(<Jail code="ABC234" view={{ ...caught(60_000), rescue }} />)
     expect(screen.getByRole('status', { name: 'Rescue' })).toHaveTextContent('Hafiz is breaking you out · 7 s')
