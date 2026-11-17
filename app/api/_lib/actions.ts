@@ -1168,7 +1168,7 @@ const location: Action = async (ctx, body) => {
   // The gap never drops the first fix inside an open check-in window (a still phone re-sends its last fix
   // right after the alert), so only rows since the window's alert count against it.
   const since = openWindowAlert(pingTimes(game, ctx.now), ctx.now)
-  // The rescuer's phone sends a fix every RESCUE_PING_MS (1.5 s) during the rescue, under the 2 s gap: their fixes
+  // The rescuer's phone sends a fix every RESCUE_BEAT_MS (1 s) during the rescue, under the 2 s gap: their fixes
   // are the hold's heartbeat, so none is dropped. A rescue lasts 20 s held plus any let-gos, so that is a few rows.
   const rescuing = game.rescue?.by === me.id
   const stored = await ctx.store.addPosition(game.id, me.id, fix, rescuing && !game.paused_at ? undefined : LOCATION_MIN_GAP_MS, since)

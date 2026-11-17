@@ -343,22 +343,22 @@ describe('RunnerChase: hold the key (rules §9a)', () => {
     expect(screen.getByRole('timer', { name: 'Seconds left to hold' })).toHaveTextContent('13')
   })
 
-  it('sends a fix about every 1.5 s, saying holding: true only while the thumb is down', async () => {
+  it('sends a fix every 1 s, saying holding: true only while the thumb is down', async () => {
     vi.useFakeTimers()
     render(<RunnerChase code="ABC234" view={rescue()} />)
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_600)
+      await vi.advanceTimersByTimeAsync(1_000)
     })
     expect(locationCalls()).toHaveLength(1)
     expect(locationCalls()[0][1]).toEqual({ code: 'ABC234', token: 't1', lat: 3, lng: 101, accuracy_m: 5 })
     await act(async () => fireEvent.pointerDown(screen.getByRole('button', { name: 'HOLD' })))
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_500)
+      await vi.advanceTimersByTimeAsync(1_000)
     })
     expect(locationCalls()[1][1]).toEqual({ code: 'ABC234', token: 't1', lat: 3, lng: 101, accuracy_m: 5, holding: true })
     await act(async () => fireEvent.pointerUp(screen.getByRole('button', { name: 'HOLDING' })))
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_500)
+      await vi.advanceTimersByTimeAsync(1_000)
     })
     expect(locationCalls()[2][1]).not.toHaveProperty('holding')
   })
@@ -367,53 +367,69 @@ describe('RunnerChase: hold the key (rules §9a)', () => {
     vi.useFakeTimers()
     render(<RunnerChase code="ABC234" view={rescue()} />)
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_000)
+      await vi.advanceTimersByTimeAsync(600)
     })
     await act(async () => fireEvent.pointerDown(screen.getByRole('button', { name: 'HOLD' }), { pointerId: 1 }))
     expect(holdCalls()).toEqual([{ code: 'ABC234', token: 't1', down: true }])
-    // The free-running timer would have beaten at 1.5 s; re-phased, the next beat is 1.5 s after the press.
+    // The free-running timer would have beaten at 1 s; re-phased, the next beat is 1 s after the press.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_000)
+      await vi.advanceTimersByTimeAsync(600)
     })
     expect(locationCalls()).toHaveLength(0)
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(400)
     })
     expect(locationCalls()).toHaveLength(1)
     expect(locationCalls()[0][1]).toMatchObject({ holding: true })
   })
 
-  it('a beat never waits on GPS: with no fresh fix within 300 ms it goes with the latest known one', async () => {
+  it('a beat never waits on GPS: a known fix up to 3 s old goes at once', async () => {
     vi.useFakeTimers()
     here.pending = new Promise(() => {}) // the phone never answers
     here.last = { lat: 3.2, lng: 101.2, accuracy_m: 7 }
     render(<RunnerChase code="ABC234" view={rescue()} />)
     await act(async () => fireEvent.pointerDown(screen.getByRole('button', { name: 'HOLD' }), { pointerId: 1 }))
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_500 + 299)
+      await vi.advanceTimersByTimeAsync(1_000)
     })
-    expect(locationCalls()).toHaveLength(0)
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1)
-    })
+    expect(locationCalls()).toHaveLength(1)
     expect(locationCalls()[0][1]).toEqual({ code: 'ABC234', token: 't1', lat: 3.2, lng: 101.2, accuracy_m: 7, holding: true })
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_500)
+      await vi.advanceTimersByTimeAsync(1_000)
     })
     expect(locationCalls()).toHaveLength(2)
   })
 
-  it('with no coordinates at all, the key itself beats: rescueHold down: true every 1.5 s while held, none once let go', async () => {
+  it('with no known fix, a beat waits at most 300 ms for a fresh one', async () => {
+    vi.useFakeTimers()
+    let answer: (c: Record<string, number>) => void = () => {}
+    here.pending = new Promise((resolve) => (answer = resolve))
+    render(<RunnerChase code="ABC234" view={rescue()} />)
+    await act(async () => fireEvent.pointerDown(screen.getByRole('button', { name: 'HOLD' }), { pointerId: 1 }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_200)
+    })
+    expect(locationCalls()).toHaveLength(0)
+    await act(async () => answer({ lat: 3.3, lng: 101.3, accuracy_m: 6 }))
+    expect(locationCalls()[0][1]).toEqual({ code: 'ABC234', token: 't1', lat: 3.3, lng: 101.3, accuracy_m: 6, holding: true })
+  })
+
+  it('with no coordinates at all, the key itself beats: rescueHold down: true every 1 s while held, none once let go', async () => {
     vi.useFakeTimers()
     here.pending = new Promise(() => {})
     render(<RunnerChase code="ABC234" view={rescue()} />)
     const btn = screen.getByRole('button', { name: 'HOLD' })
     await act(async () => fireEvent.pointerDown(btn, { pointerId: 1 }))
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_800)
+      await vi.advanceTimersByTimeAsync(1_299)
     })
+    expect(holdCalls().map((b) => b.down)).toEqual([true])
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_500)
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    expect(holdCalls().map((b) => b.down)).toEqual([true, true])
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000)
     })
     expect(holdCalls().map((b) => b.down)).toEqual([true, true, true])
     expect(locationCalls()).toHaveLength(0)
@@ -422,6 +438,31 @@ describe('RunnerChase: hold the key (rules §9a)', () => {
       await vi.advanceTimersByTimeAsync(3_000)
     })
     expect(holdCalls().map((b) => b.down)).toEqual([true, true, true, false])
+  })
+
+  it('a thumb held through a pause beats the moment the game resumes, and every 1 s from then', async () => {
+    vi.useFakeTimers()
+    const { rerender } = render(<RunnerChase code="ABC234" view={rescue()} />)
+    await act(async () => fireEvent.pointerDown(screen.getByRole('button', { name: 'HOLD' }), { pointerId: 1 }))
+    rerender(<RunnerChase code="ABC234" view={{ ...rescue(), paused: true }} />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000)
+    })
+    expect(locationCalls()).toHaveLength(0)
+    await act(async () => {
+      rerender(<RunnerChase code="ABC234" view={rescue()} />)
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(locationCalls()).toHaveLength(1)
+    expect(locationCalls()[0][1]).toMatchObject({ holding: true })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(999)
+    })
+    expect(locationCalls()).toHaveLength(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    expect(locationCalls()).toHaveLength(2)
   })
 
   it('only the pointer that pressed lets go: a second finger lifting elsewhere does nothing', async () => {

@@ -9,8 +9,8 @@ import {
   pickReel,
   REEL_SLOTS,
   RESCUE_BEAT_LAPSE_MS,
+  RESCUE_BEAT_MS,
   RESCUE_HOLD_MS,
-  RESCUE_PING_MS,
   RESCUE_RADIUS_M,
   RESCUE_RESET_MS,
   rescueProgress,
@@ -35,10 +35,10 @@ describe('the held-key rescue (rules §9a)', () => {
   it('holds the exact values', () => {
     expect(RESCUE_HOLD_MS).toBe(20_000)
     expect(RESCUE_RESET_MS).toBe(5_000)
-    expect(RESCUE_BEAT_LAPSE_MS).toBe(2_000)
+    expect(RESCUE_BEAT_LAPSE_MS).toBe(3_000)
+    expect(RESCUE_BEAT_MS).toBe(1_000)
     expect(HEAD_START_MS).toBe(10_000)
     expect(RESCUE_RADIUS_M).toBe(30)
-    expect(RESCUE_PING_MS).toBe(1_500)
   })
   it('is holding at 19 999 ms and succeeds at 20 000 ms', () => {
     expect(verdict(rec({ lastBeat: iso(T0 + 19_999) }), T0 + 19_999).kind).toBe('holding')
@@ -59,11 +59,11 @@ describe('the held-key rescue (rules §9a)', () => {
   })
   it('a thumb that stopped beating counts as lifted at the last beat (Review Focus 1)', () => {
     const r = rec({ heldMs: 0, holdSince: iso(T0), lastBeat: iso(T0 + 7_000) })
-    // 2.5 s after the last beat: held stops at that beat, and the 5 s window already runs from it.
-    expect(rescueProgress(r, T0 + 9_500)).toEqual({ heldMs: 7_000, holding: false, offSince: T0 + 7_000 })
-    expect(verdict(r, T0 + 9_500).kind).toBe('paused')
-    // Inside the lapse it is still held.
-    expect(rescueProgress(r, T0 + 8_000)).toEqual({ heldMs: 8_000, holding: true, offSince: null })
+    // 3.5 s after the last beat: held stops at that beat, and the 5 s window already runs from it.
+    expect(rescueProgress(r, T0 + 10_500)).toEqual({ heldMs: 7_000, holding: false, offSince: T0 + 7_000 })
+    expect(verdict(r, T0 + 10_500).kind).toBe('paused')
+    // Inside the lapse (two missed 1 s beats) it is still held.
+    expect(rescueProgress(r, T0 + 10_000)).toEqual({ heldMs: 10_000, holding: true, offSince: null })
     expect(verdict(r, T0 + 12_000)).toEqual({ kind: 'reset' })
   })
   it('is never won on unconfirmed holding: last beat at 18.3 s, phone quiet, a poll at 20.1 s holds, then resets', () => {

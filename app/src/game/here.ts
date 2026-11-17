@@ -8,8 +8,11 @@ export function rememberCoords(c: Coords): void {
   last = { ...c, at: Date.now() }
 }
 
-/** The latest known fix if it is at most `maxAgeMs` old, else null. */
-export function lastCoords(maxAgeMs = 10_000): Coords | null {
+/**
+ * The latest known fix if it is at most `maxAgeMs` old, else null. A rescue beat stands in for where the rescuer is
+ * now, so by default it must be recent: 3 s, about three beats.
+ */
+export function lastCoords(maxAgeMs = 3_000): Coords | null {
   if (!last || Date.now() - last.at > maxAgeMs) return null
   return { lat: last.lat, lng: last.lng, accuracy_m: last.accuracy_m }
 }

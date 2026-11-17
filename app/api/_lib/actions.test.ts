@@ -648,14 +648,14 @@ describe('the held-key rescue at Penjara (rules §9a)', () => {
     expect(await events(g, 'rescue-failed')).toMatchObject([{ data: { reason: 'reset' } }])
   })
 
-  it('beats stop while holding: held time stops 2 s after the last beat, and it resets 5 s after it (Review Focus 1)', async () => {
+  it('beats stop while holding: held time stops 3 s after the last beat, and it resets 5 s after it (Review Focus 1)', async () => {
     const g = await inPenjara()
     await scan(g, g.wei.token)
     const t = now
     await holdFor(g, 6_000) // last beat at t + 6 s
-    now = t + 7_999
-    expect(await held(g)).toMatchObject({ heldMs: 7_999, holding: true })
-    now = t + 8_001
+    now = t + 8_999
+    expect(await held(g)).toMatchObject({ heldMs: 8_999, holding: true })
+    now = t + 9_001
     expect(await held(g)).toMatchObject({ heldMs: 6_000, holding: false, offSince: t + 6_000 })
     now = t + 10_999
     await poll(g)
@@ -671,9 +671,9 @@ describe('the held-key rescue at Penjara (rules §9a)', () => {
     await scan(g, g.wei.token)
     const t = now
     await holdFor(g, 6_000)
-    now = t + 9_000 // 3 s without a beat: let go at t + 6 s
+    now = t + 9_500 // 3.5 s without a beat: let go at t + 6 s
     await beat(g)
-    expect(await live(g)).toMatchObject({ heldMs: 6_000, holdSince: stamp(t + 9_000), lastBeat: stamp(t + 9_000), releasedAt: null })
+    expect(await live(g)).toMatchObject({ heldMs: 6_000, holdSince: stamp(t + 9_500), lastBeat: stamp(t + 9_500), releasedAt: null })
     await holdFor(g, 13_999)
     expect(await jailedIds(g)).toEqual(BOTH(g))
     now += 1
@@ -686,7 +686,7 @@ describe('the held-key rescue at Penjara (rules §9a)', () => {
     await scan(g, g.wei.token)
     const t = now
     await holdFor(g, 6_000)
-    now = t + 9_000
+    now = t + 9_500
     expect(await press(g, false)).toEqual({ ok: true, heldMs: 6_000, holding: false })
     expect(await live(g)).toMatchObject({ heldMs: 6_000, holdSince: null, releasedAt: stamp(t + 6_000) })
     now = t + 11_000

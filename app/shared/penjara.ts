@@ -8,14 +8,17 @@ import type { Game, LatLng, Player, Position, RescueRecord } from './types.js'
 export const RESCUE_HOLD_MS = 20_000
 /** Let go, and the key waits this long for the thumb to come back before the whole hold resets. */
 export const RESCUE_RESET_MS = 5_000
-/** A thumb that sends no heartbeat for this long counts as let go, at the last beat (the phone died or lost signal). */
-export const RESCUE_BEAT_LAPSE_MS = 2_000
+/**
+ * A thumb that sends no heartbeat for this long counts as let go, at the last beat (the phone died or lost signal).
+ * With a beat every RESCUE_BEAT_MS that is about two missed beats, so one slow request never lets go.
+ */
+export const RESCUE_BEAT_LAPSE_MS = 3_000
 /** A freed runner cannot be tagged again for this long (rules §9a); see `judgeCatch`. */
 export const HEAD_START_MS = 10_000
 /** A rescue's reach: the same as a jailbreak scan's. */
 export const RESCUE_RADIUS_M = JAIL_RADIUS_M
-/** How often the rescuer's phone sends its location during the hold. */
-export const RESCUE_PING_MS = 1_500
+/** How often the rescuer's phone beats during the hold: its location, or the key itself with no fix. */
+export const RESCUE_BEAT_MS = 1_000
 /** A fix less accurate than this neither fails nor helps a rescue (GPS leniency, rules §9a). */
 export const RESCUE_MAX_ACCURACY_M = 20
 

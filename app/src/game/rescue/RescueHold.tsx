@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
-import { RESCUE_PING_MS, RESCUE_RESET_MS } from '../../../shared/penjara'
+import { RESCUE_BEAT_MS, RESCUE_RESET_MS } from '../../../shared/penjara'
 import { call } from '../api'
-import { currentCoords, lastCoords } from '../here'
+import { currentCoords, lastCoords, type Coords } from '../here'
 import { loadSession } from '../session'
 import { primeAudio } from '../sounds'
 import RescueLock, { type RescueLockMode } from './RescueLock'
@@ -14,7 +14,7 @@ type HoldAnswer = { ok: true; heldMs: number; holding: boolean } | { ok: false; 
 /** The hold as the last answer left it, read at `at` on the server's clock. */
 type Answered = Pick<RescueNow, 'heldMs' | 'holdSince' | 'resetAt'> & { at: number }
 
-/** A beat waits at most this long for a fresh fix, then goes with the latest known one: it must land within 2 s. */
+/** A beat with no recent fix waits at most this long for a fresh one: it must land well inside the 3 s lapse. */
 export const BEAT_FIX_WAIT_MS = 300
 
 const isHoldKey = (e: KeyboardEvent) => e.key === ' ' || e.key === 'Enter'
@@ -25,13 +25,15 @@ const isHoldKey = (e: KeyboardEvent) => e.key === ' ' || e.key === 'Enter'
  *
  * The thumb going down and coming up are each one `rescueHold` call, sent in order through one queue (a quick tap must
  * not reach the server as up-then-down). The press is itself the first heartbeat, and the beat timer restarts from
- * it. Every RESCUE_PING_MS after that a beat goes out, and it never waits on GPS:
- * - a fix, fresh if one comes within BEAT_FIX_WAIT_MS or else the latest known one, saying `holding: true` while the
- *   thumb is down (thumb up, the fix still goes: the server judges every one against Penjara's 30 m);
+ * it. Every RESCUE_BEAT_MS after that a beat goes out, and it never waits on GPS:
+ * - a fix saying `holding: true` while the thumb is down (thumb up, the fix still goes: the server judges every one
+ *   against Penjara's 30 m). A known fix up to 3 s old goes at once; with none, it waits up to BEAT_FIX_WAIT_MS for
+ *   a fresh one. Each beat also asks for a fresh fix, so the next beat has a recent one ready;
  * - with no coordinates at all and the thumb down, `rescueHold { down: true }`, through the same queue, so it can never
  *   land after a let-go and start the hold again.
- * That is at most 40 requests a minute, plus a few for presses, under the 120 per minute a token gets (with the 3 s
- * poll, about 60 in all).
+ * A game resuming with the thumb still down beats at once, and the timer starts again from there.
+ * That is at most 60 requests a minute, plus a few for presses, under the 120 per minute a token gets (with the 3 s
+ * poll, about 80 in all).
  *
  * Anything that can take the thumb away without its pointerup counts as letting go: a cancelled pointer, the window
  * losing focus, the screen going to the background, this screen going away. Only the pointer that pressed counts: a
@@ -91,17 +93,26 @@ export default function RescueHold({
     [code],
   )
 
-  // The heartbeat and the 30 m fixes, from the last press on.
+  // Was the game paused when the beat timer last stopped: resuming with the thumb down beats at once.
+  const wasPaused = useRef(paused)
+  // The heartbeat and the 30 m fixes, from the last press (or the resume) on.
   useEffect(() => {
+    const resumed = wasPaused.current && !paused
+    wasPaused.current = paused
     if (paused) return
     const token = loadSession(localStorage, code).token
     if (!token) return
     const beat = async () => {
-      const fresh = await Promise.race([
-        currentCoords(RESCUE_PING_MS),
-        new Promise<Record<string, never>>((resolve) => window.setTimeout(() => resolve({}), BEAT_FIX_WAIT_MS)),
-      ])
-      const c = typeof fresh.lat === 'number' && typeof fresh.lng === 'number' ? fresh : lastCoords()
+      // Always ask for a fresh fix: it lands in `lastCoords` for the next beat even when this one can't wait for it.
+      const lookup = currentCoords(RESCUE_BEAT_MS)
+      let c = lastCoords()
+      if (!c) {
+        const fresh = await Promise.race([
+          lookup,
+          new Promise<Record<string, never>>((resolve) => window.setTimeout(() => resolve({}), BEAT_FIX_WAIT_MS)),
+        ])
+        c = typeof fresh.lat === 'number' && typeof fresh.lng === 'number' && typeof fresh.accuracy_m === 'number' ? (fresh as Coords) : lastCoords()
+      }
       if (c) {
         await call('location', { code, token, ...c, ...(downRef.current ? { holding: true } : {}) }).catch(() => undefined)
         return
@@ -112,7 +123,8 @@ export default function RescueHold({
         downRef.current ? call('rescueHold', { code, token, down: true }).catch(() => undefined) : undefined,
       )
     }
-    const id = window.setInterval(() => void beat(), RESCUE_PING_MS)
+    if (resumed && downRef.current) void beat()
+    const id = window.setInterval(() => void beat(), RESCUE_BEAT_MS)
     return () => window.clearInterval(id)
   }, [code, paused, phase])
 
