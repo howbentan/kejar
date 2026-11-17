@@ -908,8 +908,8 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
       return two(
         'Rescue starting at Penjara!',
         'RESCUE',
-        ctx.jailedNow === 0 ? 'Hold Penjara for 10 s.' : `Hold for 10 s and ${ctx.jailedNow} could get out.`,
-        'Catch them in 10 s and nobody gets out.',
+        ctx.jailedNow === 0 ? 'Hold Penjara for 20 s.' : `Hold for 20 s and ${ctx.jailedNow} could get out.`,
+        'Catch them before 20 s of holding and nobody gets out.',
         'chaser',
       )
     case 'reel-free':

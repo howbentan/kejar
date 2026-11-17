@@ -252,7 +252,7 @@ describe('two-part feed', () => {
   })
   it('a rescue starting: the chasers get both lines and are told to act', () => {
     const { runner, chaser: c } = both('rescue-started', { actor_id: 'r3', data: { who: 'Wei #14' } })
-    expect(c).toMatchObject({ text: 'Rescue starting at Penjara!', means: 'Catch them in 10 s and nobody gets out.', act: true, label: 'RESCUE' })
+    expect(c).toMatchObject({ text: 'Rescue starting at Penjara!', means: 'Catch them before 20 s of holding and nobody gets out.', act: true, label: 'RESCUE' })
     expect(runner).toMatchObject({ text: 'Rescue starting at Penjara!', act: false, label: 'RESCUE' })
     expect(line(siti, { actor_id: 'r3' }, 'rescue-started')).toMatchObject({ text: 'Rescue starting at Penjara!', means: null, act: false })
   })

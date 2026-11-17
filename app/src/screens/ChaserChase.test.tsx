@@ -198,13 +198,13 @@ describe('ChaserChase Luar Garisan', () => {
 })
 
 describe('ChaserChase: a rescue at Penjara (rules §9a)', () => {
-  const rescueLine = { at: new Date(99_000).toISOString(), text: 'Rescue starting at Penjara!', means: 'Catch them in 10 s and nobody gets out.', act: true, label: 'RESCUE' }
+  const rescueLine = { at: new Date(99_000).toISOString(), text: 'Rescue starting at Penjara!', means: 'Catch them before 20 s of holding and nobody gets out.', act: true, label: 'RESCUE' }
   afterEach(() => vi.restoreAllMocks())
   it('shows both chaser lines in the ticker', () => {
     render(<ChaserChase code="ABC234" view={{ ...chaser(), feed: [rescueLine], rescue: { by: 'r3', byName: 'Wei', heldMs: 13_000, holdSince: 100_000, resetAt: null } }} refresh={() => {}} />)
     const ticker = screen.getByRole('button', { name: /^Feed:/ })
     expect(ticker).toHaveTextContent('Rescue starting at Penjara!')
-    expect(ticker).toHaveTextContent('Catch them in 10 s and nobody gets out.')
+    expect(ticker).toHaveTextContent('Catch them before 20 s of holding and nobody gets out.')
   })
   it('buzzes once when a rescue starts, and not again for the same one', () => {
     const vibrate = vi.fn()
