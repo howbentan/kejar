@@ -919,6 +919,39 @@ html { -webkit-tap-highlight-color: transparent; }
 .flock .fl-burst { animation: fl-burst 0.45s ease-out both; transform-box: fill-box; transform-origin: 0% 100%; }
 @keyframes fl-burst { from { opacity: 1; transform: scale(0.6); } to { opacity: 0; transform: scale(1.4); } }
 
+/* The rescue screens: the rescuer's (RescueHold) covers the chase; RescueWatch sits on Penjara; RescueEnd is a moment.
+   Centred with margin: auto, so a short phone scrolls instead of cutting off the top. Nothing on them selects or
+   calls up a long-press menu: a 20 s press would otherwise open one. */
+.rescue-screen {
+  position: fixed; inset: 0; z-index: 44; display: flex; overflow-y: auto; background: var(--black);
+  padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.rescue-body { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; max-width: 100%; }
+.rescue-watch { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 8px 0; }
+.rescue-end { background: var(--black); user-select: none; -webkit-user-select: none; }
+.rescue-lime { color: var(--volt); }
+.rescue-red { color: var(--danger); }
+.rescue-big { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.05em; line-height: 1.05; }
+.rescue-line { margin: 0; font-size: 14px; line-height: 1.4; color: var(--dim); max-width: 280px; }
+.rescue-count { font: 800 64px var(--font); letter-spacing: -0.06em; color: var(--volt); line-height: 1; font-variant-numeric: tabular-nums; transition: color 0.2s; }
+.rescue-count small { font-size: 22px; margin-left: 2px; }
+.rescue-count.dim { color: rgba(198, 255, 61, 0.35); }
+/* The thumb button: big enough to find without looking, and the page never scrolls or zooms under it. */
+.holdbtn {
+  appearance: none; box-sizing: border-box; flex: none; width: 132px; height: 132px; margin-top: 6px; border-radius: 50%;
+  background: var(--volt); color: var(--black); display: grid; place-items: center; font: 900 20px var(--font); letter-spacing: 0.06em;
+  border: 5px solid #141414; box-shadow: 0 8px 0 #5E7D12, 0 0 0 6px var(--white); cursor: pointer;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; touch-action: none;
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.holdbtn.down { transform: translateY(6px); box-shadow: 0 2px 0 #5E7D12, 0 0 0 6px var(--white); }
+.holdbtn:focus-visible { outline: 3px solid var(--white); outline-offset: 6px; }
+.holdbtn:disabled { opacity: 0.5; cursor: default; }
+@media (max-height: 640px) {
+  .rescue-count { font-size: 48px; }
+  .holdbtn { width: 112px; height: 112px; }
+}
+
 /* The Penjara gate doodle (PenjaraGate): doors swing and sparkles fly when open; a green chain when locked. */
 .pgate { display: block; overflow: visible; }
 .pgate .pg-door-l, .pgate .pg-door-r, .pgate .pg-lock, .pgate .pg-shackle, .pgate .pg-spark { transform-box: fill-box; }

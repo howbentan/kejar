@@ -832,6 +832,24 @@ interface FeedContext {
 type Line = Omit<FeedItem, 'at'>
 const plain = (text: string): Line => ({ text, means: null, act: false, label: null })
 
+/**
+ * The feed line for a rescue that ended without freeing anyone, by the server's reason; an old event without a reason
+ * gets the plain line. Exported so the rescue screens can tell from the feed how the rescue they watched ended.
+ */
+export function rescueFailedText(reason: string, who: string): string {
+  const why: Record<string, string> = {
+    caught: `The rescue failed: ${who} was caught.`,
+    left: `The rescue failed: ${who} walked away.`,
+    reset: 'The rescue reset.',
+    locked: 'The rescue failed: Penjara is locked.',
+    removed: 'The rescue failed.',
+  }
+  return why[reason] ?? 'Rescue failed. Nobody gets out.'
+}
+
+/** The feed line for a rescue that freed `n` runners (the rescue screens read it back too). */
+export const jailbreakText = (n: number) => `Jailbreak! ${n} Dikejar free.`
+
 /** The two-part lines (motion §8.2). Runner power-up uses never appear, so nothing secret leaks. */
 function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Line | Line[] | null {
   const actor = e.actor_id ? byId.get(e.actor_id) : undefined
@@ -916,21 +934,13 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
       return plain(`${actor?.name ?? String(e.data.who ?? 'A Dikejar')} pulled the free slot. Keluar penjara!`)
     case 'rescue-failed': {
       // The server says why (caught, walked away, ...); an event without a reason is an old one.
-      const who = actor?.name ?? 'The rescuer'
-      const why: Record<string, string> = {
-        caught: `The rescue failed: ${who} was caught.`,
-        left: `The rescue failed: ${who} walked away.`,
-        reset: 'The rescue reset.',
-        locked: 'The rescue failed: Penjara is locked.',
-        removed: 'The rescue failed.',
-      }
-      const text = why[String(e.data.reason ?? '')] ?? 'Rescue failed. Nobody gets out.'
+      const text = rescueFailedText(String(e.data.reason ?? ''), actor?.name ?? 'The rescuer')
       return two(text, 'RESCUE', 'The rescuer can try again if they are still free.', 'Penjara holds. Nice.')
     }
     case 'jailbreak': {
       const n = Number(e.data.freed ?? 0)
       return two(
-        `Jailbreak! ${n} Dikejar free.`,
+        jailbreakText(n),
         'FREE',
         ctx.jailedNow === 0 ? 'Penjara is empty again.' : `${ctx.jailedNow} still inside.`,
         `${n} more Dikejar ${n === 1 ? 'is' : 'are'} loose near Penjara.`,

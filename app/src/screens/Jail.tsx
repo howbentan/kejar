@@ -6,7 +6,7 @@ import Marker from '../game/Marker'
 import PenjaraArrival from '../game/PenjaraArrival'
 import PenjaraReel, { useReelHold } from '../game/PenjaraReel'
 import PenjaraTicket from '../game/PenjaraTicket'
-import RescueBanner from '../game/RescueBanner'
+import RescueWatch from '../game/rescue/RescueWatch'
 import SettlePanel from '../game/SettlePanel'
 import Stamp from '../game/Stamp'
 import { WalkGuide } from '../game/WalkGuide'
@@ -131,7 +131,7 @@ function AutoJailed({ code, view, reason = 'missed-checkins' }: { code: string; 
       {reason === 'missed-checkins' && view.jailCheckins && view.jailCheckins.length > 0 && <CheckinRow checkins={view.jailCheckins} />}
       {view.me.jailed && <PenjaraClosed view={view} />}
       {view.me.jailed && <PenjaraLock view={view} />}
-      {view.me.jailed && !view.me.freed_once && <RescueBanner view={view} />}
+      {view.me.jailed && !view.me.freed_once && <RescueWatch view={view} />}
       <PenjaraTicket
         playerId={view.me.id}
         variant={
@@ -246,7 +246,7 @@ function Caught({ code, view }: { code: string; view: View }) {
       </p>
       {view.me.jailed && <PenjaraClosed view={view} />}
       {view.me.jailed && <PenjaraLock view={view} />}
-      {view.me.jailed && !view.me.freed_once && <RescueBanner view={view} />}
+      {view.me.jailed && !view.me.freed_once && <RescueWatch view={view} />}
       <PenjaraTicket
         playerId={view.me.id}
         variant={{ kind: 'catch', caughtBy: view.caughtBy ?? 'a chaser', caughtAtMs: view.me.caught_at ? Date.parse(view.me.caught_at) : null }}

@@ -155,6 +155,10 @@ describe('catchMessage', () => {
   it('explains the 15 s head start', () => {
     expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'durian-head-start', name: 'Aina' })).toBe('Durian! Aina gets a 15 s head start.')
   })
+  it('a runner just freed from Penjara: the head start left, in whole seconds rounded up', () => {
+    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'head-start', leftMs: 5_200 })).toBe('Just freed: 6 s head start.')
+    expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'head-start' })).toBe('Just freed: 1 s head start.')
+  })
   it('Super Ring: the catch that fires it, the lock after, and house arrest', () => {
     expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'ring', name: 'Aina' })).toBe("Super Ring! You can't catch Aina again this game. Hand the tag back.")
     expect(catchMessage('KEJAR:TAG:07', { ok: false, reason: 'ring-locked', name: 'Aina' })).toBe("Super Ring! You can't catch Aina again this game.")

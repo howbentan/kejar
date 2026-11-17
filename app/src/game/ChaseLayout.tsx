@@ -55,7 +55,8 @@ export default function ChaseLayout(props: {
   describe: (s: Scanned, text: string, result: unknown) => string
   /** A full-screen moment for a good scan (the catch stamp, the lucky dip), or null for just the line. */
   momentFor?: (s: Scanned, text: string, result: unknown, done: () => void) => ReactNode | null
-  onScanned?: () => void
+  /** After every answered scan, with what was scanned and the answer (the runner's Penjara scan opens the rescue). */
+  onScanned?: (s: Scanned, text: string, result: unknown) => void
 }) {
   const { code, view, side, describe, momentFor, onScanned } = props
   // The scanner's hint: the usual one, or the side quest's while the player is looking for the slip.
@@ -81,7 +82,7 @@ export default function ChaseLayout(props: {
         setResult(describe(target, text, r))
         const m = momentFor?.(target, text, r, () => setMoment(null))
         if (m) setMoment(m)
-        onScanned?.()
+        onScanned?.(target, text, r)
       } catch (e) {
         setResult(e instanceof Error ? e.message : String(e))
       } finally {

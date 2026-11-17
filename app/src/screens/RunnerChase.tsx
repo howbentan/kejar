@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BreakJudgement } from '../../shared/catch.js'
-import { RESCUE_HOLD_MS, RESCUE_PING_MS } from '../../shared/penjara.js'
+import { RESCUE_PING_MS, RESCUE_RESET_MS } from '../../shared/penjara.js'
 import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
 import { penjaraLockedLine } from '../../shared/hijau.js'
@@ -13,6 +13,7 @@ import CheckinBanner from '../game/CheckinBanner'
 import { EndgameStatus } from '../game/EndgameChip'
 import HijauTakeover, { type TapResult } from '../game/HijauTakeover'
 import { dipFor } from '../game/LuckyDip'
+import RescueHold from '../game/rescue/RescueHold'
 import PowerUpHand, { claimMessage, slipMessage, type SlipClaimResult, type ClaimResult } from '../game/PowerUpHand'
 import { loadSession } from '../game/session'
 import { clock, useServerNow } from '../game/time'
@@ -50,42 +51,26 @@ const BREAK_REJECTIONS: Record<string, string> = {
   'penjara-closed': 'Penjara is closed (PKP)',
 }
 
-/** What a Penjara scan answers: a rescue started or joined (rules §9a), or why not. */
-type BreakResult = { ok: true; rescue: 'started' | 'joined'; endsAt: number } | Extract<BreakJudgement, { ok: false }> | { ok: false; reason: string }
-
-/** Whole seconds left in the hold, rounding up so it never shows 0 early. */
-export const secondsLeft = (endsAt: number, now: number) => Math.max(0, Math.ceil((endsAt - now) / 1000))
-
-/** The rescuer's and joiners' lime ring, filling over the 10 s hold. */
-function HoldRing({ endsAt, now }: { endsAt: number; now: number }) {
-  const done = Math.min(1, Math.max(0, 1 - (endsAt - now) / RESCUE_HOLD_MS))
-  const c = 2 * Math.PI * 22
-  return (
-    <div role="status" aria-label="Rescue hold" className="chase-warning" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-      <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
-        <circle cx="26" cy="26" r="22" fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="6" />
-        <circle
-          cx="26"
-          cy="26"
-          r="22"
-          fill="none"
-          stroke="var(--volt)"
-          strokeWidth="6"
-          strokeDasharray={c}
-          strokeDashoffset={c * (1 - done)}
-          transform="rotate(-90 26 26)"
-        />
-      </svg>
-      <p style={{ fontWeight: 700 }}>{`Stay close · ${secondsLeft(endsAt, now)} s`}</p>
-    </div>
-  )
-}
+/**
+ * What a Penjara scan answers (rules §9a): the rescue is claimed (or, for its own rescuer, resumed), someone else has
+ * it, or why not.
+ */
+type BreakResult =
+  | { ok: true; rescue: 'started' | 'resumed' }
+  | { ok: false; reason: 'rescue-taken'; byName: string }
+  | Extract<BreakJudgement, { ok: false }>
+  | { ok: false; reason: string }
 
 /**
  * While `active`, this phone asks for a fresh fix every `everyMs` and sends it, even when it's standing still (a still
  * phone's position watch may report nothing). With `now`, the first one goes straight away.
  */
-export function useLocationPings(code: string, active: boolean, everyMs: number, now = false) {
+export function useLocationPings(code: string, active: boolean, everyMs: number, now = false, extra?: () => Record<string, unknown>) {
+  // Read when each fix goes out, so a change (the thumb on the key) never restarts the timer.
+  const more = useRef(extra)
+  useEffect(() => {
+    more.current = extra
+  })
   useEffect(() => {
     if (!active) return
     const token = loadSession(localStorage, code).token
@@ -93,7 +78,7 @@ export function useLocationPings(code: string, active: boolean, everyMs: number,
     const ping = () =>
       void currentCoords(everyMs).then((c) => {
         if (typeof c.lat !== 'number' || typeof c.lng !== 'number') return
-        return call('location', { code, token, ...c }).catch(() => undefined)
+        return call('location', { code, token, ...c, ...more.current?.() }).catch(() => undefined)
       })
     if (now) ping()
     const id = setInterval(ping, everyMs)
@@ -101,9 +86,13 @@ export function useLocationPings(code: string, active: boolean, everyMs: number,
   }, [code, active, everyMs, now])
 }
 
-/** The rescuer's phone sends its location every RESCUE_PING_MS while holding: the server judges each fix. */
-function useRescuePings(code: string, holding: boolean) {
-  useLocationPings(code, holding, RESCUE_PING_MS)
+/**
+ * The rescuer's phone sends its location every RESCUE_PING_MS for the whole rescue: the server judges each fix
+ * against Penjara's 30 m. While the thumb is on the key each fix also says `holding: true`, the hold's heartbeat
+ * (`rescueHold` itself is called only when the thumb goes down and comes up).
+ */
+function useRescuePings(code: string, active: boolean, thumbDown: { current: boolean }) {
+  useLocationPings(code, active, RESCUE_PING_MS, false, () => (thumbDown.current ? { holding: true } : {}))
 }
 
 const tagOf = (view: View) => (view.me.tag_id ? `#${String(view.me.tag_id).padStart(2, '0')}` : view.me.name.toUpperCase())
@@ -129,16 +118,33 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
   if (opened && pushedFor.current === null && checkin) pushedFor.current = checkin.alertAt
   const openedByPush = opened && checkin?.alertAt === pushedFor.current
   const banner = !!checkin && (checkin.state !== 'early' || openedByPush)
-  // While paused the hold is frozen: count from the server's moment, not the ticking clock.
-  const rescue = view.rescue
-  const inHold = !!rescue && !view.me.jailed && rescue.by === view.me.id
-  const holdNow = view.paused ? view.now : now
-  useRescuePings(code, !!rescue && rescue.by === view.me.id && !view.me.jailed && !view.paused)
+  // My rescue (rules §9a). A scan that claims one opens the HOLD screen at once, before the next poll brings it: the
+  // 5 s to press runs from the scan. That stand-in lasts until a view made after the scan says how it really stands.
+  const [claimedAt, setClaimedAt] = useState<number | null>(null)
+  const claimed =
+    claimedAt !== null && view.now <= claimedAt && now < claimedAt + RESCUE_RESET_MS
+      ? { by: view.me.id, byName: view.me.name, heldMs: 0, holdSince: null, resetAt: claimedAt + RESCUE_RESET_MS }
+      : null
+  const myRescue = view.me.jailed ? null : view.rescue?.by === view.me.id ? view.rescue : view.rescue ? null : claimed
+  const thumbDown = useRef(false)
+  const onThumb = useCallback((down: boolean) => void (thumbDown.current = down), [])
+  useRescuePings(code, !!myRescue && !view.paused, thumbDown)
+  // The server's time right now, read fresh at the answer (the ticking clock can be a second behind): a view made
+  // just before the scan must not count as one made after it.
+  const viewAt = useRef({ server: view.now, local: 0 })
+  useEffect(() => {
+    viewAt.current = { server: view.now, local: Date.now() }
+  }, [view.now])
+  const onScanned = useCallback((s: { action: string }, _text: string, r: unknown) => {
+    if (s.action === 'jailbreak' && (r as BreakResult).ok) setClaimedAt(viewAt.current.server + Date.now() - viewAt.current.local)
+  }, [])
 
   const describe = useCallback((s: { action: string }, text: string, r: unknown) => {
     if (s.action === 'jailbreak') {
       const b = r as BreakResult
-      if (b.ok) return b.rescue === 'joined' ? 'You joined the rescue. Stay close!' : 'Rescue on! Stay close to Penjara for 10 s.'
+      // Claimed or resumed: the rescue screen opens over everything, so no line under it.
+      if (b.ok) return ''
+      if (b.reason === 'rescue-taken') return `${('byName' in b && b.byName) || 'Another Dikejar'} is already breaking them out.`
       if (b.reason === 'penjara-locked' && 'lockedMs' in b) return penjaraLockedLine(b.lockedMs)
       return BREAK_REJECTIONS[b.reason] ?? 'Nobody freed'
     }
@@ -199,7 +205,6 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
                 <p className="muted">Turn on location for this site in your browser settings.</p>
               </div>
             )}
-            {inHold && <HoldRing endsAt={holdNow + RESCUE_HOLD_MS - rescue.heldMs - (rescue.holdSince ? Math.max(0, holdNow - rescue.holdSince) : 0)} now={holdNow} />}
             {view.me.role === 'runner' && <AlertsCard code={code} view={view} />}
             {banner && <CheckinBanner checkin={checkin} now={now} openedByPush={openedByPush} />}
           </>
@@ -209,7 +214,10 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
         scanClass="scan-runner"
         describe={describe}
         momentFor={momentFor}
+        onScanned={onScanned}
       />
+      {/* My rescue covers the chase: the rescuer's job is the key, and the screen has to stay open for it. */}
+      {myRescue && <RescueHold code={code} rescue={myRescue} viewNow={view.now} paused={view.paused} onThumb={onThumb} />}
     </>
   )
 }

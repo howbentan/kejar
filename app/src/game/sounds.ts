@@ -86,6 +86,20 @@ export function playClunk(): void {
   tone(70, 0.25, 'sine', 0.15, 0.02)
 }
 
+/**
+ * Wakes the audio from inside a touch. iPhone only lets Web Audio start in a gesture, and the key's first click comes
+ * 5 s after the thumb went down, outside it: the HOLD button calls this on press so that click is heard.
+ */
+export function primeAudio(): void {
+  if (isMuted()) return
+  try {
+    const a = ac()
+    if (a?.state === 'suspended') void a.resume()
+  } catch {
+    // No audio on this device: nothing to wake.
+  }
+}
+
 /* ---- The Penjara key (hold-to-rescue). Same Web Audio helpers as the reel, so no files to load. ---- */
 
 let noiseBuf: AudioBuffer | null = null

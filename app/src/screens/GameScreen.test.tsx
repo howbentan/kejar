@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { View } from '../../shared/views.js'
 import { testView } from './testView'
@@ -292,5 +292,45 @@ describe('GameScreen: the endgame takeover (endgame design §6.4)', () => {
     render(<GameScreen code="ABC234" />)
     expect(screen.queryByRole('alertdialog')).toBeNull()
     expect(screen.getByRole('button', { name: /Bomba/ })).toBeInTheDocument()
+  })
+})
+
+describe('GameScreen: how a rescue ended (rules §9a)', () => {
+  const base = testView()
+  const feedLine = (text: string) => ({ at: new Date(100_500).toISOString(), text, means: null, act: false, label: 'RESCUE' })
+  const rescue = (by: string) => ({ by, byName: by === 'r1' ? 'Aina' : 'Hafiz', heldMs: 18_000, holdSince: 99_000, resetAt: null })
+
+  it('a runner in Penjara it freed sees the gate open: LEPAS! and their head start', () => {
+    state.view = testView({ rescue: rescue('r3'), me: { ...base.me, jailed: true, caught_at: new Date(10_000).toISOString() } })
+    const { rerender } = render(<GameScreen code="ABC234" />)
+    state.view = testView({
+      now: 101_000,
+      rescue: null,
+      feed: [feedLine('Jailbreak! 2 Dikejar free.')],
+      me: { ...base.me, jailed: false, freed_once: true, freed_at: new Date(100_500).toISOString(), caught_at: new Date(10_000).toISOString() },
+    })
+    rerender(<GameScreen code="ABC234" />)
+    expect(screen.getByText('LEPAS!')).toBeInTheDocument()
+    expect(screen.getByText("You're free.")).toBeInTheDocument()
+  })
+
+  it('the rescuer sees Rescue reset. once, and not again on the next poll', () => {
+    state.view = testView({ rescue: rescue('r1') })
+    const { rerender } = render(<GameScreen code="ABC234" />)
+    state.view = testView({ now: 101_000, rescue: null, feed: [feedLine('The rescue reset.')] })
+    rerender(<GameScreen code="ABC234" />)
+    expect(screen.getByText('Rescue reset.')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Rescue reset.'))
+    state.view = testView({ now: 104_000, rescue: null, feed: [feedLine('The rescue reset.')] })
+    rerender(<GameScreen code="ABC234" />)
+    expect(screen.queryByText('Rescue reset.')).toBeNull()
+  })
+
+  it('a free runner with nothing to do with it sees no ending', () => {
+    state.view = testView({ rescue: rescue('r3') })
+    const { rerender } = render(<GameScreen code="ABC234" />)
+    state.view = testView({ now: 101_000, rescue: null, feed: [feedLine('Jailbreak! 2 Dikejar free.')] })
+    rerender(<GameScreen code="ABC234" />)
+    expect(screen.queryByText('LEPAS!')).toBeNull()
   })
 })

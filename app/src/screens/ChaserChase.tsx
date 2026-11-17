@@ -34,6 +34,8 @@ export function catchMessage(text: string, r: CatchJudgement): string {
   const tag = tagIdFromQr(text)
   const label = tag === null ? 'runner' : `#${String(tag).padStart(2, '0')}`
   if (r.ok) return r.flagged ? `Caught ${label} . Flagged for a marshal.` : `Caught ${label} ✓`
+  // Just freed from Penjara (rules §9a): the seconds left, rounded up so it never says 0 while it still blocks.
+  if (r.reason === 'head-start') return `Just freed: ${Math.max(1, Math.ceil((r.leftMs ?? 0) / 1000))} s head start.`
   return (REJECTIONS[r.reason] ?? 'Catch not recorded').replace('{name}', () => r.name ?? label)
 }
 

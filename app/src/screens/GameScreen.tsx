@@ -20,6 +20,7 @@ import Removed from './Removed'
 import Cancelled from './Cancelled'
 import Results from './Results'
 import RunnerChase from './RunnerChase'
+import RescueEnd, { useRescueEnding } from '../game/rescue/RescueEnd'
 import type { View } from '../../shared/views.js'
 
 // A disqualified (Luar Garisan) runner deliberately keeps sending location while the app is open: it only feeds
@@ -90,6 +91,9 @@ export default function GameScreen({ code }: { code: string }) {
     return () => window.clearTimeout(t)
   }, [released])
 
+  // How a rescue this player was part of ended: over whichever screen comes next (a freed runner leaves Penjara).
+  const rescueEnd = useRescueEnding(current)
+
   if (!current || gate.show) return <GameLoading code={code} error={error} {...gate.loader} />
   if (current.cancelled) return <Cancelled code={code} organiser={current.me.id === 'host'} />
   if (current.me.removed_at) return <Removed />
@@ -117,6 +121,7 @@ export default function GameScreen({ code }: { code: string }) {
   return (
     <>
       {screen}
+      {rescueEnd.ending && <RescueEnd key={rescueEnd.ending.at} ending={rescueEnd.ending} onDone={rescueEnd.done} />}
       {takeover}
       <SosIcon code={code} view={current} />
     </>

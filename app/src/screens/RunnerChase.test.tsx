@@ -124,16 +124,28 @@ describe('RunnerChase', () => {
     expect(screen.queryByText(/^Check in in/)).toBeNull()
   })
 
-  it('scanning the Penjara code starts the rescue, or joins one already going', async () => {
-    call.mockResolvedValue({ ok: true, rescue: 'started', endsAt: 110_000 })
+  it('scanning the Penjara code claims the rescue and opens the HOLD screen straight away, before the next poll', async () => {
+    call.mockResolvedValue({ ok: true, rescue: 'started' })
     render(<RunnerChase code="ABC234" view={testView({ counts: { runnersFree: 3, runnersJailed: 2, runnersLuarGarisan: 0, chasers: 1 } })} />)
     await scan('KEJAR:JAIL')
     expect(call).toHaveBeenCalledWith('jailbreak', { code: 'ABC234', token: 't1', qr: 'KEJAR:JAIL' })
-    expect(screen.getByText('Rescue on! Stay close to Penjara for 10 s.')).toBeInTheDocument()
-    call.mockResolvedValue({ ok: true, rescue: 'joined', endsAt: 110_000 })
-    fireEvent.click(screen.getByText('Rescue on! Stay close to Penjara for 10 s.'))
+    expect(screen.getByRole('button', { name: 'HOLD' })).toBeInTheDocument()
+    expect(screen.getByText('Press and hold for 20 s. Let go and it waits 5 s, then resets.')).toBeInTheDocument()
+  })
+
+  it("the rescuer's own re-scan resumes: back on the rescue screen", async () => {
+    call.mockResolvedValue({ ok: true, rescue: 'resumed' })
+    render(<RunnerChase code="ABC234" view={testView()} />)
     await scan('KEJAR:JAIL')
-    expect(screen.getByText('You joined the rescue. Stay close!')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'HOLD' })).toBeInTheDocument()
+  })
+
+  it('a second runner is told who already has the rescue, and gets no HOLD button', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'rescue-taken', byName: 'Hafiz' })
+    render(<RunnerChase code="ABC234" view={testView()} />)
+    await scan('KEJAR:JAIL')
+    expect(screen.getByText('Hafiz is already breaking them out.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'HOLD' })).toBeNull()
   })
 
   it('scanning a station claims it, opens the lucky dip, and no other scan can start meanwhile', async () => {
@@ -238,42 +250,115 @@ describe('RunnerChase', () => {
   })
 })
 
-describe('RunnerChase: the 10-second rescue (rules §9a)', () => {
-  const holding = (by = 'r1') => testView({ rescue: { by, byName: by === 'r1' ? 'Aina' : 'Wei', heldMs: 13_000, holdSince: 100_000, resetAt: null } })
+describe('RunnerChase: hold the key (rules §9a)', () => {
+  const rescue = (over: Partial<NonNullable<ReturnType<typeof testView>['rescue']>> = {}, by = 'r1') =>
+    testView({ rescue: { by, byName: by === 'r1' ? 'Aina' : 'Hafiz', heldMs: 0, holdSince: null, resetAt: 105_000, ...over } })
+  const holdCalls = () => call.mock.calls.filter((c) => c[0] === 'rescueHold').map((c) => c[1])
+  const locationCalls = () => call.mock.calls.filter((c) => c[0] === 'location')
   beforeEach(() => {
     here.coords = { lat: 3, lng: 101, accuracy_m: 5 }
+    call.mockImplementation(async (action: string) => (action === 'rescueHold' ? { ok: true, heldMs: 0, holding: true } : { ok: true }))
   })
-  afterEach(() => vi.useRealTimers())
-  const locationCalls = () => call.mock.calls.filter((c) => c[0] === 'location')
-
-  it('shows the rescuer the hold ring: Stay close · 7 s', () => {
-    render(<RunnerChase code="ABC234" view={holding()} />)
-    expect(screen.getByRole('status', { name: 'Rescue hold' })).toHaveTextContent('Stay close · 7 s')
+  afterEach(() => {
+    vi.useRealTimers()
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
   })
 
-  it('shows the ring to the rescuer only', () => {
-    render(<RunnerChase code="ABC234" view={holding()} />)
-    expect(screen.getByText('Stay close · 7 s')).toBeInTheDocument()
-    cleanup()
-    render(<RunnerChase code="ABC234" view={holding('r3')} />)
-    expect(screen.queryByText(/Stay close/)).toBeNull()
+  it('covers the chase with the HOLD button and the idle line for the rescuer', () => {
+    render(<RunnerChase code="ABC234" view={rescue()} />)
+    expect(screen.getByRole('button', { name: 'HOLD' })).toBeInTheDocument()
+    expect(screen.getByText('RESCUE ON')).toBeInTheDocument()
+    expect(screen.getByText('Press and hold for 20 s. Let go and it waits 5 s, then resets.')).toBeInTheDocument()
+    expect(screen.getByRole('timer', { name: 'Seconds left to hold' })).toHaveTextContent('20')
   })
 
-  it('sends location about every 1.5 s while holding', async () => {
+  it('shows nothing to a runner whose rescue it is not', () => {
+    render(<RunnerChase code="ABC234" view={rescue({}, 'r3')} />)
+    expect(screen.queryByRole('button', { name: 'HOLD' })).toBeNull()
+  })
+
+  it('counts the seconds left from the held time, ticking from holdSince', () => {
+    render(<RunnerChase code="ABC234" view={rescue({ heldMs: 13_000, holdSince: 100_000, resetAt: null })} />)
+    expect(screen.getByRole('timer', { name: 'Seconds left to hold' })).toHaveTextContent('7')
+  })
+
+  it('pointerdown sends rescueHold down: true and pointerup down: false, in that order', async () => {
+    render(<RunnerChase code="ABC234" view={rescue()} />)
+    const btn = screen.getByRole('button', { name: 'HOLD' })
+    await act(async () => fireEvent.pointerDown(btn))
+    expect(screen.getByRole('button', { name: 'HOLDING' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('Keep holding. Stay within 30 m of Penjara.')).toBeInTheDocument()
+    await act(async () => fireEvent.pointerUp(btn))
+    expect(holdCalls()).toEqual([
+      { code: 'ABC234', token: 't1', down: true },
+      { code: 'ABC234', token: 't1', down: false },
+    ])
+  })
+
+  it('a cancelled pointer lets go too, and a second up sends nothing more', async () => {
+    render(<RunnerChase code="ABC234" view={rescue()} />)
+    const btn = screen.getByRole('button', { name: 'HOLD' })
+    await act(async () => fireEvent.pointerDown(btn))
+    await act(async () => fireEvent.pointerCancel(btn))
+    await act(async () => fireEvent.pointerUp(btn))
+    expect(holdCalls().map((b) => b.down)).toEqual([true, false])
+  })
+
+  it('the screen going to the background lets go', async () => {
+    render(<RunnerChase code="ABC234" view={rescue()} />)
+    await act(async () => fireEvent.pointerDown(screen.getByRole('button', { name: 'HOLD' })))
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true })
+    await act(async () => document.dispatchEvent(new Event('visibilitychange')))
+    expect(holdCalls().map((b) => b.down)).toEqual([true, false])
+  })
+
+  it('the window losing focus lets go', async () => {
+    render(<RunnerChase code="ABC234" view={rescue()} />)
+    await act(async () => fireEvent.pointerDown(screen.getByRole('button', { name: 'HOLD' })))
+    await act(async () => window.dispatchEvent(new Event('blur')))
+    expect(holdCalls().map((b) => b.down)).toEqual([true, false])
+  })
+
+  it('Space holds and lets go as well', async () => {
+    render(<RunnerChase code="ABC234" view={rescue()} />)
+    const btn = screen.getByRole('button', { name: 'HOLD' })
+    await act(async () => fireEvent.keyDown(btn, { key: ' ' }))
+    await act(async () => fireEvent.keyDown(btn, { key: ' ', repeat: true }))
+    await act(async () => fireEvent.keyUp(btn, { key: ' ' }))
+    expect(holdCalls().map((b) => b.down)).toEqual([true, false])
+  })
+
+  it('let go: LET GO, the count dims, and Resets in 3. Hold again to keep it.', () => {
+    render(<RunnerChase code="ABC234" view={rescue({ heldMs: 7_000, holdSince: null, resetAt: 103_000 })} />)
+    expect(screen.getByText('LET GO')).toBeInTheDocument()
+    expect(screen.getByText('Resets in 3. Hold again to keep it.')).toBeInTheDocument()
+    expect(screen.getByRole('timer', { name: 'Seconds left to hold' })).toHaveClass('dim')
+    expect(screen.getByRole('timer', { name: 'Seconds left to hold' })).toHaveTextContent('13')
+  })
+
+  it('sends a fix about every 1.5 s, saying holding: true only while the thumb is down', async () => {
     vi.useFakeTimers()
-    call.mockResolvedValue({ ok: true })
-    render(<RunnerChase code="ABC234" view={holding()} />)
+    render(<RunnerChase code="ABC234" view={rescue()} />)
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(4_600)
+      await vi.advanceTimersByTimeAsync(1_600)
     })
-    expect(locationCalls()).toHaveLength(3)
+    expect(locationCalls()).toHaveLength(1)
     expect(locationCalls()[0][1]).toEqual({ code: 'ABC234', token: 't1', lat: 3, lng: 101, accuracy_m: 5 })
+    await act(async () => fireEvent.pointerDown(screen.getByRole('button', { name: 'HOLD' })))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500)
+    })
+    expect(locationCalls()[1][1]).toEqual({ code: 'ABC234', token: 't1', lat: 3, lng: 101, accuracy_m: 5, holding: true })
+    await act(async () => fireEvent.pointerUp(screen.getByRole('button', { name: 'HOLDING' })))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500)
+    })
+    expect(locationCalls()[2][1]).not.toHaveProperty('holding')
   })
 
   it('a runner with no rescue of their own sends no extra fixes', async () => {
     vi.useFakeTimers()
-    call.mockResolvedValue({ ok: true })
-    render(<RunnerChase code="ABC234" view={holding('r3')} />)
+    render(<RunnerChase code="ABC234" view={rescue({}, 'r3')} />)
     await act(async () => {
       await vi.advanceTimersByTimeAsync(4_600)
     })
