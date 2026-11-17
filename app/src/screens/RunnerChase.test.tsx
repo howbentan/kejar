@@ -34,7 +34,7 @@ vi.mock('../game/push', () => ({
   NotificationsDeniedError: class extends Error {},
 }))
 import RunnerChase from './RunnerChase'
-import { testView } from './testView'
+import { testView, viewedRescue } from './testView'
 
 beforeEach(() => {
   call.mockReset()
@@ -281,6 +281,11 @@ describe('RunnerChase: hold the key (rules §9a)', () => {
 
   it('counts the seconds left from the held time, ticking from holdSince', () => {
     render(<RunnerChase code="ABC234" view={rescue({ heldMs: 13_000, holdSince: 100_000, resetAt: null })} />)
+    expect(screen.getByRole('timer', { name: 'Seconds left to hold' })).toHaveTextContent('7')
+  })
+
+  it('counts a live stretch once: 6 s banked and 7 s held now leaves 7 s, not 0', () => {
+    render(<RunnerChase code="ABC234" view={testView({ rescue: viewedRescue(6_000, 7_000, 'r1', 'Aina') })} />)
     expect(screen.getByRole('timer', { name: 'Seconds left to hold' })).toHaveTextContent('7')
   })
 

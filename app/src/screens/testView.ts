@@ -1,5 +1,6 @@
+import { game, iso, MIN, player, T0 } from '../../shared/fixtures.js'
 import { DEFAULT_SETTINGS } from '../../shared/types.js'
-import type { View } from '../../shared/views.js'
+import { viewFor, type View } from '../../shared/views.js'
 
 /** A minimal View for screen tests. */
 export function testView(over: Partial<View> = {}): View {
@@ -75,4 +76,21 @@ export function testView(over: Partial<View> = {}): View {
     results: null,
     ...over,
   }
+}
+
+/**
+ * A rescue exactly as the server's view sends it at testView's clock (100 000 ms): `banked` ms held in earlier
+ * stretches, plus a thumb that went down `stretch` ms ago and is still beating. Built through `viewFor`, so a screen is
+ * tested on the real shape and can't count the live stretch twice. `by` holds the key; `name` is theirs.
+ */
+export function viewedRescue(banked: number, stretch: number, by = 'r3', name = 'Hafiz'): NonNullable<View['rescue']> {
+  const now = T0 + 16 * MIN
+  const since = iso(now - stretch)
+  const rescue = { by, startedAt: since, heldMs: banked, holdSince: since, lastBeat: iso(now), releasedAt: null }
+  const me = player('r1', 'runner', { name: 'Aina' })
+  const players = [me, player(by, 'runner', { name }), player('c1', 'chaser')]
+  const v = viewFor({ game: game({ rescue }), me, players, positions: {}, pings: [], events: [], now, results: null, powerUps: [] })
+  // The view's times, moved onto testView's clock.
+  const shift = (t: number | null) => (t === null ? null : t - now + 100_000)
+  return { ...v.rescue!, holdSince: shift(v.rescue!.holdSince), resetAt: shift(v.rescue!.resetAt) }
 }

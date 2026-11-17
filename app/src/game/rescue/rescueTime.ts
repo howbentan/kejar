@@ -6,7 +6,8 @@ import { useServerNow } from '../time'
 export type RescueNow = NonNullable<View['rescue']>
 
 /**
- * The key's held time at `now`: what is banked, plus the run since the thumb went down. Never past the full hold:
+ * The key's held time at `now`: what the view or answer counted, plus the run since it counted it (`holdSince` is
+ * that moment, not when the thumb went down, so the stretch is never counted twice). Never past the full hold:
  * between polls this only guesses (the server may already have counted the thumb as lifted), so it must not run on.
  */
 export const heldAt = (r: Pick<RescueNow, 'heldMs' | 'holdSince'>, now: number) =>

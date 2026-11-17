@@ -1164,13 +1164,13 @@ describe('the live rescue (rules §9a)', () => {
         by: 'r3',
         byName: 'Wei',
         heldMs: 7_000,
-        holdSince: NOW - 7_000,
+        holdSince: NOW,
         resetAt: null,
       })
     }
   })
   it('a chaser sees the progress, never who is breaking them out', () => {
-    expect(view(chaser, { game: { ...g, rescue } }).rescue).toEqual({ heldMs: 7_000, holdSince: NOW - 7_000, resetAt: null })
+    expect(view(chaser, { game: { ...g, rescue } }).rescue).toEqual({ heldMs: 7_000, holdSince: NOW, resetAt: null })
   })
   it('after a let go it shows the held time banked and when it resets', () => {
     const released = { ...rescue, heldMs: 7_000, holdSince: null, lastBeat: null, releasedAt: iso(NOW - 2_000) }
@@ -1187,7 +1187,13 @@ describe('the live rescue (rules §9a)', () => {
   it('is null with no rescue, and frozen while paused', () => {
     expect(view(aina).rescue).toBeNull()
     const paused = { ...g, rescue, paused_at: iso(NOW - 1_000) }
-    expect(view(aina, { game: paused }).rescue).toMatchObject({ heldMs: 6_000, holdSince: NOW - 7_000 })
+    expect(view(aina, { game: paused }).rescue).toMatchObject({ heldMs: 6_000, holdSince: NOW })
+  })
+  it('holdSince is the view time, so a phone adding (now - holdSince) never counts the stretch twice', () => {
+    const r = view(aina, { game: { ...g, rescue } }).rescue!
+    expect(r.holdSince).toBe(NOW)
+    // The phone's count one second on: banked-and-live 7 s, plus that second. Not 7 + 7 + 1.
+    expect(r.heldMs + (NOW + 1_000 - r.holdSince!)).toBe(8_000)
   })
   it('a chaser never sees another player\'s head start; a runner sees their own', () => {
     const freed = { ...aina, head_start_until: iso(NOW + 8_000) }

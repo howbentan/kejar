@@ -210,8 +210,9 @@ export interface View {
    */
   settle: { canFreeSelf: boolean; options: { id: string; name: string; eligible: boolean }[] } | null
   /**
-   * The live key-hold rescue at Penjara (rules §9a): held time so far, when the thumb went down (null when it is
-   * off), and when the rescue resets (null while the thumb is down). Everyone but a chaser also gets who is holding;
+   * The live key-hold rescue at Penjara (rules §9a): held time so far, counted up to this view; while the thumb is
+   * down, the time it was counted to (the view's `now`: add only what comes after it), null when it is off; and when
+   * the rescue resets (null while the thumb is down). Everyone but a chaser also gets who is holding;
    * a chaser is never told who is rescuing. Null when none is going.
    */
   rescue: { by?: string; byName?: string; heldMs: number; holdSince: number | null; resetAt: number | null } | null
@@ -744,6 +745,9 @@ function reelFor(i: ViewInput): View['reel'] {
 /**
  * The live rescue as players see it: how long the key has been held and, once the thumb is off, when it resets.
  * While the game is paused the progress is read at the pause, so nothing counts (or lapses) until it resumes.
+ * `heldMs` already holds the live stretch, so `holdSince` is the view's own time, not when the thumb went down: the
+ * phone adds `now − holdSince` on top, and it must only add what came after this view (a paused phone's clock stands
+ * at the view's time, so that adds nothing).
  */
 function rescueFor(i: ViewInput, phase: Phase): View['rescue'] {
   if (!i.game.rescue || phase !== 'chasing' || i.game.ended_at) return null
@@ -752,7 +756,7 @@ function rescueFor(i: ViewInput, phase: Phase): View['rescue'] {
   const p = rescueProgress(r, at)
   const progress = {
     heldMs: p.heldMs,
-    holdSince: p.holding ? Date.parse(r.holdSince!) : null,
+    holdSince: p.holding ? i.now : null,
     resetAt: p.offSince === null ? null : p.offSince + RESCUE_RESET_MS,
   }
   if (i.me.role === 'chaser') return progress

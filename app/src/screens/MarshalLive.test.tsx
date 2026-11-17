@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Alert } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
-import { testView } from './testView'
+import { testView, viewedRescue } from './testView'
 
 const call = vi.hoisted(() => vi.fn())
 const useWakeLock = vi.hoisted(() => vi.fn())
@@ -243,6 +243,10 @@ describe('MarshalLive after the game', () => {
 describe('MarshalLive: a rescue at Penjara (rules §9a)', () => {
   it('shows the marshal who is breaking them out, counting down', () => {
     render(<MarshalLive code="ABC234" view={marshal({ rescue: { by: 'r3', byName: 'Hafiz', heldMs: 13_000, holdSince: 100_000, resetAt: null } })} refresh={refresh} />)
+    expect(screen.getByRole('status', { name: 'Rescue' })).toHaveTextContent('Hafiz is breaking them out · 7 s')
+  })
+  it('counts a live stretch once: 6 s banked and 7 s held now leaves 7 s, not 0', () => {
+    render(<MarshalLive code="ABC234" view={marshal({ rescue: viewedRescue(6_000, 7_000) })} refresh={refresh} />)
     expect(screen.getByRole('status', { name: 'Rescue' })).toHaveTextContent('Hafiz is breaking them out · 7 s')
   })
   it('shows nothing with no rescue going', () => {

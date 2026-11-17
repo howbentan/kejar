@@ -24,7 +24,7 @@ vi.mock('../game/push', () => ({
 }))
 import { ARRIVAL_MS } from '../game/PenjaraArrival'
 import Jail from './Jail'
-import { testView } from './testView'
+import { testView, viewedRescue } from './testView'
 
 beforeEach(() => sessionStorage.clear())
 afterEach(() => {
@@ -390,6 +390,10 @@ describe('a rescue at Penjara (rules §9a)', () => {
     expect(watch).toHaveTextContent('Hafiz is breaking you out')
     expect(screen.getByRole('timer', { name: 'Seconds left to hold' })).toHaveTextContent('7')
     expect(screen.queryByRole('button', { name: /^HOLD/ })).toBeNull()
+  })
+  it('counts a live stretch once: 6 s banked and 7 s held now leaves 7 s, not 0', () => {
+    render(<Jail code="ABC234" view={{ ...caught(60_000), rescue: viewedRescue(6_000, 7_000) }} />)
+    expect(screen.getByRole('timer', { name: 'Seconds left to hold' })).toHaveTextContent('7')
   })
   it('says when the rescuer let go, and that they have to hold again', () => {
     render(<Jail code="ABC234" view={{ ...caught(60_000), rescue: { ...rescue, holdSince: null, resetAt: 103_000 } }} />)
