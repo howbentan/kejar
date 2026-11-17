@@ -901,3 +901,50 @@ html { -webkit-tap-highlight-color: transparent; }
 .to.to-end .to-card { transform: translateY(-58px) rotate(-2deg) scale(1.06); }
 .to.to-end .to-tub { opacity: 0; }
 .to.to-end .dd, .to.to-end .pc-scribbles path { stroke-dashoffset: 0; }
+
+/* The Penjara rescue lock (RescueLock): the key in the lock, four click marks, a rattle that grows with the hold. */
+.flock { display: block; overflow: visible; }
+.flock .fl-shake { transform-box: fill-box; transform-origin: 50% 85%; }
+.flock.holding .fl-shake { animation: fl-rattle var(--spd, 0.4s) linear infinite; }
+@keyframes fl-rattle {
+  0%, 100% { transform: rotate(0) translateX(0); }
+  25% { transform: rotate(calc(var(--amp, 1deg) * -1)) translateX(calc(var(--dx, 0px) * -1)); }
+  75% { transform: rotate(var(--amp, 1deg)) translateX(var(--dx, 0px)); }
+}
+.flock .fl-shackle { transform-box: fill-box; transform-origin: 85% 100%; transition: transform 0.35s cubic-bezier(0.3, 1.8, 0.5, 1); }
+.flock.open .fl-shackle { transform: translateY(-22px) rotate(18deg); }
+.flock .fl-key { transition: transform 0.18s cubic-bezier(0.3, 1.6, 0.5, 1); }
+.flock.paused .fl-mark.on circle { animation: fl-blink 0.8s infinite; }
+@keyframes fl-blink { 50% { opacity: 0.35; } }
+.flock .fl-burst { animation: fl-burst 0.45s ease-out both; transform-box: fill-box; transform-origin: 0% 100%; }
+@keyframes fl-burst { from { opacity: 1; transform: scale(0.6); } to { opacity: 0; transform: scale(1.4); } }
+
+/* The Penjara gate doodle (PenjaraGate): doors swing and sparkles fly when open; a green chain when locked. */
+.pgate { display: block; overflow: visible; }
+.pgate .pg-door-l, .pgate .pg-door-r, .pgate .pg-lock, .pgate .pg-shackle, .pgate .pg-spark { transform-box: fill-box; }
+.pgate .pg-door-l { transform-origin: 0% 50%; }
+.pgate .pg-door-r { transform-origin: 100% 50%; }
+.pgate.open .pg-door-l { animation: pg-swing-l 0.9s 0.35s cubic-bezier(0.3, 1.3, 0.5, 1) both; }
+.pgate.open .pg-door-r { animation: pg-swing-r 0.9s 0.35s cubic-bezier(0.3, 1.3, 0.5, 1) both; }
+@keyframes pg-swing-l { to { transform: scaleX(0.28) skewY(-6deg); } }
+@keyframes pg-swing-r { to { transform: scaleX(0.28) skewY(6deg); } }
+.pgate .pg-shackle { transform-origin: 85% 100%; }
+.pgate.open .pg-shackle { animation: pg-pop 0.4s cubic-bezier(0.3, 1.8, 0.5, 1) both; }
+@keyframes pg-pop { to { transform: translateY(-9px) rotate(28deg); } }
+.pgate.open .pg-lock { animation: pg-drop 0.7s 0.3s cubic-bezier(0.5, 0, 0.8, 0.4) both; }
+@keyframes pg-drop { 0% { transform: none; } 30% { transform: translateY(-6px) rotate(-8deg); } 100% { transform: translateY(120px) rotate(-40deg); opacity: 0; } }
+.pgate .pg-spark { opacity: 0; transform-origin: 50% 50%; }
+.pgate.open .pg-spark { animation: pg-spark 0.6s 0.45s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+.pgate.open .pg-spark:nth-last-of-type(2) { animation-delay: 0.55s; }
+.pgate.open .pg-spark:nth-last-of-type(1) { animation-delay: 0.65s; }
+@keyframes pg-spark { from { opacity: 0; transform: scale(0) rotate(-40deg); } to { opacity: 1; transform: scale(1) rotate(0); } }
+.pgate .pg-wob { animation: pg-wob 2.4s ease-in-out infinite; transform-box: fill-box; transform-origin: 50% 90%; }
+@keyframes pg-wob { 0%, 70%, 100% { transform: rotate(0); } 78% { transform: rotate(-1.4deg); } 88% { transform: rotate(1deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .pgate *, .flock * { animation: none !important; transition: none !important; }
+  /* Without the swing the open gate still has to read as open: show the end of each animation. */
+  .pgate.open .pg-door-l { transform: scaleX(0.28) skewY(-6deg); }
+  .pgate.open .pg-door-r { transform: scaleX(0.28) skewY(6deg); }
+  .pgate.open .pg-lock { opacity: 0; }
+  .pgate.open .pg-spark { opacity: 1; }
+}
