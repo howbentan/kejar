@@ -8,10 +8,10 @@ import { floodPlanOf } from '../../shared/flood.js'
 import { inPlayArea } from '../../shared/playArea.js'
 import { JAIL_QR, slipQr, stationQr, tagQr } from '../../shared/ids.js'
 import { seeded } from '../../shared/testing.js'
-import type { PowerUpKind, Role } from '../../shared/types.js'
+import type { PowerUpKind, RescueRecord, Role } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
 import { PHONE_MOVE_TTL_MS } from '../../shared/invites.js'
-import { RESCUE_HOLD_MS } from '../../shared/penjara.js'
+import { HEAD_START_MS, legacyRescue, RESCUE_HOLD_MS, rescueProgress } from '../../shared/penjara.js'
 import { ActionError, actions, MAX_PLAYERS_PER_GAME, STASH_MISS_LIMIT, WIPE_AFTER_MS, type ActionName } from './actions.js'
 import { hashToken } from './secrets.js'
 import { computeResults } from '../../shared/results.js'
@@ -132,16 +132,26 @@ async function readyGame(settings: object = {}, extra: object = {}) {
 const at = (dLatM: number) => ({ lat: CENTER.lat + dLatM / 111_195, lng: CENTER.lng, accuracy_m: 8 })
 
 /**
- * A Penjara scan starts the 10-second rescue (rules §9a): this one holds it to the end and polls, so it frees
- * everyone eligible. `now` is left at the end of the hold.
+ * A Penjara scan claims the rescue (rules §9a); this one then holds the key for the full 20 s, pressing again every
+ * 1.5 s as its heartbeat, so it frees everyone eligible. `now` is left at the end of the hold.
  */
 async function breakOut(code: string, token: string, extra: object = {}) {
   const r = await run('jailbreak', { code, token, qr: JAIL_QR, ...extra })
   if (r.ok) {
-    now += RESCUE_HOLD_MS
+    await holdKey(code, token, RESCUE_HOLD_MS)
     await run('state', { code, token })
   }
   return r
+}
+
+/** Holds the rescue key from `now` for `ms`, pressing again every 1.5 s as the heartbeat; `now` is left at the end. */
+async function holdKey(code: string, token: string, ms: number) {
+  const end = now + ms
+  await run('rescueHold', { code, token, down: true })
+  while (now < end) {
+    now = Math.min(end, now + 1_500)
+    await run('rescueHold', { code, token, down: true })
+  }
 }
 
 /** Both runners keep Kejar open (a location every minute), so they never miss a check-in. */
@@ -428,7 +438,7 @@ describe('catching and jail', () => {
     const g = await chasing()
     await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })
     await run('location', { code: g.code, token: g.hafiz.token, ...at(10) }) // jail is at the centre
-    expect(await breakOut(g.code, g.hafiz.token)).toEqual({ ok: true, rescue: 'started', endsAt: now })
+    expect(await breakOut(g.code, g.hafiz.token)).toEqual({ ok: true, rescue: 'started' })
     expect((await store.players((await store.gameByCode(g.code))!.id)).find((p) => p.id === g.aina.playerId)).toMatchObject({ jailed: false, freed_once: true })
     await run('location', { code: g.code, token: g.aina.token, ...at(20) })
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })
@@ -481,7 +491,7 @@ describe('catching and jail', () => {
   })
 })
 
-describe('the 10-second rescue at Penjara (rules §9a)', () => {
+describe('the held-key rescue at Penjara (rules §9a)', () => {
   /**
    * A Full game in the chase at +7 min: Ben chases; Aina #07 and Hafiz #03 are in Penjara; Wei #14 and Mei #21
    * are free. Ben is at the centre (Penjara), Wei and Mei 10 m from it.
@@ -506,113 +516,319 @@ describe('the 10-second rescue at Penjara (rules §9a)', () => {
     return { ...g, wei, mei, gameId }
   }
   type G = Awaited<ReturnType<typeof inPenjara>>
+  const stamp = (ms: number) => new Date(ms).toISOString()
   const scan = (g: G, token: string) => run('jailbreak', { code: g.code, token, qr: JAIL_QR, ...at(10) })
+  const press = (g: G, down: boolean, token = g.wei.token) => run('rescueHold', { code: g.code, token, down })
+  /** The rescuer's 1.5 s fix during the hold, saying the thumb is still down. */
+  const beat = (g: G, extra: object = {}) => run('location', { code: g.code, token: g.wei.token, ...at(10), holding: true, ...extra })
+  /** Thumb down now, a beat every 1.5 s, and a last beat at `now + ms` (where `now` is left, the thumb still down). */
+  async function holdFor(g: G, ms: number) {
+    const end = now + ms
+    await press(g, true)
+    while (now + 1_500 < end) {
+      now += 1_500
+      await beat(g)
+    }
+    now = end
+    await beat(g)
+  }
   const jailedIds = async (g: G) => (await store.players(g.gameId)).filter((p) => p.jailed).map((p) => p.id)
   const poll = (g: G) => run<View>('state', { code: g.code, organiserToken: g.organiserToken })
   const events = async (g: G, type: string) => (await store.events(g.gameId)).filter((e) => e.type === type)
+  const live = async (g: G) => (await store.gameByCode(g.code))!.rescue
+  /** Held time as the server counts it right now. */
+  const held = async (g: G) => rescueProgress(legacyRescue((await live(g))!), now)
+  const row = async (g: G, id: string) => (await store.players(g.gameId)).find((p) => p.id === id)!
+  const BOTH = (g: G) => [g.aina.playerId, g.hafiz.playerId]
 
-  it('a scan at Penjara starts a rescue, frees nobody yet, and tells everyone', async () => {
+  it('a scan claims the rescue with nothing held: the key waits for a thumb, and everyone is told', async () => {
     const g = await inPenjara()
     const t = now
-    expect(await scan(g, g.wei.token)).toEqual({ ok: true, rescue: 'started', endsAt: t + RESCUE_HOLD_MS })
-    expect(await jailedIds(g)).toEqual([g.aina.playerId, g.hafiz.playerId])
+    expect(await scan(g, g.wei.token)).toEqual({ ok: true, rescue: 'started' })
+    expect(await live(g)).toEqual({ by: g.wei.playerId, startedAt: stamp(t), heldMs: 0, holdSince: null, lastBeat: null, releasedAt: stamp(t) })
+    expect(await jailedIds(g)).toEqual(BOTH(g))
     expect(await events(g, 'rescue-started')).toMatchObject([{ actor_id: g.wei.playerId, data: { who: 'Wei #14' } }])
-    const rescue = { by: g.wei.playerId, byName: 'Wei', endsAt: t + RESCUE_HOLD_MS, joiners: [] }
-    for (const who of [{ token: g.aina.token }, { token: g.wei.token }, { organiserToken: g.organiserToken }]) {
-      expect((await run<View>('state', { code: g.code, ...who })).rescue).toEqual(rescue)
-    }
-    const ben = await run<View>('state', { code: g.code, token: g.ben.token })
-    expect(ben.rescue).toEqual({ endsAt: t + RESCUE_HOLD_MS }) // a chaser is never told who
-    expect(ben.feed[0]).toMatchObject({ text: 'Rescue starting at Penjara!', means: 'Catch them in 10 s and nobody gets out.', act: true })
   })
 
-  it('a poll at +10 s frees everyone eligible and posts the jailbreak', async () => {
+  it('20 s held with a beat every 1.5 s frees everyone eligible, each with a 10 s head start', async () => {
     const g = await inPenjara()
     await scan(g, g.wei.token)
-    now += 9_999
-    await poll(g)
-    expect(await jailedIds(g)).toHaveLength(2)
-    now += 1
-    const v = await poll(g)
+    const t = now
+    expect(await press(g, true)).toEqual({ ok: true, heldMs: 0, holding: true })
+    while (now < t + 19_500) {
+      now += 1_500
+      await beat(g)
+    }
+    expect(await jailedIds(g)).toEqual(BOTH(g))
+    expect((await held(g)).heldMs).toBe(19_500)
+    now = t + RESCUE_HOLD_MS
+    await beat(g)
     expect(await jailedIds(g)).toEqual([])
-    expect(v.rescue).toBeNull()
-    expect(v.feed[0].text).toBe('Jailbreak! 2 Dikejar free.')
+    expect(await live(g)).toBeNull()
     expect(await events(g, 'jailbreak')).toMatchObject([{ actor_id: g.wei.playerId, data: { freed: 2 } }])
-    const freed = (await store.players(g.gameId)).filter((p) => p.id === g.aina.playerId || p.id === g.hafiz.playerId)
-    expect(freed.every((p) => p.freed_once && p.freed_at === new Date(now).toISOString())).toBe(true)
-    // Settled once: another poll frees and posts nothing more.
+    for (const id of BOTH(g)) {
+      expect(await row(g, id)).toMatchObject({ freed_once: true, freed_at: stamp(now), head_start_until: stamp(now + HEAD_START_MS) })
+    }
+    expect((await row(g, g.wei.playerId)).head_start_until ?? null).toBeNull() // the rescuer was never in Penjara
+    expect(await events(g, 'rescue-failed')).toEqual([])
+    // Settled once: more polls free and post nothing.
     now += 5_000
     await poll(g)
     expect(await events(g, 'jailbreak')).toHaveLength(1)
   })
 
-  it('catching the rescuer at +5 s fails it: the catch counts and nobody gets out (Review Focus 1)', async () => {
+  it('hold 7 s, let go, 3 s later hold 13 s more: freed', async () => {
+    const g = await inPenjara()
+    await scan(g, g.wei.token)
+    const t = now
+    await holdFor(g, 7_000)
+    expect(await press(g, false)).toEqual({ ok: true, heldMs: 7_000, holding: false })
+    now = t + 10_000
+    await poll(g)
+    expect(await live(g)).not.toBeNull()
+    expect((await held(g)).heldMs).toBe(7_000)
+    await holdFor(g, 12_999)
+    expect(await jailedIds(g)).toEqual(BOTH(g))
+    now += 1
+    await beat(g)
+    expect(await jailedIds(g)).toEqual([])
+  })
+
+  it('let go for 5 s and it resets: rescue-failed with reason reset, nobody freed, anyone can start again', async () => {
+    const g = await inPenjara()
+    await scan(g, g.wei.token)
+    await holdFor(g, 7_000)
+    await press(g, false)
+    const off = now
+    now = off + 4_999
+    await poll(g)
+    expect(await live(g)).not.toBeNull()
+    now = off + 5_000
+    await poll(g)
+    expect(await live(g)).toBeNull()
+    expect(await events(g, 'rescue-failed')).toMatchObject([{ actor_id: g.wei.playerId, data: { reason: 'reset' } }])
+    expect(await jailedIds(g)).toEqual(BOTH(g))
+    expect(await press(g, true)).toEqual({ ok: false, reason: 'not-rescuer' })
+    expect(await scan(g, g.mei.token)).toEqual({ ok: true, rescue: 'started' })
+  })
+
+  it('a key never touched after the scan resets 5 s later', async () => {
     const g = await inPenjara()
     await scan(g, g.wei.token)
     now += 5_000
+    await poll(g)
+    expect(await events(g, 'rescue-failed')).toMatchObject([{ data: { reason: 'reset' } }])
+  })
+
+  it('beats stop while holding: held time stops 2 s after the last beat, and it resets 5 s after it (Review Focus 1)', async () => {
+    const g = await inPenjara()
+    await scan(g, g.wei.token)
+    const t = now
+    await holdFor(g, 6_000) // last beat at t + 6 s
+    now = t + 7_999
+    expect(await held(g)).toMatchObject({ heldMs: 7_999, holding: true })
+    now = t + 8_001
+    expect(await held(g)).toMatchObject({ heldMs: 6_000, holding: false, offSince: t + 6_000 })
+    now = t + 10_999
+    await poll(g)
+    expect(await live(g)).not.toBeNull()
+    now = t + 11_000
+    await poll(g)
+    expect(await live(g)).toBeNull()
+    expect(await events(g, 'rescue-failed')).toMatchObject([{ data: { reason: 'reset' } }])
+  })
+
+  it('a beat back within the 5 s carries on from the last beat: the quiet gap is not held', async () => {
+    const g = await inPenjara()
+    await scan(g, g.wei.token)
+    const t = now
+    await holdFor(g, 6_000)
+    now = t + 9_000 // 3 s without a beat: let go at t + 6 s
+    await beat(g)
+    expect(await live(g)).toMatchObject({ heldMs: 6_000, holdSince: stamp(t + 9_000), lastBeat: stamp(t + 9_000), releasedAt: null })
+    await holdFor(g, 13_999)
+    expect(await jailedIds(g)).toEqual(BOTH(g))
+    now += 1
+    await beat(g)
+    expect(await jailedIds(g)).toEqual([])
+  })
+
+  it('a thumb lifted after its beats lapsed starts the 5 s from the last beat, not from the late let-go', async () => {
+    const g = await inPenjara()
+    await scan(g, g.wei.token)
+    const t = now
+    await holdFor(g, 6_000)
+    now = t + 9_000
+    expect(await press(g, false)).toEqual({ ok: true, heldMs: 6_000, holding: false })
+    expect(await live(g)).toMatchObject({ heldMs: 6_000, holdSince: null, releasedAt: stamp(t + 6_000) })
+    now = t + 11_000
+    await poll(g)
+    expect(await events(g, 'rescue-failed')).toMatchObject([{ data: { reason: 'reset' } }])
+  })
+
+  it('a beat without the thumb down, or with it already lifted, never starts a hold', async () => {
+    const g = await inPenjara()
+    await scan(g, g.wei.token)
+    now += 1_000
+    await beat(g)
+    expect(await live(g)).toMatchObject({ heldMs: 0, holdSince: null })
+    await holdFor(g, 2_000)
+    await press(g, false)
+    // A beat sent before the let-go that lands after it.
+    await beat(g)
+    expect(await live(g)).toMatchObject({ heldMs: 2_000, holdSince: null })
+  })
+
+  it('a pause during the 5 s window freezes it: after resuming, it resets on time (Review Focus 2)', async () => {
+    const g = await inPenjara()
+    await scan(g, g.wei.token)
+    await holdFor(g, 7_000)
+    await press(g, false)
+    now += 2_000
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    expect(await press(g, true)).toEqual({ ok: false, reason: 'paused' })
+    now += 60_000
+    await poll(g)
+    expect(await live(g)).not.toBeNull()
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    const resumed = now
+    now = resumed + 2_999
+    await poll(g)
+    expect(await live(g)).not.toBeNull()
+    expect((await held(g)).heldMs).toBe(7_000)
+    now = resumed + 3_000
+    await poll(g)
+    expect(await events(g, 'rescue-failed')).toMatchObject([{ data: { reason: 'reset' } }])
+  })
+
+  it('a pause during a hold freezes it: beats during the pause count for nothing, and it frees 12 s after resuming (Review Focus 2)', async () => {
+    const g = await inPenjara()
+    await scan(g, g.wei.token)
+    const t = now
+    await holdFor(g, 7_500) // beats up to t + 7.5 s
+    now = t + 8_000
+    await run('pause', { code: g.code, organiserToken: g.organiserToken })
+    now = t + 30_000
+    await beat(g)
+    expect(await press(g, false)).toEqual({ ok: false, reason: 'paused' })
+    now = t + 8_000 + 2 * MIN
+    await run('resume', { code: g.code, organiserToken: g.organiserToken })
+    const resumed = now
+    expect(await held(g)).toMatchObject({ heldMs: 8_000, holding: true })
+    // The phone carries on beating: 12 s more frees them.
+    while (now + 1_500 < resumed + 12_000) {
+      now += 1_500
+      await beat(g)
+    }
+    expect(await jailedIds(g)).toEqual(BOTH(g))
+    now = resumed + 12_000
+    await beat(g)
+    expect(await jailedIds(g)).toEqual([])
+    expect(await events(g, 'rescue-failed')).toEqual([])
+  })
+
+  it('the rescuer let go, then caught: reason caught, nobody freed (Review Focus 3)', async () => {
+    const g = await inPenjara()
+    await scan(g, g.wei.token)
+    await holdFor(g, 5_000)
+    await press(g, false)
+    now += 1_000
     await run('location', { code: g.code, token: g.ben.token, ...at(0) })
     expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(14) })).toMatchObject({ ok: true })
-    expect((await store.gameByCode(g.code))!.rescue).toBeNull()
-    const v = await run<View>('state', { code: g.code, token: g.aina.token })
-    expect(v.feed[0].text).toBe('Rescue failed. Nobody gets out.')
-    expect(v.rescue).toBeNull()
-    now += 10_000
+    expect(await live(g)).toBeNull()
+    expect(await events(g, 'rescue-failed')).toMatchObject([{ actor_id: g.wei.playerId, data: { reason: 'caught' } }])
+    now += 30_000
     await poll(g)
-    expect(await jailedIds(g)).toEqual([g.aina.playerId, g.hafiz.playerId, g.wei.playerId])
+    expect(await jailedIds(g)).toEqual([...BOTH(g), g.wei.playerId])
     expect(await events(g, 'jailbreak')).toEqual([])
     expect(await events(g, 'rescue-failed')).toHaveLength(1)
   })
 
-  it('a second scan at +3 s joins: the hold keeps its time, and success still comes at +10 s (Review Focus 3)', async () => {
+  it('one rescuer: a second scan is told who has it, and the rescuer re-scanning resumes the same rescue', async () => {
     const g = await inPenjara()
-    const t = now
     await scan(g, g.wei.token)
-    now = t + 3_000
-    expect(await scan(g, g.mei.token)).toEqual({ ok: true, rescue: 'joined', endsAt: t + RESCUE_HOLD_MS })
-    expect((await store.gameByCode(g.code))!.rescue).toEqual({ by: g.wei.playerId, startedAt: new Date(t).toISOString(), joiners: [g.mei.playerId] })
+    await holdFor(g, 4_000)
+    await press(g, false)
+    const before = await live(g)
+    now += 1_000
+    expect(await scan(g, g.mei.token)).toEqual({ ok: false, reason: 'rescue-taken', byName: 'Wei' })
+    expect(await press(g, true, g.mei.token)).toEqual({ ok: false, reason: 'not-rescuer' })
+    expect(await scan(g, g.wei.token)).toEqual({ ok: true, rescue: 'resumed' })
+    expect(await live(g)).toEqual(before)
     expect(await events(g, 'rescue-started')).toHaveLength(1)
-    now = t + 9_000
-    await poll(g)
-    expect(await jailedIds(g)).toHaveLength(2)
-    now = t + RESCUE_HOLD_MS
-    await poll(g)
-    expect(await jailedIds(g)).toEqual([])
   })
 
-  it('catching the first rescuer fails the rescue even with a joiner still close (Review Focus 3)', async () => {
+  it('a good fix 45 m out while let go fails it: reason left', async () => {
     const g = await inPenjara()
     await scan(g, g.wei.token)
-    now += 3_000
-    await scan(g, g.mei.token)
-    now += 2_000
-    await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(14) })
-    now += 10_000
-    await poll(g)
-    expect(await jailedIds(g)).toEqual([g.aina.playerId, g.hafiz.playerId, g.wei.playerId])
-    expect(await events(g, 'rescue-failed')).toHaveLength(1)
+    await holdFor(g, 3_000)
+    await press(g, false)
+    now += 1_000
+    await run('location', { code: g.code, token: g.wei.token, ...at(45), accuracy_m: 5 })
+    expect(await live(g)).toBeNull()
+    expect(await events(g, 'rescue-failed')).toMatchObject([{ data: { reason: 'left' } }])
+    expect(await jailedIds(g)).toEqual(BOTH(g))
   })
 
-  it('a 2-minute pause at +4 s freezes the hold: after resuming it still needs 6 s more (Review Focus 2)', async () => {
+  it('a far fix landing after an unsettled reset is still a reset', async () => {
+    const g = await inPenjara()
+    await scan(g, g.wei.token)
+    await holdFor(g, 3_000)
+    await press(g, false)
+    now += 6_000
+    await run('location', { code: g.code, token: g.wei.token, ...at(45), accuracy_m: 5 })
+    expect(await events(g, 'rescue-failed')).toMatchObject([{ data: { reason: 'reset' } }])
+  })
+
+  it('a fix from after the moment it reached 20 s cannot turn the success into a failure', async () => {
+    const g = await inPenjara()
+    await scan(g, g.wei.token)
+    const t = now
+    await holdFor(g, 19_500)
+    // Nobody settles at t + 20 s; the next request is a far fix a second later.
+    now = t + 21_000
+    await run('location', { code: g.code, token: g.wei.token, ...at(60), accuracy_m: 5, holding: true })
+    expect(await jailedIds(g)).toEqual([])
+    expect(await events(g, 'rescue-failed')).toEqual([])
+    expect(await events(g, 'jailbreak')).toHaveLength(1)
+  })
+
+  it('the rescuer put out after the moment it reached 20 s (a later Luar Garisan) keeps the success', async () => {
+    const g = await inPenjara()
+    await scan(g, g.wei.token)
+    const t = now
+    await holdFor(g, 19_500)
+    now = t + 21_000
+    await store.updatePlayers([{ id: g.wei.playerId, patch: { disqualified_at: stamp(now) } }])
+    await poll(g)
+    expect(await events(g, 'jailbreak')).toMatchObject([{ data: { freed: 2 } }])
+    expect(await events(g, 'rescue-failed')).toEqual([])
+  })
+
+  it('the rescuer put out before it reached 20 s fails it: reason removed', async () => {
+    const g = await inPenjara()
+    await scan(g, g.wei.token)
+    const t = now
+    await holdFor(g, 19_500)
+    await store.updatePlayers([{ id: g.wei.playerId, patch: { disqualified_at: stamp(t + 19_800) } }])
+    now = t + 21_000
+    await poll(g)
+    expect(await events(g, 'rescue-failed')).toMatchObject([{ data: { reason: 'removed' } }])
+    expect(await jailedIds(g)).toEqual(BOTH(g))
+  })
+
+  it("the rescuer's fixes are the heartbeat: none is dropped by the location gap, and a poor fix far away is ignored", async () => {
     const g = await inPenjara()
     const t = now
     await scan(g, g.wei.token)
-    now = t + 4_000
-    await run('pause', { code: g.code, organiserToken: g.organiserToken })
-    now = t + 4_000 + 2 * MIN
-    const during = await poll(g)
-    expect(await jailedIds(g)).toHaveLength(2)
-    expect(during.rescue!.endsAt - during.now).toBe(6_000)
-    await run('resume', { code: g.code, organiserToken: g.organiserToken })
-    expect((await poll(g)).rescue!.endsAt).toBe(now + 6_000)
-    now += 5_999
-    await poll(g)
-    expect(await jailedIds(g)).toHaveLength(2)
-    now += 1
-    await poll(g)
-    expect(await jailedIds(g)).toEqual([])
+    await holdFor(g, 4_500)
+    expect((await store.positions(g.gameId, stamp(t)))[g.wei.playerId]).toHaveLength(4) // the scan's own fix, then every 1.5 s
+    now = t + 6_000
+    await beat(g, { ...at(60), accuracy_m: 50 })
+    expect(await live(g)).not.toBeNull()
   })
 
-  it('the clock running out during the hold ends the game with no jailbreak (Review Focus 2)', async () => {
+  it('the clock running out during the hold ends the game with no jailbreak', async () => {
     const g = await inPenjara({ lengthMin: 15 }) // the chase ends at +20 min
     for (let m = 8; m <= 19; m++) {
       now = T0 + m * MIN
@@ -621,91 +837,135 @@ describe('the 10-second rescue at Penjara (rules §9a)', () => {
     }
     now = T0 + 20 * MIN - 5_000
     expect(await scan(g, g.wei.token)).toMatchObject({ ok: true, rescue: 'started' })
-    now = T0 + 20 * MIN + 5_000
+    await holdFor(g, 4_500)
+    now = T0 + 20 * MIN + 15_000
     const v = await poll(g)
     expect(v.phase).toBe('ended')
-    expect(v.rescue).toBeNull()
-    expect((await store.gameByCode(g.code))!.rescue).toBeNull()
-    expect(await jailedIds(g)).toEqual([g.aina.playerId, g.hafiz.playerId])
+    expect(await live(g)).toBeNull()
+    expect(await jailedIds(g)).toEqual(BOTH(g))
     expect(await events(g, 'jailbreak')).toEqual([])
   })
 
-  it("Dato Seri's Settle during a hold still frees at once; the hold then frees whoever is left", async () => {
+  it('a rescuer removed mid-rescue fails it at the next poll: reason removed', async () => {
     const g = await inPenjara()
-    const dato = await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'dato', station: null })
     await scan(g, g.wei.token)
+    await holdFor(g, 3_000)
+    await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.wei.playerId })
+    now += 1_000
+    await poll(g)
+    expect(await live(g)).toBeNull()
+    expect(await events(g, 'rescue-failed')).toMatchObject([{ data: { reason: 'removed' } }])
+  })
+
+  it('a legacy-shape rescue left by a running game resets 5 s after its start unless held', async () => {
+    const g = await inPenjara()
+    const t = now
+    const legacy = { by: g.wei.playerId, startedAt: stamp(t), joiners: [] } as unknown as RescueRecord
+    await store.updateGame(g.gameId, { rescue: legacy })
+    now = t + 4_999
+    await poll(g)
+    expect(await live(g)).not.toBeNull()
+    now = t + 5_000
+    await poll(g)
+    expect(await events(g, 'rescue-failed')).toMatchObject([{ data: { reason: 'reset' } }])
+
+    // Another one, held within its 5 s, frees as usual.
+    now = t + 6_000
+    await store.updateGame(g.gameId, { rescue: { by: g.wei.playerId, startedAt: stamp(now), joiners: [] } as unknown as RescueRecord })
     now += 2_000
-    await store.updatePlayers([{ id: g.mei.playerId, patch: { jailed: true, caught_by: g.ben.playerId, caught_at: new Date(now).toISOString() } }])
+    await holdFor(g, 19_999)
+    expect(await jailedIds(g)).toEqual(BOTH(g))
+    now += 1
+    await beat(g)
+    expect(await jailedIds(g)).toEqual([])
+  })
+
+  describe('the 10 s head start', () => {
+    /** Frees Aina and Hafiz with a full hold; returns when. */
+    async function freed(g: G) {
+      await scan(g, g.wei.token)
+      await holdFor(g, RESCUE_HOLD_MS)
+      expect(await jailedIds(g)).toEqual([])
+      return now
+    }
+    const catchAina = async (g: G) => {
+      await run('location', { code: g.code, token: g.ben.token, ...at(0) })
+      return run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })
+    }
+
+    it('a Kejar scan at +9.9 s is refused with the time left; at +10.1 s it catches (Review Focus 4)', async () => {
+      const g = await inPenjara()
+      const f = await freed(g)
+      now = f + 9_900
+      expect(await catchAina(g)).toEqual({ ok: false, reason: 'head-start', leftMs: 100 })
+      expect((await row(g, g.aina.playerId)).jailed).toBe(false)
+      expect(await events(g, 'caught')).toEqual([])
+      now = f + 10_100
+      expect(await catchAina(g)).toMatchObject({ ok: true, runnerId: g.aina.playerId })
+    })
+
+    it('a 60 s pause in between does not count: still refused at +9.9 s of game time (Review Focus 4)', async () => {
+      const g = await inPenjara()
+      const f = await freed(g)
+      now = f + 5_000
+      await run('pause', { code: g.code, organiserToken: g.organiserToken })
+      now += 60_000
+      await run('resume', { code: g.code, organiserToken: g.organiserToken })
+      now += 4_900
+      expect(await catchAina(g)).toEqual({ ok: false, reason: 'head-start', leftMs: 100 })
+      now += 200
+      expect(await catchAina(g)).toMatchObject({ ok: true })
+    })
+
+    it('Super Ring does not fire during it: the scan is refused before the catch starts', async () => {
+      const g = await inPenjara()
+      const ring = await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'ring', station: null })
+      const f = await freed(g)
+      now = f + 3_000
+      expect(await catchAina(g)).toEqual({ ok: false, reason: 'head-start', leftMs: 7_000 })
+      expect((await store.powerUps(g.gameId)).find((u) => u.id === ring.id)!.used_at).toBeNull()
+      expect((await row(g, g.aina.playerId)).arrest ?? null).toBeNull()
+    })
+
+    it("Dato Seri's Settle sets the same head start on everyone it frees (Review Focus 5)", async () => {
+      const g = await inPenjara()
+      await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'dato', station: null })
+      now += 1_000
+      expect(await run('settle', { code: g.code, token: g.aina.token, qr: JAIL_QR, targetIds: [g.hafiz.playerId], ...at(10) })).toMatchObject({ ok: true })
+      for (const id of BOTH(g)) expect((await row(g, id)).head_start_until).toBe(stamp(now + HEAD_START_MS))
+    })
+
+    it('the reel’s free slot sets the same head start (Review Focus 5)', async () => {
+      const g = await inPenjara()
+      now += 1_000
+      const pulled = await actions.pullReel(
+        { store, now, rng: () => 0, push: async () => {}, fetchJson: async () => ({}) },
+        { code: g.code, token: g.aina.token, ...at(10) },
+      )
+      expect(pulled).toEqual({ ok: true, result: 'free' })
+      expect((await row(g, g.aina.playerId)).head_start_until).toBe(stamp(now + HEAD_START_MS))
+      expect((await row(g, g.hafiz.playerId)).head_start_until ?? null).toBeNull()
+    })
+  })
+
+  it("Dato Seri's Settle during a hold frees at once; the hold then frees whoever is left", async () => {
+    const g = await inPenjara()
+    await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'dato', station: null })
+    await scan(g, g.wei.token)
+    const t = now
+    await holdFor(g, 3_000)
+    await store.updatePlayers([{ id: g.mei.playerId, patch: { jailed: true, caught_by: g.ben.playerId, caught_at: stamp(now) } }])
     expect(await run('settle', { code: g.code, token: g.aina.token, qr: JAIL_QR, targetIds: [g.hafiz.playerId], ...at(10) })).toEqual({
       ok: true,
       freedIds: [g.aina.playerId, g.hafiz.playerId],
     })
     expect(await jailedIds(g)).toEqual([g.mei.playerId])
-    expect((await store.powerUps(g.gameId)).find((u) => u.id === dato.id)!.used_at).not.toBeNull()
-    now += 8_000
-    expect((await poll(g)).feed[0].text).toBe('Jailbreak! 1 Dikejar free.')
-    expect(await jailedIds(g)).toEqual([])
-  })
-
-  it("the rescuer's fixes are the heartbeat: none is dropped by the location gap, and one clearly outside fails it", async () => {
-    const g = await inPenjara()
-    const t = now
-    await scan(g, g.wei.token)
-    for (const ms of [1_500, 3_000, 4_500]) {
-      now = t + ms
-      await run('location', { code: g.code, token: g.wei.token, ...at(12) })
+    while (now < t + RESCUE_HOLD_MS) {
+      now += 1_000
+      await beat(g)
     }
-    const weiFixes = (await store.positions(g.gameId, new Date(t).toISOString()))[g.wei.playerId]
-    expect(weiFixes).toHaveLength(4) // the scan's own fix, then every 1.5 s
-    // A poor fix (accuracy 50 m) far away is ignored...
-    now = t + 6_000
-    await run('location', { code: g.code, token: g.wei.token, ...at(60), accuracy_m: 50 })
-    expect((await store.gameByCode(g.code))!.rescue).not.toBeNull()
-    // ...but a good one 60 m away fails the rescue at once.
-    now = t + 7_500
-    await run('location', { code: g.code, token: g.wei.token, ...at(60), accuracy_m: 5 })
-    expect((await store.gameByCode(g.code))!.rescue).toBeNull()
-    expect((await poll(g)).feed[0].text).toBe('Rescue failed. Nobody gets out.')
-    expect(await jailedIds(g)).toHaveLength(2)
-    // Still free, so they can try again.
-    now = t + 9_000
-    expect(await scan(g, g.wei.token)).toMatchObject({ ok: true, rescue: 'started' })
-  })
-
-  it('a fix sent during a safety pause is not judged after resuming: still holding, then success', async () => {
-    const g = await inPenjara()
-    const t = now
-    await scan(g, g.wei.token)
-    now = t + 4_000
-    await run('pause', { code: g.code, organiserToken: g.organiserToken })
-    // Phones keep sending while paused. The resumed window starts inside the pause, so this 60 m fix lands in it.
-    now = t + 4_000 + 118_000
-    expect(await run('location', { code: g.code, token: g.wei.token, ...at(60), accuracy_m: 5 })).toEqual({ ok: true })
-    now = t + 4_000 + 2 * MIN
-    await run('resume', { code: g.code, organiserToken: g.organiserToken })
-    const resumed = now
-    await poll(g)
-    expect((await store.gameByCode(g.code))!.rescue).not.toBeNull()
-    expect(await jailedIds(g)).toHaveLength(2)
-    expect(await events(g, 'rescue-failed')).toEqual([])
-    now = resumed + 6_000
-    await poll(g)
-    expect(await events(g, 'rescue-failed')).toEqual([])
+    expect(await events(g, 'jailbreak')).toMatchObject([{ data: { freed: 1 } }])
     expect(await jailedIds(g)).toEqual([])
-  })
-
-  it('a rescuer who goes out some other way (Luar Garisan, removed) fails the rescue at the next poll', async () => {
-    const g = await inPenjara()
-    await scan(g, g.wei.token)
-    now += 3_000
-    await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: g.wei.playerId })
-    now += 1_000
-    await poll(g)
-    expect((await store.gameByCode(g.code))!.rescue).toBeNull()
-    expect(await events(g, 'rescue-failed')).toHaveLength(1)
-    now += 10_000
-    await poll(g)
-    expect(await jailedIds(g)).toHaveLength(2)
   })
 })
 
@@ -5431,7 +5691,7 @@ describe('Super Ring: house arrest instead of Penjara (Plan E2 task 4)', () => {
       now += 3 * S
       expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7), ...at(0) })).toEqual(LOCK_LINE)
       expect((await store.gameByCode(g.code))!.rescue).toBeNull()
-      expect(await evs(g, 'rescue-failed')).toMatchObject([{ actor_id: g.aina.playerId }])
+      expect(await evs(g, 'rescue-failed')).toMatchObject([{ actor_id: g.aina.playerId, data: { reason: 'caught' } }])
       now += 10 * S
       await poll(g, now)
       expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
@@ -5892,12 +6152,16 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
   it('freed by a jailbreak during the 20 s: never pushed, so no takeover and not jailed', async () => {
     const g = await chasing()
     await store.updatePlayers([{ id: g.hafiz.playerId, patch: { jailed: true, caught_at: stamp(now), caught_by: g.ben.playerId } }])
-    const t = T0 + 7 * MIN
+    // Aina starts holding the key 10 s before the claim, so the rescue frees Hafiz 10 s into the 20 s.
+    const t = T0 + 7 * MIN + 10 * S
+    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true })
+    await holdKey(g.code, g.aina.token, 10 * S)
     await claimAt(g, t)
     expect((await game(g)).hijau!.targets).toEqual([g.aina.playerId])
+    await holdKey(g.code, g.aina.token, 5 * S)
     await tap(g, g.aina.token, t + 5 * S)
-    now = t + 6 * S
-    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true })
+    await holdKey(g.code, g.aina.token, 5 * S)
+    expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
     await poll(g, t + 17 * S)
     expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
     expect((await poll(g, t + 18 * S, g.hafiz.token)).hijau).toBeNull()
@@ -5929,8 +6193,7 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
     await poll(g, t + 20 * S)
     expect(await row(g, g.hafiz.playerId)).toMatchObject({ jailed: true, freed_once: false, caught_by: null })
     now = t + 20 * S + 3 * MIN
-    expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true })
-    await poll(g, t + 30 * S + 3 * MIN)
+    expect(await breakOut(g.code, g.aina.token, at(10))).toMatchObject({ ok: true })
     expect(await row(g, g.hafiz.playerId)).toMatchObject({ jailed: false, freed_once: true })
   })
 
@@ -6060,15 +6323,14 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
       const t = T0 + 7 * MIN
       await claimAt(g, t)
       await tap(g, g.aina.token, t + 5 * S)
-      // Aina starts a rescue 15 s in; its 10 s hold ends after the deadline.
+      // Aina starts a rescue 15 s in; its 20 s of holding ends after the deadline.
       now = t + 15 * S
       expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true, rescue: 'started' })
-      now = t + 25 * S
-      await run('location', { code: g.code, token: g.aina.token, ...at(10) })
-      await poll(g, t + 26 * S)
+      await holdKey(g.code, g.aina.token, 20 * S)
+      await poll(g, t + 36 * S)
       expect((await row(g, dan.playerId)).jailed).toBe(true)
       expect(await evs(g, 'jailbreak')).toHaveLength(0)
-      expect(await evs(g, 'rescue-failed')).toHaveLength(1)
+      expect(await evs(g, 'rescue-failed')).toMatchObject([{ data: { reason: 'locked' } }])
     })
 
     it('a void run locks nothing', async () => {
@@ -6450,8 +6712,9 @@ describe('Hang Hebat: the wanted runner decides the game (Plan E3 task 5)', () =
     await run('location', { code: g.code, token: g.hafiz.token, ...at(10) })
     expect(await breakOut(g.code, g.hafiz.token)).toMatchObject({ ok: true })
     expect((await row(g, g.aina.playerId)).jailed).toBe(false)
-    expect(await catchAt(g, 'aina', T0 + 8 * MIN + 20 * S)).toMatchObject({ ok: true })
-    now = T0 + 8 * MIN + 30 * S
+    // Freed at 8:25 with a 10 s head start, so caught again at 8:40.
+    expect(await catchAt(g, 'aina', T0 + 8 * MIN + 40 * S)).toMatchObject({ ok: true })
+    now = T0 + 8 * MIN + 50 * S
     expect(await run('undoKejar', { code: g.code, eventId: await catchId(g, g.aina.playerId), token: g.siti.token })).toEqual({ ok: true })
     expect((await row(g, g.aina.playerId)).jailed).toBe(false)
     expect((await gameRow(g)).final_whistle_at).toBe(stamp(T0 + 8 * MIN))
@@ -6611,13 +6874,12 @@ describe('PKP closes Penjara and doubles stations (Plan E3 task 6)', () => {
     await jailHafiz(g)
     now = T0 + 45 * MIN - 5 * S
     expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true, rescue: 'started' })
-    now = T0 + 45 * MIN + 6 * S
-    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
-    await poll(g, T0 + 45 * MIN + 7 * S)
+    await holdKey(g.code, g.aina.token, 20 * S)
+    await poll(g, T0 + 45 * MIN + 16 * S)
     expect((await store.gameByCode(g.code))!.endgame!.revealedAt).toBeTruthy()
     expect((await hafizRow(g)).jailed).toBe(true)
     expect(await events(g, 'jailbreak')).toHaveLength(0)
-    expect(await events(g, 'rescue-failed')).toHaveLength(1)
+    expect(await events(g, 'rescue-failed')).toMatchObject([{ data: { reason: 'locked' } }])
   })
 
   it('pkp: a rescue whose hold ends before the reveal still frees', async () => {
@@ -6625,8 +6887,7 @@ describe('PKP closes Penjara and doubles stations (Plan E3 task 6)', () => {
     await jailHafiz(g)
     now = T0 + 44 * MIN
     await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })
-    now = T0 + 44 * MIN + 11 * S
-    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
+    await holdKey(g.code, g.aina.token, 20 * S)
     await poll(g, T0 + 45 * MIN + S)
     expect((await hafizRow(g)).jailed).toBe(false)
     expect(await events(g, 'rescue-failed')).toHaveLength(0)
@@ -6641,9 +6902,8 @@ describe('PKP closes Penjara and doubles stations (Plan E3 task 6)', () => {
     await store.updatePlayers([{ id: g.hafiz.playerId, patch: { jailed: true, caught_at: iso(now), caught_by: g.ben.playerId } }])
     now = T0 + 40 * MIN - 5 * S
     expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(10) })).toMatchObject({ ok: true, rescue: 'started' })
-    now = T0 + 40 * MIN + 6 * S
-    await run('location', { code: g.code, token: g.aina.token, ...at(10) })
-    now = T0 + 40 * MIN + 7 * S
+    await holdKey(g.code, g.aina.token, 20 * S)
+    now = T0 + 40 * MIN + 16 * S
     await run('state', { code: g.code, organiserToken: g.organiserToken })
     const evs = await store.events(gameId)
     expect(evs.filter((e) => e.type === 'rescue-failed')).toHaveLength(0)

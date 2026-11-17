@@ -14,6 +14,7 @@ import {
   RESCUE_RADIUS_M,
   RESCUE_RESET_MS,
   rescueProgress,
+  rescueSuccessAt,
   rescueVerdict,
 } from './penjara.js'
 import { seeded } from './testing.js'
@@ -88,6 +89,21 @@ describe('the held-key rescue (rules §9a)', () => {
   it('a fix away while the key is waiting still fails it', () => {
     const r = rec({ heldMs: 7_000, holdSince: null, lastBeat: null, releasedAt: iso(T0 + 7_000) })
     expect(verdict(r, T0 + 9_000, { fixes: [fix(60, 8_000)] })).toEqual({ kind: 'failed', reason: 'left' })
+  })
+})
+
+describe('rescueSuccessAt', () => {
+  it('is null until 20 s are held', () => {
+    expect(rescueSuccessAt(rec({ lastBeat: iso(T0 + 19_000) }), T0 + 19_999)).toBeNull()
+  })
+  it('is the moment the live stretch reached 20 s, however late it is asked', () => {
+    const r = rec({ heldMs: 7_000, holdSince: iso(T0 + 10_000), lastBeat: iso(T0 + 22_500) })
+    expect(rescueSuccessAt(r, T0 + 23_000)).toBe(T0 + 23_000)
+    expect(rescueSuccessAt(r, T0 + 24_000)).toBe(T0 + 23_000)
+  })
+  it('for 20 s banked by a let-go, is that much before the let-go', () => {
+    const r = rec({ heldMs: 21_000, holdSince: null, lastBeat: null, releasedAt: iso(T0 + 21_000) })
+    expect(rescueSuccessAt(r, T0 + 22_000)).toBe(T0 + 20_000)
   })
 })
 

@@ -27,13 +27,13 @@ import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS,
 import { HIJAU_FIX_FRESH_MS, HIJAU_MS, hijauCounts, hijauLockEnd, hijauStartsAt, hijauTargets, penjaraLockLeft } from '../../shared/hijau.js'
 import { isSlipQr, slipTokenFromQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, judgeHijauClaim, judgeRingClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS, TOLL_FRESH_MS } from '../../shared/powerups.js'
-import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict, sentDuringPause } from '../../shared/penjara.js'
+import { fiveLeftDue, HEAD_START_MS, legacyRescue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, RESCUE_RESET_MS, rescueProgress, rescueSuccessAt, rescueVerdict, sentDuringPause } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeIdFor, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS } from '../../shared/kit.js'
 import { LEGENDARY_KINDS, pickLegendaries, SIDE_PAIRS, sidesOf, type SideSwitch } from '../../shared/legendaries.js'
 import { validateTeams } from '../../shared/teams.js'
 import { boxFor, judgeSlip, SIDE_QUEST_RADIUS_M, sideOf as tupperSideOf } from '../../shared/tupperware.js'
-import { DEFAULT_SETTINGS, type Arena, type Arrest, type BomohStash, type DatoStash, type Game, type GameEvent, type HijauFix, type LatLng, type LegendaryKind, type Player, type Position, type PowerUp, type PowerUpKind, type Role, type Settings } from '../../shared/types.js'
+import { DEFAULT_SETTINGS, type Arena, type Arrest, type BomohStash, type DatoStash, type Game, type GameEvent, type HijauFix, type LatLng, type LegendaryKind, type Player, type Position, type PowerUp, type PowerUpKind, type RescueRecord, type Role, type Settings } from '../../shared/types.js'
 import { latestAtOrBefore, snapshotWindow, viewFor, type SnapshotInput } from '../../shared/views.js'
 import { distanceM } from '../../shared/geo.js'
 import { buildPlayArea, distanceOutsidePlayArea, inPlayArea, ringAreaHa } from '../../shared/playArea.js'
@@ -557,47 +557,83 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
 
 /**
  * Settles a live rescue (rules §9a). Once the game has ended (the clock ran out) it is cleared and frees nobody;
- * while paused it waits. Otherwise the rescuer's fixes during the hold decide it: `fix` is one just sent (the
- * `location` heartbeat judges each fix as it lands), else their latest stored fix within the hold. `end_rescue`
- * decides who settles it, so a success frees once and a failure posts once.
+ * while paused it waits. The rescue is read fresh, so a thumb that went down or up in another request since `game`
+ * was read counts. The rescuer's fixes decide whether they stayed: `fix` is one just sent (the `location` heartbeat
+ * judges each fix as it lands), else their latest stored fix. A rescue that reached 20 s held is judged only up to
+ * that moment, so a fix (or a lock) that came after it can't take the success back. `end_rescue` decides who
+ * settles it, so a success frees once and a failure posts once.
  */
 async function settleRescue(ctx: Ctx, game: Game, phase = phaseAt(game, ctx.now).phase, fix?: Position): Promise<void> {
   const { store, now } = ctx
-  const r = game.rescue
-  if (!r) return
-  if (phase === 'ended' || game.ended_at) {
-    await store.endRescue(game.id, r.startedAt)
+  if (!game.rescue) return
+  const current = await store.gameByCode(game.code)
+  if (!current?.rescue) return
+  if (phase === 'ended' || current.ended_at) {
+    await store.endRescue(game.id, current.rescue.startedAt)
     return
   }
-  if (game.paused_at) return
-  const startedAt = Date.parse(r.startedAt)
+  if (current.paused_at) return
+  // A rescue a running game started before the held key reads as a key let go at its start (`legacyRescue`).
+  const r = legacyRescue(current.rescue)
+  // Nothing settles a rescue the instant it succeeds or resets (there's no server tick), so it is judged as of that
+  // moment: a fix, a Luar Garisan or a lock that came after it can't change how it ended.
+  const progress = rescueProgress(r, now)
+  const resetAt = !progress.holding && progress.offSince !== null && now - progress.offSince >= RESCUE_RESET_MS ? progress.offSince + RESCUE_RESET_MS : null
+  const successAt = rescueSuccessAt(r, now)
+  const judgedTo = successAt ?? resetAt ?? now
   const players = await store.players(game.id)
-  const rescuer = players.find((p) => p.id === r.by)
-  let fixes: Position[] = fix ? [fix] : []
-  if (!fix && rescuer) {
-    fixes = (await store.latestPositions(game.id, [iso(Math.min(now, startedAt + RESCUE_HOLD_MS))]))[r.by] ?? []
+  const found = players.find((p) => p.id === r.by)
+  const outOnlyAfter = (p: Player) =>
+    (!p.jailed || (!!p.caught_at && Date.parse(p.caught_at) > judgedTo)) && (!p.disqualified_at || Date.parse(p.disqualified_at) > judgedTo)
+  const rescuer = found && isOut(found) && outOnlyAfter(found) ? { ...found, jailed: false, disqualified_at: null } : found
+  // `fix` is the sender's; a newer rescue by someone else (this one ended meanwhile) is judged on its own fixes.
+  let fixes: Position[] = fix && r.by === game.rescue.by ? [fix] : []
+  if (!fixes.length && rescuer) fixes = (await store.latestPositions(game.id, [iso(judgedTo)]))[r.by] ?? []
+  fixes = fixes.filter((f) => Date.parse(f.at) <= judgedTo)
+  const verdict = rescueVerdict({ rescue: r, rescuer, fixes, jail: current.arena.jail, now, pauses: current.pauses, pausedAt: current.paused_at })
+  if (verdict.kind === 'holding' || verdict.kind === 'paused') return
+  // A removed rescuer has left the game: the same as being caught. A hold that succeeds once Penjara is locked
+  // after Mak Kau Hijau, or once PKP has shut it for good, frees nobody. `advance` settles the rescue before it
+  // claims the reveal, so a PKP reveal that is due but not yet posted counts too.
+  let reason: 'left' | 'removed' | 'reset' | 'locked' | null = verdict.kind === 'failed' ? verdict.reason : verdict.kind === 'reset' ? 'reset' : null
+  if (verdict.kind === 'success') {
+    const closed = pkpClosed(current) || (current.endgame?.kind === 'pkp' && revealDue(current, judgedTo))
+    if (closed || penjaraLockLeft(current, judgedTo) > 0) reason = 'locked'
   }
-  // A removed rescuer has left the game: the same as being caught. A hold that ends with Penjara locked after Mak
-  // Kau Hijau can't free anyone either.
-  // Until the held-key flow lands, a live rescue is read as one unbroken hold since its scan.
-  const held = { by: r.by, startedAt: r.startedAt, heldMs: 0, holdSince: r.startedAt, lastBeat: iso(now), releasedAt: null }
-  const kind = rescueVerdict({ rescue: held, rescuer, fixes, jail: game.arena.jail, now, pauses: game.pauses, pausedAt: game.paused_at }).kind
-  const judged = kind === 'failed' ? 'failed' : kind === 'success' ? 'success' : 'holding'
-  // PKP shuts Penjara for good: a hold that ends once it is revealed frees nobody. `advance` settles the rescue
-  // before it claims the reveal, so a reveal that is due but not yet posted counts too.
-  const holdEnd = Math.min(now, startedAt + RESCUE_HOLD_MS)
-  const closed = pkpClosed(game) || (game.endgame?.kind === 'pkp' && revealDue(game, holdEnd))
-  const verdict = judged !== 'holding' && (closed || penjaraLockLeft(game, holdEnd) > 0) ? 'failed' : judged
-  if (verdict === 'holding' || !(await store.endRescue(game.id, r.startedAt))) return
-  if (verdict === 'failed') {
-    await store.addEvent({ game_id: game.id, type: 'rescue-failed', actor_id: r.by, target_id: null, data: {} })
+  if (!(await store.endRescue(game.id, r.startedAt))) return
+  if (reason) {
+    await store.addEvent({ game_id: game.id, type: 'rescue-failed', actor_id: r.by, target_id: null, data: { reason } })
     return
   }
   // Frees exactly as the scan used to: everyone in Penjara who hasn't used their one escape.
   const freedIds = players.filter((p) => p.role === 'runner' && p.jailed && !p.freed_once).map((p) => p.id)
   if (freedIds.length === 0) return
-  await store.updatePlayers(freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(now), out_warned_at: null } })))
+  await freeFromPenjara(ctx, freedIds)
   await store.addEvent({ game_id: game.id, type: 'jailbreak', actor_id: r.by, target_id: null, data: { freed: freedIds.length } })
+}
+
+/**
+ * Frees runners from Penjara (a rescue, Settle, the reel) with their 10 s head start (rules §9a). The head start goes
+ * on first, so no catch can land in between them being free and safe.
+ */
+async function freeFromPenjara(ctx: Ctx, ids: string[]): Promise<void> {
+  await ctx.store.setHeadStart(ids, iso(ctx.now + HEAD_START_MS))
+  await ctx.store.updatePlayers(ids.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now), out_warned_at: null } })))
+}
+
+/**
+ * The hold fields after the rescuer's thumb goes down (or beats) or comes up at `now`, or null when nothing changes
+ * (rules §9a). Held time is banked through `rescueProgress`, so a thumb whose beats lapsed counts as lifted at its
+ * last beat: a late let-go doesn't stretch the 5 s window, and a late press doesn't count the quiet gap as held. A
+ * rescue that has already reset or reached 20 s is left alone for `settleRescue` to end.
+ */
+function holdPatch(r: RescueRecord, now: number, down: boolean): Partial<RescueRecord> | null {
+  const p = rescueProgress(r, now)
+  if (p.heldMs >= RESCUE_HOLD_MS) return null
+  if (!p.holding && p.offSince !== null && now - p.offSince >= RESCUE_RESET_MS) return null
+  if (down) return p.holding ? { lastBeat: iso(now) } : { heldMs: p.heldMs, holdSince: iso(now), lastBeat: iso(now), releasedAt: null }
+  if (!r.holdSince) return null
+  return { heldMs: p.heldMs, holdSince: null, lastBeat: null, releasedAt: iso(p.offSince ?? now) }
 }
 
 /** What put the last free Dikejar out: it picks the feed line (views.ts). */
@@ -1131,8 +1167,8 @@ const location: Action = async (ctx, body) => {
   // The gap never drops the first fix inside an open check-in window (a still phone re-sends its last fix
   // right after the alert), so only rows since the window's alert count against it.
   const since = openWindowAlert(pingTimes(game, ctx.now), ctx.now)
-  // The rescuer's phone sends a fix every RESCUE_PING_MS (1.5 s) during the hold, under the 2 s gap: their fixes
-  // are the hold's heartbeat, so none is dropped. The hold is 10 s, so that is a handful of extra rows.
+  // The rescuer's phone sends a fix every RESCUE_PING_MS (1.5 s) during the rescue, under the 2 s gap: their fixes
+  // are the hold's heartbeat, so none is dropped. A rescue lasts 20 s held plus any let-gos, so that is a few rows.
   const rescuing = game.rescue?.by === me.id
   const stored = await ctx.store.addPosition(game.id, me.id, fix, rescuing && !game.paused_at ? undefined : LOCATION_MIN_GAP_MS, since)
   if (!stored) {
@@ -1155,8 +1191,18 @@ const location: Action = async (ctx, body) => {
   if (me.arrest && !game.paused_at && phaseAt(game, ctx.now).phase === 'chasing') {
     await arrestFix(ctx, game, await requirePlayer(ctx, game, body), { ...fix, at: iso(ctx.now) })
   }
-  // Each fix is judged as it lands, so a step outside and back between two polls still counts (rules §9a).
-  if (rescuing) await settleRescue(ctx, game, undefined, { ...fix, at: iso(ctx.now) })
+  if (rescuing) {
+    // A fix saying the thumb is still down is the hold's heartbeat (rules §9a). Only a hold already under way takes
+    // it: a fix sent just before a let-go that lands after it must not start the hold again. Read fresh for that.
+    if (body.holding === true && !game.paused_at) {
+      const live = (await ctx.store.gameByCode(game.code))?.rescue
+      const r = live?.by === me.id ? legacyRescue(live) : null
+      const patch = r?.holdSince ? holdPatch(r, ctx.now, true) : null
+      if (r && patch) await ctx.store.patchRescue(game.id, r.startedAt, patch)
+    }
+    // Each fix is judged as it lands, so a step outside and back between two polls still counts.
+    await settleRescue(ctx, game, undefined, { ...fix, at: iso(ctx.now) })
+  }
   // Read again: this same fix may just have disqualified them.
   await sideQuestFix(ctx, game, await requirePlayer(ctx, game, body), fix)
   return { ok: true }
@@ -1327,11 +1373,11 @@ const catchAction: Action = async (ctx, body) => {
   }
   const sent = runner ? await jailOrArrest(ctx, fresh, runner, players.find((p) => p.id === me.id) ?? me, 'catch') : null
   if (sent === null) return { ok: false, reason: 'already-caught' }
-  // Catching the rescuer fails a live rescue: nobody gets out, even with a joiner still close (rules §9a). Super
-  // Ring saving the rescuer from Penjara doesn't save the rescue.
+  // Catching the rescuer fails a live rescue, held or let go: nobody gets out (rules §9a). Super Ring saving the
+  // rescuer from Penjara doesn't save the rescue.
   const failRescue = async () => {
     if (fresh.rescue?.by === verdict.runnerId && (await ctx.store.endRescue(game.id, fresh.rescue.startedAt))) {
-      await ctx.store.addEvent({ game_id: game.id, type: 'rescue-failed', actor_id: verdict.runnerId, target_id: null, data: {} })
+      await ctx.store.addEvent({ game_id: game.id, type: 'rescue-failed', actor_id: verdict.runnerId, target_id: null, data: { reason: 'caught' } })
     }
   }
   // Super Ring fired: house arrest, not a catch, and this chaser hands the tag back for good.
@@ -1393,15 +1439,41 @@ const jailbreak: Action = async (ctx, body) => {
     lockedMs: penjaraLockLeft(fresh, ctx.now),
   })
   if (!verdict.ok) return verdict
-  // The scan starts the 10-second hold instead of freeing at once (rules §9a); `advance` settles it.
+  // The scan claims the rescue instead of freeing at once (rules §9a): the rescuer then holds the key
+  // (`rescueHold`), and `advance` settles it.
   if (await ctx.store.startRescue(game.id, me.id, iso(ctx.now))) {
     await ctx.store.addEvent({ game_id: game.id, type: 'rescue-started', actor_id: me.id, target_id: null, data: { who: who(me) } })
-    return { ok: true, rescue: 'started', endsAt: ctx.now + RESCUE_HOLD_MS }
+    return { ok: true, rescue: 'started' }
   }
-  // One rescue at a time. (Task 3 rewrites this: a second runner is told it is taken, the rescuer's re-scan resumes.)
+  // One rescuer at a time. Their own re-scan (a reload, a reopened app) resumes it as it was; anyone else is told
+  // who has it, and nothing changes.
   const live = (await loadGame(ctx, body)).rescue
   if (!live) return { ok: false, reason: 'try-again' }
-  return { ok: true, rescue: live.by === me.id ? 'started' : 'joined', endsAt: Date.parse(live.startedAt) + RESCUE_HOLD_MS }
+  if (live.by === me.id) return { ok: true, rescue: 'resumed' }
+  const rescuer = (await ctx.store.players(game.id)).find((p) => p.id === live.by)
+  return { ok: false, reason: 'rescue-taken', byName: rescuer?.name ?? '' }
+}
+
+/**
+ * The rescuer's thumb on the key (rules §9a): `down: true` when it goes down, and again as a heartbeat while it stays
+ * (the rescue fix carries one too, see `location`); `down: false` when it comes up. Only the server's clock counts
+ * held time. Refused while paused: the key does nothing then. Answers the held time as the server now counts it.
+ */
+const rescueHold: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  if (typeof body.down !== 'boolean') throw new ActionError(400, 'Say whether the key is held')
+  await advance(ctx, game)
+  const fresh = (await loadGame(ctx, body)) as Game
+  if (fresh.paused_at) return { ok: false, reason: 'paused' }
+  if (fresh.rescue?.by !== me.id) return { ok: false, reason: 'not-rescuer' }
+  const r = legacyRescue(fresh.rescue)
+  const patch = holdPatch(r, ctx.now, body.down)
+  // A stale press can't write into a newer rescue: the patch applies only to the one that started at `startedAt`.
+  if (patch && !(await ctx.store.patchRescue(game.id, r.startedAt, patch))) return { ok: false, reason: 'not-rescuer' }
+  await settleRescue(ctx, fresh)
+  const { heldMs, holding } = rescueProgress({ ...r, ...patch }, ctx.now)
+  return { ok: true, heldMs, holding }
 }
 
 /**
@@ -1432,7 +1504,7 @@ const pullReel: Action = async (ctx, body) => {
   const result = pickReel(ctx.rng, current.freed_once)
   if (result === 'free') {
     try {
-      await ctx.store.updatePlayers([{ id: me.id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now), out_warned_at: null } }])
+      await freeFromPenjara(ctx, [me.id])
       await ctx.store.addEvent({ game_id: game.id, type: 'reel-free', actor_id: me.id, target_id: null, data: { who: who(me) } })
     } catch (e) {
       await ctx.store.releaseReelPull(me.id) // give the pull back
@@ -1480,7 +1552,7 @@ const settle: Action = async (ctx, body) => {
   if (!verdict.ok) return verdict
   if (!(await ctx.store.markUsed(dato!.id))) return { ok: false, reason: 'already-used' }
   try {
-    await ctx.store.updatePlayers(verdict.freedIds.map((id) => ({ id, patch: { jailed: false, freed_once: true, freed_at: iso(ctx.now), out_warned_at: null } })))
+    await freeFromPenjara(ctx, verdict.freedIds)
   } catch (e) {
     await ctx.store.updatePowerUp(dato!.id, { used_at: null }) // give Dato Seri back
     throw e
@@ -2618,6 +2690,7 @@ export const actions = {
   location,
   catch: catchAction,
   jailbreak,
+  rescueHold,
   pullReel,
   settle,
   subscribe,

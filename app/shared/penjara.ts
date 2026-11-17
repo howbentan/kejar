@@ -49,6 +49,17 @@ export function rescueProgress(r: RescueRecord, now: number): { heldMs: number; 
   return { heldMs: r.heldMs + Math.max(0, now - since), holding: true, offSince: null }
 }
 
+/**
+ * When the key reached 20 s held (ms), or null while it hasn't. Nothing settles a rescue the instant it succeeds
+ * (there's no server tick), so this is what a late settle judges up to: a fix or a lock that came after it can't
+ * take the success back. Held time banked by a let-go counts back from that let-go.
+ */
+export function rescueSuccessAt(r: RescueRecord, now: number): number | null {
+  if (rescueProgress(r, now).heldMs < RESCUE_HOLD_MS) return null
+  if (r.holdSince) return Date.parse(r.holdSince) + Math.max(0, RESCUE_HOLD_MS - r.heldMs)
+  return Date.parse(r.releasedAt ?? r.startedAt) - (r.heldMs - RESCUE_HOLD_MS)
+}
+
 export type RescueVerdict = { kind: 'holding' | 'paused' | 'success' } | { kind: 'failed'; reason: 'left' | 'removed' } | { kind: 'reset' }
 
 /**
