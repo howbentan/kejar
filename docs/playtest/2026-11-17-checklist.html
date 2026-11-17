@@ -1,0 +1,259 @@
+<title>Kejar Playtest 17 Nov</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;800&family=Geist+Mono:wght@500&display=swap">
+<style>
+  /* Layout: one column like the app itself, a sticky progress bar, sections in the order a real game day runs. */
+  :root {
+    --bg: #0A0A0B;
+    --panel: #131416;
+    --line: rgba(245, 245, 243, 0.1);
+    --fg: #F5F5F3;
+    --dim: rgba(245, 245, 243, 0.6);
+    --volt: #C6FF3D;
+    --banjir: #3D8BFD;
+    --danger: #E5484D;
+    --display: 'Geist', system-ui, sans-serif;
+    --mono: 'Geist Mono', ui-monospace, monospace;
+    color-scheme: dark;
+  }
+  html { background: var(--bg); }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--display); }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+  .wrap { max-width: 640px; margin: 0 auto; padding-block: 24px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  h1 { font-size: 34px; font-weight: 800; letter-spacing: -0.05em; margin: 0; line-height: 1.05; text-wrap: balance; }
+  h1 span { color: var(--volt); }
+  .lede { color: var(--dim); margin: 8px 0 0; max-width: 60ch; }
+  .bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding: 12px 0; margin-top: 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
+  .bar .track { flex: 1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .bar .fill { height: 100%; width: 0; background: var(--volt); transition: width 0.25s; }
+  .bar .count { font: 500 12px var(--mono); letter-spacing: 0.08em; font-variant-numeric: tabular-nums; color: var(--dim); white-space: nowrap; }
+  section { margin-top: 28px; }
+  .eyebrow { font: 500 11px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--volt); margin: 0; }
+  section.banjir .eyebrow { color: var(--banjir); }
+  section.cancel .eyebrow { color: var(--danger); }
+  h2 { font-size: 21px; font-weight: 800; letter-spacing: -0.03em; margin: 4px 0 4px; }
+  .who { color: var(--dim); font-size: 13px; margin: 0 0 10px; }
+  .items { display: grid; gap: 8px; }
+  label.item { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); cursor: pointer; }
+  label.item input { appearance: none; width: 22px; height: 22px; margin: 1px 0 0; border: 2px solid var(--dim); border-radius: 7px; display: grid; place-items: center; cursor: pointer; }
+  label.item input:checked { background: var(--volt); border-color: var(--volt); }
+  label.item input:checked::after { content: ""; width: 6px; height: 11px; border: solid var(--bg); border-width: 0 3px 3px 0; transform: translateY(-1px) rotate(45deg); }
+  label.item input:focus-visible { outline: 2px solid var(--volt); outline-offset: 2px; }
+  .do { font-weight: 600; min-width: 0; }
+  .expect { display: block; color: var(--dim); font-weight: 400; font-size: 14px; margin-top: 2px; }
+  label.item:has(input:checked) .do { color: var(--dim); text-decoration: line-through; text-decoration-color: rgba(245, 245, 243, 0.3); }
+  .tip { margin: 10px 0 0; padding: 10px 12px; border-left: 3px solid var(--banjir); background: rgba(61, 139, 253, 0.08); border-radius: 0 10px 10px 0; font-size: 14px; color: var(--fg); }
+  .notes { margin-top: 32px; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 140px; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: 15px/1.45 var(--display); resize: vertical; }
+  textarea:focus-visible { outline: 2px solid var(--volt); outline-offset: 2px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+  button { font: 800 15px var(--display); border-radius: 999px; padding: 12px 18px; border: 0; cursor: pointer; }
+  .primary { background: var(--volt); color: var(--bg); }
+  .ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+  button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .status { font: 500 12px var(--mono); color: var(--volt); align-self: center; min-height: 1em; }
+  @media (prefers-reduced-motion: reduce) { .bar .fill { transition: none; } }
+</style>
+
+<div class="wrap">
+  <h1>Kejar playtest<span>.</span></h1>
+  <p class="lede">Everything built since 16 Nov that hasn't been tried on a real phone: the Tupperware legendaries, the 20-second held key at Penjara with its head start, safer check-ins and the new security policy, plus the 16 Nov items still unticked. Tick as you go: ticks and notes stay on this phone. At the end, copy your notes and paste them to Claude.</p>
+
+  <div class="bar" aria-live="polite">
+    <div class="track"><div class="fill" id="fill"></div></div>
+    <span class="count" id="count">0 / 0</span>
+  </div>
+
+  <section>
+    <p class="eyebrow">Before the day</p>
+    <h2>Kit and setup</h2>
+    <p class="who">Organiser, at home.</p>
+    <div class="items">
+      <label class="item"><input type="checkbox" id="kit-migrations"><span class="do">Supabase: migrations 0024, 0025 and 0026 have all run<span class="expect">0024 is the Tupperware slips, 0025 the wipe, 0026 the held-key rescue. Without 0026 the live app can't read players.</span></span></label>
+      <label class="item"><input type="checkbox" id="kit-live"><span class="do">Open the live site once after the deploy<span class="expect">Home loads with the running j, and game setup's Circle mode draws the map. If either is blank, the new security policy is blocking something: note what.</span></span></label>
+      <label class="item"><input type="checkbox" id="kit-print"><span class="do">Print the kit PDF<span class="expect">Pages 1–3 armband tags; stations 1–8 and Penjara each on their own A4. Tape the station and Penjara pages at eye height.</span></span></label>
+      <label class="item"><input type="checkbox" id="kit-slips"><span class="do">Your Kit → Print slips<span class="expect">An A4 of Dikejar and Kejar slips, two-digit numbers, footer "Any unused slip of the right side works." Cut one of each.</span></span></label>
+      <label class="item"><input type="checkbox" id="kit-boxes"><span class="do">Two red Tupperwares, one slip inside each<span class="expect">Any unused Dikejar slip in one box, any unused Kejar slip in the other.</span></span></label>
+      <label class="item"><input type="checkbox" id="kit-phones"><span class="do">At least 4 phones: organiser, two runners, one chaser<span class="expect">Two runners are needed for a rescue (one in Penjara, one holding the key). An iPhone and an Android if you can.</span></span></label>
+      <label class="item"><input type="checkbox" id="kit-sound"><span class="do">Volume up, ringer on, Reduce Motion off on the test phones<span class="expect">iPhones on silent mute the key clicks. Leave Reduce Motion on one phone to check it too.</span></span></label>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Setting up</p>
+    <h2>Creating a Full game</h2>
+    <p class="who">Organiser.</p>
+    <div class="items">
+      <label class="item"><input type="checkbox" id="new-full"><span class="do">Step 2: pick Full<span class="expect">The sticker row ends with Dato Seri, Super Ring, Bomoh and Mak Kau Hijau.</span></span></label>
+      <label class="item"><input type="checkbox" id="new-pack"><span class="do">Step 5, the packing list<span class="expect">"2 red Tupperwares, 1 slip of each side" and "Bawa balik Tupperware Mak!". No colour cards.</span></span></label>
+      <label class="item"><input type="checkbox" id="new-gesture"><span class="do">Use the phone's back gesture on steps 3 and 4<span class="expect">It steps back without leaving game creation and never lands on a fresh step 1.</span></span></label>
+      <label class="item"><input type="checkbox" id="walk-steps"><span class="do">Walk the Park: the Tupperware steps<span class="expect">After the stations and Penjara: "Hide the Dikejar Tupperware", then Kejar, red, with the hide tips (wakaf, angsana roots… avoid surau, drains, bins).</span></span></label>
+      <label class="item"><input type="checkbox" id="walk-drop"><span class="do">Hide each box near its pin and tap Drop it here<span class="expect">The step ticks off and the next one shows.</span></span></label>
+      <label class="item"><input type="checkbox" id="lob-warn"><span class="do">Before dropping one: look at the lobby checks<span class="expect">"Kejar Tupperware not dropped yet" with a Drop it link to the walk. Start still works.</span></span></label>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">During the chase</p>
+    <h2>Safer check-ins</h2>
+    <p class="who">A runner, phone locked in a pocket.</p>
+    <div class="items">
+      <label class="item"><input type="checkbox" id="ci-push"><span class="do">Wait for a ping with the phone locked<span class="expect">"Ping in 60s. Slow down, then check in." arrives a full minute ahead, with when Kejar see you.</span></span></label>
+      <label class="item"><input type="checkbox" id="ci-open"><span class="do">Tap it<span class="expect">Opens straight to the check-in. There was time to slow to a walk first.</span></span></label>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">During the chase</p>
+    <h2>The Tupperware</h2>
+    <p class="who">A runner and a chaser, near the boxes.</p>
+    <div class="items">
+      <label class="item"><input type="checkbox" id="tw-quest"><span class="do">Runner: be within ~50 m of the Dikejar box at a ping<span class="expect">One "Side quest · Something's nearby…" push. In the app: SIDE QUEST, "Find the Tupperware" decoding from scrambled letters, a Found button. No hint of where.</span></span></label>
+      <label class="item"><input type="checkbox" id="tw-buzz"><span class="do">Android, with Kejar open<span class="expect">The phone keeps buzzing while the card is up. An iPhone gets only the push.</span></span></label>
+      <label class="item"><input type="checkbox" id="tw-close"><span class="do">Close the card with ×, then reload<span class="expect">It stays closed, and a "Side quest" chip in the header reopens it. Tapping Found instead doesn't hide it for good.</span></span></label>
+      <label class="item"><input type="checkbox" id="tw-other"><span class="do">Runner: scan the Kejar slip<span class="expect">"Not your Tupperware." No try used.</span></span></label>
+      <label class="item"><input type="checkbox" id="tw-unlock"><span class="do">Runner: Found → scan the Dikejar slip at the box<span class="expect">The unlock: the box shakes, the lid flies, a card back in the legendary's colour rises and flips. "Keep it" for Dato Seri / Super Ring. Tap to skip works.</span></span></label>
+      <label class="item"><input type="checkbox" id="tw-taken"><span class="do">Another runner scans the same slip<span class="expect">"Dah kena ambil." No try used.</span></span></label>
+      <label class="item"><input type="checkbox" id="tw-wrong"><span class="do">Chaser: scan a used or wrong slip at the Kejar box<span class="expect">"Bukan ini. That was your try." A later correct slip from that chaser is refused.</span></span></label>
+      <label class="item"><input type="checkbox" id="tw-kejar"><span class="do">Another chaser opens the Kejar box<span class="expect">The unlock ends "It's working!". Bomoh: the purple card, and every runner shows at the next 2 pings. Mak Kau Hijau: the green takeover on runners' phones.</span></span></label>
+      <label class="item"><input type="checkbox" id="tw-settle"><span class="do">If Dato Seri was in the box: Settle at Penjara<span class="expect">The ID card and wrinkly RM100 doodle, then "Duit kopi sampai." fades in. Okay appears after a moment.</span></span></label>
+      <label class="item"><input type="checkbox" id="tw-feed"><span class="do">Everyone: check the feed<span class="expect">"Something legendary was found." Never who, never which.</span></span></label>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">During the chase</p>
+    <h2>Penjara: hold the key</h2>
+    <p class="who">One runner in Penjara, one free runner, one chaser nearby.</p>
+    <div class="items">
+      <label class="item"><input type="checkbox" id="pj-start"><span class="do">Free runner: scan the Penjara poster<span class="expect">RESCUE ON, the padlock in front of the Penjara gate, 20 s, and a big HOLD button.</span></span></label>
+      <label class="item"><input type="checkbox" id="pj-hold"><span class="do">Hold the button<span class="expect">The key turns one click every 5 s with a click sound (rising each time), the marks fill, and the lock shakes harder near the end. Android buzzes on each click.</span></span></label>
+      <label class="item"><input type="checkbox" id="pj-watch"><span class="do">Runner in Penjara: watch your screen<span class="expect">The same lock turning, "Hafiz is breaking you out". No button, no sound. Its count matches the rescuer's (within a second).</span></span></label>
+      <label class="item"><input type="checkbox" id="pj-letgo"><span class="do">Let go for 3 s, then hold again<span class="expect">LET GO, the count dims, "Resets in 3". Holding again keeps the clicks already earned.</span></span></label>
+      <label class="item"><input type="checkbox" id="pj-reset"><span class="do">Let go for more than 5 s<span class="expect">The key spins back with the reset sound: "Rescue reset." Scanning again starts from zero.</span></span></label>
+      <label class="item"><input type="checkbox" id="pj-second"><span class="do">During a rescue, another free runner scans Penjara<span class="expect">"Hafiz is already breaking them out." Nothing else changes.</span></span></label>
+      <label class="item"><input type="checkbox" id="pj-pocket"><span class="do">Rescuer: lock the phone mid-hold<span class="expect">Counts as letting go. Unlock within 5 s and hold again to keep it.</span></span></label>
+      <label class="item"><input type="checkbox" id="pj-far"><span class="do">Rescuer: walk more than 30 m away while holding<span class="expect">The rescue fails: the key snaps. "Nobody gets out this time."</span></span></label>
+      <label class="item"><input type="checkbox" id="pj-caught"><span class="do">Chaser: tag the rescuer mid-hold<span class="expect">The rescue fails. Chasers never see the rescuer's name in the feed.</span></span></label>
+      <label class="item"><input type="checkbox" id="pj-free"><span class="do">Hold the full 20 s<span class="expect">The gate swings open, LEPAS! stamps down (within ~3 s of 0), the unlock sound plays. The freed runner reads "You're free. 10 s head start".</span></span></label>
+      <label class="item"><input type="checkbox" id="pj-head"><span class="do">Chaser: scan the freed runner straight away<span class="expect">"Just freed: 7 s head start." No catch. After 10 s, the scan catches.</span></span></label>
+      <label class="item"><input type="checkbox" id="pj-pause"><span class="do">Organiser: pause mid-hold, then resume<span class="expect">The count freezes and carries on from the same place.</span></span></label>
+      <label class="item"><input type="checkbox" id="pj-hijau"><span class="do">After a Mak Kau Hijau that jailed someone<span class="expect">Jailed runners see the chained green gate with "Penjara locked · m:ss". No rescue until it opens.</span></span></label>
+      <label class="item"><input type="checkbox" id="pj-howto"><span class="do">Open How to Play from the game<span class="expect">The Penjara card describes the 20 s hold, the 5 s reset, one rescuer and the 10 s head start.</span></span></label>
+    </div>
+  </section>
+
+  <section class="banjir">
+    <p class="eyebrow">If Banjir Kilat rolls</p>
+    <h2>Banjir Kilat</h2>
+    <p class="who">Still unticked from 16 Nov.</p>
+    <div class="items">
+      <label class="item"><input type="checkbox" id="bj-reveal"><span class="do">10 minutes left: the reveal<span class="expect">Takeover on every phone plus a push: the water rises at 8, 6, 4 and 2 min left, 30 s in it means Penjara.</span></span></label>
+      <label class="item"><input type="checkbox" id="bj-banner"><span class="do">Runner: walk into the water<span class="expect">A push, and a blue banner "Banjir! Get to dry land · 30 s" counting down.</span></span></label>
+      <label class="item"><input type="checkbox" id="bj-jail"><span class="do">Stay in the water past 0<span class="expect">Penjara, with "The flood got you". It can land up to ~15 s after 0.</span></span></label>
+      <label class="item"><input type="checkbox" id="bj-rescue"><span class="do">If Penjara is under water, try a rescue<span class="expect">The 20-second hold works. A rescuer standing in the water still has their own 30 s.</span></span></label>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">After the whistle</p>
+    <h2>After the game</h2>
+    <p class="who">Organiser.</p>
+    <div class="items">
+      <label class="item"><input type="checkbox" id="end-home"><span class="do">If a Tupperware was never opened<span class="expect">Results show "Kejar's Tupperware wasn't opened. Bawa balik!" with a small map of where it is. Players never see this.</span></span></label>
+      <label class="item"><input type="checkbox" id="end-slips"><span class="do">Your Kit afterwards<span class="expect">The used slips no longer count as unused. Bin the scanned ones.</span></span></label>
+    </div>
+  </section>
+
+
+  <section class="notes">
+    <p class="eyebrow">Anything off?</p>
+    <h2>Notes</h2>
+    <label for="notes" class="who">What looked wrong, what felt slow, how the clicks sounded.</label>
+    <textarea id="notes" placeholder="e.g. The third key click was too quiet on the iPhone"></textarea>
+    <div class="actions">
+      <button type="button" class="primary" id="copy">Copy notes for Claude</button>
+      <button type="button" class="ghost" id="reset">Clear ticks</button>
+      <span class="status" id="status" role="status"></span>
+    </div>
+    <textarea id="fallback" hidden readonly aria-label="Notes to copy"></textarea>
+  </section>
+</div>
+
+<script>
+  (function () {
+    var KEY = 'kejar-playtest-2026-11-17'
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('label.item input'))
+    var notes = document.getElementById('notes')
+    var load = function () {
+      try {
+        return JSON.parse(localStorage.getItem(KEY) || '{}')
+      } catch (e) {
+        return {}
+      }
+    }
+    var save = function () {
+      var data = { notes: notes.value, ticks: {} }
+      boxes.forEach(function (b) { data.ticks[b.id] = b.checked })
+      try { localStorage.setItem(KEY, JSON.stringify(data)) } catch (e) {}
+    }
+    var progress = function () {
+      var done = boxes.filter(function (b) { return b.checked }).length
+      document.getElementById('count').textContent = done + ' / ' + boxes.length
+      document.getElementById('fill').style.width = (boxes.length ? (100 * done) / boxes.length : 0) + '%'
+    }
+    var saved = load()
+    boxes.forEach(function (b) {
+      if (saved.ticks && saved.ticks[b.id]) b.checked = true
+      b.addEventListener('change', function () { save(); progress() })
+    })
+    if (saved.notes) notes.value = saved.notes
+    notes.addEventListener('input', save)
+    progress()
+
+    var status = document.getElementById('status')
+    var say = function (t) { status.textContent = t; setTimeout(function () { status.textContent = '' }, 2500) }
+    document.getElementById('copy').addEventListener('click', function () {
+      var lines = ['Kejar playtest, 17 Nov build', '']
+      document.querySelectorAll('section').forEach(function (sec) {
+        var h = sec.querySelector('h2')
+        var items = sec.querySelectorAll('label.item')
+        if (!h || !items.length) return
+        lines.push(h.textContent)
+        items.forEach(function (it) {
+          var box = it.querySelector('input')
+          var what = it.querySelector('.do').firstChild.textContent.trim()
+          lines.push((box.checked ? '  [x] ' : '  [ ] ') + what)
+        })
+      })
+      lines.push('', 'Notes:', notes.value.trim() || '(none)')
+      var text = lines.join('\n')
+      var fallback = function () {
+        var f = document.getElementById('fallback')
+        f.hidden = false
+        f.value = text
+        f.focus()
+        f.select()
+        say('Select all and copy')
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { say('Copied') }, fallback)
+      } else fallback()
+    })
+    var armed = false
+    document.getElementById('reset').addEventListener('click', function (e) {
+      if (!armed) {
+        armed = true
+        e.target.textContent = 'Tap again to clear'
+        setTimeout(function () { armed = false; e.target.textContent = 'Clear ticks' }, 3000)
+        return
+      }
+      armed = false
+      e.target.textContent = 'Clear ticks'
+      boxes.forEach(function (b) { b.checked = false })
+      save()
+      progress()
+      say('Cleared')
+    })
+  })()
+</script>

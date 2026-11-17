@@ -1,0 +1,251 @@
+<title>Kejar Playtest</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;800&family=Geist+Mono:wght@500&display=swap">
+<style>
+  /* Layout: one column like the app itself, a sticky progress bar, sections in the order a real game day runs. */
+  :root {
+    --bg: #0A0A0B;
+    --panel: #131416;
+    --line: rgba(245, 245, 243, 0.1);
+    --fg: #F5F5F3;
+    --dim: rgba(245, 245, 243, 0.6);
+    --volt: #C6FF3D;
+    --banjir: #3D8BFD;
+    --danger: #E5484D;
+    --display: 'Geist', system-ui, sans-serif;
+    --mono: 'Geist Mono', ui-monospace, monospace;
+    color-scheme: dark;
+  }
+  html { background: var(--bg); }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.5 var(--display); }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+  .wrap { max-width: 640px; margin: 0 auto; padding-block: 24px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  h1 { font-size: 34px; font-weight: 800; letter-spacing: -0.05em; margin: 0; line-height: 1.05; text-wrap: balance; }
+  h1 span { color: var(--volt); }
+  .lede { color: var(--dim); margin: 8px 0 0; max-width: 60ch; }
+  .bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding: 12px 0; margin-top: 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 12px; }
+  .bar .track { flex: 1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .bar .fill { height: 100%; width: 0; background: var(--volt); transition: width 0.25s; }
+  .bar .count { font: 500 12px var(--mono); letter-spacing: 0.08em; font-variant-numeric: tabular-nums; color: var(--dim); white-space: nowrap; }
+  section { margin-top: 28px; }
+  .eyebrow { font: 500 11px var(--mono); letter-spacing: 0.16em; text-transform: uppercase; color: var(--volt); margin: 0; }
+  section.banjir .eyebrow { color: var(--banjir); }
+  section.cancel .eyebrow { color: var(--danger); }
+  h2 { font-size: 21px; font-weight: 800; letter-spacing: -0.03em; margin: 4px 0 4px; }
+  .who { color: var(--dim); font-size: 13px; margin: 0 0 10px; }
+  .items { display: grid; gap: 8px; }
+  label.item { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); cursor: pointer; }
+  label.item input { appearance: none; width: 22px; height: 22px; margin: 1px 0 0; border: 2px solid var(--dim); border-radius: 7px; display: grid; place-items: center; cursor: pointer; }
+  label.item input:checked { background: var(--volt); border-color: var(--volt); }
+  label.item input:checked::after { content: ""; width: 6px; height: 11px; border: solid var(--bg); border-width: 0 3px 3px 0; transform: translateY(-1px) rotate(45deg); }
+  label.item input:focus-visible { outline: 2px solid var(--volt); outline-offset: 2px; }
+  .do { font-weight: 600; min-width: 0; }
+  .expect { display: block; color: var(--dim); font-weight: 400; font-size: 14px; margin-top: 2px; }
+  label.item:has(input:checked) .do { color: var(--dim); text-decoration: line-through; text-decoration-color: rgba(245, 245, 243, 0.3); }
+  .tip { margin: 10px 0 0; padding: 10px 12px; border-left: 3px solid var(--banjir); background: rgba(61, 139, 253, 0.08); border-radius: 0 10px 10px 0; font-size: 14px; color: var(--fg); }
+  .notes { margin-top: 32px; }
+  textarea { width: 100%; box-sizing: border-box; min-height: 140px; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); font: 15px/1.45 var(--display); resize: vertical; }
+  textarea:focus-visible { outline: 2px solid var(--volt); outline-offset: 2px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+  button { font: 800 15px var(--display); border-radius: 999px; padding: 12px 18px; border: 0; cursor: pointer; }
+  .primary { background: var(--volt); color: var(--bg); }
+  .ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+  button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .status { font: 500 12px var(--mono); color: var(--volt); align-self: center; min-height: 1em; }
+  @media (prefers-reduced-motion: reduce) { .bar .fill { transition: none; } }
+</style>
+
+<div class="wrap">
+  <h1>Kejar playtest<span>.</span></h1>
+  <p class="lede">Everything built on 16 Nov that hasn't been tried on a real phone yet. Tick as you go: ticks and notes stay on this phone. At the end, copy your notes and paste them to Claude.</p>
+
+  <div class="bar" aria-live="polite">
+    <div class="track"><div class="fill" id="fill"></div></div>
+    <span class="count" id="count">0 / 0</span>
+  </div>
+
+  <section>
+    <p class="eyebrow">Before the day</p>
+    <h2>Kit and setup</h2>
+    <p class="who">Organiser, at home</p>
+    <div class="items">
+      <label class="item"><input type="checkbox" id="kit-cards"><span class="do">Print the orange and green secret cards in Your Kit<span class="expect">A Full game may pick Super Ring or Mak Kau Hijau, and there's nothing to hide without the card.</span></span></label>
+      <label class="item"><input type="checkbox" id="kit-phones"><span class="do">Have at least 3 phones: organiser, one runner, one chaser<span class="expect">A 4th phone as a marshal helps for the Penjara and cancel checks.</span></span></label>
+      <label class="item"><input type="checkbox" id="kit-motion"><span class="do">Turn off Reduce Motion / Remove animations on the test phones<span class="expect">With it on, the j stands still and the exits are skipped, as designed. Leave it on one phone to check that too.</span></span></label>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Organiser phone</p>
+    <h2>Creating a game</h2>
+    <p class="who">kejar → organise game</p>
+    <div class="items">
+      <label class="item"><input type="checkbox" id="new-arrows"><span class="do">Step buttons read ‹ Back and Next ›<span class="expect">On steps 1 to 3, and Next › on the crew step.</span></span></label>
+      <label class="item"><input type="checkbox" id="new-gesture"><span class="do">Go to step 3, then use the phone's back gesture twice<span class="expect">It steps back to 2, then 1, without leaving game creation.</span></span></label>
+      <label class="item"><input type="checkbox" id="new-full"><span class="do">Step 2: look at the Full card<span class="expect">The sticker row ends with Dato Seri, Super Ring, Bomoh and Mak Kau Hijau. The line says "a secret legendary for each side".</span></span></label>
+      <label class="item"><input type="checkbox" id="new-endgame"><span class="do">Step 3: the Endgame switches<span class="expect">Banjir Kilat is switchable and on by default. No "Coming soon".</span></span></label>
+      <label class="item"><input type="checkbox" id="new-search"><span class="do">In park setup, tap Search<span class="expect">The small j runs while it searches, then wipes "Searching" and the button reads Search again.</span></span></label>
+      <label class="item"><input type="checkbox" id="new-parks"><span class="do">Open organise game a few times<span class="expect">If the saved parks take a moment, the loader ends with the j clearing the screen. A quick load just shows the screen.</span></span></label>
+      <label class="item"><input type="checkbox" id="new-step4"><span class="do">After Create game, use the back gesture on step 4 (crew)<span class="expect">It does not land on a fresh step 1. No second game gets made.</span></span></label>
+      <label class="item"><input type="checkbox" id="new-step5"><span class="do">Step 5 (pack): tap ‹ Back<span class="expect">Back to step 4, crew.</span></span></label>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Organiser phone</p>
+    <h2>The lobby</h2>
+    <p class="who">After Go to the lobby</p>
+    <div class="items">
+      <label class="item"><input type="checkbox" id="lob-exit"><span class="do">Reload the lobby several times<span class="expect">When loading takes a moment, one of three exits plays: wipe with the k and e chasing the j, bulldoze with a back kick, or kung fu. Note which ones you saw.</span></span></label>
+      <label class="item"><input type="checkbox" id="lob-time"><span class="do">Set a planned start, e.g. 10:30 PM<span class="expect">The full time fits in the box. "starts in …" shows beside it.</span></span></label>
+      <label class="item"><input type="checkbox" id="lob-cancel-ask"><span class="do">Tap the red Cancel game, then Keep the game<span class="expect">The first tap only asks "Cancel game … for everyone?". Keep the game backs out, nothing cancelled.</span></span></label>
+      <label class="item"><input type="checkbox" id="lob-cards"><span class="do">Organiser tools: print and drop the hidden cards<span class="expect">Cards show by colour only. Drop saves the spot ("hidden at the … pin").</span></span></label>
+      <label class="item"><input type="checkbox" id="lob-invite"><span class="do">Tap Invite a marshal<span class="expect">The j wipes "Inviting marshal" when the link is ready.</span></span></label>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Player phones</p>
+    <h2>Joining</h2>
+    <p class="who">Runner and chaser phones</p>
+    <div class="items">
+      <label class="item"><input type="checkbox" id="join-step"><span class="do">Home → join game<span class="expect">Just the code box, join and back. No "scan qr" button.</span></span></label>
+      <label class="item"><input type="checkbox" id="join-camera"><span class="do">Back on home, tap the green camera next to join game<span class="expect">The scanner opens. Scanning the lobby QR joins the game.</span></span></label>
+      <label class="item"><input type="checkbox" id="join-open"><span class="do">Open the game from the join link<span class="expect">The loading screen ends with the j clearing it before the game shows.</span></span></label>
+    </div>
+  </section>
+
+  <section>
+    <p class="eyebrow">Everyone</p>
+    <h2>During the chase</h2>
+    <p class="who">Any game, Core or Full</p>
+    <div class="items">
+      <label class="item"><input type="checkbox" id="chase-checkin"><span class="do">Runner: lock the phone and wait for a ping<span class="expect">"Ping in 45s — check in!" arrives on the lock screen and opens the check-in. (Flagged for a hand check for a while.)</span></span></label>
+      <label class="item"><input type="checkbox" id="chase-start"><span class="do">Organiser: Start game<span class="expect">The j wipes "Starting game" before the screen moves on, or the screen just moves on.</span></span></label>
+      <label class="item"><input type="checkbox" id="chase-tap"><span class="do">Tap around the chase screen<span class="expect">No blue box flashes on the right when tapping.</span></span></label>
+      <label class="item"><input type="checkbox" id="chase-still"><span class="do">On the phone with Reduce Motion on<span class="expect">The j stands still and loaders just show the screen. That's correct.</span></span></label>
+    </div>
+  </section>
+
+  <section class="banjir">
+    <p class="eyebrow">Its own game</p>
+    <h2>Banjir Kilat</h2>
+    <p class="who">Full, Quick (30 min), only Banjir Kilat switched on, so it's sure to roll</p>
+    <div class="items">
+      <label class="item"><input type="checkbox" id="bj-reveal"><span class="do">10 minutes left: the reveal<span class="expect">Takeover on every phone plus a push: the water rises at 8, 6, 4 and 2 min left, 30 s in it means Penjara.</span></span></label>
+      <label class="item"><input type="checkbox" id="bj-line"><span class="do">9 minutes left: the waterline<span class="expect">A dashed blue line appears on the map, 60 s before the first rise. Feed: "The water's rising."</span></span></label>
+      <label class="item"><input type="checkbox" id="bj-water"><span class="do">8 minutes left: the first rise<span class="expect">Blue water covers the park outside the dry circle. Feed: "The water rose."</span></span></label>
+      <label class="item"><input type="checkbox" id="bj-banner"><span class="do">Runner: walk into the water<span class="expect">A push, and a blue banner "Banjir! Get to dry land · 30 s" counting down.</span></span></label>
+      <label class="item"><input type="checkbox" id="bj-dry"><span class="do">Walk back onto dry land before 0<span class="expect">The banner goes. Going back in later starts a fresh 30 s.</span></span></label>
+      <label class="item"><input type="checkbox" id="bj-jail"><span class="do">Stay in the water past 0<span class="expect">Penjara, with "The flood got you" and a CAUGHT IN THE FLOOD ticket. It can land up to ~15 s after 0 (the next location update).</span></span></label>
+      <label class="item"><input type="checkbox" id="bj-chaser"><span class="do">Chaser: walk into the water<span class="expect">Nothing happens. Chasers can wade in.</span></span></label>
+      <label class="item"><input type="checkbox" id="bj-station"><span class="do">Try a station that's under water<span class="expect">"That station is under water."</span></span></label>
+      <label class="item"><input type="checkbox" id="bj-pause"><span class="do">Organiser: pause while a runner is in the water<span class="expect">The banner's count freezes and carries on after resume.</span></span></label>
+      <label class="item"><input type="checkbox" id="bj-rescue"><span class="do">If Penjara is under water, try a rescue<span class="expect">The 10-second hold works. A rescuer in the water still has their own 30 s.</span></span></label>
+    </div>
+    <p class="tip">Ask the jailed runner to tell a marshal "phone problem" once, to check the marshal's undo works for a flood jailing too.</p>
+  </section>
+
+  <section class="cancel">
+    <p class="eyebrow">Throwaway game</p>
+    <h2>Cancel for real</h2>
+    <p class="who">A spare game with 2 players joined, started</p>
+    <div class="items">
+      <label class="item"><input type="checkbox" id="cx-cancel"><span class="do">Organiser: Cancel game → Yes, cancel game<span class="expect">The organiser sees "You cancelled this game."</span></span></label>
+      <label class="item"><input type="checkbox" id="cx-players"><span class="do">Player phones<span class="expect">"Game cancelled" with a Home button within a few seconds, plus a push. No results, no rating.</span></span></label>
+      <label class="item"><input type="checkbox" id="cx-home"><span class="do">Players go Home<span class="expect">No reconnect card for the cancelled game.</span></span></label>
+      <label class="item"><input type="checkbox" id="cx-walk"><span class="do">Organiser opens the walk page for that game<span class="expect">"Game cancelled" there too.</span></span></label>
+    </div>
+  </section>
+
+  <section class="notes">
+    <p class="eyebrow">Anything off?</p>
+    <h2>Notes</h2>
+    <label for="notes" class="who">What looked wrong, what felt slow, which exits you saw.</label>
+    <textarea id="notes" placeholder="e.g. Kung fu kick looked cut off on the small phone"></textarea>
+    <div class="actions">
+      <button type="button" class="primary" id="copy">Copy notes for Claude</button>
+      <button type="button" class="ghost" id="reset">Clear ticks</button>
+      <span class="status" id="status" role="status"></span>
+    </div>
+    <textarea id="fallback" hidden readonly aria-label="Notes to copy"></textarea>
+  </section>
+</div>
+
+<script>
+  (function () {
+    var KEY = 'kejar-playtest-2026-11-16'
+    var boxes = Array.prototype.slice.call(document.querySelectorAll('label.item input'))
+    var notes = document.getElementById('notes')
+    var load = function () {
+      try {
+        return JSON.parse(localStorage.getItem(KEY) || '{}')
+      } catch (e) {
+        return {}
+      }
+    }
+    var save = function () {
+      var data = { notes: notes.value, ticks: {} }
+      boxes.forEach(function (b) { data.ticks[b.id] = b.checked })
+      try { localStorage.setItem(KEY, JSON.stringify(data)) } catch (e) {}
+    }
+    var progress = function () {
+      var done = boxes.filter(function (b) { return b.checked }).length
+      document.getElementById('count').textContent = done + ' / ' + boxes.length
+      document.getElementById('fill').style.width = (boxes.length ? (100 * done) / boxes.length : 0) + '%'
+    }
+    var saved = load()
+    boxes.forEach(function (b) {
+      if (saved.ticks && saved.ticks[b.id]) b.checked = true
+      b.addEventListener('change', function () { save(); progress() })
+    })
+    if (saved.notes) notes.value = saved.notes
+    notes.addEventListener('input', save)
+    progress()
+
+    var status = document.getElementById('status')
+    var say = function (t) { status.textContent = t; setTimeout(function () { status.textContent = '' }, 2500) }
+    document.getElementById('copy').addEventListener('click', function () {
+      var lines = ['Kejar playtest, 16 Nov build', '']
+      document.querySelectorAll('section').forEach(function (sec) {
+        var h = sec.querySelector('h2')
+        var items = sec.querySelectorAll('label.item')
+        if (!h || !items.length) return
+        lines.push(h.textContent)
+        items.forEach(function (it) {
+          var box = it.querySelector('input')
+          var what = it.querySelector('.do').firstChild.textContent.trim()
+          lines.push((box.checked ? '  [x] ' : '  [ ] ') + what)
+        })
+      })
+      lines.push('', 'Notes:', notes.value.trim() || '(none)')
+      var text = lines.join('\n')
+      var fallback = function () {
+        var f = document.getElementById('fallback')
+        f.hidden = false
+        f.value = text
+        f.focus()
+        f.select()
+        say('Select all and copy')
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { say('Copied') }, fallback)
+      } else fallback()
+    })
+    var armed = false
+    document.getElementById('reset').addEventListener('click', function (e) {
+      if (!armed) {
+        armed = true
+        e.target.textContent = 'Tap again to clear'
+        setTimeout(function () { armed = false; e.target.textContent = 'Clear ticks' }, 3000)
+        return
+      }
+      armed = false
+      e.target.textContent = 'Clear ticks'
+      boxes.forEach(function (b) { b.checked = false })
+      save()
+      progress()
+      say('Cleared')
+    })
+  })()
+</script>
