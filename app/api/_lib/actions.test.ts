@@ -11,7 +11,7 @@ import { seeded } from '../../shared/testing.js'
 import type { PowerUpKind, RescueRecord, Role } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
 import { PHONE_MOVE_TTL_MS } from '../../shared/invites.js'
-import { HEAD_START_MS, legacyRescue, RESCUE_HOLD_MS, rescueProgress } from '../../shared/penjara.js'
+import { HEAD_START_MS, legacyRescue, RESCUE_HOLD_MS, RESCUE_RESET_MS, rescueProgress } from '../../shared/penjara.js'
 import { ActionError, actions, MAX_PLAYERS_PER_GAME, STASH_MISS_LIMIT, WIPE_AFTER_MS, type ActionName } from './actions.js'
 import { hashToken } from './secrets.js'
 import { computeResults } from '../../shared/results.js'
@@ -577,6 +577,34 @@ describe('the held-key rescue at Penjara (rules §9a)', () => {
     expect(await events(g, 'jailbreak')).toHaveLength(1)
   })
 
+  it('never frees on unconfirmed holding: quiet after 18.3 s, a poll at 20.1 s frees nobody; it resets', async () => {
+    const g = await inPenjara()
+    await scan(g, g.wei.token)
+    const t = now
+    await holdFor(g, 18_300)
+    now = t + 20_100
+    await poll(g)
+    expect(await jailedIds(g)).toEqual(BOTH(g))
+    expect(await live(g)).not.toBeNull()
+    now = t + 18_300 + RESCUE_RESET_MS
+    await poll(g)
+    expect(await jailedIds(g)).toEqual(BOTH(g))
+    expect(await events(g, 'rescue-failed')).toMatchObject([{ data: { reason: 'reset' } }])
+  })
+
+  it('a beat that lands after 20 s on the display still counts: it confirms the hold and frees', async () => {
+    const g = await inPenjara()
+    await scan(g, g.wei.token)
+    const t = now
+    await holdFor(g, 19_300)
+    now = t + 20_100
+    await poll(g)
+    expect(await jailedIds(g)).toEqual(BOTH(g))
+    await beat(g)
+    expect(await jailedIds(g)).toEqual([])
+    expect(await events(g, 'jailbreak')).toHaveLength(1)
+  })
+
   it('hold 7 s, let go, 3 s later hold 13 s more: freed', async () => {
     const g = await inPenjara()
     await scan(g, g.wei.token)
@@ -798,6 +826,8 @@ describe('the held-key rescue at Penjara (rules §9a)', () => {
     await scan(g, g.wei.token)
     const t = now
     await holdFor(g, 19_500)
+    // A beat at 20.2 s proved the 20 s, but nothing settled it (its request died after writing the beat).
+    await store.patchRescue(g.gameId, (await live(g))!.startedAt, { lastBeat: stamp(t + 20_200) })
     now = t + 21_000
     await store.updatePlayers([{ id: g.wei.playerId, patch: { disqualified_at: stamp(now) } }])
     await poll(g)

@@ -66,6 +66,20 @@ describe('the held-key rescue (rules §9a)', () => {
     expect(rescueProgress(r, T0 + 8_000)).toEqual({ heldMs: 8_000, holding: true, offSince: null })
     expect(verdict(r, T0 + 12_000)).toEqual({ kind: 'reset' })
   })
+  it('is never won on unconfirmed holding: last beat at 18.3 s, phone quiet, a poll at 20.1 s holds, then resets', () => {
+    const r = rec({ lastBeat: iso(T0 + 18_300) })
+    // The display may count on (the thumb could still be down), but the verdict only counts up to the last beat.
+    expect(rescueProgress(r, T0 + 20_100)).toMatchObject({ heldMs: 20_100, holding: true })
+    expect(verdict(r, T0 + 20_100).kind).toBe('holding')
+    expect(rescueSuccessAt(r, T0 + 20_100)).toBeNull()
+    expect(verdict(r, T0 + 18_300 + RESCUE_BEAT_LAPSE_MS + 1).kind).toBe('paused')
+    expect(verdict(r, T0 + 18_300 + RESCUE_RESET_MS)).toEqual({ kind: 'reset' })
+  })
+  it('beats carrying on succeed at the first beat at or after 20 s confirmed', () => {
+    expect(verdict(rec({ lastBeat: iso(T0 + 19_300) }), T0 + 19_900).kind).toBe('holding')
+    expect(verdict(rec({ lastBeat: iso(T0 + 20_300) }), T0 + 20_300).kind).toBe('success')
+    expect(rescueSuccessAt(rec({ lastBeat: iso(T0 + 20_300) }), T0 + 20_300)).toBe(T0 + 20_000)
+  })
   it('fails when the rescuer is jailed, Luar Garisan, or gone', () => {
     expect(verdict(live, T0 + 5_000, { rescuer: { ...hafiz, jailed: true } })).toEqual({ kind: 'failed', reason: 'removed' })
     expect(verdict(live, T0 + 5_000, { rescuer: { ...hafiz, disqualified_at: iso(T0) } })).toEqual({ kind: 'failed', reason: 'removed' })
@@ -96,9 +110,9 @@ describe('rescueSuccessAt', () => {
   it('is null until 20 s are held', () => {
     expect(rescueSuccessAt(rec({ lastBeat: iso(T0 + 19_000) }), T0 + 19_999)).toBeNull()
   })
-  it('is the moment the live stretch reached 20 s, however late it is asked', () => {
-    const r = rec({ heldMs: 7_000, holdSince: iso(T0 + 10_000), lastBeat: iso(T0 + 22_500) })
-    expect(rescueSuccessAt(r, T0 + 23_000)).toBe(T0 + 23_000)
+  it('is the moment the live stretch reached 20 s, once a beat has proved it, however late it is asked', () => {
+    const r = rec({ heldMs: 7_000, holdSince: iso(T0 + 10_000), lastBeat: iso(T0 + 23_200) })
+    expect(rescueSuccessAt(r, T0 + 23_200)).toBe(T0 + 23_000)
     expect(rescueSuccessAt(r, T0 + 24_000)).toBe(T0 + 23_000)
   })
   it('for 20 s banked by a let-go, is that much before the let-go', () => {

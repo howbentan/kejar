@@ -27,7 +27,7 @@ import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS,
 import { HIJAU_FIX_FRESH_MS, HIJAU_MS, hijauCounts, hijauLockEnd, hijauStartsAt, hijauTargets, penjaraLockLeft } from '../../shared/hijau.js'
 import { isSlipQr, slipTokenFromQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, judgeHijauClaim, judgeRingClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS, TOLL_FRESH_MS } from '../../shared/powerups.js'
-import { fiveLeftDue, HEAD_START_MS, legacyRescue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, RESCUE_RESET_MS, rescueProgress, rescueSuccessAt, rescueVerdict, sentDuringPause } from '../../shared/penjara.js'
+import { confirmedHeldMs, fiveLeftDue, HEAD_START_MS, legacyRescue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, RESCUE_RESET_MS, rescueProgress, rescueSuccessAt, rescueVerdict, sentDuringPause } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeIdFor, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS } from '../../shared/kit.js'
 import { LEGENDARY_KINDS, pickLegendaries, SIDE_PAIRS, sidesOf, type SideSwitch } from '../../shared/legendaries.js'
@@ -625,11 +625,12 @@ async function freeFromPenjara(ctx: Ctx, ids: string[]): Promise<void> {
  * The hold fields after the rescuer's thumb goes down (or beats) or comes up at `now`, or null when nothing changes
  * (rules §9a). Held time is banked through `rescueProgress`, so a thumb whose beats lapsed counts as lifted at its
  * last beat: a late let-go doesn't stretch the 5 s window, and a late press doesn't count the quiet gap as held. A
- * rescue that has already reset or reached 20 s is left alone for `settleRescue` to end.
+ * rescue that has already reset or reached 20 s of confirmed holding is left alone for `settleRescue` to end; one
+ * past 20 s only on the display still takes the beat, which is what confirms it.
  */
 function holdPatch(r: RescueRecord, now: number, down: boolean): Partial<RescueRecord> | null {
   const p = rescueProgress(r, now)
-  if (p.heldMs >= RESCUE_HOLD_MS) return null
+  if (confirmedHeldMs(r, now) >= RESCUE_HOLD_MS) return null
   if (!p.holding && p.offSince !== null && now - p.offSince >= RESCUE_RESET_MS) return null
   if (down) return p.holding ? { lastBeat: iso(now) } : { heldMs: p.heldMs, holdSince: iso(now), lastBeat: iso(now), releasedAt: null }
   if (!r.holdSince) return null

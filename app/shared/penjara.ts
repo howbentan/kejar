@@ -50,12 +50,25 @@ export function rescueProgress(r: RescueRecord, now: number): { heldMs: number; 
 }
 
 /**
- * When the key reached 20 s held (ms), or null while it hasn't. Nothing settles a rescue the instant it succeeds
- * (there's no server tick), so this is what a late settle judges up to: a fix or a lock that came after it can't
- * take the success back. Held time banked by a let-go counts back from that let-go.
+ * Held time the phone has proved at `now`: what is banked, plus the live stretch only up to its last beat (or the
+ * let-go). `rescueProgress` counts on past the last beat while the thumb may still be down, which is right for the
+ * screens but not for winning: a phone that went quiet at 18.3 s must not free anyone at 20 s. Only this frees.
+ */
+export function confirmedHeldMs(r: RescueRecord, now: number): number {
+  const p = rescueProgress(r, now)
+  if (!p.holding || !r.holdSince) return p.heldMs
+  const since = Date.parse(r.holdSince)
+  const beat = Math.max(since, Date.parse(r.lastBeat ?? r.holdSince))
+  return r.heldMs + (Math.min(beat, now) - since)
+}
+
+/**
+ * When the key reached 20 s held (ms), or null while the phone hasn't proved it (`confirmedHeldMs`). Nothing settles
+ * a rescue the instant it succeeds (there's no server tick), so this is what a late settle judges up to: a fix or a
+ * lock that came after it can't take the success back. Held time banked by a let-go counts back from that let-go.
  */
 export function rescueSuccessAt(r: RescueRecord, now: number): number | null {
-  if (rescueProgress(r, now).heldMs < RESCUE_HOLD_MS) return null
+  if (confirmedHeldMs(r, now) < RESCUE_HOLD_MS) return null
   if (r.holdSince) return Date.parse(r.holdSince) + Math.max(0, RESCUE_HOLD_MS - r.heldMs)
   return Date.parse(r.releasedAt ?? r.startedAt) - (r.heldMs - RESCUE_HOLD_MS)
 }
@@ -65,8 +78,8 @@ export type RescueVerdict = { kind: 'holding' | 'paused' | 'success' } | { kind:
 /**
  * Where a live rescue stands (rules §9a). It fails if the rescuer is gone or out, or if any fix they sent since the
  * rescue began is clearly outside Penjara's 30 m plus its GPS error. A fix sent during a pause is ignored, and so
- * is a poor fix (over 20 m accuracy), so one bad reading never fails it. Otherwise it succeeds at 20 s held, resets
- * once the thumb has been off for 5 s, and is `holding` or `paused` in between.
+ * is a poor fix (over 20 m accuracy), so one bad reading never fails it. Otherwise it succeeds at 20 s of confirmed
+ * holding (`confirmedHeldMs`), resets once the thumb has been off for 5 s, and is `holding` or `paused` in between.
  */
 export function rescueVerdict(i: {
   rescue: RescueRecord
@@ -87,8 +100,8 @@ export function rescueVerdict(i: {
     return distanceM(f, i.jail) > RESCUE_RADIUS_M + Math.max(f.accuracy_m, 0)
   })
   if (away) return { kind: 'failed', reason: 'left' }
-  const { heldMs, holding, offSince } = rescueProgress(i.rescue, i.now)
-  if (heldMs >= RESCUE_HOLD_MS) return { kind: 'success' }
+  const { holding, offSince } = rescueProgress(i.rescue, i.now)
+  if (confirmedHeldMs(i.rescue, i.now) >= RESCUE_HOLD_MS) return { kind: 'success' }
   if (offSince !== null && i.now - offSince >= RESCUE_RESET_MS) return { kind: 'reset' }
   return { kind: holding ? 'holding' : 'paused' }
 }
