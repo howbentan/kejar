@@ -1398,11 +1398,9 @@ const jailbreak: Action = async (ctx, body) => {
     await ctx.store.addEvent({ game_id: game.id, type: 'rescue-started', actor_id: me.id, target_id: null, data: { who: who(me) } })
     return { ok: true, rescue: 'started', endsAt: ctx.now + RESCUE_HOLD_MS }
   }
-  // One rescue at a time: a scan during a hold joins it, and the hold keeps its own time. Only the first
-  // rescuer's catch or fixes decide it.
+  // One rescue at a time. (Task 3 rewrites this: a second runner is told it is taken, the rescuer's re-scan resumes.)
   const live = (await loadGame(ctx, body)).rescue
   if (!live) return { ok: false, reason: 'try-again' }
-  await ctx.store.joinRescue(game.id, me.id)
   return { ok: true, rescue: live.by === me.id ? 'started' : 'joined', endsAt: Date.parse(live.startedAt) + RESCUE_HOLD_MS }
 }
 

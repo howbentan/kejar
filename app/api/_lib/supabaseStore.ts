@@ -1,10 +1,10 @@
 import { LUAR_GARISAN_GRACE_MS } from '../../shared/alerts.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Arrest, Game, GameEvent, HijauFix, HijauRun, Ping, Player, Position, PowerUp, PowerUpKind, Slip } from '../../shared/types.js'
+import type { Arrest, Game, GameEvent, HijauFix, HijauRun, Ping, Player, Position, PowerUp, PowerUpKind, RescueRecord, Slip } from '../../shared/types.js'
 import { newToken } from './secrets.js'
 import type { GameRow, GameStore, MarshalInviteRow, NewPowerUp, NewSavedArena, Organisation, OrganiserInviteRow, OrganiserRow, PhoneMoveRow, PlayerRow, RedeemInviteResult, RedeemMarshalInviteResult, RedeemPhoneMoveResult, SafetyRecord, SavedArenaRow, GrabPick, StationClaim, StolenCard } from './store.js'
 
-const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, reel_pulled_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at, brief_opened_at, brief_ready_at, frozen_until, arrest, flooded_at, side_quest_at'
+const PLAYER_COLUMNS = 'id, game_id, name, role, tag_id, accepted_at, caught_at, caught_by, jailed, freed_once, freed_at, reel_pulled_at, push, removed_at, outside, left_start, out_warned_at, disqualified_at, brief_opened_at, brief_ready_at, frozen_until, arrest, flooded_at, side_quest_at, head_start_until'
 const GAME_COLUMNS = 'id, code, arena, settings, started_at, ended_at, winner, paused_at, pauses, final_whistle_at, rescue, five_warned_at, wiped_at, organiser_id, runner_sets, chaser_sets, runner_draws, chaser_draws, deck_seed, dato_stash, bomoh_stash, kit, briefed_at, endgame'
 
 function check<T>(res: { data: T; error: { message: string } | null }): T {
@@ -130,8 +130,16 @@ export class SupabaseStore implements GameStore {
   async endRescue(gameId: string, startedAtIso: string) {
     return check(await this.db.rpc('end_rescue', { p_game: gameId, p_started: startedAtIso })) === true
   }
-  async joinRescue(gameId: string, playerId: string) {
-    check(await this.db.rpc('join_rescue', { p_game: gameId, p_player: playerId }))
+  async patchRescue(
+    gameId: string,
+    startedAtIso: string,
+    patch: Partial<Pick<RescueRecord, 'heldMs' | 'holdSince' | 'lastBeat' | 'releasedAt'>>,
+  ) {
+    return check(await this.db.rpc('patch_rescue', { p_game: gameId, p_started: startedAtIso, p_patch: patch })) === true
+  }
+  async setHeadStart(playerIds: string[], untilIso: string) {
+    if (!playerIds.length) return
+    check(await this.db.from('players').update({ head_start_until: untilIso }).in('id', playerIds))
   }
   async catchRunner(id: string, by: string | null) {
     const rows = check(

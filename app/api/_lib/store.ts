@@ -1,6 +1,6 @@
 import { LUAR_GARISAN_GRACE_MS } from '../../shared/alerts.js'
 import type { ArenaDraft } from '../../shared/arenaDraft.js'
-import type { Arena, Arrest, Game, GameEvent, HijauFix, HijauRun, Ping, Player, Position, PowerUp, PowerUpKind, Slip } from '../../shared/types.js'
+import type { Arena, Arrest, Game, GameEvent, HijauFix, HijauRun, Ping, Player, Position, PowerUp, PowerUpKind, RescueRecord, Slip } from '../../shared/types.js'
 import { newToken } from './secrets.js'
 
 export type GameRow = Game & { organiser_id: string; host_push?: PushSubscriptionJSON | null }
@@ -127,8 +127,9 @@ export interface GameStore {
   /** Calls off a pending final whistle (someone is free again). */
   clearFinalWhistle(gameId: string): Promise<void>
   /**
-   * Starts the 10-second rescue (rules §9a) as `{ by, startedAt, joiners: [] }`, only if none is live and the game
-   * hasn't ended. True for the first caller.
+   * Starts the held-key rescue (rules §9a) as `{ by, startedAt, heldMs: 0, holdSince: null, lastBeat: null,
+   * releasedAt: startedAt }` (nobody's thumb is down yet, so the 5 s reset window runs from the scan), only if none
+   * is live and the game hasn't ended. True for the first caller.
    */
   startRescue(gameId: string, by: string, atIso: string): Promise<boolean>
   /**
@@ -140,8 +141,17 @@ export interface GameStore {
   releaseReelPull(playerId: string): Promise<void>
   /** Clears the live rescue only if it is still the one that started at `startedAtIso`. True for the first caller. */
   endRescue(gameId: string, startedAtIso: string): Promise<boolean>
-  /** Adds a joiner to the live rescue, once; never the rescuer. Does nothing with no rescue. */
-  joinRescue(gameId: string, playerId: string): Promise<void>
+  /**
+   * Updates the live rescue's hold fields only while it is still the one that started at `startedAtIso` (atomic, so a
+   * stale phone can't write into a newer rescue). True if it applied.
+   */
+  patchRescue(
+    gameId: string,
+    startedAtIso: string,
+    patch: Partial<Pick<RescueRecord, 'heldMs' | 'holdSince' | 'lastBeat' | 'releasedAt'>>,
+  ): Promise<boolean>
+  /** Gives the freed runners their head start: sets `head_start_until` on each (a freed runner's 10 s of safety). */
+  setHeadStart(playerIds: string[], untilIso: string): Promise<void>
   /**
    * With `minGapMs`, writes nothing and returns false when the player already has a fix newer than that.
    * With `since` (ms) too, only fixes at or after `since` count against the gap, so the first fix inside an
@@ -564,7 +574,7 @@ export class MemoryStore implements GameStore {
   async startRescue(gameId: string, by: string, atIso: string) {
     const g = this.games.find((x) => x.id === gameId)
     if (!g || g.ended_at || g.rescue) return false
-    g.rescue = { by, startedAt: atIso, heldMs: 0, holdSince: atIso, lastBeat: atIso, releasedAt: null }
+    g.rescue = { by, startedAt: atIso, heldMs: 0, holdSince: null, lastBeat: null, releasedAt: atIso }
     return true
   }
   async pullReel(playerId: string, atIso: string) {
@@ -584,10 +594,18 @@ export class MemoryStore implements GameStore {
     g.rescue = null
     return true
   }
-  async joinRescue(gameId: string, playerId: string) {
-    // Joining is gone with the held key (rules §9a: one rescuer); Task 3 removes this method and its callers.
-    void gameId
-    void playerId
+  async patchRescue(
+    gameId: string,
+    startedAtIso: string,
+    patch: Partial<Pick<RescueRecord, 'heldMs' | 'holdSince' | 'lastBeat' | 'releasedAt'>>,
+  ) {
+    const g = this.games.find((x) => x.id === gameId)
+    if (!g?.rescue || g.rescue.startedAt !== startedAtIso) return false
+    g.rescue = { ...g.rescue, ...patch }
+    return true
+  }
+  async setHeadStart(playerIds: string[], untilIso: string) {
+    for (const p of this.playerRows) if (playerIds.includes(p.id)) p.head_start_until = untilIso
   }
   async catchRunner(id: string, by: string | null) {
     const p = this.playerRows.find((x) => x.id === id)
@@ -938,10 +956,16 @@ export class MemoryStore implements GameStore {
     if (g.final_whistle_at) {
       g.final_whistle_at = new Date(Date.parse(g.final_whistle_at) + this.clock() - Math.max(Date.parse(g.final_whistle_at), pausedAt)).toISOString()
     }
-    // A live rescue's 10 s hold freezes the same way, so it still needs the time it had left (rules §9a).
+    // A live rescue's held time and its 5 s reset window freeze the same way (rules §9a): every time it carries moves
+    // by the pause, so paused time never counts as held or as let go.
     if (g.rescue) {
-      const started = Date.parse(g.rescue.startedAt)
-      g.rescue = { ...g.rescue, startedAt: new Date(started + this.clock() - Math.max(started, pausedAt)).toISOString() }
+      const r = g.rescue
+      const move = (t: string | null) => (t ? new Date(Date.parse(t) + this.clock() - Math.max(Date.parse(t), pausedAt)).toISOString() : null)
+      g.rescue = { ...r, startedAt: move(r.startedAt)!, holdSince: move(r.holdSince), lastBeat: move(r.lastBeat), releasedAt: move(r.releasedAt) }
+    }
+    // A freed runner's 10 s head start waits out the pause too (one that already ended is left alone).
+    for (const p of this.playerRows) {
+      if (p.game_id === gameId && p.head_start_until && Date.parse(p.head_start_until) > pausedAt) p.head_start_until = shift(p.head_start_until)
     }
     // A house arrest's clock freezes the same way: it counts from when it started (or, while waiting for the runner to
     // open Kejar, from when it fired), so the time it had already run is kept.

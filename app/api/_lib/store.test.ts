@@ -232,11 +232,18 @@ describe('MemoryStore safety methods', () => {
     expect(await store.claimFinalWhistle(g.id, iso(T0 + 3 * MIN))).toBe(false)
   })
 
-  it('startRescue is true for only one of two calls, and endRescue needs the right startedAt', async () => {
+  it('startRescue is true for only one of two calls, writes the held-key shape, and endRescue needs the right startedAt', async () => {
     const g = await startedGame()
     const results = await Promise.all([store.startRescue(g.id, 'p1', iso(T0 + MIN)), store.startRescue(g.id, 'p2', iso(T0 + MIN))])
     expect(results.filter(Boolean)).toHaveLength(1)
-    expect((await store.gameByCode('ABC234'))!.rescue).toEqual({ by: 'p1', startedAt: iso(T0 + MIN), joiners: [] })
+    expect((await store.gameByCode('ABC234'))!.rescue).toEqual({
+      by: 'p1',
+      startedAt: iso(T0 + MIN),
+      heldMs: 0,
+      holdSince: null,
+      lastBeat: null,
+      releasedAt: iso(T0 + MIN),
+    })
     expect(await store.endRescue(g.id, iso(T0 + 2 * MIN))).toBe(false)
     expect((await store.gameByCode('ABC234'))!.rescue).not.toBeNull()
     expect(await store.endRescue(g.id, iso(T0 + MIN))).toBe(true)
@@ -244,15 +251,25 @@ describe('MemoryStore safety methods', () => {
     expect(await store.endRescue(g.id, iso(T0 + MIN))).toBe(false)
   })
 
-  it('joinRescue adds each joiner once, never the rescuer, and does nothing with no rescue', async () => {
+  it('patchRescue applies only while startedAt still matches, and changes nothing otherwise', async () => {
     const g = await startedGame()
-    await store.joinRescue(g.id, 'p2')
-    expect((await store.gameByCode('ABC234'))!.rescue ?? null).toBeNull()
+    expect(await store.patchRescue(g.id, iso(T0), { heldMs: 1 })).toBe(false)
     await store.startRescue(g.id, 'p1', iso(T0))
-    await store.joinRescue(g.id, 'p2')
-    await store.joinRescue(g.id, 'p2')
-    await store.joinRescue(g.id, 'p1')
-    expect((await store.gameByCode('ABC234'))!.rescue).toEqual({ by: 'p1', startedAt: iso(T0), joiners: ['p2'] })
+    expect(await store.patchRescue(g.id, iso(T0), { holdSince: iso(T0 + 1_000), lastBeat: iso(T0 + 1_000), releasedAt: null })).toBe(true)
+    expect((await store.gameByCode('ABC234'))!.rescue).toMatchObject({ heldMs: 0, holdSince: iso(T0 + 1_000), lastBeat: iso(T0 + 1_000), releasedAt: null })
+    const before = (await store.gameByCode('ABC234'))!.rescue
+    expect(await store.patchRescue(g.id, iso(T0 + 5), { heldMs: 9_000 })).toBe(false)
+    expect((await store.gameByCode('ABC234'))!.rescue).toEqual(before)
+  })
+
+  it('setHeadStart sets every named player and no one else', async () => {
+    const g = await startedGame()
+    const a = await newPlayer(g.id, 'a')
+    const b = await newPlayer(g.id, 'b')
+    const c = await newPlayer(g.id, 'c')
+    await store.setHeadStart([a.id, b.id], iso(T0 + 10_000))
+    const byId = Object.fromEntries((await store.players(g.id)).map((p) => [p.id, p.head_start_until ?? null]))
+    expect(byId).toEqual({ [a.id]: iso(T0 + 10_000), [b.id]: iso(T0 + 10_000), [c.id]: null })
   })
 
   it('startRescue refuses an ended game', async () => {
@@ -261,14 +278,39 @@ describe('MemoryStore safety methods', () => {
     expect(await store.startRescue(g.id, 'p1', iso(T0))).toBe(false)
   })
 
-  it('resumeGame moves a live rescue by the pause, so the hold keeps its time', async () => {
+  it('resumeGame moves a live rescue and a running head start by the pause, and leaves a past head start alone', async () => {
+    const g = await startedGame()
+    const a = await newPlayer(g.id, 'a')
+    const b = await newPlayer(g.id, 'b')
+    await store.startRescue(g.id, 'p1', iso(T0 + MIN))
+    await store.patchRescue(g.id, iso(T0 + MIN), { holdSince: iso(T0 + MIN + 1_000), lastBeat: iso(T0 + MIN + 3_000), releasedAt: iso(T0 + MIN + 3_000) })
+    now = T0 + MIN + 4_000
+    await store.setHeadStart([a.id], iso(T0 + MIN + 8_000))
+    await store.setHeadStart([b.id], iso(T0 + MIN + 2_000))
+    await store.pauseGame(g.id)
+    now = T0 + MIN + 4_000 + 60_000
+    await store.resumeGame(g.id)
+    expect((await store.gameByCode('ABC234'))!.rescue).toEqual({
+      by: 'p1',
+      startedAt: iso(T0 + MIN + 60_000),
+      heldMs: 0,
+      holdSince: iso(T0 + MIN + 1_000 + 60_000),
+      lastBeat: iso(T0 + MIN + 3_000 + 60_000),
+      releasedAt: iso(T0 + MIN + 3_000 + 60_000),
+    })
+    const byId = Object.fromEntries((await store.players(g.id)).map((p) => [p.id, p.head_start_until]))
+    expect(byId[a.id]).toBe(iso(T0 + MIN + 8_000 + 60_000))
+    expect(byId[b.id]).toBe(iso(T0 + MIN + 2_000))
+  })
+
+  it('resumeGame keeps null rescue times null', async () => {
     const g = await startedGame()
     await store.startRescue(g.id, 'p1', iso(T0 + MIN))
-    now = T0 + MIN + 4_000
+    now = T0 + MIN + 1_000
     await store.pauseGame(g.id)
-    now = T0 + 3 * MIN + 4_000
+    now = T0 + MIN + 31_000
     await store.resumeGame(g.id)
-    expect((await store.gameByCode('ABC234'))!.rescue).toEqual({ by: 'p1', startedAt: iso(T0 + 3 * MIN), joiners: [] })
+    expect((await store.gameByCode('ABC234'))!.rescue).toMatchObject({ holdSince: null, lastBeat: null, releasedAt: iso(T0 + MIN + 30_000) })
   })
 
   it('addEvent returns the stored event', async () => {
