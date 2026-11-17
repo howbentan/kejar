@@ -34,6 +34,20 @@ describe('how to play cards', () => {
     }
   })
 
+  it('tells the held-key rescue as it is: 20 s held, a 5 s reset, one rescuer, a 10 s head start', () => {
+    const card = (side: 'runner' | 'chaser', scene: string) => cardsFor(side, 'core', true).find((c) => c.scene === scene)!.line
+    const breakOut = card('runner', 'break-out')
+    expect(breakOut).toContain('<b>hold the key for 20 s</b>')
+    expect(breakOut).toContain('Let go and it waits 5 s, then resets.')
+    expect(breakOut).toContain('One rescuer at a time')
+    expect(breakOut).toContain('10 s head start')
+    const stop = card('chaser', 'stop-rescue')
+    expect(stop).toContain('<b>hold the key for 20 s</b>')
+    expect(stop).toContain('10 s head start')
+    for (const side of ['runner', 'chaser'] as const)
+      for (const c of cardsFor(side, 'core', true)) expect(c.line).not.toMatch(/10 seconds|you get 10/)
+  })
+
   it('never names the legendaries and has no em-dashes', () => {
     for (const side of ['runner', 'chaser'] as const)
       for (const mode of ['core', 'full'] as const)
