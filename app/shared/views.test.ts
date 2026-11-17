@@ -266,6 +266,10 @@ describe('two-part feed', () => {
     expect(why('caught').runner).toMatchObject({ text: 'The rescue failed: Wei was caught.', label: 'RESCUE' })
     expect(why('caught').chaser).toMatchObject({ text: 'The rescue failed: Wei was caught.' })
     expect(why('left').runner.text).toBe('The rescue failed: Wei walked away.')
+    // A chaser is never told who was rescuing (a let-go names nobody they could hunt); marshals still are.
+    expect(why('left').chaser.text).toBe('The rescue failed: the rescuer walked away.')
+    expect(why('left').chaser.text).not.toContain('Wei')
+    expect(line(siti, { actor_id: 'r3', data: { reason: 'left' } }, 'rescue-failed').text).toBe('The rescue failed: Wei walked away.')
     expect(why('reset').runner.text).toBe('The rescue reset.')
     expect(why('locked').runner.text).toBe('The rescue failed: Penjara is locked.')
     expect(why('removed').runner.text).toBe('The rescue failed.')

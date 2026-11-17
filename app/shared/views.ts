@@ -937,8 +937,13 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
     case 'reel-free':
       return plain(`${actor?.name ?? String(e.data.who ?? 'A Dikejar')} pulled the free slot. Keluar penjara!`)
     case 'rescue-failed': {
-      // The server says why (caught, walked away, ...); an event without a reason is an old one.
-      const text = rescueFailedText(String(e.data.reason ?? ''), actor?.name ?? 'The rescuer')
+      // The server says why (caught, walked away, ...); an event without a reason is an old one. A chaser is never
+      // told who walked away: nothing else names the rescuer to them (a catch line already names who was caught).
+      const reason = String(e.data.reason ?? '')
+      const text =
+        reason === 'left' && ctx.side === 'chaser'
+          ? 'The rescue failed: the rescuer walked away.'
+          : rescueFailedText(reason, actor?.name ?? 'The rescuer')
       return two(text, 'RESCUE', 'The rescuer can try again if they are still free.', 'Penjara holds. Nice.')
     }
     case 'jailbreak': {
