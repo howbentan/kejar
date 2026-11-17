@@ -439,9 +439,9 @@ select.input option { background: #141614; color: var(--white); }
 .kd-endgames { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(2, 64px); place-content: center; gap: 18px 34px; opacity: 0.4; }
 .kd-endgames > span { display: inline-flex; justify-content: center; }
 
-/* Penjara locked after Mak Kau Hijau: a dark pill with a deep-green edge and the countdown in green mono. */
+/* Penjara locked after Mak Kau Hijau: the chained gate over a dark card with a deep-green edge and the countdown in green mono. */
 .penjara-lock {
-  align-self: flex-start; display: inline-flex; align-items: baseline; gap: 6px; padding: 7px 14px; border-radius: 999px;
+  align-self: flex-start; display: inline-flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 18px 12px; border-radius: 22px;
   background: var(--black); border: 1.5px solid var(--hijau-2); color: var(--white); font: 600 13px var(--font);
 }
 .penjara-lock .mono { font: 700 13px var(--mono); color: var(--hijau-2); }

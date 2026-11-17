@@ -189,6 +189,8 @@ describe('Penjara locked after Mak Kau Hijau (owner, 2026-11-13)', () => {
     // Readable: the dark lock pill, not the lime pill-on.
     expect(lock).toHaveClass('penjara-lock')
     expect(lock).not.toHaveClass('pill-on')
+    // The chained gate sits above the words, in its locked state.
+    expect(lock.querySelector('svg.pgate.locked')).not.toBeNull()
     act(() => vi.advanceTimersByTime(4_000))
     expect(lock).toHaveTextContent('Penjara locked · 2:10')
     rerender(<Jail code="ABC234" view={{ ...caught(60_000), penjaraLockedUntil: null }} />)

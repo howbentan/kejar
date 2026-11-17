@@ -6,6 +6,7 @@ import Marker from '../game/Marker'
 import PenjaraArrival from '../game/PenjaraArrival'
 import PenjaraReel, { useReelHold } from '../game/PenjaraReel'
 import PenjaraTicket from '../game/PenjaraTicket'
+import PenjaraGate from '../game/rescue/PenjaraGate'
 import RescueWatch from '../game/rescue/RescueWatch'
 import SettlePanel from '../game/SettlePanel'
 import Stamp from '../game/Stamp'
@@ -37,7 +38,7 @@ function CheckinRow({ checkins }: { checkins: { at: number; ok: boolean }[] }) {
 }
 
 /**
- * `Penjara locked · 2:14` after a Mak Kau Hijau that counted (owner, 2026-11-13): no rescue, Settle or reel until it
+ * The chained gate over `Penjara locked · 2:14` after a Mak Kau Hijau that counted (owner, 2026-11-13): no rescue, Settle or reel until it
  * runs out. Held still while paused, so it counts from the server's moment then.
  */
 function PenjaraLock({ view }: { view: View }) {
@@ -48,7 +49,10 @@ function PenjaraLock({ view }: { view: View }) {
   if (left <= 0) return null
   return (
     <div role="status" aria-label="Penjara locked" className="penjara-lock">
-      Penjara locked · <span className="mono">{clock(left)}</span>
+      <PenjaraGate state="locked" size={120} />
+      <span>
+        Penjara locked · <span className="mono">{clock(left)}</span>
+      </span>
     </div>
   )
 }
