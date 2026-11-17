@@ -18,6 +18,12 @@ describe('PrintTags', () => {
     expect(screen.getByText('#01')).toBeInTheDocument()
   })
 
+  it('prints each station and Penjara as its own A4 poster, so it can be taped up and scanned from a step away', () => {
+    render(<PrintTags />)
+    const posters = [...document.querySelectorAll('.a4-poster')]
+    expect(posters.map((p) => p.querySelector('h2')?.textContent)).toEqual([...Array.from({ length: 8 }, (_, i) => `STATION ${i + 1}`), 'PENJARA'])
+  })
+
   it('prints 40 armbands, #01 to #40, one QR code each', async () => {
     render(<PrintTags />)
     await waitFor(() => expect(encoded).toContain('KEJAR:JAIL'))

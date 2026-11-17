@@ -6,7 +6,7 @@ const TAGS = Array.from({ length: MAX_PLAYERS_PER_GAME }, (_, i) => i + 1)
 const STATIONS = Array.from({ length: MAX_STATIONS }, (_, i) => i + 1)
 
 /**
- * Printable sheet: armbands #01 to #40 (one per player at the game cap) plus the jail code. Black on white, no lime text (spec §9). It's public, so it
+ * Printable sheet: armbands #01 to #40 (one per player at the game cap), then each station and Penjara on an A4 page of its own. Black on white, no lime text (spec §9). It's public, so it
  * never has Full mode's Tupperware slips: those print from Your kit (`PrintSlips`), organiser only.
  */
 export default function PrintTags() {
@@ -19,9 +19,12 @@ export default function PrintTags() {
 
   return (
     <div style={{ background: '#fff', color: '#0A0A0B', minHeight: '100dvh', padding: 16 }}>
-      <style>{`@media print { .no-print { display: none } } .tag { break-inside: avoid }`}</style>
+      <style>{`@media print { .no-print { display: none } } .tag { break-inside: avoid }
+        .a4-poster { break-before: page; break-inside: avoid; box-sizing: border-box; height: 270mm; margin-top: 24px; border: 3px solid #0A0A0B; border-radius: 6mm;
+          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6mm; text-align: center; padding: 10mm }
+        @media print { .a4-poster { margin-top: 0 } }`}</style>
       <p className="no-print" style={{ marginBottom: 12 }}>
-        Print on A4, cut out each tag, laminate, and stick a hook-velcro square on the back.{' '}
+        Print on A4. Cut out each tag, laminate, and stick a hook-velcro square on the back. Each station and Penjara gets a page of its own: tape it up at its spot.{' '}
         <button onClick={() => window.print()}>Print</button>
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8 }}>
@@ -33,23 +36,25 @@ export default function PrintTags() {
           </div>
         ))}
       </div>
-      <p style={{ marginTop: 24, fontWeight: 700 }}>Power-up stations: tape each at the matching numbered spot on the map.</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8, marginTop: 8 }}>
-        {STATIONS.map((n) => (
-          <div key={n} className="tag" style={{ border: '2px solid #0A0A0B', padding: 10, textAlign: 'center' }}>
-            {codes[stationQr(n)] && (
-              <img src={codes[stationQr(n)]} alt={`Station ${n}`} style={{ width: '55mm', height: '55mm' }} />
-            )}
-            <div style={{ fontWeight: 800, fontSize: 22 }}>{`STATION ${n}`}</div>
-            <div style={{ fontSize: 12 }}>Scan to get a power-up</div>
-          </div>
-        ))}
-      </div>
-      <div className="tag" style={{ marginTop: 24, border: '2px solid #0A0A0B', padding: 16, textAlign: 'center' }}>
-        {codes[JAIL_QR] && <img src={codes[JAIL_QR]} alt="Penjara code" style={{ width: '90mm', height: '90mm' }} />}
-        <div style={{ fontWeight: 800, fontSize: 40 }}>PENJARA</div>
-        <div>Free runners: scan this to break everyone out (once each).</div>
-      </div>
+      {STATIONS.map((n) => (
+        <Poster key={n} qr={codes[stationQr(n)]} alt={`Station ${n}`} title={`STATION ${n}`} line="Scan to get a power-up" />
+      ))}
+      <Poster qr={codes[JAIL_QR]} alt="Penjara code" title="PENJARA" line="Free runners: scan this to break everyone out (once each)." />
+    </div>
+  )
+}
+
+/**
+ * One station or Penjara as a whole A4 page: it's taped to a pole or a wall and scanned from a step away, so the QR is
+ * 150 mm and the name reads from across the path.
+ */
+function Poster({ qr, alt, title, line }: { qr?: string; alt: string; title: string; line: string }) {
+  return (
+    <div className="a4-poster">
+      {qr && <img src={qr} alt={alt} style={{ width: '150mm', height: '150mm' }} />}
+      <h2 style={{ margin: 0, fontWeight: 800, fontSize: '22mm', lineHeight: 1, letterSpacing: '-0.02em' }}>{title}</h2>
+      <p style={{ margin: 0, fontSize: '7mm' }}>{line}</p>
+      <img src="/logo-ink.png" alt="kejar." style={{ height: '12mm', width: 'auto' }} />
     </div>
   )
 }
