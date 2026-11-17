@@ -46,7 +46,7 @@ What the organiser wants:
 
 - **No server tick.** The rescue settles lazily in `advance()` / `settleRescue` on polls and actions, as today.
 - **Web limits.** No background location, so the rescue screen must stay open: it already sends a fix every
-  `RESCUE_PING_MS` (1.5 s). `navigator.vibrate` works on Android only, foreground only. iPhone silences web audio when the
+  `RESCUE_BEAT_MS` (1 s). `navigator.vibrate` works on Android only, foreground only. iPhone silences web audio when the
   ringer switch is off.
 - **Pauses** freeze everything: held time, the 5-second window, the head start.
 - Both stores (`MemoryStore`, `SupabaseStore`) change together; any new column or JSON shape gets a migration (next
@@ -90,15 +90,15 @@ The organiser chose the hold with pause, 20 s, 5 s reset.
 
 ### 5.3 How the server counts (server's clock only)
 
-- The phone tells the server when the thumb goes down and up, and every rescue fix (each 1.5 s) carries whether the thumb
+- The phone tells the server when the thumb goes down and up, and every rescue fix (each 1 s) carries whether the thumb
   is still down.
-- If a rescue that is being held gets no "still holding" message for about **2 s**, the server counts the thumb as
+- If a rescue that is being held gets no "still holding" message for about **3 s** (two missed beats), the server counts the thumb as
   lifted at the last message (covers a call, a notification, a locked screen or a dropped connection). The 5 s reset
   window runs **from that last message**, so a lapse resets about 5 s after the phone went quiet, not 7. *(My call.)*
 - Paused game time is left out of held time and of the 5 s window, the same way `sentDuringPause` leaves pause-time
   fixes out today. *(My call.)*
 - Held time = the sum of down-intervals, judged on server receive times. The rescue succeeds the moment held time reaches
-  20 s; the server settles it on the next request (the rescuer's phone keeps sending fixes, so that's within 1.5 s).
+  20 s; the server settles it on the next request (the rescuer's phone keeps sending fixes, so that's within about 1 s). Success counts only confirmed held time, up to the last beat. *(Final review: 1 s beats and a 3 s lapse, so normal phone-network jitter doesn't cost held time.)*
 
 ### 5.4 The rescuer's screen
 
