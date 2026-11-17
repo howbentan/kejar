@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const reduce = vi.hoisted(() => ({ on: false }))
 vi.mock('motion/react', async (orig) => ({ ...(await orig<typeof import('motion/react')>()), useReducedMotion: () => reduce.on }))
 
-import LuckyDip, { CLAIM_STAMP_MS, dipFor, FLIP_MS, LEGENDARY_HOLD_MS, PICK_MS, REVEAL_HOLD_MS, SPARKLES, SWEEP_MS } from './LuckyDip'
+import LuckyDip, { CLAIM_STAMP_MS, dipFor, FLIP_MS, PICK_MS, REVEAL_HOLD_MS, SPARKLES, SWEEP_MS } from './LuckyDip'
 import { stashMessage } from './PowerUpHand'
 
 beforeEach(() => vi.useFakeTimers())
@@ -96,39 +96,13 @@ describe('LuckyDip', () => {
   })
 })
 
-describe("Dato Seri's reveal (motion design §7)", () => {
-  it('a good stash scan skips the fan: one foil card, the yellow marker, then done', () => {
-    const onDone = vi.fn()
-    const { container } = render(<>{dipFor('KEJAR:DATO', { ok: true, kind: 'dato' }, 5, onDone)}</>)
-    expect(screen.queryByText(/CLAIMED · Station/)).toBeNull()
-    expect(screen.queryAllByLabelText('Face-down card')).toHaveLength(0)
-    expect(screen.getByRole('heading', { name: 'Dato Seri.' })).toBeInTheDocument()
-    expect(screen.getByText('Legendary. In Penjara, free yourself and up to two friends. Only one exists.')).toBeInTheDocument()
-    expect(container.querySelector('.power-card.legendary')).not.toBeNull()
-    wait(FLIP_MS)
-    const paths = container.querySelectorAll('svg.marker path')
-    expect(paths.length).toBeGreaterThan(0)
-    for (const p of paths) expect(p.getAttribute('stroke')).toBe('#FFD60A')
-    wait(LEGENDARY_HOLD_MS)
-    expect(onDone).toHaveBeenCalledTimes(1)
+describe('Legendary claims and their lines', () => {
+  it('a legendary only gets its moment from a slip: off any other QR there is no dip', () => {
+    for (const kind of ['dato', 'ring', 'bomoh', 'hijau'] as const) expect(dipFor('KEJAR:STATION:1', { ok: true, kind }, 5, () => {})).toBeNull()
   })
 
-  it('works with reduced motion too', () => {
-    reduce.on = true
-    const onDone = vi.fn()
-    render(<>{dipFor('KEJAR:DATO', { ok: true, kind: 'dato' }, null, onDone)}</>)
-    expect(screen.getByRole('heading', { name: 'Dato Seri.' })).toBeInTheDocument()
-    wait(LEGENDARY_HOLD_MS)
-    expect(onDone).toHaveBeenCalledTimes(1)
-  })
-
-  it('Bomoh has no dip or reveal, whichever QR it came from', () => {
-    expect(dipFor('KEJAR:BOMOH:Pq7-abc', { ok: true, kind: 'bomoh' }, 5, () => {})).toBeNull()
-    expect(dipFor('KEJAR:DATO:Pq7-abc', { ok: true, kind: 'bomoh' }, 5, () => {})).toBeNull()
-  })
-
-  it('a refused stash scan is a calm line with no moment', () => {
-    expect(dipFor('KEJAR:DATO', { ok: false, reason: 'too-far' }, 5, () => {})).toBeNull()
+  it('a refused slip scan is a calm line with no moment', () => {
+    expect(dipFor('KEJAR:SLIP:x', { ok: false, reason: 'too-far' }, 5, () => {})).toBeNull()
   })
 
   it("refusals never say what it is or call it a station", () => {

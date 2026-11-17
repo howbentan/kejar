@@ -243,22 +243,6 @@ export interface Arrest {
   eventId?: string | null
 }
 
-/**
- * One of an organisation's six reusable secret cards: A-C yellow (Dato Seri) and A-C purple (Bomoh).
- * `ready`: printed and can be put in play. `retired`: found, or retired by hand. `printing`: has a new code that
- * isn't confirmed printed yet.
- */
-export interface SecretCard {
-  id: string
-  organisation_id: string
-  legendary: LegendaryKind
-  letter: 'A' | 'B' | 'C'
-  code: string
-  state: 'ready' | 'retired' | 'printing'
-  /** Set when someone claims it. */
-  found_at: string | null
-}
-
 /** Which side a Tupperware slip is printed for. */
 export type TupperSide = 'dikejar' | 'kejar'
 
@@ -372,12 +356,10 @@ export type EventType =
   | 'sos-responding'
   | 'rated'
   | 'stolen'
-  /** Someone scanned Dato Seri's stash. The feed never says who, or what it was (jail design §4c). */
+  /** Someone opened a Tupperware. The feed never says who, or which legendary it was (jail design §4c). */
   | 'legendary'
   /** Dato Seri's Settle freed `data.freed` runners. Visible, but never names the card (jail design §4). */
   | 'settled'
-  /** A stash scan by this player that didn't claim. Three lock them out. Never in a feed or an alert. data: {} */
-  | 'stash-miss'
   /** A wrong Tupperware slip: this player's one try in this game is gone. Never in a feed or an alert. data: {} */
   | 'slip-miss'
   /** A marshal or the organiser undid a chaser's catch (fair-play §1.4). target: the runner. data: { eventId, who } */

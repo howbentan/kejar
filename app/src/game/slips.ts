@@ -1,3 +1,5 @@
+import { sideName } from '../../shared/tupperware.js'
+
 /** One Tupperware slip as the organiser sees it (the token is secret, so it's only ever in organiser calls). */
 export interface Slip {
   side: 'dikejar' | 'kejar'
@@ -8,7 +10,7 @@ export interface Slip {
 
 /** The label printed on a slip: `Dikejar #04`. */
 export const slipLabel = (s: Pick<Slip, 'side' | 'number'>) =>
-  `${s.side === 'dikejar' ? 'Dikejar' : 'Kejar'} #${String(s.number).padStart(2, '0')}`
+  `${sideName(s.side)} #${String(s.number).padStart(2, '0')}`
 
 /** How many unused slips each side has left. A bound slip is dead, so it doesn't count. */
 export function unusedCounts(slips: Slip[]) {

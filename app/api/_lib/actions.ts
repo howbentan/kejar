@@ -25,7 +25,7 @@ import { ARREST_FIX_FRESH_MS, ARREST_OPEN_MS, arrestEndsAt, insideArrest, releas
 import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/catch.js'
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
 import { HIJAU_FIX_FRESH_MS, HIJAU_MS, hijauCounts, hijauLockEnd, hijauStartsAt, hijauTargets, penjaraLockLeft } from '../../shared/hijau.js'
-import { bomohCodeFromQr, datoCodeFromQr, hijauCodeFromQr, isBomohQr, isDatoQr, isHijauQr, isRingQr, isSlipQr, ringCodeFromQr, slipTokenFromQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
+import { isSlipQr, slipTokenFromQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, judgeHijauClaim, judgeRingClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS, TOLL_FRESH_MS } from '../../shared/powerups.js'
 import { fiveLeftDue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, rescueVerdict, sentDuringPause } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
@@ -169,11 +169,7 @@ async function marshalName(ctx: Ctx, game: GameRow, body: Body, marshal: Player 
   return marshal ? marshal.name : (await requireOrganiser(ctx, game, body)).name
 }
 
-// ---- Legendary stashes: since the Tupperware, a dropped box's spot; a game started on a printed card keeps its code ----
-
-/** Stash scans that don't claim before a player's later stash scans are all ignored (Review Focus 2). */
-export const STASH_MISS_LIMIT = 3
-const NO_STASH = { ok: false, reason: 'no-stash' } as const
+// ---- Legendary stashes: each side's Tupperware, a dropped box's spot and who claimed it ----
 
 /** A game's personal data is wiped this long after it ends (fair-play §1.8). */
 export const WIPE_AFTER_MS = 30 * 24 * 60 * 60_000
@@ -1673,16 +1669,6 @@ const claim: Action = async (ctx, body) => {
   const fresh = (await loadGame(ctx, body)) as Game
   if (fresh.paused_at) return { ok: false, reason: 'paused' }
   const qr = str(body.qr)
-  if (isDatoQr(qr)) {
-    const code = datoCodeFromQr(qr)
-    // Purple cards printed before Bomoh had his own QR carry KEJAR:DATO:<purple code>. Cards are printed once and
-    // reused every game, so that scan is a Bomoh claim, exactly as if it were KEJAR:BOMOH:<code> (C1).
-    if (isLegacyBomohCode(fresh as GameRow, code)) return claimBomoh(ctx, fresh as GameRow, me, code)
-    return claimDato(ctx, fresh as GameRow, me, code)
-  }
-  if (isBomohQr(qr)) return claimBomoh(ctx, fresh as GameRow, me, bomohCodeFromQr(qr))
-  if (isRingQr(qr)) return claimRing(ctx, fresh as GameRow, me, ringCodeFromQr(qr))
-  if (isHijauQr(qr)) return claimHijau(ctx, fresh as GameRow, me, hijauCodeFromQr(qr))
   if (isSlipQr(qr)) return claimSlip(ctx, fresh as GameRow, me, slipTokenFromQr(qr))
   const station = stationFromQr(str(body.qr))
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
@@ -1730,161 +1716,6 @@ async function doubleIfCombo(ctx: Ctx, me: Player, delivered: PowerUp): Promise<
   return (await ctx.store.applyCombo(me.id, delivered.id)) ? { double: true } : {}
 }
 
-/**
- * One legendary's wrong-scan limit for one player (Review Focus 2): null once they've used up STASH_MISS_LIMIT
- * misses on it, otherwise the function that records the next one and passes its answer through. Each legendary
- * counts its own misses (I5), tagged `data.legendary`; an untagged miss predates Bomoh, so it is Dato Seri's.
- */
-async function stashMisses(ctx: Ctx, game: GameRow, me: Player, legendary: LegendaryKind) {
-  const missed = (await ctx.store.events(game.id)).filter(
-    (e) => e.type === 'stash-miss' && e.actor_id === me.id && (e.data?.legendary ?? 'dato') === legendary,
-  ).length
-  if (missed >= STASH_MISS_LIMIT) return null
-  // Only a wrong or unknown code, no stash, or too far counts (ruling R4): the other refusals reveal no location.
-  return async <T extends { reason: string }>(answer: T): Promise<T> => {
-    await ctx.store.addEvent({ game_id: game.id, type: 'stash-miss', actor_id: me.id, target_id: null, data: { legendary } })
-    return answer
-  }
-}
-
-/** A ★-prefixed code that is really this game's purple card: it matches the Bomoh stash's code and not the Dato one. */
-function isLegacyBomohCode(game: GameRow, code: string | null): boolean {
-  if (!code || game.settings.mode !== 'full') return false
-  const matches = (secret: string | null | undefined) => !!secret && hashToken(secret) === hashToken(code)
-  return matches(game.bomoh_stash?.code) && !matches(game.dato_stash?.code)
-}
-
-/**
- * Scanning Dato Seri's hidden stash (jail design §4b). A refusal changes nothing, so the stash stays claimable.
- * The store claims it atomically: two runners scanning at once get one card. No 'powerup' event, which would
- * name the finder: the feed only ever says `Something legendary was found.` (§4c). Claiming retires the card.
- *
- * The wrong-scan limit (Review Focus 2): a scan that doesn't claim is recorded as a `stash-miss`, and after
- * STASH_MISS_LIMIT of them every later stash scan by that player answers `no-stash`, unrecorded, even at the
- * right spot, so a photo of the card can't be walked round the zone. Nothing says they're locked out. A full
- * slot isn't a miss: the runner is at the stash and can come back once their slot is free.
- */
-async function claimDato(ctx: Ctx, game: GameRow, me: Player, scanned: string | null) {
-  const miss = await stashMisses(ctx, game, me, 'dato')
-  if (!miss) return NO_STASH
-  // Only the code this game was assigned (ruling R15, R2): the one on the card the organiser printed and hid. Any
-  // other ★ card, bare, another game's or another card's, gets the same answer as no stash before anything else is
-  // judged, so it can't tell anyone how near they are or whether a stash exists.
-  const secret = game.settings.mode === 'full' ? (game.dato_stash?.code ?? null) : null
-  if (!scanned || !secret || hashToken(scanned) !== hashToken(secret)) return miss(NO_STASH)
-  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
-  const verdict = judgeDatoClaim({
-    phase: phaseAt(game, ctx.now).phase,
-    me,
-    stash: game.dato_stash,
-    myPos: latest(positions[me.id]),
-    powerUps: await ctx.store.powerUps(game.id),
-    pings: await ctx.store.pings(game.id),
-    now: ctx.now,
-  })
-  if (!verdict.ok) return verdict.reason === 'no-stash' || verdict.reason === 'too-far' ? miss(verdict) : verdict
-  // Losing the race to another runner isn't a miss.
-  if (!(await ctx.store.claimDato(game.id, me.id))) return NO_STASH
-  // Found: the card is never put in play again until it's reprinted.
-  if (game.dato_stash?.card) await ctx.store.setSecretCard(game.dato_stash.card.id, { state: 'retired', found_at: iso(ctx.now) })
-  await ctx.store.addEvent({ game_id: game.id, type: 'legendary', actor_id: me.id, target_id: null, data: {} })
-  return { ok: true, kind: 'dato' }
-}
-
-/**
- * Scanning Bomoh's hidden stash: a chaser within reach of the dropped purple card, first come first served.
- * Mirrors `claimDato` above, with Bomoh's own rules (chaser-only, no jail or hand-slot check — power-ups §5a,
- * `judgeBomohClaim`). The store claims it atomically: two chasers scanning at once get one card. No 'powerup'
- * event, which would name the finder: the feed only ever says `Something legendary was found.`. Claiming retires
- * the card. Unlike `claimDato`, no `powerups` row is read back or returned: Bomoh activates on claim, and
- * `store.claimBomoh` only reports whether the caller won.
- *
- * The wrong-scan limit (mirroring Review Focus 2): a scan that doesn't claim is recorded as a `stash-miss`, and
- * after STASH_MISS_LIMIT of them every later stash scan by that player answers `no-stash`, unrecorded, even at
- * the right spot.
- */
-async function claimBomoh(ctx: Ctx, game: GameRow, me: Player, scanned: string | null) {
-  const miss = await stashMisses(ctx, game, me, 'bomoh')
-  if (!miss) return NO_STASH
-  // Only the code this game was assigned (ruling R15, R2): the one on the card the organiser printed and hid. Any
-  // other Bomoh card, bare, another game's or another card's, gets the same answer as no stash before anything else
-  // is judged, so it can't tell anyone how near they are or whether a stash exists.
-  const secret = game.settings.mode === 'full' ? (game.bomoh_stash?.code ?? null) : null
-  if (!scanned || !secret || hashToken(scanned) !== hashToken(secret)) return miss(NO_STASH)
-  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
-  const verdict = judgeBomohClaim({
-    phase: phaseAt(game, ctx.now).phase,
-    me,
-    stash: game.bomoh_stash,
-    myPos: latest(positions[me.id]),
-    now: ctx.now,
-  })
-  if (!verdict.ok) return verdict.reason === 'no-stash' || verdict.reason === 'too-far' ? miss(verdict) : verdict
-  // Losing the race to another chaser isn't a miss.
-  if (!(await ctx.store.claimBomoh(game.id, me.id, new Date(ctx.now)))) return NO_STASH
-  // Found: the card is never put in play again until it's reprinted.
-  if (game.bomoh_stash?.card) await ctx.store.setSecretCard(game.bomoh_stash.card.id, { state: 'retired', found_at: iso(ctx.now) })
-  await ctx.store.addEvent({ game_id: game.id, type: 'legendary', actor_id: me.id, target_id: null, data: {} })
-  return { ok: true, kind: 'bomoh' }
-}
-
-/**
- * Scanning Super Ring's hidden stash: exactly Dato Seri's flow and refusals (`claimDato`), with its own wrong-scan
- * count. The store puts an unused `ring` row in the runner's slot; it is used automatically later, never from the
- * slot. The feed only ever says `Something legendary was found.`
- */
-async function claimRing(ctx: Ctx, game: GameRow, me: Player, scanned: string | null) {
-  const miss = await stashMisses(ctx, game, me, 'ring')
-  if (!miss) return NO_STASH
-  const secret = game.settings.mode === 'full' ? (game.ring_stash?.code ?? null) : null
-  if (!scanned || !secret || hashToken(scanned) !== hashToken(secret)) return miss(NO_STASH)
-  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
-  const verdict = judgeRingClaim({
-    phase: phaseAt(game, ctx.now).phase,
-    me,
-    stash: game.ring_stash,
-    myPos: latest(positions[me.id]),
-    powerUps: await ctx.store.powerUps(game.id),
-    pings: await ctx.store.pings(game.id),
-    now: ctx.now,
-  })
-  if (!verdict.ok) return verdict.reason === 'no-stash' || verdict.reason === 'too-far' ? miss(verdict) : verdict
-  // Losing the race to another runner isn't a miss.
-  if (!(await ctx.store.claimRing(game.id, me.id))) return NO_STASH
-  if (game.ring_stash?.card) await ctx.store.setSecretCard(game.ring_stash.card.id, { state: 'retired', found_at: iso(ctx.now) })
-  await ctx.store.addEvent({ game_id: game.id, type: 'legendary', actor_id: me.id, target_id: null, data: {} })
-  return { ok: true, kind: 'ring' }
-}
-
-/**
- * Scanning Mak Kau Hijau's hidden stash: exactly Bomoh's flow and refusals (`claimBomoh`, plus the frozen
- * refusal from `judgeHijauClaim`), with its own wrong-scan count. The store marks the stash claimed and writes
- * `games.hijau` in one step. The 45 s starts clear of every check-in window, scheduled or Mat Rempit (§6.3);
- * starting now, its push goes out at once. One that can't finish before the whistle is claimed and settled void.
- */
-async function claimHijau(ctx: Ctx, game: GameRow, me: Player, scanned: string | null) {
-  const miss = await stashMisses(ctx, game, me, 'hijau')
-  if (!miss) return NO_STASH
-  const secret = game.settings.mode === 'full' ? (game.hijau_stash?.code ?? null) : null
-  if (!scanned || !secret || hashToken(scanned) !== hashToken(secret)) return miss(NO_STASH)
-  const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
-  const verdict = judgeHijauClaim({
-    phase: phaseAt(game, ctx.now).phase,
-    me,
-    stash: game.hijau_stash,
-    myPos: latest(positions[me.id]),
-    now: ctx.now,
-  })
-  if (!verdict.ok) return verdict.reason === 'no-stash' || verdict.reason === 'too-far' ? miss(verdict) : verdict
-  const run = await hijauRunFor(ctx, game)
-  // Losing the race to another chaser isn't a miss.
-  if (!(await ctx.store.claimHijau(game.id, me.id, run))) return NO_STASH
-  if (game.hijau_stash?.card) await ctx.store.setSecretCard(game.hijau_stash.card.id, { state: 'retired', found_at: iso(ctx.now) })
-  await ctx.store.addEvent({ game_id: game.id, type: 'legendary', actor_id: me.id, target_id: null, data: {} })
-  await startHijauRun(ctx, game, run)
-  return { ok: true, kind: 'hijau' }
-}
-
 /** When a Mak Kau Hijau claimed now runs: it starts clear of every check-in window, scheduled or Mat Rempit (§6.3). */
 async function hijauRunFor(ctx: Ctx, game: GameRow): Promise<{ startsAt: string; deadline: string }> {
   const windows = [
@@ -1898,7 +1729,7 @@ async function hijauRunFor(ctx: Ctx, game: GameRow): Promise<{ startsAt: string;
 }
 
 /**
- * Right after a Mak Kau Hijau claim (a hidden card or a Tupperware slip): one that can't finish before the whistle is
+ * Right after a Mak Kau Hijau claim (a Tupperware slip): one that can't finish before the whistle is
  * settled void, and one starting now sends its push with the claim instead of waiting for the next poll.
  */
 async function startHijauRun(ctx: Ctx, game: GameRow, run: { startsAt: string }) {

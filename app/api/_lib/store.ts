@@ -1,7 +1,7 @@
 import { LUAR_GARISAN_GRACE_MS } from '../../shared/alerts.js'
 import type { ArenaDraft } from '../../shared/arenaDraft.js'
-import type { Arena, Arrest, Game, GameEvent, HijauFix, HijauRun, Ping, Player, Position, PowerUp, PowerUpKind, SecretCard, Slip } from '../../shared/types.js'
-import { newDatoCode, newToken } from './secrets.js'
+import type { Arena, Arrest, Game, GameEvent, HijauFix, HijauRun, Ping, Player, Position, PowerUp, PowerUpKind, Slip } from '../../shared/types.js'
+import { newToken } from './secrets.js'
 
 export type GameRow = Game & { organiser_id: string; host_push?: PushSubscriptionJSON | null }
 export type PlayerRow = Player & { token_hash: string }
@@ -76,14 +76,6 @@ export interface GameStore {
    * (null), leaving every other key as it is, so two phones ticking at once never drop each other's ticks.
    */
   setKitKey(gameId: string, group: 'ticks' | 'placed', key: string, value: string | true | null): Promise<void>
-  /**
-   * Every game not yet ended (ended_at unset) by any organiser in the organisation that has started, or was made
-   * after `createdAfter` (ISO), so abandoned lobbies drop out and the list stays small.
-   */
-  unfinishedGames(organisationId: string, createdAfter: string): Promise<GameRow[]>
-  /** The organisation's twelve secret cards, A-C each of yellow, orange, purple and green; missing ones are made `ready`, with fresh codes, on first read. */
-  secretCards(organisationId: string): Promise<SecretCard[]>
-  setSecretCard(id: string, patch: Partial<Pick<SecretCard, 'code' | 'state' | 'found_at'>>): Promise<void>
   /** Every Tupperware slip the organisation has printed. */
   slips(organisationId: string): Promise<Slip[]>
   /** The slip with this token, from any organisation (the caller checks `organisation_id`). */
@@ -387,7 +379,6 @@ export class MemoryStore implements GameStore {
   private phoneMoveRows: PhoneMoveRow[] = []
   private arenaRows: SavedArenaRow[] = []
   private osmCacheRows = new Map<string, { body: unknown; fetched_at: number }>()
-  private secretCardRows: SecretCard[] = []
   private slipRows: Slip[] = []
   private rateRows = new Map<string, number>()
 
@@ -424,8 +415,8 @@ export class MemoryStore implements GameStore {
     this.marshalInviteRows = this.marshalInviteRows.filter((r) => r.game_id !== id)
     // A Tee And Gee gate's position is a chaser's exact position.
     for (const u of this.powerUpRows) if (u.game_id === id) u.spot = null
-    // A house arrest's centre is a runner's position.
-    for (const p of this.playerRows) if (p.game_id === id) p.arrest = null
+    // A house arrest's centre is a runner's position, and when someone got the side quest says where they were at a ping.
+    for (const p of this.playerRows) if (p.game_id === id) Object.assign(p, { arrest: null, side_quest_at: null })
     // Mak Kau Hijau's tap spots are runners' exact positions (fair-play §1.8): the rest of the run stays.
     if (g.hijau?.fixes) {
       const { fixes: _fixes, ...rest } = g.hijau
@@ -486,38 +477,6 @@ export class MemoryStore implements GameStore {
     if (value === null) delete into[key]
     else into[key] = value
     g.kit = kit
-  }
-  async unfinishedGames(organisationId: string, createdAfter: string) {
-    const organisers = new Set(this.organiserRows.filter((o) => o.organisation_id === organisationId).map((o) => o.id))
-    return this.games
-      .filter(
-        (g) =>
-          organisers.has(g.organiser_id) &&
-          !g.ended_at &&
-          (g.started_at ||
-            !g.created_at ||
-            g.created_at > createdAfter ||
-            typeof g.dato_stash?.lat === 'number' ||
-            typeof g.bomoh_stash?.lat === 'number' ||
-            typeof g.ring_stash?.lat === 'number' ||
-            typeof g.hijau_stash?.lat === 'number'),
-      )
-      .map((g) => ({ ...g }))
-  }
-  async secretCards(organisationId: string) {
-    for (const legendary of ['dato', 'ring', 'bomoh', 'hijau'] as const) {
-      for (const letter of ['A', 'B', 'C'] as const) {
-        const has = this.secretCardRows.some((c) => c.organisation_id === organisationId && c.legendary === legendary && c.letter === letter)
-        if (!has) {
-          this.secretCardRows.push({ id: this.id('sc'), organisation_id: organisationId, legendary, letter, code: newDatoCode(), state: 'ready', found_at: null })
-        }
-      }
-    }
-    return this.secretCardRows.filter((c) => c.organisation_id === organisationId).map((c) => ({ ...c }))
-  }
-  async setSecretCard(id: string, patch: Partial<Pick<SecretCard, 'code' | 'state' | 'found_at'>>) {
-    const c = this.secretCardRows.find((x) => x.id === id)
-    if (c) Object.assign(c, patch)
   }
   async addPlayer(p: Omit<PlayerRow, 'id'>) {
     const row = { ...p, id: this.id('p') }

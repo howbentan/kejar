@@ -4,7 +4,7 @@ import { RESCUE_HOLD_MS, RESCUE_PING_MS } from '../../shared/penjara.js'
 import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
 import { penjaraLockedLine } from '../../shared/hijau.js'
-import { isBomohQr, isDatoQr, isHijauQr, isRingQr, isSlipQr, stationFromQr } from '../../shared/ids.js'
+import { isSlipQr, stationFromQr } from '../../shared/ids.js'
 import AlertsCard from '../game/AlertsCard'
 import { call } from '../game/api'
 import ChaseLayout from '../game/ChaseLayout'
@@ -13,7 +13,7 @@ import CheckinBanner from '../game/CheckinBanner'
 import { EndgameStatus } from '../game/EndgameChip'
 import HijauTakeover, { type TapResult } from '../game/HijauTakeover'
 import { dipFor } from '../game/LuckyDip'
-import PowerUpHand, { claimMessage, slipMessage, stashMessage, type SlipClaimResult, type ClaimResult } from '../game/PowerUpHand'
+import PowerUpHand, { claimMessage, slipMessage, type SlipClaimResult, type ClaimResult } from '../game/PowerUpHand'
 import { loadSession } from '../game/session'
 import { clock, useServerNow } from '../game/time'
 
@@ -143,7 +143,6 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
       return BREAK_REJECTIONS[b.reason] ?? 'Nobody freed'
     }
     if (isSlipQr(text)) return slipMessage(r as SlipClaimResult)
-    if (isDatoQr(text) || isBomohQr(text) || isRingQr(text) || isHijauQr(text)) return stashMessage(r as ClaimResult, 'runner')
     return claimMessage(r as ClaimResult, stationFromQr(text))
   }, [])
   const deckLeft = view.deckLeft

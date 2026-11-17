@@ -169,43 +169,6 @@ describe('RunnerChase', () => {
     expect(screen.queryByText(/CLAIMED/)).toBeNull()
   })
 
-  it('scanning the hidden stash card claims it and shows the legendary reveal, with no fan', async () => {
-    call.mockResolvedValue({ ok: true, kind: 'dato' })
-    render(<RunnerChase code="ABC234" view={testView()} />)
-    await scan('KEJAR:DATO')
-    expect(call).toHaveBeenCalledWith('claim', { code: 'ABC234', token: 't1', qr: 'KEJAR:DATO' })
-    expect(screen.getByRole('heading', { name: 'Dato Seri.' })).toBeInTheDocument()
-    expect(screen.queryByText(/CLAIMED · Station/)).toBeNull()
-  })
-
-  it.each([
-    ['hand-full', 'Use or lose your power-up first'],
-    ['too-far', 'Get closer.'],
-    ['no-stash', 'Nothing here.'],
-  ])('a refused stash scan (%s) says so without naming a station', async (reason, text) => {
-    call.mockResolvedValue({ ok: false, reason })
-    render(<RunnerChase code="ABC234" view={testView()} />)
-    await scan('KEJAR:DATO')
-    expect(screen.getByText(text)).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Dato Seri.' })).toBeNull()
-  })
-
-  it.each(['KEJAR:BOMOH:Pq7-abc', 'KEJAR:DATO:Pq7-abc'])('a runner scanning a purple card (%s) is told it is not for their side', async (qr) => {
-    call.mockResolvedValue({ ok: false, reason: 'cannot-claim' })
-    render(<RunnerChase code="ABC234" view={testView()} />)
-    await scan(qr)
-    expect(screen.getByText('Not for your side.')).toBeInTheDocument()
-    expect(document.body.textContent).not.toMatch(/Station \d|the station|within 30 m|bomoh/i)
-  })
-
-  it('a refused Bomoh scan for being too far uses the stash copy, not a station', async () => {
-    call.mockResolvedValue({ ok: false, reason: 'too-far' })
-    render(<RunnerChase code="ABC234" view={testView()} />)
-    await scan('KEJAR:BOMOH:Pq7-abc')
-    expect(screen.getByText('Get closer.')).toBeInTheDocument()
-    expect(document.body.textContent).not.toMatch(/Station \d|the station|within 30 m/i)
-  })
-
   it("draws the chasers' frozen snapshot on the map", () => {
     const chaserSnapshot = { positions: [{ name: 'Ben', lat: 3.001, lng: 101.001, stale: false }] }
     render(<RunnerChase code="ABC234" view={testView({ chaserSnapshot })} />)

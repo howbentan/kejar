@@ -18,67 +18,6 @@ export function tagIdFromQr(text: string): number | null {
 
 export const JAIL_QR = 'KEJAR:JAIL'
 
-/**
- * The printed Dato Seri card the organiser hides (jail design §4b); scanning it is a claim. The code belongs to one of
- * the organisation's reusable yellow cards (A-C), assigned to a game and claiming only there while it's in play
- * (ruling R15). It's printed from the organiser-only link, never the public sheet, and reprinting gives a new code.
- */
-export const datoQr = (code: string) => `KEJAR:DATO:${code}`
-
-/**
- * Any ★ card, this game's or not, including a bare `KEJAR:DATO`: all go to the server as a claim, which answers
- * a wrong card exactly like no stash, so a scan never says whose card it was.
- */
-export const isDatoQr = (text: string) => /^KEJAR:DATO(:|$)/.test(text.trim())
-
-/** The secret code on a ★ card, or null for a bare or malformed one. */
-export function datoCodeFromQr(text: string): string | null {
-  const m = /^KEJAR:DATO:([A-Za-z0-9_-]{1,64})$/.exec(text.trim())
-  return m ? m[1] : null
-}
-
-/**
- * The printed Bomoh card (the chaser-side legendary power-up); the same card rules as the ★ card above. Scanning it is
- * a claim, and the code belongs to one of the organisation's reusable cards, claiming only in its own game (ruling R15).
- */
-export const bomohQr = (code: string) => `KEJAR:BOMOH:${code}`
-
-/**
- * Any Bomoh card, this game's or not, including a bare `KEJAR:BOMOH`: all go to the server as a claim, which answers
- * a wrong card exactly like no stash, so a scan never says whose card it was.
- */
-export const isBomohQr = (text: string) => /^KEJAR:BOMOH(:|$)/.test(text.trim())
-
-/** The secret code on a Bomoh card, or null for a bare or malformed one. */
-export function bomohCodeFromQr(text: string): string | null {
-  const m = /^KEJAR:BOMOH:([A-Za-z0-9_-]{1,64})$/.exec(text.trim())
-  return m ? m[1] : null
-}
-
-/** The printed cheese-orange Super Ring card (the runner legendary): the same card rules as the Bomoh card above. */
-export const ringQr = (code: string) => `KEJAR:RING:${code}`
-
-/** Any Super Ring card, this game's or not, including a bare `KEJAR:RING`: all go to the server as a claim. */
-export const isRingQr = (text: string) => /^KEJAR:RING(:|$)/.test(text.trim())
-
-/** The secret code on a Super Ring card, or null for a bare or malformed one. */
-export function ringCodeFromQr(text: string): string | null {
-  const m = /^KEJAR:RING:([A-Za-z0-9_-]{1,64})$/.exec(text.trim())
-  return m ? m[1] : null
-}
-
-/** The printed deep-green Mak Kau Hijau card (the chaser legendary): the same card rules as the Bomoh card above. */
-export const hijauQr = (code: string) => `KEJAR:HIJAU:${code}`
-
-/** Any Mak Kau Hijau card, this game's or not, including a bare `KEJAR:HIJAU`: all go to the server as a claim. */
-export const isHijauQr = (text: string) => /^KEJAR:HIJAU(:|$)/.test(text.trim())
-
-/** The secret code on a Mak Kau Hijau card, or null for a bare or malformed one. */
-export function hijauCodeFromQr(text: string): string | null {
-  const m = /^KEJAR:HIJAU:([A-Za-z0-9_-]{1,64})$/.exec(text.trim())
-  return m ? m[1] : null
-}
-
 /** The printed single-use Tupperware slip: `KEJAR:SLIP:<token>`. The token is a long random string; the side is on the paper, not in the code. */
 export const slipQr = (token: string) => `KEJAR:SLIP:${token}`
 

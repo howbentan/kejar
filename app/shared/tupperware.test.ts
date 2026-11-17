@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { game } from './fixtures.js'
 import { distanceM } from './geo.js'
 import { inPlayArea } from './playArea.js'
-import { boxFor, judgeSlip, mirroredSpots, sideOf } from './tupperware.js'
+import { boxFor, judgeSlip, mirroredSpots, sideName, sideOf, TUPPER_SIDES } from './tupperware.js'
 import { DEFAULT_SETTINGS, type Game, type Slip } from './types.js'
 
 const full = (over: Partial<Game> = {}, legendaries: Partial<Game['settings']['legendaries']> = {}) =>
@@ -19,6 +19,13 @@ describe('sideOf', () => {
     expect(sideOf('chaser')).toBe('kejar')
     expect(sideOf('marshal')).toBeNull()
     expect(sideOf(null)).toBeNull()
+  })
+})
+
+describe('sideName', () => {
+  it('names each side the way players say it, Dikejar first', () => {
+    expect(TUPPER_SIDES).toEqual(['dikejar', 'kejar'])
+    expect(TUPPER_SIDES.map(sideName)).toEqual(['Dikejar', 'Kejar'])
   })
 })
 

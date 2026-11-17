@@ -22,6 +22,12 @@ export function sideOf(role: Player['role']): TupperSide | null {
   return role === 'runner' ? 'dikejar' : role === 'chaser' ? 'kejar' : null
 }
 
+/** Both sides, Dikejar first: the order every list of boxes, steps and notices uses. */
+export const TUPPER_SIDES: readonly TupperSide[] = ['dikejar', 'kejar']
+
+/** A side as players say it, for copy: `Kejar Tupperware not dropped yet`. */
+export const sideName = (side: TupperSide): 'Dikejar' | 'Kejar' => (side === 'kejar' ? 'Kejar' : 'Dikejar')
+
 const stashOf = (game: Game, kind: LegendaryKind) =>
   ({ dato: game.dato_stash, ring: game.ring_stash, bomoh: game.bomoh_stash, hijau: game.hijau_stash })[kind]
 

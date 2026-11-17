@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { fallbackFor, LEGENDARY_KINDS, pickLegendaries, SIDE_PAIRS, sidesOf } from './legendaries.js'
+import { LEGENDARY_KINDS, pickLegendaries, SIDE_PAIRS, sidesOf } from './legendaries.js'
 import { seeded } from './testing.js'
 
 describe('SIDE_PAIRS', () => {
@@ -50,11 +50,3 @@ describe('sidesOf', () => {
   })
 })
 
-describe('fallbackFor', () => {
-  it('is the other one of the pair', () => {
-    expect(fallbackFor('dato')).toBe('ring')
-    expect(fallbackFor('ring')).toBe('dato')
-    expect(fallbackFor('bomoh')).toBe('hijau')
-    expect(fallbackFor('hijau')).toBe('bomoh')
-  })
-})

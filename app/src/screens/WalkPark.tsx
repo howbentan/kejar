@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { distanceM } from '../../shared/geo.js'
 import type { SecretTone } from '../../shared/kit.js'
+import { sideName } from '../../shared/tupperware.js'
 import type { LatLng } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
 import { call } from '../game/api'
@@ -74,7 +75,7 @@ const SECRET: Record<SecretTone, { token: string; button: string; drop: string; 
 
 /** Which side's box a `tupper-*` step hides. */
 const sideOfBox = (id: string): 'dikejar' | 'kejar' => (id === 'tupper-kejar' ? 'kejar' : 'dikejar')
-const sideName = (id: string) => (sideOfBox(id) === 'kejar' ? 'Kejar' : 'Dikejar')
+const boxSide = (id: string) => sideName(sideOfBox(id))
 
 const cardStyle = (here: boolean, tone: SecretTone | null) => ({
   border: '1px solid var(--hair)',
@@ -125,7 +126,7 @@ export default function WalkPark({
   // The secret step has no spot to reach: any place nearby will do, so only stations and Penjara use the 15 m rule.
   const isHere = !secret && metres !== null && metres <= WALK_HERE_M
   // The server only sends a secret place to the organiser, so a step shows up here only when it's theirs to see.
-  const hideLineFor = (id: string) => `Hide the ${sideName(id)} Tupperware`
+  const hideLineFor = (id: string) => `Hide the ${boxSide(id)} Tupperware`
 
   async function mark(id: string, beforeSave?: () => Promise<unknown>) {
     if (busy) return
@@ -206,7 +207,7 @@ export default function WalkPark({
               <>
                 <p className="eyebrow" style={here ? { color: 'inherit', opacity: 0.6 } : { color: `var(--${look.token}-2)` }}>{`SECRET · ${count}`}</p>
                 <p style={{ fontWeight: 800, fontSize: 21, letterSpacing: '-0.04em' }}>{hideLineFor(next!.id)}</p>
-                <p>{`Any unused ${sideName(next!.id)} slip inside`}</p>
+                <p>{`Any unused ${boxSide(next!.id)} slip inside`}</p>
                 <p>
                   <b>Good spots</b> under a wakaf bench · behind the park map board · in the roots of a big angsana · by the outdoor gym
                 </p>

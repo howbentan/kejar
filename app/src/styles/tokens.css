@@ -29,6 +29,8 @@
   --tupper-2: #E63946;
   --tupper-3: #A4161A;
   --tupper-ink: #3A0508;
+  /* Under white text (buttons, badges): a deeper red, 4.85:1 against --white. The box art keeps --tupper-2. */
+  --tupper-btn: #CC2B38;
   /* The endgames' own colours (endgame design §6.4), kept clear of the legendaries' yellow, orange, purple and green.
      Map.tsx reads --bomba, --hebat and --hebat-ink for MapLibre, with these values as its fallbacks. */
   --bomba: #E63946;
@@ -669,7 +671,7 @@ select.input option { background: #141614; color: var(--white); }
 .btn.btn-bomoh { background: var(--bomoh-2); color: var(--bomoh-ink); border-color: var(--bomoh-3); }
 .btn.btn-ring { background: var(--ring-2); color: var(--ring-ink); border-color: var(--ring-3); }
 .btn.btn-hijau { background: var(--hijau-2); color: var(--hijau-ink); border-color: var(--hijau-3); }
-.btn.btn-tupper { background: var(--tupper-2); color: var(--white); border-color: var(--tupper-3); }
+.btn.btn-tupper { background: var(--tupper-btn); color: var(--white); border-color: var(--tupper-3); }
 
 /* How to play doodle scenes (motion design 8.8): marker strokes that draw themselves, then stay still. */
 .kd-doodle path, .kd-doodle circle, .kd-doodle rect { fill: none; stroke: var(--volt); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
@@ -815,7 +817,7 @@ html { -webkit-tap-highlight-color: transparent; }
 .sq { position: fixed; inset: 0; z-index: 30; background: rgba(5, 5, 5, 0.55); display: flex; align-items: center; justify-content: center; padding: 18px; box-sizing: border-box; }
 .sq-card { position: relative; width: 100%; max-width: 360px; background: var(--white); color: #0A0A0B; border-radius: 26px; padding: 20px 18px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6); animation: sq-pop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
 @keyframes sq-pop { from { transform: scale(0.7) translateY(20px); opacity: 0; } to { transform: none; opacity: 1; } }
-.sq-eyebrow { margin: 0; font: 500 10px var(--mono); letter-spacing: 0.22em; color: #fff; background: var(--tupper-2); padding: 4px 9px; border-radius: 999px; }
+.sq-eyebrow { margin: 0; font: 500 10px var(--mono); letter-spacing: 0.22em; color: #fff; background: var(--tupper-btn); padding: 4px 9px; border-radius: 999px; }
 .sq-card h2 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.05em; line-height: 1.05; }
 .sq-cipher { min-height: 2.1em; display: grid; place-items: center; }
 .decrypt { font-variant-ligatures: none; }
@@ -825,7 +827,7 @@ html { -webkit-tap-highlight-color: transparent; }
 .sq-buzz { margin: 2px 0 4px; font: 500 10.5px var(--mono); letter-spacing: 0.06em; color: #555; display: flex; align-items: center; gap: 6px; }
 .sq-buzz .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tupper-2); animation: sq-blink 1.4s infinite; }
 @keyframes sq-blink { 50% { opacity: 0.25; } }
-.sq-card .sq-found { width: 100%; background: var(--tupper-2); color: #fff; border-color: var(--tupper-3); }
+.sq-card .sq-found { width: 100%; background: var(--tupper-btn); color: #fff; border-color: var(--tupper-3); }
 .sq-close { position: absolute; top: 8px; right: 10px; width: 36px; height: 36px; border: 0; background: none; font-size: 26px; line-height: 1; color: #444; cursor: pointer; }
 .chip.chip-quest { pointer-events: auto; cursor: pointer; color: var(--white); border-color: var(--tupper-2); }
 @media (prefers-reduced-motion: reduce) { .sq-card, .sq-tub, .sq-buzz .dot { animation: none; } }

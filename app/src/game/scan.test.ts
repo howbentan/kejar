@@ -6,16 +6,6 @@ describe('scanTarget', () => {
     expect(scanTarget('KEJAR:STATION:3', 'runner')).toEqual({ action: 'claim', body: { qr: 'KEJAR:STATION:3' } })
     expect(scanTarget('KEJAR:STATION:3', 'chaser')).toEqual({ action: 'claim', body: { qr: 'KEJAR:STATION:3' } })
   })
-  it('the hidden stash card claims, for either side (the server turns chasers away)', () => {
-    expect(scanTarget('KEJAR:DATO', 'runner')).toEqual({ action: 'claim', body: { qr: 'KEJAR:DATO' } })
-    expect(scanTarget(' KEJAR:DATO ', 'chaser')).toEqual({ action: 'claim', body: { qr: ' KEJAR:DATO ' } })
-    // Each game's card carries its own code (ruling R15).
-    expect(scanTarget('KEJAR:DATO:Zx9_q-4', 'runner')).toEqual({ action: 'claim', body: { qr: 'KEJAR:DATO:Zx9_q-4' } })
-  })
-  it('the hidden purple card claims, for either side (the server turns runners away)', () => {
-    expect(scanTarget('KEJAR:BOMOH', 'runner')).toEqual({ action: 'claim', body: { qr: 'KEJAR:BOMOH' } })
-    expect(scanTarget('KEJAR:BOMOH:Zx9_q-4', 'chaser')).toEqual({ action: 'claim', body: { qr: 'KEJAR:BOMOH:Zx9_q-4' } })
-  })
   it('a Tupperware slip claims, for either side', () => {
     expect(scanTarget('KEJAR:SLIP:abc123', 'runner')).toEqual({ action: 'claim', body: { qr: 'KEJAR:SLIP:abc123' } })
     expect(scanTarget('KEJAR:SLIP:abc123', 'chaser')).toEqual({ action: 'claim', body: { qr: 'KEJAR:SLIP:abc123' } })
@@ -33,9 +23,4 @@ describe('scanTarget', () => {
     expect(scanTarget('https://example.com', 'chaser')).toEqual({ error: "That's not a tag or station code" })
   })
 
-  it('the orange and green cards scan like any hidden stash, for either side', () => {
-    expect(scanTarget('KEJAR:RING:Zx9_q-4', 'runner')).toEqual({ action: 'claim', body: { qr: 'KEJAR:RING:Zx9_q-4' } })
-    expect(scanTarget('KEJAR:HIJAU:Zx9_q-4', 'chaser')).toEqual({ action: 'claim', body: { qr: 'KEJAR:HIJAU:Zx9_q-4' } })
-    expect(scanTarget('KEJAR:RING', 'chaser')).toEqual({ action: 'claim', body: { qr: 'KEJAR:RING' } })
-  })
 })

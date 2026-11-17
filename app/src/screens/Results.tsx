@@ -1,5 +1,7 @@
 import type { View } from '../../shared/views.js'
 import { ENDGAME_COPY } from '../game/EndgameLogo'
+import GameMap from '../game/Map'
+import { sideName, TUPPER_SIDES } from '../../shared/tupperware.js'
 import { clock } from '../game/time'
 import { Screen, Wordmark } from '../game/ui'
 import PostGameFeedback from './PostGameFeedback'
@@ -15,31 +17,22 @@ function EndgameLine({ view }: { view: View }) {
 
 /**
  * Organiser only (the view carries `tupperware` for nobody else): a box that was dropped and never opened is still out
- * in the park, so say so and link its pin. One line on the results card, so a map link rather than a map.
+ * in the park, so say so and show its pin on a small map, framed with the start so it's easy to walk back to.
  */
 function BringHome({ view }: { view: View }) {
-  const left = (['dikejar', 'kejar'] as const).flatMap((side) => {
+  const left = TUPPER_SIDES.flatMap((side) => {
     const box = view.tupperware?.[side]
-    return box && box.dropped && !box.claimed ? [{ side, name: side === 'dikejar' ? 'Dikejar' : 'Kejar', at: box.dropped }] : []
+    return box && box.dropped && !box.claimed ? [{ side, at: box.dropped }] : []
   })
   return (
     <>
-      {left.map(({ side, name, at }) => (
-        <p key={side} style={{ color: '#E63946', fontWeight: 700 }}>
-          {name}'s Tupperware wasn't opened. Bawa balik!{' '}
-          <a
-            href={`https://www.google.com/maps?q=${at.lat},${at.lng}`}
-            target="_blank"
-            rel="noreferrer"
-            aria-label={`Map pin for the ${name} Tupperware`}
-            style={{ color: 'inherit' }}
-          >
-            <svg width="14" height="18" viewBox="0 0 14 18" aria-hidden="true" style={{ verticalAlign: '-3px' }}>
-              <path d="M7 0C3.1 0 0 3 0 6.8 0 11.7 7 18 7 18s7-6.3 7-11.2C14 3 10.9 0 7 0z" fill="currentColor" />
-              <circle cx="7" cy="6.8" r="2.4" fill="#0A0A0B" />
-            </svg>
-          </a>
-        </p>
+      {left.map(({ side, at }) => (
+        <div key={side} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <p style={{ color: 'var(--tupper-2)', fontWeight: 700, margin: 0 }}>{sideName(side)}'s Tupperware wasn't opened. Bawa balik!</p>
+          <div style={{ borderRadius: 14, overflow: 'hidden' }}>
+            <GameMap arena={view.arena} dots={[]} stash={at} fit={[at, view.arena.start]} height={180} />
+          </div>
+        </div>
       ))}
     </>
   )

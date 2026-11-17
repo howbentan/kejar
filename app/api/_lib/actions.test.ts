@@ -6,7 +6,7 @@ import { cardAt, deckFor } from '../../shared/deck.js'
 import { distanceM, distanceToEdgeM, offset } from '../../shared/geo.js'
 import { floodPlanOf } from '../../shared/flood.js'
 import { inPlayArea } from '../../shared/playArea.js'
-import { bomohQr, datoQr, hijauQr, JAIL_QR, ringQr, slipQr, stationQr, tagQr } from '../../shared/ids.js'
+import { JAIL_QR, slipQr, stationQr, tagQr } from '../../shared/ids.js'
 import { seeded } from '../../shared/testing.js'
 import type { PowerUpKind, Role } from '../../shared/types.js'
 import type { View } from '../../shared/views.js'
@@ -80,21 +80,28 @@ async function createOrganiser() {
   return organiserToken
 }
 
+/** The slip kept for each hidden box, by game code and legendary: `slipQrFor` hands it back. */
+const slipTokens = new Map<string, string>()
+
 /**
- * A game started on a printed colour card before the Tupperware (spec §6, release ruling): its stash holds one of the
- * organisation's cards and that card's code, hidden at `spot` (null: not yet hidden). `create` no longer hands cards
- * out, so a test of the kept legacy claim path writes the stash here.
+ * Hides the Tupperware for `legendary` at `spot` (null: not yet dropped) and keeps one unused slip of its side for it,
+ * the way every legendary is claimed now. Scan it with `slipQrFor`.
  */
-async function legacyCard(code: string, legendary: 'dato' | 'ring' | 'bomoh' | 'hijau', spot: { lat: number; lng: number } | null, letter = 'A') {
+async function hideBox(code: string, legendary: 'dato' | 'ring' | 'bomoh' | 'hijau', spot: { lat: number; lng: number } | null) {
   const game = (await store.gameByCode(code))!
+  await store.updateGame(game.id, { [`${legendary}_stash`]: { lat: spot?.lat ?? null, lng: spot?.lng ?? null, claimedBy: null, claimedAt: null } })
   const org = (await store.organiserById(game.organiser_id))!.organisation_id
-  const card = (await store.secretCards(org)).find((c) => c.legendary === legendary && c.letter === letter)!
-  const stash = { code: card.code, card: { id: card.id, letter: card.letter }, lat: spot?.lat ?? null, lng: spot?.lng ?? null, claimedBy: null, claimedAt: null }
-  await store.updateGame(game.id, { [`${legendary}_stash`]: stash })
+  const side = legendary === 'dato' || legendary === 'ring' ? 'dikejar' : 'kejar'
+  const kept = new Set(slipTokens.values())
+  const free = async () => (await store.slips(org)).filter((x) => x.side === side && !x.used_at && !x.bound_game_id && !kept.has(x.token))
+  if ((await free()).length === 0) await store.makeSlipSheet(org)
+  slipTokens.set(`${code}:${legendary}`, (await free())[0].token)
 }
+const slipQrFor = (code: string, legendary: 'dato' | 'ring' | 'bomoh' | 'hijau') => slipQr(slipTokens.get(`${code}:${legendary}`)!)
 
 beforeEach(() => {
   now = T0
+  slipTokens.clear()
   store = new MemoryStore(() => now)
   pushes = []
   pushFails = false
@@ -3897,265 +3904,7 @@ describe('the chaser snapshot at check-in (checkins design §5)', () => {
   })
 })
 
-describe('Dato Seri: the hidden stash (jail design §4b, §4c)', () => {
-  const STASH = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
-  const atStash = { lat: STASH.lat, lng: STASH.lng, accuracy_m: 8 }
-
-  /** A Full game in the lobby with Siti as marshal. */
-  async function lobby() {
-    const g = await readyGame({ mode: 'full' })
-    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
-    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
-    return { ...g, siti, gameId: (await store.gameByCode(g.code))!.id }
-  }
-  async function chasing(drop = true) {
-    const g = await lobby()
-    await legacyCard(g.code, 'dato', drop ? STASH : null)
-    await run('start', { code: g.code, organiserToken: g.organiserToken })
-    now = T0 + 7 * MIN
-    await run('state', { code: g.code, organiserToken: g.organiserToken })
-    return g
-  }
-  const stash = async (g: { code: string }) => (await store.gameByCode(g.code))!.dato_stash
-  /** This game's own ★ card code (ruling R15). */
-  const cardCode = async (g: { code: string }) => (await stash(g))!.code!
-  const scanQr = (g: { code: string }, token: string, qr: string, where: object = atStash) => run('claim', { code: g.code, token, qr, ...where })
-  const scan = async (g: { code: string }, token: string, where: object = atStash) => scanQr(g, token, datoQr(await cardCode(g)), where)
-  const CODE = expect.stringMatching(/^[A-Za-z0-9_-]{22}$/)
-  const CARD = { id: expect.any(String), letter: expect.stringMatching(/^[ABC]$/) }
-
-  it("only this game's card claims: a bare, another game's or a made-up card gets the same answer as no stash", async () => {
-    const g = await chasing()
-    const other = await lobby()
-    await legacyCard(other.code, 'dato', null)
-    for (const qr of ['KEJAR:DATO', datoQr(await cardCode(other)), datoQr('x'.repeat(22)), 'KEJAR:DATO:'])
-      expect(await scanQr(g, g.aina.token, qr)).toEqual({ ok: false, reason: 'no-stash' })
-    // Even for a chaser, or far away: a wrong card says nothing about where or whose the stash is.
-    expect(await scanQr(g, g.ben.token, 'KEJAR:DATO')).toEqual({ ok: false, reason: 'no-stash' })
-    expect(await scanQr(g, g.aina.token, 'KEJAR:DATO', { lat: CENTER.lat, lng: CENTER.lng, accuracy_m: 8 })).toEqual({ ok: false, reason: 'no-stash' })
-    expect((await stash(g))!.claimedBy).toBeNull()
-    // Aina has used up her wrong scans by now, so Hafiz claims it.
-    expect(await scan(g, g.hafiz.token)).toEqual({ ok: true, kind: 'dato' })
-  })
-
-  it('a stash made but not yet dropped claims nothing and shows no zone', async () => {
-    const g = await chasing(false)
-    expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'no-stash' })
-    expect(await run<View>('state', { code: g.code, token: g.aina.token })).not.toHaveProperty('legendaryZone')
-  })
-
-  it("the card's code never reaches a player, a marshal or the organiser's view", async () => {
-    const g = await chasing()
-    const code = await cardCode(g)
-    for (const token of [g.aina.token, g.hafiz.token, g.ben.token, g.siti.token]) {
-      const v = await run<View>('state', { code: g.code, token })
-      expect(JSON.stringify(v)).not.toContain(code)
-      expect(v).not.toHaveProperty('datoCode')
-      expect(v).not.toHaveProperty('datoCard')
-    }
-    const host = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
-    expect(host).not.toHaveProperty('datoCard')
-    expect(JSON.stringify(host)).not.toContain(code)
-    const claimed = await scan(g, g.aina.token)
-    expect(JSON.stringify(claimed)).not.toContain(code)
-    expect(JSON.stringify(await run<View>('state', { code: g.code, token: g.aina.token }))).not.toContain(code)
-  })
-
-  it('the first runner to scan the stash claims Dato Seri; it stops working after', async () => {
-    const g = await chasing()
-    expect(await scan(g, g.aina.token)).toEqual({ ok: true, kind: 'dato' })
-    expect(await stash(g)).toEqual({ code: CODE, card: CARD, ...STASH, claimedBy: g.aina.playerId, claimedAt: new Date(now).toISOString() })
-    const held = (await store.powerUps(g.gameId)).filter((u) => u.kind === 'dato')
-    expect(held).toEqual([expect.objectContaining({ player_id: g.aina.playerId, station: null, used_at: null, sealed: false })])
-    expect(await scan(g, g.hafiz.token)).toEqual({ ok: false, reason: 'no-stash' })
-    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'dato')).toHaveLength(1)
-  })
-
-  it('a chaser scanning the stash is refused, not consumed', async () => {
-    const g = await chasing()
-    expect(await scan(g, g.ben.token)).toEqual({ ok: false, reason: 'cannot-claim' })
-    expect((await stash(g))!.claimedBy).toBeNull()
-    expect(await scan(g, g.aina.token)).toEqual({ ok: true, kind: 'dato' })
-  })
-
-  it('a marshal or a jailed runner is refused with nothing changed', async () => {
-    const g = await chasing()
-    expect(await scan(g, g.siti.token)).toEqual({ ok: false, reason: 'cannot-claim' })
-    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: true } }])
-    expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'cannot-claim' })
-    expect((await stash(g))!.claimedBy).toBeNull()
-    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'dato')).toHaveLength(0)
-  })
-
-  it('needs a fresh position within 30 m of the stash, forgiving GPS error as stations do', async () => {
-    const g = await chasing()
-    expect(await scan(g, g.aina.token, { lat: CENTER.lat, lng: CENTER.lng, accuracy_m: 8 })).toEqual({ ok: false, reason: 'too-far' })
-    await run('location', { code: g.code, token: g.hafiz.token, ...atStash })
-    now += 31_000
-    expect(await scan(g, g.hafiz.token, {})).toEqual({ ok: false, reason: 'too-far' })
-    // 45 m off with 20 m accuracy is within 30 + 20.
-    const near = { lat: STASH.lat + 45 / 111_195, lng: STASH.lng, accuracy_m: 20 }
-    expect(await scan(g, g.hafiz.token, near)).toEqual({ ok: true, kind: 'dato' })
-  })
-
-  it('a full slot is refused with hand-full and the stash stays claimable', async () => {
-    const g = await chasing()
-    await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'cloak', station: 1 })
-    expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'hand-full' })
-    expect((await stash(g))!.claimedBy).toBeNull()
-    expect(await scan(g, g.hafiz.token)).toEqual({ ok: true, kind: 'dato' })
-  })
-
-  it('is refused before the chase, while paused, and when no stash was dropped', async () => {
-    const g = await lobby()
-    await legacyCard(g.code, 'dato', STASH)
-    await run('start', { code: g.code, organiserToken: g.organiserToken })
-    now = T0 + 2 * MIN // hiding
-    expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'not-chasing' })
-    now = T0 + 7 * MIN
-    await run('pause', { code: g.code, organiserToken: g.organiserToken })
-    expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'paused' })
-    now = T0
-    const none = await chasing(false)
-    expect(await scan(none, none.aina.token)).toEqual({ ok: false, reason: 'no-stash' })
-  })
-
-  it('two runners scanning at the same moment: exactly one gets it', async () => {
-    const g = await chasing()
-    const [a, b] = await Promise.all([scan(g, g.aina.token), scan(g, g.hafiz.token)])
-    expect([a, b].filter((r) => r.ok)).toHaveLength(1)
-    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'dato')).toHaveLength(1)
-  })
-
-  it('Dato Seri is secret: the feed never names it or the finder', async () => {
-    const g = await chasing()
-    await scan(g, g.aina.token)
-    for (const token of [g.hafiz.token, g.ben.token, g.siti.token]) {
-      const v = await run<View>('state', { code: g.code, token })
-      expect(v.feed[0].text).toBe('Something legendary was found.')
-      const lines = v.feed.map((f) => f.text)
-      expect(lines.filter((t) => /Aina/.test(t))).toEqual(['Aina joined'])
-      expect(lines.join(' ')).not.toMatch(/Dato|picked up/)
-    }
-    expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).feed[0].text).toBe('Something legendary was found.')
-    // The finder's reveal is their own claim result and hand.
-    expect((await run<View>('state', { code: g.code, token: g.aina.token })).hand.map((u) => u.kind)).toEqual(['dato'])
-  })
-
-  it('no player sees a hint zone around the stash any more (the Tupperware side quest replaced it)', async () => {
-    const g = await lobby()
-    await legacyCard(g.code, 'dato', STASH)
-    expect(await run<View>('state', { code: g.code, token: g.aina.token })).not.toHaveProperty('legendaryZone')
-    await run('start', { code: g.code, organiserToken: g.organiserToken })
-    now = T0 + 2 * MIN // hiding: not yet
-    expect(await run<View>('state', { code: g.code, token: g.aina.token })).not.toHaveProperty('legendaryZone')
-    now = T0 + 7 * MIN
-    for (const token of [g.aina.token, g.hafiz.token, g.ben.token]) {
-      const v = await run<View>('state', { code: g.code, token })
-      expect(v).not.toHaveProperty('legendaryZone')
-      expect(v).not.toHaveProperty('datoStash')
-      expect(JSON.stringify(v)).not.toMatch(/dato/i)
-    }
-    await scan(g, g.hafiz.token)
-    for (const token of [g.aina.token, g.hafiz.token, g.ben.token]) {
-      expect(await run<View>('state', { code: g.code, token })).not.toHaveProperty('legendaryZone')
-    }
-  })
-
-  it('the organiser sees the exact stash instead of the zone; a marshal sees neither the stash nor the legendaries', async () => {
-    const g = await chasing()
-    const v = await run<View>('state', { code: g.code, organiserToken: g.organiserToken })
-    expect(v.datoStash).toEqual({ ...STASH, claimedBy: null, claimedAt: null })
-    expect(v).not.toHaveProperty('legendaryZone')
-    expect(v.settings.legendaries).toEqual({ dato: 'stash', bomoh: 'off', ring: 'off', hijau: 'off' })
-    const m = await run<View>('state', { code: g.code, token: g.siti.token })
-    expect(m).not.toHaveProperty('datoStash')
-    expect(m).not.toHaveProperty('datoCode')
-    expect(m).not.toHaveProperty('datoCard')
-    expect(m.settings).not.toHaveProperty('legendaries')
-    expect(JSON.stringify(m)).not.toContain(await cardCode(g))
-  })
-
-  it('claiming the stash retires its card, with found_at', async () => {
-    const g = await chasing()
-    const card = (await stash(g))!.card!
-    expect(await scan(g, g.aina.token)).toEqual({ ok: true, kind: 'dato' })
-    const org = (await store.organiserBySessionTokenHash(hashToken(g.organiserToken)))!.organisation_id
-    expect((await store.secretCards(org)).find((c) => c.id === card.id)).toMatchObject({ state: 'retired', found_at: new Date(now).toISOString() })
-  })
-
-  describe('the wrong-scan limit (Review Focus 2)', () => {
-    const far = { lat: CENTER.lat, lng: CENTER.lng, accuracy_m: 8 }
-    const misses = async (g: { gameId: string }) => (await store.events(g.gameId)).filter((e) => e.type === 'stash-miss')
-
-    it('a copied card walked round the zone: 3 wrong scans are recorded, the 4th at the right spot is ignored, and someone else still claims it', async () => {
-      const g = await chasing()
-      const feedBefore = (await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).feed
-      const spots = [far, { ...far, lat: CENTER.lat - 60 / 111_195 }, { ...far, lng: CENTER.lng + 60 / 111_195 }]
-      for (const where of spots) expect((await scan(g, g.aina.token, where)).ok).toBe(false)
-      expect(await misses(g)).toEqual([0, 1, 2].map(() => expect.objectContaining({ actor_id: g.aina.playerId, target_id: null, data: { legendary: 'dato' } })))
-      // The 4th, right code at the right spot: the same neutral answer, nothing changes and nothing is recorded.
-      expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'no-stash' })
-      expect(await misses(g)).toHaveLength(3)
-      expect((await stash(g))!.claimedBy).toBeNull()
-      expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'dato')).toHaveLength(0)
-      // Never in a feed or an alert.
-      const views = [
-        await run<View>('state', { code: g.code, organiserToken: g.organiserToken }),
-        ...(await Promise.all([g.aina.token, g.hafiz.token, g.ben.token, g.siti.token].map((token) => run<View>('state', { code: g.code, token })))),
-      ]
-      expect(views[0].feed).toEqual(feedBefore)
-      const missIds = (await misses(g)).map((e) => e.id)
-      for (const v of views) {
-        expect(JSON.stringify(v)).not.toContain('stash-miss')
-        for (const id of missIds) expect(v.alerts.map((a) => a.id)).not.toContain(id)
-      }
-      expect(await scan(g, g.hafiz.token)).toEqual({ ok: true, kind: 'dato' })
-    })
-
-    it('wrong codes and no stash count as misses too', async () => {
-      const g = await chasing()
-      await scanQr(g, g.aina.token, 'KEJAR:DATO')
-      await scanQr(g, g.aina.token, datoQr('x'.repeat(22)))
-      await scanQr(g, g.aina.token, datoQr('y'.repeat(22)))
-      expect(await misses(g)).toHaveLength(3)
-      expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'no-stash' })
-      expect((await stash(g))!.claimedBy).toBeNull()
-    })
-  })
-
-  it('scans refused for not chasing, cannot claim, a full slot or a lost race are not misses (ruling R4)', async () => {
-    const g = await lobby()
-    await legacyCard(g.code, 'dato', STASH)
-    await run('start', { code: g.code, organiserToken: g.organiserToken })
-    now = T0 + 2 * MIN // hiding
-    for (let k = 0; k < 3; k++) expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'not-chasing' })
-    now = T0 + 7 * MIN
-    for (let k = 0; k < 3; k++) expect(await scan(g, g.ben.token)).toEqual({ ok: false, reason: 'cannot-claim' })
-    const cloak = await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'cloak', station: 1 })
-    for (let k = 0; k < 3; k++) expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'hand-full' })
-    expect((await store.events(g.gameId)).filter((e) => e.type === 'stash-miss')).toHaveLength(0)
-    await store.updatePowerUp(cloak.id, { taken_at: new Date(now).toISOString() })
-    expect(await scan(g, g.aina.token)).toEqual({ ok: true, kind: 'dato' })
-  })
-
-  it('Dato Seri cannot be used from the slot like other cards; it is for Settle', async () => {
-    const g = await chasing()
-    await scan(g, g.aina.token)
-    const dato = (await store.powerUps(g.gameId)).find((u) => u.kind === 'dato')!
-    expect(await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: dato.id })).toEqual({ ok: false, reason: 'settle-at-penjara' })
-    expect((await store.powerUps(g.gameId)).find((u) => u.id === dato.id)!.used_at).toBeNull()
-  })
-
-  it('a Core game never has a zone', async () => {
-    const g = await readyGame()
-    await run('start', { code: g.code, organiserToken: g.organiserToken })
-    now = T0 + 7 * MIN
-    expect(await run<View>('state', { code: g.code, token: g.aina.token })).not.toHaveProperty('legendaryZone')
-  })
-})
-
-describe('Bomoh: the hidden stash (chaser-side legendary, mirrors Dato Seri above)', () => {
+describe('Bomoh: claimed from the Tupperware, then a team-wide reveal', () => {
   const STASH = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
   const atStash = { lat: STASH.lat, lng: STASH.lng, accuracy_m: 8 }
 
@@ -4170,165 +3919,13 @@ describe('Bomoh: the hidden stash (chaser-side legendary, mirrors Dato Seri abov
     await run('linkTag', { code: g.code, token: chong.token, tagId: 5 })
     return { ...g, chong, gameId: (await store.gameByCode(g.code))!.id }
   }
-  async function chasing(drop = true) {
-    const g = await lobby()
-    await legacyCard(g.code, 'bomoh', drop ? STASH : null)
-    await run('start', { code: g.code, organiserToken: g.organiserToken })
-    now = T0 + 7 * MIN
-    await run('state', { code: g.code, organiserToken: g.organiserToken })
-    return g
-  }
-  const stash = async (g: { code: string }) => (await store.gameByCode(g.code))!.bomoh_stash
-  /** This game's own Bomoh card code (ruling R15). */
-  const cardCode = async (g: { code: string }) => (await stash(g))!.code!
-  const scanQr = (g: { code: string }, token: string, qr: string, where: object = atStash) => run('claim', { code: g.code, token, qr, ...where })
-  const scan = async (g: { code: string }, token: string, where: object = atStash) => scanQr(g, token, bomohQr(await cardCode(g)), where)
-
-  it('a chaser in reach of the dropped, unclaimed stash with the right code claims Bomoh; it retires the card and stops working after', async () => {
-    const g = await chasing()
-    const card = (await stash(g))!.card!
-    expect(await scan(g, g.ben.token)).toEqual({ ok: true, kind: 'bomoh' })
-    expect((await stash(g))!.claimedBy).toBe(g.ben.playerId)
-    expect((await stash(g))!.claimedAt).toBe(new Date(now).toISOString())
-    const org = (await store.organiserBySessionTokenHash(hashToken(g.organiserToken)))!.organisation_id
-    expect((await store.secretCards(org)).find((c) => c.id === card.id)).toMatchObject({ state: 'retired', found_at: new Date(now).toISOString() })
-    // Already claimed: nobody else can take it.
-    expect(await scan(g, g.hafiz.token)).toEqual({ ok: false, reason: 'no-stash' })
-    // Unlike Dato Seri, Bomoh activates on claim: no powerups row is ever added for it.
-    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'bomoh')).toHaveLength(0)
-  })
-
-  it('Bomoh is secret: the feed never names it or the finder', async () => {
-    const g = await chasing()
-    await scan(g, g.ben.token)
-    for (const token of [g.hafiz.token, g.aina.token, g.chong.token]) {
-      const v = await run<View>('state', { code: g.code, token })
-      expect(v.feed[0].text).toBe('Something legendary was found.')
-      expect(v.feed.map((f) => f.text).join(' ')).not.toMatch(/Bomoh|picked up/)
-    }
-    expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).feed[0].text).toBe('Something legendary was found.')
-  })
-
-  it("only this game's card claims: a bare, another game's or a made-up card is a silent miss, same as no stash", async () => {
-    const g = await chasing()
-    const other = await lobby()
-    await legacyCard(other.code, 'bomoh', STASH)
-    for (const qr of ['KEJAR:BOMOH', bomohQr(await cardCode(other)), bomohQr('x'.repeat(22)), 'KEJAR:BOMOH:'])
-      expect(await scanQr(g, g.ben.token, qr)).toEqual({ ok: false, reason: 'no-stash' })
-    expect((await stash(g))!.claimedBy).toBeNull()
-    // Hafiz still claims it: the wrong scans above were Ben's misses, not a change to the stash itself.
-    expect(await scan(g, g.hafiz.token)).toEqual({ ok: true, kind: 'bomoh' })
-  })
-
-  it('the wrong-scan limit: STASH_MISS_LIMIT misses lock a player out, even at the right spot after, but someone else can still claim it', async () => {
-    const g = await chasing()
-    for (let i = 0; i < STASH_MISS_LIMIT; i++) {
-      expect(await scanQr(g, g.ben.token, 'KEJAR:BOMOH')).toEqual({ ok: false, reason: 'no-stash' })
-    }
-    // A genuine scan at the right spot is now ignored for Ben.
-    expect(await scan(g, g.ben.token)).toEqual({ ok: false, reason: 'no-stash' })
-    expect(await scan(g, g.hafiz.token)).toEqual({ ok: true, kind: 'bomoh' })
-  })
-
-  it('two chasers scanning at the same moment: exactly one gets it', async () => {
-    const g = await chasing()
-    const [a, b] = await Promise.all([scan(g, g.ben.token), scan(g, g.hafiz.token)])
-    expect([a, b].filter((r: { ok: boolean }) => r.ok)).toHaveLength(1)
-    expect((await stash(g))!.claimedBy).not.toBeNull()
-  })
-
-  it('a runner (not a chaser) is rejected as cannot-claim, and it is not counted as a miss', async () => {
-    const g = await chasing()
-    expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'cannot-claim' })
-    expect((await stash(g))!.claimedBy).toBeNull()
-    // Not a miss: no stash-miss event was recorded for Aina, and the stash still claims.
-    expect((await store.events(g.gameId)).filter((e) => e.type === 'stash-miss')).toHaveLength(0)
-    expect(await scan(g, g.ben.token)).toEqual({ ok: true, kind: 'bomoh' })
-  })
-
-  it('scans refused for not chasing or cannot claim are not misses either (ruling R4, mirrors Dato Seri)', async () => {
-    const g = await lobby()
-    await legacyCard(g.code, 'bomoh', STASH)
-    await run('start', { code: g.code, organiserToken: g.organiserToken })
-    now = T0 + 2 * MIN // hiding
-    for (let k = 0; k < 3; k++) expect(await scan(g, g.ben.token)).toEqual({ ok: false, reason: 'not-chasing' })
-    now = T0 + 7 * MIN
-    for (let k = 0; k < 3; k++) expect(await scan(g, g.aina.token)).toEqual({ ok: false, reason: 'cannot-claim' })
-    expect((await store.events(g.gameId)).filter((e) => e.type === 'stash-miss')).toHaveLength(0)
-    expect(await scan(g, g.ben.token)).toEqual({ ok: true, kind: 'bomoh' })
-  })
-
-  it('a purple card printed before Bomoh had its own QR (KEJAR:DATO:<purple code>) still claims Bomoh, and is no Dato miss (C1)', async () => {
-    const g = await chasing()
-    expect(await scanQr(g, g.aina.token, datoQr(await cardCode(g)))).toEqual({ ok: false, reason: 'cannot-claim' })
-    expect(await scanQr(g, g.ben.token, datoQr(await cardCode(g)))).toEqual({ ok: true, kind: 'bomoh' })
-    expect((await stash(g))!.claimedBy).toBe(g.ben.playerId)
-    expect((await store.events(g.gameId)).filter((e) => e.type === 'stash-miss')).toHaveLength(0)
-  })
-
-  /** A chasing Full game with both legendaries on and both cards dropped at STASH. */
-  async function bothChasing() {
-    const g = await readyGame({ mode: 'full', legendaries: { dato: 'stash', bomoh: 'stash' } })
-    const chong = await run('join', { code: g.code, name: 'Chong', accepted: true })
-    await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [g.hafiz.playerId]: 'chaser', [chong.playerId]: 'runner' } })
-    await run('linkTag', { code: g.code, token: chong.token, tagId: 5 })
-    await legacyCard(g.code, 'bomoh', STASH)
-    await legacyCard(g.code, 'dato', STASH)
-    await run('start', { code: g.code, organiserToken: g.organiserToken })
-    now = T0 + 7 * MIN
-    const game = (await store.gameByCode(g.code))!
-    return { ...g, game }
-  }
-
-  describe('each legendary has its own wrong-scan count (I5)', () => {
-    const misses = async (gameId: string) => (await store.events(gameId)).filter((e) => e.type === 'stash-miss')
-
-    it("3 wrong ★ scans don't lock a chaser out of Bomoh, and each miss is tagged with its legendary", async () => {
-      const { game, ...g } = await bothChasing()
-      for (let i = 0; i < STASH_MISS_LIMIT; i++) expect(await scanQr(g, g.ben.token, datoQr('x'.repeat(22)))).toEqual({ ok: false, reason: 'no-stash' })
-      expect(await misses(game.id)).toEqual([0, 1, 2].map(() => expect.objectContaining({ actor_id: g.ben.playerId, data: { legendary: 'dato' } })))
-      expect(await scanQr(g, g.ben.token, bomohQr(game.bomoh_stash!.code!))).toEqual({ ok: true, kind: 'bomoh' })
-    })
-
-    it("3 wrong purple scans don't lock a runner out of Dato Seri", async () => {
-      const { game, ...g } = await bothChasing()
-      for (let i = 0; i < STASH_MISS_LIMIT; i++) expect(await scanQr(g, g.aina.token, 'KEJAR:BOMOH')).toEqual({ ok: false, reason: 'no-stash' })
-      expect(await misses(game.id)).toEqual([0, 1, 2].map(() => expect.objectContaining({ actor_id: g.aina.playerId, data: { legendary: 'bomoh' } })))
-      expect(await scanQr(g, g.aina.token, datoQr(game.dato_stash!.code!))).toEqual({ ok: true, kind: 'dato' })
-    })
-
-    it('3 wrong purple scans still lock that chaser out of Bomoh', async () => {
-      const { game, ...g } = await bothChasing()
-      for (let i = 0; i < STASH_MISS_LIMIT; i++) await scanQr(g, g.ben.token, 'KEJAR:BOMOH')
-      expect(await scanQr(g, g.ben.token, bomohQr(game.bomoh_stash!.code!))).toEqual({ ok: false, reason: 'no-stash' })
-    })
-
-    it('untagged misses from before Bomoh count as Dato Seri misses only', async () => {
-      const { game, ...g } = await bothChasing()
-      for (const p of [g.aina, g.ben])
-        for (let i = 0; i < STASH_MISS_LIMIT; i++) await store.addEvent({ game_id: game.id, type: 'stash-miss', actor_id: p.playerId, target_id: null, data: {} })
-      expect(await scanQr(g, g.aina.token, datoQr(game.dato_stash!.code!))).toEqual({ ok: false, reason: 'no-stash' })
-      expect(await scanQr(g, g.ben.token, bomohQr(game.bomoh_stash!.code!))).toEqual({ ok: true, kind: 'bomoh' })
-    })
-  })
-
-  it('with Dato Seri on too, a legacy DATO-prefixed purple card claims Bomoh and the yellow card still claims Dato', async () => {
-    const { game, ...g } = await bothChasing()
-    expect(game.dato_stash!.code).not.toBe(game.bomoh_stash!.code)
-    expect(await scanQr(g, g.ben.token, datoQr(game.bomoh_stash!.code!))).toEqual({ ok: true, kind: 'bomoh' })
-    expect(await scanQr(g, g.aina.token, datoQr(game.dato_stash!.code!))).toEqual({ ok: true, kind: 'dato' })
-    expect((await store.events(game.id)).filter((e) => e.type === 'stash-miss')).toHaveLength(0)
-  })
-
-  it('with no stash dropped, scanning claims nothing', async () => {
-    const g = await chasing(false)
-    expect(await scanQr(g, g.ben.token, 'KEJAR:BOMOH')).toEqual({ ok: false, reason: 'no-stash' })
-  })
+  /** Scans the slip in Kejar's Tupperware. */
+  const scan = (g: { code: string }, token: string, where: object = atStash) => run('claim', { code: g.code, token, qr: slipQrFor(g.code, 'bomoh'), ...where })
 
   it('end to end: a hidden card, claim, then a team-wide exact reveal for exactly 2 ping reveals', async () => {
-    // 1. A game started on a purple card, hidden before the Tupperware; a chaser sees no runner exactly.
+    // 1. Kejar's Tupperware is hidden with Bomoh in it; a chaser sees no runner exactly.
     const g = await lobby()
-    await legacyCard(g.code, 'bomoh', STASH)
+    await hideBox(g.code, 'bomoh', STASH)
     await run('start', { code: g.code, organiserToken: g.organiserToken })
     const runners = [g.aina, g.chong]
     const report = async (min: number) => {
@@ -4343,11 +3940,8 @@ describe('Bomoh: the hidden stash (chaser-side legendary, mirrors Dato Seri abov
     let v = await chaserView(g.hafiz.token)
     expect(v).not.toHaveProperty('bomohZone')
     expect(runnerDots(v)).toEqual([])
-    // 3. Ben scans the card in reach: instant claim, card retired, one anonymised feed entry.
-    const card = (await stash(g))!.card!
-    expect(await scan(g, g.ben.token)).toEqual({ ok: true, kind: 'bomoh' })
-    const org = (await store.organiserBySessionTokenHash(hashToken(g.organiserToken)))!.organisation_id
-    expect((await store.secretCards(org)).find((c) => c.id === card.id)).toMatchObject({ state: 'retired' })
+    // 3. Ben scans the slip in reach: instant claim, one anonymised feed entry.
+    expect(await scan(g, g.ben.token)).toEqual({ ok: true, kind: 'bomoh', slip: true })
     expect((await store.events(g.gameId)).filter((e) => e.type === 'legendary')).toHaveLength(1)
     v = await chaserView(g.hafiz.token)
     expect(v.feed.filter((f) => f.text === 'Something legendary was found.')).toHaveLength(1)
@@ -5412,7 +5006,7 @@ describe('one legendary per side, picked by the app (Plan E2 task 2)', () => {
   it('Core releases a dropped orange or green card and its walk step', async () => {
     forcedDraws = [0.9, 0.9]
     const g = await readyGame(BOTH)
-    await legacyCard(g.code, 'ring', STASH)
+    await hideBox(g.code, 'ring', STASH)
     await run('setKit', { code: g.code, organiserToken: g.organiserToken, placed: { id: 'tupper-kejar', on: true } })
     await run('setMode', { code: g.code, organiserToken: g.organiserToken, mode: 'core' })
     const game = await gameOf(g.code)
@@ -5427,10 +5021,10 @@ describe('one legendary per side, picked by the app (Plan E2 task 2)', () => {
     const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
     const RING_AT = { lat: CENTER.lat + 77 / 111_195, lng: CENTER.lng + 0.00031234 }
     const HIJAU_AT = { lat: CENTER.lat - 66 / 111_195, lng: CENTER.lng - 0.00041357 }
-    await legacyCard(g.code, 'ring', RING_AT)
-    await legacyCard(g.code, 'hijau', HIJAU_AT)
+    await hideBox(g.code, 'ring', RING_AT)
+    await hideBox(g.code, 'hijau', HIJAU_AT)
     const game = await gameOf(g.code)
-    const secrets = [game.ring_stash!.code!, game.hijau_stash!.code!, String(RING_AT.lat), String(RING_AT.lng), String(HIJAU_AT.lat), String(HIJAU_AT.lng)]
+    const secrets = [slipTokens.get(`${g.code}:ring`)!, slipTokens.get(`${g.code}:hijau`)!, String(RING_AT.lat), String(RING_AT.lng), String(HIJAU_AT.lat), String(HIJAU_AT.lng)]
     const names = ['Super Ring', 'Mak Kau Hijau', 'Orange card', 'Green card', 'ringCard', 'hijauCard', 'ringStash', 'hijauStash', 'ring-card', 'hijau-card', '"hijau"', '"ring"']
     const check = async (body: object) => {
       for (const phase of ['lobby', 'chase']) {
@@ -5452,9 +5046,9 @@ describe('one legendary per side, picked by the app (Plan E2 task 2)', () => {
     expect(o.ringStash).toEqual({ ...RING_AT, claimedBy: null, claimedAt: null })
     expect(o.hijauStash).toEqual({ ...HIJAU_AT, claimedBy: null, claimedAt: null })
     expect(o.kit!.places.slice(-2).map((p) => p.id)).toEqual(['tupper-dikejar', 'tupper-kejar'])
-    // A legacy colour card is no box, so the step stays open until the box is dropped over it.
-    expect(o.kit!.placed['tupper-dikejar']).toBeUndefined()
-    expect(o.kit!.placed['tupper-kejar']).toBeUndefined()
+    // A hidden box is a placed walk step.
+    expect(o.kit!.placed['tupper-dikejar']).toBe(true)
+    expect(o.kit!.placed['tupper-kejar']).toBe(true)
     await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 7 * MIN
     for (const body of [{ token: siti.token }, { token: g.aina.token }, { token: g.ben.token }]) {
@@ -5472,194 +5066,6 @@ describe('one legendary per side, picked by the app (Plan E2 task 2)', () => {
     await rejects(run('setKit', { code: g.code, token: siti.token, tick: { id: 'tupperware', on: true } }), 403)
   })
 
-})
-
-describe('Super Ring and Mak Kau Hijau: the hidden stashes (Plan E2 task 3)', () => {
-  const STASH = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
-  const atStash = { lat: STASH.lat, lng: STASH.lng, accuracy_m: 8 }
-
-  /** A chasing Full game with Super Ring and Mak Kau Hijau picked and dropped. Runners: Aina, Chong. Chasers: Ben, Hafiz. */
-  async function chasing() {
-    forcedDraws = [0.9, 0.9]
-    const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' } })
-    const chong = await run('join', { code: g.code, name: 'Chong', accepted: true })
-    await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [g.hafiz.playerId]: 'chaser', [chong.playerId]: 'runner' } })
-    await run('linkTag', { code: g.code, token: chong.token, tagId: 5 })
-    await legacyCard(g.code, 'ring', STASH)
-    await legacyCard(g.code, 'hijau', STASH)
-    await run('start', { code: g.code, organiserToken: g.organiserToken })
-    now = T0 + 7 * MIN
-    await run('state', { code: g.code, organiserToken: g.organiserToken })
-    return { ...g, chong, gameId: (await store.gameByCode(g.code))!.id }
-  }
-  const game = async (g: { code: string }) => (await store.gameByCode(g.code))!
-  const scanQr = (g: { code: string }, token: string, qr: string, where: object = atStash) => run('claim', { code: g.code, token, qr, ...where })
-  const ring = async (g: { code: string }, token: string, where: object = atStash) => scanQr(g, token, ringQr((await game(g)).ring_stash!.code!), where)
-  const hijau = async (g: { code: string }, token: string, where: object = atStash) => scanQr(g, token, hijauQr((await game(g)).hijau_stash!.code!), where)
-  const misses = async (g: { gameId: string }) => (await store.events(g.gameId)).filter((e) => e.type === 'stash-miss')
-  const stamp = (t: number) => new Date(t).toISOString()
-
-  it('the first free runner in reach claims Super Ring: an unused ring in the slot, the card retired, the stash claimed', async () => {
-    const g = await chasing()
-    const card = (await game(g)).ring_stash!.card!
-    expect(await ring(g, g.aina.token)).toEqual({ ok: true, kind: 'ring' })
-    expect((await game(g)).ring_stash).toMatchObject({ claimedBy: g.aina.playerId, claimedAt: stamp(now) })
-    const rows = (await store.powerUps(g.gameId)).filter((u) => u.kind === 'ring')
-    expect(rows).toEqual([expect.objectContaining({ player_id: g.aina.playerId, used_at: null })])
-    const org = (await store.organiserBySessionTokenHash(hashToken(g.organiserToken)))!.organisation_id
-    expect((await store.secretCards(org)).find((c) => c.id === card.id)).toMatchObject({ state: 'retired', found_at: stamp(now) })
-    // Already claimed: nobody else gets it.
-    expect(await ring(g, g.chong.token)).toEqual({ ok: false, reason: 'no-stash' })
-  })
-
-  it('two runners at once: exactly one gets Super Ring', async () => {
-    const g = await chasing()
-    const [a, b] = await Promise.all([ring(g, g.aina.token), ring(g, g.chong.token)])
-    expect([a, b].filter((r: { ok: boolean }) => r.ok)).toHaveLength(1)
-    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'ring')).toHaveLength(1)
-  })
-
-  it('a chaser cannot claim Super Ring and a runner cannot claim Mak Kau Hijau; neither is a miss', async () => {
-    const g = await chasing()
-    for (let k = 0; k < 3; k++) {
-      expect(await ring(g, g.ben.token)).toEqual({ ok: false, reason: 'cannot-claim' })
-      expect(await hijau(g, g.aina.token)).toEqual({ ok: false, reason: 'cannot-claim' })
-    }
-    expect(await misses(g)).toHaveLength(0)
-    expect(await ring(g, g.aina.token)).toEqual({ ok: true, kind: 'ring' })
-    expect(await hijau(g, g.ben.token)).toEqual({ ok: true, kind: 'hijau' })
-  })
-
-  it('a full slot refuses Super Ring with hand-full, and it is not a miss', async () => {
-    const g = await chasing()
-    const cloak = await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'cloak', station: 1 })
-    for (let k = 0; k < 3; k++) expect(await ring(g, g.aina.token)).toEqual({ ok: false, reason: 'hand-full' })
-    expect(await misses(g)).toHaveLength(0)
-    await store.updatePowerUp(cloak.id, { taken_at: stamp(now) })
-    expect(await ring(g, g.aina.token)).toEqual({ ok: true, kind: 'ring' })
-  })
-
-  it('a jailed runner cannot claim Super Ring', async () => {
-    const g = await chasing()
-    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: true } }])
-    expect(await ring(g, g.aina.token)).toEqual({ ok: false, reason: 'cannot-claim' })
-  })
-
-  it('a Luar Garisan player is refused before anything is judged', async () => {
-    const g = await chasing()
-    await store.updatePlayers([
-      { id: g.aina.playerId, patch: { disqualified_at: stamp(now) } },
-      { id: g.ben.playerId, patch: { disqualified_at: stamp(now) } },
-    ])
-    expect(await ring(g, g.aina.token)).toEqual({ ok: false, reason: 'disqualified' })
-    expect(await hijau(g, g.ben.token)).toEqual({ ok: false, reason: 'disqualified' })
-    expect((await game(g)).ring_stash!.claimedBy).toBeNull()
-    expect((await game(g)).hijau_stash!.claimedBy).toBeNull()
-  })
-
-  it('a chaser in reach claims Mak Kau Hijau: games.hijau gets a 20 s window from the claim, the card is retired, no powerups row', async () => {
-    const g = await chasing()
-    const card = (await game(g)).hijau_stash!.card!
-    expect(await hijau(g, g.ben.token)).toEqual({ ok: true, kind: 'hijau' })
-    const after = await game(g)
-    expect(after.hijau_stash).toMatchObject({ claimedBy: g.ben.playerId, claimedAt: stamp(now) })
-    // Starting at the claim, its push goes out with it (task 5).
-    expect(after.hijau).toMatchObject({ claimedBy: g.ben.playerId, claimedAt: stamp(now), startsAt: stamp(now), deadline: stamp(now + 20_000), sentAt: stamp(now), settledAt: null, tapped: [] })
-    const org = (await store.organiserBySessionTokenHash(hashToken(g.organiserToken)))!.organisation_id
-    expect((await store.secretCards(org)).find((c) => c.id === card.id)).toMatchObject({ state: 'retired', found_at: stamp(now) })
-    expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'hijau')).toHaveLength(0)
-    expect(await hijau(g, g.hafiz.token)).toEqual({ ok: false, reason: 'no-stash' })
-  })
-
-  it('a frozen chaser cannot claim Mak Kau Hijau, and it is not a miss', async () => {
-    const g = await chasing()
-    await store.updatePlayers([{ id: g.ben.playerId, patch: { frozen_until: stamp(now + 3 * MIN) } }])
-    expect(await hijau(g, g.ben.token)).toEqual({ ok: false, reason: 'frozen', frozenForMs: 3 * MIN })
-    expect(await misses(g)).toHaveLength(0)
-    expect((await game(g)).hijau).toBeFalsy()
-  })
-
-  it('the wrong-scan limit applies to each, tagged with its legendary; one does not lock the other', async () => {
-    const g = await chasing()
-    for (let i = 0; i < STASH_MISS_LIMIT; i++) {
-      expect(await scanQr(g, g.aina.token, ringQr('x'.repeat(22)))).toEqual({ ok: false, reason: 'no-stash' })
-      expect(await scanQr(g, g.ben.token, hijauQr('y'.repeat(22)))).toEqual({ ok: false, reason: 'no-stash' })
-    }
-    const all = await misses(g)
-    expect(all.filter((e) => e.data.legendary === 'ring' && e.actor_id === g.aina.playerId)).toHaveLength(3)
-    expect(all.filter((e) => e.data.legendary === 'hijau' && e.actor_id === g.ben.playerId)).toHaveLength(3)
-    // The right code at the right spot is now ignored for those two, silently and unrecorded.
-    expect(await ring(g, g.aina.token)).toEqual({ ok: false, reason: 'no-stash' })
-    expect(await hijau(g, g.ben.token)).toEqual({ ok: false, reason: 'no-stash' })
-    expect(await misses(g)).toHaveLength(6)
-    // Others still claim.
-    expect(await ring(g, g.chong.token)).toEqual({ ok: true, kind: 'ring' })
-    expect(await hijau(g, g.hafiz.token)).toEqual({ ok: true, kind: 'hijau' })
-  })
-
-  it("a bare or made-up card is a miss and claims nothing; a too-far scan is a miss too", async () => {
-    const g = await chasing()
-    for (const qr of ['KEJAR:RING', ringQr('z'.repeat(22)), 'KEJAR:RING:']) expect(await scanQr(g, g.aina.token, qr)).toEqual({ ok: false, reason: 'no-stash' })
-    expect(await ring(g, g.chong.token, { lat: CENTER.lat, lng: CENTER.lng, accuracy_m: 8 })).toEqual({ ok: false, reason: 'too-far' })
-    expect(await misses(g)).toHaveLength(4)
-    expect((await game(g)).ring_stash!.claimedBy).toBeNull()
-  })
-
-  it('a game that picked Dato Seri and Bomoh never answers a ring or hijau card', async () => {
-    forcedDraws = [0.1, 0.1]
-    const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' } })
-    await run('start', { code: g.code, organiserToken: g.organiserToken })
-    now = T0 + 7 * MIN
-    expect(await scanQr(g, g.aina.token, ringQr('x'.repeat(22)))).toEqual({ ok: false, reason: 'no-stash' })
-    expect(await scanQr(g, g.ben.token, hijauQr('x'.repeat(22)))).toEqual({ ok: false, reason: 'no-stash' })
-  })
-
-  it('secret: the feed says only "Something legendary was found." and no view names a legendary', async () => {
-    const g = await chasing()
-    await ring(g, g.aina.token)
-    await hijau(g, g.ben.token)
-    for (const token of [g.hafiz.token, g.chong.token, g.aina.token]) {
-      const v = await run<View>('state', { code: g.code, token })
-      expect(v.feed.filter((f) => f.text === 'Something legendary was found.')).toHaveLength(2)
-      // Mak Kau Hijau announces itself once its 45 s starts (task 5, §6.3); the found line still names nothing.
-      expect(v.feed.filter((f) => !f.text.startsWith('Mak kau hijau!')).map((f) => f.text).join(' ')).not.toMatch(/Ring|Hijau|Mak Kau/i)
-      expect(v).not.toHaveProperty('ringZone')
-      expect(v).not.toHaveProperty('hijauZone')
-    }
-  })
-
-  it('no zones reach runners or chasers, before or after a claim', async () => {
-    const g = await chasing()
-    for (const token of [g.aina.token, g.ben.token]) {
-      const v = await run<View>('state', { code: g.code, token })
-      expect(v).not.toHaveProperty('ringZone')
-      expect(v).not.toHaveProperty('hijauZone')
-      expect(v).not.toHaveProperty('legendaryZone')
-      expect(v).not.toHaveProperty('bomohZone')
-    }
-    await ring(g, g.aina.token)
-    expect(await run<View>('state', { code: g.code, token: g.chong.token })).not.toHaveProperty('ringZone')
-    expect(await run<View>('state', { code: g.code, token: g.chong.token })).not.toHaveProperty('hijauZone')
-    await hijau(g, g.ben.token)
-    expect(await run<View>('state', { code: g.code, token: g.chong.token })).not.toHaveProperty('hijauZone')
-  })
-
-  it('Super Ring cannot be used from the slot: it is automatic', async () => {
-    const g = await chasing()
-    await ring(g, g.aina.token)
-    const row = (await store.powerUps(g.gameId)).find((u) => u.kind === 'ring')!
-    expect(await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: row.id })).toEqual({ ok: false, reason: 'automatic' })
-    expect((await store.powerUps(g.gameId)).find((u) => u.id === row.id)!.used_at).toBeNull()
-  })
-
-  it('a Core game has no ring or hijau zones', async () => {
-    const g = await readyGame()
-    await run('start', { code: g.code, organiserToken: g.organiserToken })
-    now = T0 + 7 * MIN
-    const v = await run<View>('state', { code: g.code, token: g.aina.token })
-    expect(v).not.toHaveProperty('ringZone')
-    expect(v).not.toHaveProperty('hijauZone')
-  })
 })
 
 describe('Super Ring: house arrest instead of Penjara (Plan E2 task 4)', () => {
@@ -5680,13 +5086,12 @@ describe('Super Ring: house arrest instead of Penjara (Plan E2 task 4)', () => {
     await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [chong.playerId]: 'chaser' } })
     const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
     const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
-    await legacyCard(g.code, 'ring', STASH)
+    await hideBox(g.code, 'ring', STASH)
     await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 7 * MIN
     await run('state', { code: g.code, organiserToken: g.organiserToken })
     const gameId = (await store.gameByCode(g.code))!.id
-    const code = (await store.gameByCode(g.code))!.ring_stash!.code!
-    expect(await run('claim', { code: g.code, token: g.aina.token, qr: ringQr(code), ...STASH, accuracy_m: 8 })).toEqual({ ok: true, kind: 'ring' })
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: slipQrFor(g.code, 'ring'), ...STASH, accuracy_m: 8 })).toEqual({ ok: true, kind: 'ring', slip: true })
     pushes = []
     return { ...g, chong, siti, gameId }
   }
@@ -6108,7 +5513,7 @@ describe('Super Ring: house arrest instead of Penjara (Plan E2 task 4)', () => {
     it('a chasing poll reads the players for house arrests only once Super Ring has been claimed', async () => {
       forcedDraws = [0.9, 0.9]
       const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'on' } })
-      await legacyCard(g.code, 'ring', STASH)
+      await hideBox(g.code, 'ring', STASH)
       await run('start', { code: g.code, organiserToken: g.organiserToken })
       now = T0 + 7 * MIN
       await run('state', { code: g.code, organiserToken: g.organiserToken })
@@ -6125,9 +5530,8 @@ describe('Super Ring: house arrest instead of Penjara (Plan E2 task 4)', () => {
         return n
       }
       const unclaimed = await reads(T0 + 7 * MIN + S)
-      const code = (await store.gameByCode(g.code))!.ring_stash!.code!
       now = T0 + 7 * MIN + 2 * S
-      expect(await run('claim', { code: g.code, token: g.aina.token, qr: ringQr(code), ...STASH, accuracy_m: 8 })).toEqual({ ok: true, kind: 'ring' })
+      expect(await run('claim', { code: g.code, token: g.aina.token, qr: slipQrFor(g.code, 'ring'), ...STASH, accuracy_m: 8 })).toEqual({ ok: true, kind: 'ring', slip: true })
       expect(await reads(T0 + 7 * MIN + 3 * S)).toBe(unclaimed + 1)
     })
 
@@ -6193,8 +5597,8 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
     }
     const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
     const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
-    await legacyCard(g.code, 'ring', STASH)
-    await legacyCard(g.code, 'hijau', STASH)
+    await hideBox(g.code, 'ring', STASH)
+    await hideBox(g.code, 'hijau', STASH)
     await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 7 * MIN
     await run('state', { code: g.code, organiserToken: g.organiserToken })
@@ -6206,7 +5610,7 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
   /** A chaser (Ben by default) scans the green card at the stash at `ms`. */
   const claimAt = async (g: G, ms: number, token = g.ben.token) => {
     now = ms
-    return run('claim', { code: g.code, token, qr: hijauQr((await game(g)).hijau_stash!.code!), ...atStash })
+    return run('claim', { code: g.code, token, qr: slipQrFor(g.code, 'hijau'), ...atStash })
   }
   const poll = (g: G, ms: number, token?: string) => {
     now = ms
@@ -6224,7 +5628,7 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
   it("claiming it pushes every free runner once and jails those who don't tap in 20 s", async () => {
     const g = await chasing()
     const t = T0 + 7 * MIN
-    expect(await claimAt(g, t)).toEqual({ ok: true, kind: 'hijau' })
+    expect(await claimAt(g, t)).toEqual({ ok: true, kind: 'hijau', slip: true })
     expect((await game(g)).hijau).toMatchObject({ startsAt: stamp(t), deadline: stamp(t + 20 * S), sentAt: stamp(t), settledAt: null })
     expect(hijauPushes().map((p) => p.endpoint).sort()).toEqual(['https://push/Aina', 'https://push/Hafiz'])
     expect(hijauPushes()[0].payload).toMatchObject({ type: 'hijau', code: g.code, deadline: t + 20 * S, body: PUSH_BODY })
@@ -6350,8 +5754,7 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
 
   it('Super Ring holder who misses gets house arrest instead', async () => {
     const g = await chasing()
-    const ringCode = (await game(g)).ring_stash!.code!
-    expect(await run('claim', { code: g.code, token: g.aina.token, qr: ringQr(ringCode), ...atStash })).toEqual({ ok: true, kind: 'ring' })
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: slipQrFor(g.code, 'ring'), ...atStash })).toEqual({ ok: true, kind: 'ring', slip: true })
     const t = T0 + 7 * MIN
     await claimAt(g, t)
     pushes = []
@@ -6367,8 +5770,7 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
 
   it('a Super Ring holder who misses it and sends no fix for 60 s goes to Penjara for Mak kau hijau, not missed check-ins', async () => {
     const g = await chasing()
-    const ringCode = (await game(g)).ring_stash!.code!
-    expect(await run('claim', { code: g.code, token: g.aina.token, qr: ringQr(ringCode), ...atStash })).toEqual({ ok: true, kind: 'ring' })
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: slipQrFor(g.code, 'ring'), ...atStash })).toEqual({ ok: true, kind: 'ring', slip: true })
     const t = T0 + 7 * MIN
     await claimAt(g, t)
     await poll(g, t + 20 * S)
@@ -6477,7 +5879,7 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
     const g = await chasing({ lengthMin: 15 })
     const endsAt = (await poll(g, T0 + 7 * MIN)).endsAt!
     await keepCheckingIn(g, 7, Math.floor((endsAt - T0) / MIN) - 1)
-    expect(await claimAt(g, endsAt - 15 * S)).toEqual({ ok: true, kind: 'hijau' })
+    expect(await claimAt(g, endsAt - 15 * S)).toEqual({ ok: true, kind: 'hijau', slip: true })
     expect((await game(g)).hijau!.settledAt).toBe(stamp(endsAt - 15 * S))
     expect(hijauPushes()).toHaveLength(0)
     expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: true, jailed: 0, ended: true }])
@@ -6891,8 +6293,8 @@ describe('Hang Hebat: the wanted runner decides the game (Plan E3 task 5)', () =
     const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
     const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
     if (legendary) {
-      await legacyCard(g.code, 'ring', STASH)
-      await legacyCard(g.code, 'hijau', STASH)
+      await hideBox(g.code, 'ring', STASH)
+      await hideBox(g.code, 'hijau', STASH)
     }
     await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 7 * MIN
@@ -6979,8 +6381,7 @@ describe('Hang Hebat: the wanted runner decides the game (Plan E3 task 5)', () =
     const g = await live({}, true)
     const t = T0 + 7.5 * MIN
     now = t
-    const hijau = (await gameRow(g)).hijau_stash!.code!
-    expect(await run('claim', { code: g.code, token: g.ben.token, qr: hijauQr(hijau), ...STASH })).toEqual({ ok: true, kind: 'hijau' })
+    expect(await run('claim', { code: g.code, token: g.ben.token, qr: slipQrFor(g.code, 'hijau'), ...STASH })).toEqual({ ok: true, kind: 'hijau', slip: true })
     now = t + 10 * S
     expect(await run('touchGreen', { code: g.code, token: g.hafiz.token })).toEqual({ ok: true })
     expect(await run('touchGreen', { code: g.code, token: g.ravi.token })).toEqual({ ok: true })
@@ -7002,8 +6403,7 @@ describe('Hang Hebat: the wanted runner decides the game (Plan E3 task 5)', () =
   it('hebat: a catch that puts the wanted runner under Super Ring house arrest is a Kejar win', async () => {
     const g = await live({}, true)
     now = T0 + 7.5 * MIN
-    const ring = (await gameRow(g)).ring_stash!.code!
-    expect(await run('claim', { code: g.code, token: g.aina.token, qr: ringQr(ring), ...STASH })).toEqual({ ok: true, kind: 'ring' })
+    expect(await run('claim', { code: g.code, token: g.aina.token, qr: slipQrFor(g.code, 'ring'), ...STASH })).toEqual({ ok: true, kind: 'ring', slip: true })
     expect(await catchAt(g, 'aina', T0 + 8 * MIN)).toEqual({ ok: false, reason: 'ring', name: 'Aina' })
     expect((await row(g, g.aina.playerId))).toMatchObject({ jailed: false, arrest: expect.objectContaining({ route: 'catch' }) })
     await kejarWin(g, T0 + 8 * MIN)
@@ -7684,15 +7084,6 @@ describe('the secret colour cards are retired (Tupperware task 11)', () => {
     for (const field of STASHES) expect(game[field] ?? null).toBeNull()
   })
 
-  it('a legacy started game whose stash holds a card code still claims by KEJAR:DATO:<code>', async () => {
-    const g = await readyGame({ mode: 'full' })
-    await legacyCard(g.code, 'dato', SPOT)
-    await run('start', { code: g.code, organiserToken: g.organiserToken })
-    now = T0 + 7 * MIN
-    const code = (await store.gameByCode(g.code))!.dato_stash!.code!
-    expect(await run('claim', { code: g.code, token: g.aina.token, qr: `KEJAR:DATO:${code}`, lat: SPOT.lat, lng: SPOT.lng, accuracy_m: 8 })).toEqual({ ok: true, kind: 'dato' })
-  })
-
   const WINDOW = T0 + 9 * MIN + 10_000 // inside ping 1's side quest window
   const near = { lat: SPOT.lat - 30 / 111_195, lng: SPOT.lng, accuracy_m: 8 }
   const notices = () => pushes.filter((p) => (p.payload as { type: string }).type === 'notice')
@@ -7700,23 +7091,6 @@ describe('the secret colour cards are retired (Tupperware task 11)', () => {
     await run('makeSlipSheet', { organiserToken })
     return (await run<{ side: string; token: string }[]>('listSlips', { organiserToken })).find((s) => s.side === side)!.token
   }
-
-  it('a colour card dropped before release is never a Tupperware: no side quest or slip claim near it, and KEJAR:DATO still claims', async () => {
-    const g = await readyGame({ mode: 'full' })
-    const slipToken = await firstSlip(g.organiserToken, 'dikejar')
-    await legacyCard(g.code, 'dato', SPOT)
-    await run('start', { code: g.code, organiserToken: g.organiserToken })
-    now = WINDOW
-    await run('location', { code: g.code, token: g.aina.token, ...near })
-    const aina = (await store.players((await store.gameByCode(g.code))!.id)).find((p) => p.id === g.aina.playerId)!
-    expect(aina.side_quest_at ?? null).toBeNull()
-    expect(notices()).toHaveLength(0)
-    expect((await run<View>('state', { code: g.code, token: g.aina.token })).sideQuest).toBe(false)
-    const atSpot = { lat: SPOT.lat, lng: SPOT.lng, accuracy_m: 8 }
-    expect(await run('claim', { code: g.code, token: g.aina.token, qr: slipQr(slipToken), ...atSpot })).toEqual({ ok: false, reason: 'no-box' })
-    const code = (await store.gameByCode(g.code))!.dato_stash!.code!
-    expect(await run('claim', { code: g.code, token: g.hafiz.token, qr: `KEJAR:DATO:${code}`, ...atSpot })).toEqual({ ok: true, kind: 'dato' })
-  })
 
   it('Full with both sides on starts without a box dropped: legendaries kept, no stash, no side quest, a slip finds no box', async () => {
     forcedDraws = [0.9, 0.9]

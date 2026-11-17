@@ -47,9 +47,3 @@ export function pickLegendaries(sides: SideSwitch, rng: () => number): Settings[
   }
   return out
 }
-
-/** The other legendary of the same side: the one tried when the picked one has no free card. */
-export function fallbackFor(kind: LegendaryKind): LegendaryKind {
-  const pair: readonly LegendaryKind[] = (SIDE_PAIRS.runner as readonly LegendaryKind[]).includes(kind) ? SIDE_PAIRS.runner : SIDE_PAIRS.chaser
-  return pair[0] === kind ? pair[1] : pair[0]
-}

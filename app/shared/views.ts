@@ -11,7 +11,7 @@ import { reelPulledThisStay, RESCUE_HOLD_MS } from './penjara.js'
 import { isOut, undoableArrestId, undoableCatchId } from './players.js'
 import { ARREST_OPEN_MS, arrestEndsAt } from './arrest.js'
 import { hijauCounts, hijauTargets, penjaraLockLeft } from './hijau.js'
-import { boxFor, legendaryOn, mirroredSpots, sideOf } from './tupperware.js'
+import { boxFor, legendaryOn, mirroredSpots, sideOf, TUPPER_SIDES } from './tupperware.js'
 import { POWER_NAME } from './powerNames.js'
 import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, shieldArmedAt, slotBusy, TOLL_RADIUS_M } from './powerups.js'
 import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type LegendaryKind, type EndgameKind, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings, type TupperSide } from './types.js'
@@ -1066,7 +1066,7 @@ function withoutSideQuest(me: Player): Player {
 function tupperwareFor(i: ViewInput): View['tupperware'] {
   const suggested = mirroredSpots(i.game.arena, i.game.id)
   const out: NonNullable<View['tupperware']> = {}
-  for (const side of ['dikejar', 'kejar'] as const) {
+  for (const side of TUPPER_SIDES) {
     const legendary = legendaryOn(i.game, side)
     if (!legendary) continue
     const box = boxFor(i.game, side)
@@ -1313,7 +1313,7 @@ function kitFor(i: ViewInput): KitView {
   // The secret step is placed only when the stash is really dropped, never from the saved flag alone (ruling R8).
   const secret = (id: string) => SECRET_PLACE_IDS.includes(id)
   const placed = Object.fromEntries(Object.entries(kit.placed).filter(([id]) => !secret(id) && places.some((p) => p.id === id)))
-  for (const side of ['dikejar', 'kejar'] as const) {
+  for (const side of TUPPER_SIDES) {
     if (boxFor(i.game, side)) placed[`tupper-${side}`] = true
   }
   // The Tupperware lines are the organiser's own: a marshal's list never mentions the box.

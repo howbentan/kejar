@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { SECRET_PLACE_IDS } from '../../shared/kit.js'
+import { sideName, TUPPER_SIDES } from '../../shared/tupperware.js'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
 import HowToPlay from './HowToPlay'
@@ -59,7 +60,7 @@ export default function BeforeYouStart({ code, view, refresh }: { code: string; 
   const briefDone = briefing?.started ?? false
 
   // A side's box with no spot yet: Start stays allowed, but a Tupperware nobody can find is a dud side quest.
-  const undropped = (['dikejar', 'kejar'] as const).filter((side) => view.tupperware?.[side] && view.tupperware[side]!.dropped === null)
+  const undropped = TUPPER_SIDES.filter((side) => view.tupperware?.[side] && view.tupperware[side]!.dropped === null)
 
   async function tapBrief() {
     const organiser = loadOrganiserSession(localStorage)
@@ -90,7 +91,7 @@ export default function BeforeYouStart({ code, view, refresh }: { code: string; 
       {undropped.map((side) => (
         <div key={side} style={{ display: 'flex', gap: 10, alignItems: 'baseline', padding: '8px 0', borderBottom: '1px solid #1d1d1d', fontSize: 12.5 }}>
           <span style={{ width: 19, height: 19, borderRadius: 5, border: '1.5px solid #E63946', flex: 'none', alignSelf: 'flex-start', marginTop: 1 }} />
-          <span>{side === 'dikejar' ? 'Dikejar' : 'Kejar'} Tupperware not dropped yet</span>
+          <span>{sideName(side)} Tupperware not dropped yet</span>
           <a href={`/host/${code}/walk`} style={{ color: 'inherit', textDecoration: 'underline', marginLeft: 'auto' }}>
             Drop it
           </a>

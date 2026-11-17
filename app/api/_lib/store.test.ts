@@ -596,64 +596,6 @@ describe('MemoryStore.addPosition gap', () => {
   })
 })
 
-describe('MemoryStore secret card sets', () => {
-  it('the first read of a secret card set makes twelve ready cards: A-C yellow, orange, purple and green', async () => {
-    const cards = await store.secretCards('org1')
-    expect(cards.map((c) => `${c.legendary}:${c.letter}`).sort()).toEqual([
-      'bomoh:A', 'bomoh:B', 'bomoh:C', 'dato:A', 'dato:B', 'dato:C', 'hijau:A', 'hijau:B', 'hijau:C', 'ring:A', 'ring:B', 'ring:C',
-    ])
-    for (const c of cards) {
-      expect(c).toMatchObject({ organisation_id: 'org1', state: 'ready', found_at: null })
-      expect(c.code).toMatch(/^[A-Za-z0-9_-]{22}$/)
-    }
-    expect(new Set(cards.map((c) => c.code)).size).toBe(12)
-    // A second read finds the same twelve, and another organisation has its own.
-    expect(await store.secretCards('org1')).toEqual(cards)
-    const other = await store.secretCards('org2')
-    expect(other).toHaveLength(12)
-    expect(other.some((c) => cards.some((x) => x.id === c.id || x.code === c.code))).toBe(false)
-  })
-
-  it('setSecretCard changes only the fields given', async () => {
-    const [card] = await store.secretCards('org1')
-    await store.setSecretCard(card.id, { state: 'retired', found_at: iso(T0) })
-    const after = (await store.secretCards('org1')).find((c) => c.id === card.id)!
-    expect(after).toEqual({ ...card, state: 'retired', found_at: iso(T0) })
-  })
-
-  it('unfinishedGames lists the games of every organiser in the organisation that have not ended, and started or are recent', async () => {
-    const org = await store.createOrganisation({ name: 'o', created_at: iso(T0) })
-    const mk = (name: string) =>
-      store.createOrganiser({ organisation_id: org.id, name, created_at: iso(T0), session_token_hash: name, session_created_at: iso(T0) })
-    const a = await mk('a')
-    const b = await mk('b')
-    const base = (await startedGame()) as unknown as Record<string, unknown>
-    const { id: _id, ...rest } = base
-    const g1 = await store.createGame({ ...(rest as never), code: 'AAA222', organiser_id: a.id })
-    const g2 = await store.createGame({ ...(rest as never), code: 'BBB222', organiser_id: b.id })
-    await store.createGame({ ...(rest as never), code: 'CCC222', organiser_id: b.id, ended_at: iso(T0) })
-    const oldLobby = await store.createGame({ ...(rest as never), code: 'DDD222', organiser_id: b.id, started_at: null })
-    expect((await store.unfinishedGames(org.id, iso(T0 - 1))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id].sort())
-    // Made before the cutoff: only the started games are left, and a lobby whose stash is dropped.
-    expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id].sort())
-    await store.updateGame(oldLobby.id, { dato_stash: { code: 'c', lat: 1, lng: 2, claimedBy: null, claimedAt: null } })
-    expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id].sort())
-    // Same for a dropped-but-unclaimed Bomoh stash: an old lobby holding one is still worth listing.
-    const oldLobby2 = await store.createGame({ ...(rest as never), code: 'EEE222', organiser_id: b.id, started_at: null })
-    expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id].sort())
-    await store.updateGame(oldLobby2.id, { bomoh_stash: { code: 'd', lat: 3, lng: 4, claimedBy: null, claimedAt: null } })
-    expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual([g1.id, g2.id, oldLobby.id, oldLobby2.id].sort())
-    // And for Super Ring's and Mak Kau Hijau's.
-    const oldLobby3 = await store.createGame({ ...(rest as never), code: 'FFF222', organiser_id: b.id, started_at: null })
-    const oldLobby4 = await store.createGame({ ...(rest as never), code: 'GGG222', organiser_id: b.id, started_at: null })
-    await store.updateGame(oldLobby3.id, { ring_stash: { code: 'e', lat: 5, lng: 6, claimedBy: null, claimedAt: null } })
-    await store.updateGame(oldLobby4.id, { hijau_stash: { code: 'f', lat: 7, lng: 8, claimedBy: null, claimedAt: null } })
-    expect((await store.unfinishedGames(org.id, iso(T0))).map((g) => g.id).sort()).toEqual(
-      [g1.id, g2.id, oldLobby.id, oldLobby2.id, oldLobby3.id, oldLobby4.id].sort(),
-    )
-  })
-})
-
 describe('MemoryStore.setKitKey', () => {
   it('sets and removes one key, keeping the rest, even with no kit yet', async () => {
     const g = await startedGame()
@@ -763,6 +705,14 @@ describe('wiping a game', () => {
     expect((await store.powerUps(g.id)).find((u) => u.id === gate.id)!.spot).not.toBeNull()
     await store.wipeGame(g.id)
     expect((await store.powerUps(g.id)).find((u) => u.id === gate.id)!.spot).toBeNull()
+  })
+
+  it('clears when each player got the Tupperware side quest: it says where they were at a ping', async () => {
+    const g = await playedGame()
+    const [p] = await store.players(g.id)
+    expect(await store.setSideQuest(p.id, iso(T0))).toBe(true)
+    await store.wipeGame(g.id)
+    expect((await store.players(g.id)).find((x) => x.id === p.id)!.side_quest_at).toBeNull()
   })
 
   it('gives every player a fresh token, so an old session link no longer works', async () => {

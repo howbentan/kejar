@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { testView } from './testView'
 
 vi.mock('../game/api', () => ({ call: vi.fn(), ApiError: class extends Error {} }))
+const maps = vi.hoisted(() => [] as { stash?: unknown; fit?: unknown }[])
+vi.mock('../game/Map', () => ({ default: (p: { stash?: unknown; fit?: unknown }) => (maps.push(p), <div data-testid="box-map" />) }))
 
 import Results from './Results'
 
@@ -85,13 +87,17 @@ describe('Results: bring it home', () => {
     const view = testView({ phase: 'ended', roster, results: null, tupperware: { dikejar: box({ lat: 3.1, lng: 101.6 }, false) } })
     render(<Results code="ABC234" view={view} isHost />)
     expect(screen.getByText("Dikejar's Tupperware wasn't opened. Bawa balik!")).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /pin/i })).toHaveAttribute('href', expect.stringContaining('3.1'))
+    // Drawn on the app's own map, framed with the start, not a link out to another app.
+    expect(screen.getByTestId('box-map')).toBeInTheDocument()
+    expect(maps.at(-1)?.stash).toEqual({ lat: 3.1, lng: 101.6 })
+    expect(screen.queryByRole('link', { name: /pin/i })).toBeNull()
   })
 
   it('says nothing for a claimed or undropped box, or to anyone without the organiser view', () => {
     const view = testView({ phase: 'ended', roster, results: null, tupperware: { dikejar: box({ lat: 3, lng: 101 }, true), kejar: box(null, false) } })
     render(<Results code="ABC234" view={view} isHost />)
     expect(screen.queryByText(/Bawa balik/)).toBeNull()
+    expect(screen.queryByTestId('box-map')).toBeNull()
     cleanup()
     render(<Results code="ABC234" view={testView({ phase: 'ended', roster, results: null })} isHost={false} />)
     expect(screen.queryByText(/Bawa balik/)).toBeNull()

@@ -1,5 +1,5 @@
 import { SIDE_PAIRS } from './legendaries.js'
-import { boxFor, legendaryOn, mirroredSpots } from './tupperware.js'
+import { boxFor, legendaryOn, mirroredSpots, TUPPER_SIDES } from './tupperware.js'
 import { DEFAULT_SETTINGS, type Game, type LegendaryKind, type TupperSide } from './types.js'
 
 /** The Tupperware's colour: the red box everyone's mak has, the same for both sides. */
@@ -35,7 +35,6 @@ export const SECRET_PLACE_IDS: string[] = ['tupper-dikejar', 'tupper-kejar']
 /** The walk step that places this legendary's Tupperware: Dikejar's pair share one, Kejar's the other. */
 export const placeIdFor = (legendary: LegendaryKind): string => `tupper-${(SIDE_PAIRS.runner as readonly string[]).includes(legendary) ? 'dikejar' : 'kejar'}`
 
-const SIDES: TupperSide[] = ['dikejar', 'kejar']
 const capital = (s: string) => s[0].toUpperCase() + s.slice(1)
 const stashOf = (game: Game, kind: LegendaryKind) =>
   ({ dato: game.dato_stash, ring: game.ring_stash, bomoh: game.bomoh_stash, hijau: game.hijau_stash })[kind]
@@ -46,7 +45,7 @@ const stashOf = (game: Game, kind: LegendaryKind) =>
  * either; a lobby with one still lists them, because dropping the box replaces the card.
  */
 const sidesOn = (game: Game): TupperSide[] =>
-  SIDES.filter((side) => {
+  TUPPER_SIDES.filter((side) => {
     const kind = legendaryOn(game, side)
     return kind !== null && !(game.started_at && stashOf(game, kind)?.code)
   })
