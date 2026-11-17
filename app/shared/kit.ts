@@ -1,6 +1,6 @@
 import { SIDE_PAIRS } from './legendaries.js'
-import { legendaryOn, mirroredSpots } from './tupperware.js'
-import { DEFAULT_SETTINGS, placedStash, type Game, type LegendaryKind, type TupperSide } from './types.js'
+import { boxFor, legendaryOn, mirroredSpots } from './tupperware.js'
+import { DEFAULT_SETTINGS, type Game, type LegendaryKind, type TupperSide } from './types.js'
 
 /** The Tupperware's colour: the red box everyone's mak has, the same for both sides. */
 export type TupperTone = 'red'
@@ -40,8 +40,16 @@ const capital = (s: string) => s[0].toUpperCase() + s.slice(1)
 const stashOf = (game: Game, kind: LegendaryKind) =>
   ({ dato: game.dato_stash, ring: game.ring_stash, bomoh: game.bomoh_stash, hijau: game.hijau_stash })[kind]
 
-/** The sides whose Tupperware is in play: Full mode, and a legendary on a hidden stash for that side. */
-const sidesOn = (game: Game): TupperSide[] => SIDES.filter((side) => legendaryOn(game, side) !== null)
+/**
+ * The sides whose Tupperware is in play: Full mode, and a legendary on a hidden stash for that side. A game that has
+ * started on a legacy colour card (a stash with a `code`) has no box for that side, so it has no Tupperware lines
+ * either; a lobby with one still lists them, because dropping the box replaces the card.
+ */
+const sidesOn = (game: Game): TupperSide[] =>
+  SIDES.filter((side) => {
+    const kind = legendaryOn(game, side)
+    return kind !== null && !(game.started_at && stashOf(game, kind)?.code)
+  })
 
 /** Older games stored before the setup settings existed have no band or legendaries: read them with the defaults. */
 const bandOf = (game: Game): PlayersBand => game.settings.playersBand ?? DEFAULT_SETTINGS.playersBand
@@ -100,7 +108,7 @@ export function placeItems(game: Game, forOrganiser: boolean): PlaceItem[] {
   for (const side of sidesOn(game)) {
     const stash = stashOf(game, legendaryOn(game, side)!)
     if (stash?.claimedBy) continue
-    const at = placedStash(stash) ?? suggested[side]
+    const at = boxFor(game, side)?.spot ?? suggested[side]
     places.push({ id: `tupper-${side}`, label: `${capital(side)} Tupperware`, lat: at.lat, lng: at.lng, tone: 'red' })
   }
   return places

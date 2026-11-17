@@ -1,5 +1,5 @@
 import { useReducedMotion } from 'motion/react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { penjaraLockedLine } from '../../shared/hijau.js'
 import { JAIL_QR } from '../../shared/ids.js'
 import type { View } from '../../shared/views.js'
@@ -10,6 +10,9 @@ import Scanner from './Scanner'
 import { loadSession } from './session'
 import { ErrorText } from './ui'
 import { Busy } from './Runner'
+
+/** Okay appears once the words have faded up (56% of the 5 s settled animation), so it can't be tapped or tabbed to while invisible. */
+const OKAY_AFTER_MS = 2800
 
 /** Settle frees the holder plus up to this many others (rules doc §9c). */
 const MAX_PICKS = 2
@@ -61,6 +64,13 @@ export default function SettlePanel({
   // The "Duit kopi sampai." moment shows until Okay; the freed line stays after it.
   const [moment, setMoment] = useState(true)
   const reduce = !!useReducedMotion()
+  const [okayWaited, setOkayWaited] = useState(false)
+  useEffect(() => {
+    if (!done) return
+    const id = window.setTimeout(() => setOkayWaited(true), OKAY_AFTER_MS)
+    return () => window.clearTimeout(id)
+  }, [done])
+  const okayShown = reduce || okayWaited
   const [scanning, setScanning] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
@@ -145,7 +155,7 @@ export default function SettlePanel({
       )}
       {done && moment && <p className="settled-title settled-fade">Duit kopi sampai.</p>}
       {message && <p role="status" className={done && moment ? 'settled-fade' : undefined}>{message}</p>}
-      {done && moment && (
+      {done && moment && okayShown && (
         <button type="button" className="btn btn-legendary settled-btn" onClick={() => setMoment(false)}>
           Okay
         </button>

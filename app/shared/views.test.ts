@@ -1111,6 +1111,23 @@ describe('the packing list in organiser and marshal views', () => {
       expect(k.placed['tupper-kejar']).toBeUndefined()
     })
 
+    const legacy = { code: 'legacy-card-code', card: { id: 'sc1', letter: 'A' }, lat: 3.002, lng: 101.002, claimedBy: null, claimedAt: null }
+    const ringGame = (over: object = {}) => boxGame({ settings: { ...DEFAULT_SETTINGS, mode: 'full', legendaries: { dato: 'off', bomoh: 'off', ring: 'stash', hijau: 'off' } }, ring_stash: legacy, ...over })
+
+    it('a lobby with a legacy colour card is not placed: the step is open and nothing is dropped', () => {
+      const v = view(host, { game: ringGame({ started_at: null }) })
+      expect(v.kit!.places.map((p) => p.id)).toContain('tupper-dikejar')
+      expect(v.kit!.placed['tupper-dikejar']).toBeUndefined()
+      expect(v.tupperware!.dikejar!.dropped).toBeNull()
+    })
+
+    it('a started game on a legacy card has no Tupperware step or pack line for that side', () => {
+      const k = view(host, { game: ringGame({ started_at: iso(T0) }) }).kit!
+      expect(k.places.map((p) => p.id)).not.toContain('tupper-dikejar')
+      expect(k.items.map((i) => i.id)).not.toContain('tupperware')
+      expect(k.items.map((i) => i.id)).not.toContain('bring-home')
+    })
+
     it('a dropped box is placed even without the saved flag', () => {
       const k = boxView(boxGame({ bomoh_stash: { lat: 3.002, lng: 101.002, claimedBy: null, claimedAt: null } }))
       expect(k.placed['tupper-kejar']).toBe(true)

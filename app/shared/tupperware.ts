@@ -91,6 +91,9 @@ export function judgeSlip(i: {
 }): SlipVerdict {
   const { slip } = i
   if (i.triedBefore) return { ok: false, reason: 'no-try' }
+  // The slip that claimed this game's box is burnt, but a teammate scanning it at the claimed box hears "taken".
+  const burntAtClaimedBox = !!slip && slip.organisation_id === i.organisationId && slip.bound_game_id === i.gameId && !!slip.used_at && i.box?.spot.claimedBy != null
+  if (burntAtClaimedBox) return { ok: false, reason: 'taken' }
   if (!slip || slip.organisation_id !== i.organisationId || slip.used_at || (slip.bound_game_id && slip.bound_game_id !== i.gameId)) {
     return { ok: false, reason: 'wrong' }
   }

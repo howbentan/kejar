@@ -26,7 +26,7 @@ function Tupper() {
  * The private side quest card: it shows while this side's Tupperware is still out there and the player is near it.
  * It never says where (the server never tells the phone). On Android it buzzes until the player taps Found.
  */
-export default function SideQuest({ onFound, onClose }: { gameCode: string; onFound: () => void; onClose: () => void }) {
+export default function SideQuest({ onFound, onClose }: { onFound: () => void; onClose: () => void }) {
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('vibrate' in navigator)) return
     navigator.vibrate(BUZZ)

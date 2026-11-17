@@ -83,6 +83,13 @@ describe('judgeSlip', () => {
     expect(verdict({ slip: slip({ side: 'kejar', used_at: '2026-01-01T00:00:00Z' }) })).toEqual(wrong)
     expect(verdict({ slip: slip({ side: 'kejar', bound_game_id: 'g2' }), box: null })).toEqual(wrong)
   })
+  it('taken, not wrong, for the slip already used here when the box is claimed', () => {
+    const taken: typeof box = { legendary: 'ring', spot: { ...dropped, claimedBy: 'p9', claimedAt: 'x' } }
+    const burnt = slip({ bound_game_id: 'g1', used_at: '2026-01-01T00:00:00Z', used_by: 'p9' })
+    expect(verdict({ slip: burnt, box: taken })).toEqual({ ok: false, reason: 'taken' })
+    expect(verdict({ slip: burnt })).toEqual({ ok: false, reason: 'wrong' })
+    expect(verdict({ slip: slip({ bound_game_id: 'g2', used_at: 'x' }), box: taken })).toEqual({ ok: false, reason: 'wrong' })
+  })
   it('a slip bound to this game still works', () => {
     expect(verdict({ slip: slip({ bound_game_id: 'g1' }) })).toEqual({ ok: true })
   })

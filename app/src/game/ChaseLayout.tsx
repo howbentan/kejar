@@ -154,7 +154,6 @@ export default function ChaseLayout(props: {
       {moment}
       {view.sideQuest && !questHidden && (
         <SideQuest
-          gameCode={code}
           onClose={closeQuest}
           onFound={() => {
             setQuestAside(true)
@@ -169,10 +168,13 @@ export default function ChaseLayout(props: {
             onCancel={() => setScanning(null)}
             hint={scanning.hint ?? (side === 'runner' ? 'Point at the station or Penjara card' : 'Point at the tag or station card')}
             // No camera (blocked or broken): type the number printed on the card. The server still checks reach.
+            // The side quest's slip has no number to type, so it gets no fallback.
             numberFallback={
-              side === 'runner'
-                ? { label: 'Or type the station number', onNumber: (n) => onScan(stationQr(n)) }
-                : { label: 'Or type the tag number', onNumber: (n) => onScan(tagQr(n)) }
+              scanning.hint
+                ? undefined
+                : side === 'runner'
+                  ? { label: 'Or type the station number', onNumber: (n) => onScan(stationQr(n)) }
+                  : { label: 'Or type the tag number', onNumber: (n) => onScan(tagQr(n)) }
             }
           />
         </div>

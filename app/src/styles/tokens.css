@@ -627,7 +627,8 @@ select.input option { background: #141614; color: var(--white); }
 @keyframes settle-slip { 0%, 26% { transform: rotate(14deg) translate(0, 0); opacity: 1; } 40% { transform: rotate(14deg) translate(18px, 10px); opacity: 1; } 50%, 100% { transform: rotate(14deg) translate(60px, 26px); opacity: 0; } }
 .settled-title { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.05em; text-align: center; }
 .settled-fade { animation: settle-textup 5s both; }
-.settle .btn.settled-btn { animation: settle-textup 5s both; }
+.settle .btn.settled-btn { animation: settle-okay .4s both; }
+@keyframes settle-okay { from { opacity: 0; } to { opacity: 1; } }
 @keyframes settle-textup { 0%, 44% { opacity: 0; transform: translateY(10px); } 56%, 100% { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .wobble-soft, .settled-art, .settled-art .sd-note, .settled-fade, .settle .btn.settled-btn { animation: none; } }
 

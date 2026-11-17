@@ -1932,6 +1932,8 @@ async function claimSlip(ctx: Ctx, game: GameRow, me: Player, token: string | nu
   const triedBefore = (await ctx.store.events(game.id)).some((e) => e.type === 'slip-miss' && e.actor_id === me.id)
   // Nothing is bound or used once the try is gone (Review Focus 3).
   if (triedBefore) return { ok: false, reason: 'no-try' } as const
+  // A finished or cancelled game binds nothing: the slip stays free for the next game.
+  if (game.ended_at || phaseAt(game, ctx.now).phase === 'ended') return { ok: false, reason: 'not-chasing' } as const
   let slip = token ? await ctx.store.slipByToken(token) : null
   if (slip && organisationId && slip.organisation_id === organisationId && !slip.used_at && !slip.bound_game_id) {
     // Two games scanning the same slip at once: the store keeps the first, and the loser sees it as dead here.

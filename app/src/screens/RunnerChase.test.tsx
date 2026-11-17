@@ -16,9 +16,10 @@ vi.mock('../game/Map', () => ({
 const here = vi.hoisted(() => ({ coords: {} as Record<string, number>, pending: null as null | Promise<Record<string, number>> }))
 vi.mock('../game/here', () => ({ currentCoords: () => here.pending ?? Promise.resolve(here.coords) }))
 vi.mock('../game/Scanner', () => ({
-  default: ({ onResult, hint }: { onResult: (t: string) => void; hint?: string }) => (
+  default: ({ onResult, hint, numberFallback }: { onResult: (t: string) => void; hint?: string; numberFallback?: { label: string } }) => (
     <>
       <p>{hint}</p>
+      {numberFallback && <p>{numberFallback.label}</p>}
       <button type="button" onClick={() => onResult(scanned.text)}>
         fake camera
       </button>
@@ -370,6 +371,17 @@ describe('RunnerChase: alerts after New phone', () => {
       render(<RunnerChase code="ABC234" view={testView()} />)
       expect(screen.queryByRole('dialog')).toBeNull()
       expect(screen.queryByRole('button', { name: 'Side quest' })).toBeNull()
+    })
+    it('the slip scanner has no station-number fallback, the usual scanner does', () => {
+      render(<RunnerChase code="ABC234" view={quest()} />)
+      fireEvent.click(screen.getByRole('button', { name: 'Found' }))
+      expect(screen.getByText('Scan the slip inside')).toBeInTheDocument()
+      expect(screen.queryByText('Or type the station number')).toBeNull()
+    })
+    it('the usual scan button keeps the station-number fallback', () => {
+      render(<RunnerChase code="ABC234" view={testView()} />)
+      fireEvent.click(screen.getByRole('button', { name: /scan/i }))
+      expect(screen.getByText('Or type the station number')).toBeInTheDocument()
     })
     it('Found opens the scanner with the slip hint, and a wrong slip answers in plain words', async () => {
       call.mockResolvedValue({ ok: false, reason: 'wrong' })

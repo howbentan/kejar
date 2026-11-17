@@ -5452,7 +5452,9 @@ describe('one legendary per side, picked by the app (Plan E2 task 2)', () => {
     expect(o.ringStash).toEqual({ ...RING_AT, claimedBy: null, claimedAt: null })
     expect(o.hijauStash).toEqual({ ...HIJAU_AT, claimedBy: null, claimedAt: null })
     expect(o.kit!.places.slice(-2).map((p) => p.id)).toEqual(['tupper-dikejar', 'tupper-kejar'])
-    expect(o.kit!.placed).toMatchObject({ 'tupper-dikejar': true, 'tupper-kejar': true })
+    // A legacy colour card is no box, so the step stays open until the box is dropped over it.
+    expect(o.kit!.placed['tupper-dikejar']).toBeUndefined()
+    expect(o.kit!.placed['tupper-kejar']).toBeUndefined()
     await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 7 * MIN
     for (const body of [{ token: siti.token }, { token: g.aina.token }, { token: g.ben.token }]) {
@@ -7354,6 +7356,15 @@ describe('Tupperware slip sheets and dropping a box', () => {
     expect((await gameOf(g.code)).hijau_stash).toEqual({ ...SPOT, claimedBy: null, claimedAt: null })
   })
 
+  it('dropTupperware over a legacy colour card replaces it with a code-less box', async () => {
+    forcedDraws = [0.9, 0.9]
+    const g = await readyGame(BOTH)
+    const id = (await gameOf(g.code)).id
+    await store.updateGame(id, { ring_stash: { code: 'legacy-card-code', card: { id: 'sc1', letter: 'A' }, ...SPOT, claimedBy: null, claimedAt: null } })
+    await run('dropTupperware', { code: g.code, organiserToken: g.organiserToken, side: 'dikejar', ...SPOT })
+    expect((await gameOf(g.code)).ring_stash).toEqual({ ...SPOT, claimedBy: null, claimedAt: null })
+  })
+
   it('dropTupperware refuses a side that is off, Core, a started game, outside the area and non-organisers', async () => {
     forcedDraws = [0.9]
     const g = await readyGame({ mode: 'full', legendarySides: { runner: 'on', chaser: 'off' } })
@@ -7417,6 +7428,22 @@ describe("slip claims: scanning the slip in your side's Tupperware (Tupperware t
     expect(after.hijau_stash!.claimedBy).toBe(g.ben.playerId)
     expect(after.hijau).toMatchObject({ claimedBy: g.ben.playerId, startsAt: stamp(now), deadline: stamp(now + 20_000), sentAt: stamp(now) })
     expect(await slip(g.kejar[0])).toMatchObject({ used_by: g.ben.playerId })
+  })
+
+  it("a teammate scanning the slip that already claimed the box hears taken, and no try is used", async () => {
+    const g = await chasing()
+    expect(await scan(g, g.aina.token, g.dikejar[0])).toEqual({ ok: true, kind: 'ring', slip: true })
+    expect(await scan(g, g.chong.token, g.dikejar[0])).toEqual({ ok: false, reason: 'taken' })
+    expect(await slipMisses(g)).toHaveLength(0)
+  })
+
+  it('a slip scanned after the game ended stays unbound', async () => {
+    const g = await chasing()
+    now = T0 + 24 * 60 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    expect(await scan(g, g.aina.token, g.dikejar[0])).toEqual({ ok: false, reason: 'not-chasing' })
+    expect(await slip(g.dikejar[0])).toMatchObject({ bound_game_id: null, used_at: null })
+    expect(await slipMisses(g)).toHaveLength(0)
   })
 
   it("the other side's slip is Not your Tupperware: it binds the slip, uses no try, and a right slip still claims", async () => {

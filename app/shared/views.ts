@@ -1313,10 +1313,8 @@ function kitFor(i: ViewInput): KitView {
   // The secret step is placed only when the stash is really dropped, never from the saved flag alone (ruling R8).
   const secret = (id: string) => SECRET_PLACE_IDS.includes(id)
   const placed = Object.fromEntries(Object.entries(kit.placed).filter(([id]) => !secret(id) && places.some((p) => p.id === id)))
-  const stashes: Record<LegendaryKind, Game['dato_stash']> = { dato: i.game.dato_stash, ring: i.game.ring_stash, bomoh: i.game.bomoh_stash, hijau: i.game.hijau_stash }
   for (const side of ['dikejar', 'kejar'] as const) {
-    const kind = legendaryOn(i.game, side)
-    if (kind && placedStash(stashes[kind])) placed[`tupper-${side}`] = true
+    if (boxFor(i.game, side)) placed[`tupper-${side}`] = true
   }
   // The Tupperware lines are the organiser's own: a marshal's list never mentions the box.
   const items = packItems(i.game).filter((item) => organiser || !SECRET_PACK_IDS.includes(item.id))

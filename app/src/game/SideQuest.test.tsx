@@ -18,7 +18,7 @@ afterEach(() => {
 describe('SideQuest', () => {
   it('settles into its words after the decode, and Found calls onFound', () => {
     const onFound = vi.fn()
-    render(<SideQuest gameCode="ABC234" onFound={onFound} onClose={() => {}} />)
+    render(<SideQuest onFound={onFound} onClose={() => {}} />)
     act(() => {
       vi.advanceTimersByTime(2000)
     })
@@ -32,13 +32,13 @@ describe('SideQuest', () => {
 
   it('the close button calls onClose', () => {
     const onClose = vi.fn()
-    render(<SideQuest gameCode="ABC234" onFound={() => {}} onClose={onClose} />)
+    render(<SideQuest onFound={() => {}} onClose={onClose} />)
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
   it('buzzes every 2 s while mounted, and stops on unmount', () => {
-    const { unmount } = render(<SideQuest gameCode="ABC234" onFound={() => {}} onClose={() => {}} />)
+    const { unmount } = render(<SideQuest onFound={() => {}} onClose={() => {}} />)
     expect(vibrate).toHaveBeenCalledWith([300, 200, 300])
     vibrate.mockClear()
     act(() => {
@@ -55,6 +55,6 @@ describe('SideQuest', () => {
 
   it('runs fine where the phone cannot vibrate', () => {
     delete (navigator as { vibrate?: unknown }).vibrate
-    expect(() => render(<SideQuest gameCode="ABC234" onFound={() => {}} onClose={() => {}} />)).not.toThrow()
+    expect(() => render(<SideQuest onFound={() => {}} onClose={() => {}} />)).not.toThrow()
   })
 })
