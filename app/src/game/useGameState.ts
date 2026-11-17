@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
 import { credentials } from './auth'
+import { rememberCoords } from './here'
 import { loadSession } from './session'
 import { clockOffset, type ClockSample } from './time'
 
@@ -104,6 +105,8 @@ export function useGameState(
     const send = (p: GeolocationPosition) => {
       setLocationOff(false)
       lastFix.current = p
+      // The rescue heartbeat falls back on this when a fresh fix is slow.
+      rememberCoords({ lat: p.coords.latitude, lng: p.coords.longitude, accuracy_m: p.coords.accuracy })
       if (document.visibilityState !== 'visible' || Date.now() - lastSent.current < minGap) return
       lastSent.current = Date.now()
       void call('location', {

@@ -13,8 +13,8 @@ vi.mock('../game/Map', () => ({
     return <div data-testid="map" />
   },
 }))
-const here = vi.hoisted(() => ({ coords: {} as Record<string, number>, pending: null as null | Promise<Record<string, number>> }))
-vi.mock('../game/here', () => ({ currentCoords: () => here.pending ?? Promise.resolve(here.coords) }))
+const here = vi.hoisted(() => ({ coords: {} as Record<string, number>, pending: null as null | Promise<Record<string, number>>, last: null as null | Record<string, number> }))
+vi.mock('../game/here', () => ({ currentCoords: () => here.pending ?? Promise.resolve(here.coords), lastCoords: () => here.last }))
 vi.mock('../game/Scanner', () => ({
   default: ({ onResult, hint, numberFallback }: { onResult: (t: string) => void; hint?: string; numberFallback?: { label: string } }) => (
     <>
@@ -261,6 +261,8 @@ describe('RunnerChase: hold the key (rules §9a)', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
+    here.pending = null
+    here.last = null
     Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true })
   })
 
@@ -354,6 +356,78 @@ describe('RunnerChase: hold the key (rules §9a)', () => {
       await vi.advanceTimersByTimeAsync(1_500)
     })
     expect(locationCalls()[2][1]).not.toHaveProperty('holding')
+  })
+
+  it('the press is the first beat, and the beat timer starts again from it', async () => {
+    vi.useFakeTimers()
+    render(<RunnerChase code="ABC234" view={rescue()} />)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000)
+    })
+    await act(async () => fireEvent.pointerDown(screen.getByRole('button', { name: 'HOLD' }), { pointerId: 1 }))
+    expect(holdCalls()).toEqual([{ code: 'ABC234', token: 't1', down: true }])
+    // The free-running timer would have beaten at 1.5 s; re-phased, the next beat is 1.5 s after the press.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000)
+    })
+    expect(locationCalls()).toHaveLength(0)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+    expect(locationCalls()).toHaveLength(1)
+    expect(locationCalls()[0][1]).toMatchObject({ holding: true })
+  })
+
+  it('a beat never waits on GPS: with no fresh fix within 300 ms it goes with the latest known one', async () => {
+    vi.useFakeTimers()
+    here.pending = new Promise(() => {}) // the phone never answers
+    here.last = { lat: 3.2, lng: 101.2, accuracy_m: 7 }
+    render(<RunnerChase code="ABC234" view={rescue()} />)
+    await act(async () => fireEvent.pointerDown(screen.getByRole('button', { name: 'HOLD' }), { pointerId: 1 }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500 + 299)
+    })
+    expect(locationCalls()).toHaveLength(0)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    expect(locationCalls()[0][1]).toEqual({ code: 'ABC234', token: 't1', lat: 3.2, lng: 101.2, accuracy_m: 7, holding: true })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500)
+    })
+    expect(locationCalls()).toHaveLength(2)
+  })
+
+  it('with no coordinates at all, the key itself beats: rescueHold down: true every 1.5 s while held, none once let go', async () => {
+    vi.useFakeTimers()
+    here.pending = new Promise(() => {})
+    render(<RunnerChase code="ABC234" view={rescue()} />)
+    const btn = screen.getByRole('button', { name: 'HOLD' })
+    await act(async () => fireEvent.pointerDown(btn, { pointerId: 1 }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_800)
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_500)
+    })
+    expect(holdCalls().map((b) => b.down)).toEqual([true, true, true])
+    expect(locationCalls()).toHaveLength(0)
+    await act(async () => fireEvent.pointerUp(btn, { pointerId: 1 }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3_000)
+    })
+    expect(holdCalls().map((b) => b.down)).toEqual([true, true, true, false])
+  })
+
+  it('only the pointer that pressed lets go: a second finger lifting elsewhere does nothing', async () => {
+    render(<RunnerChase code="ABC234" view={rescue()} />)
+    await act(async () => fireEvent.pointerDown(screen.getByRole('button', { name: 'HOLD' }), { pointerId: 1 }))
+    await act(async () => fireEvent.pointerUp(window, { pointerId: 2 }))
+    await act(async () => fireEvent.pointerCancel(window, { pointerId: 2 }))
+    expect(screen.getByRole('button', { name: 'HOLDING' })).toBeInTheDocument()
+    expect(holdCalls().map((b) => b.down)).toEqual([true])
+    await act(async () => fireEvent.pointerUp(window, { pointerId: 1 }))
+    expect(holdCalls().map((b) => b.down)).toEqual([true, false])
   })
 
   it('a runner with no rescue of their own sends no extra fixes', async () => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BreakJudgement } from '../../shared/catch.js'
-import { RESCUE_PING_MS, RESCUE_RESET_MS } from '../../shared/penjara.js'
+import { RESCUE_RESET_MS } from '../../shared/penjara.js'
 import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
 import { penjaraLockedLine } from '../../shared/hijau.js'
@@ -65,12 +65,7 @@ type BreakResult =
  * While `active`, this phone asks for a fresh fix every `everyMs` and sends it, even when it's standing still (a still
  * phone's position watch may report nothing). With `now`, the first one goes straight away.
  */
-export function useLocationPings(code: string, active: boolean, everyMs: number, now = false, extra?: () => Record<string, unknown>) {
-  // Read when each fix goes out, so a change (the thumb on the key) never restarts the timer.
-  const more = useRef(extra)
-  useEffect(() => {
-    more.current = extra
-  })
+export function useLocationPings(code: string, active: boolean, everyMs: number, now = false) {
   useEffect(() => {
     if (!active) return
     const token = loadSession(localStorage, code).token
@@ -78,21 +73,12 @@ export function useLocationPings(code: string, active: boolean, everyMs: number,
     const ping = () =>
       void currentCoords(everyMs).then((c) => {
         if (typeof c.lat !== 'number' || typeof c.lng !== 'number') return
-        return call('location', { code, token, ...c, ...more.current?.() }).catch(() => undefined)
+        return call('location', { code, token, ...c }).catch(() => undefined)
       })
     if (now) ping()
     const id = setInterval(ping, everyMs)
     return () => clearInterval(id)
   }, [code, active, everyMs, now])
-}
-
-/**
- * The rescuer's phone sends its location every RESCUE_PING_MS for the whole rescue: the server judges each fix
- * against Penjara's 30 m. While the thumb is on the key each fix also says `holding: true`, the hold's heartbeat
- * (`rescueHold` itself is called only when the thumb goes down and comes up).
- */
-function useRescuePings(code: string, active: boolean, thumbDown: { current: boolean }) {
-  useLocationPings(code, active, RESCUE_PING_MS, false, () => (thumbDown.current ? { holding: true } : {}))
 }
 
 const tagOf = (view: View) => (view.me.tag_id ? `#${String(view.me.tag_id).padStart(2, '0')}` : view.me.name.toUpperCase())
@@ -126,9 +112,6 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
       ? { by: view.me.id, byName: view.me.name, heldMs: 0, holdSince: null, resetAt: claimedAt + RESCUE_RESET_MS }
       : null
   const myRescue = view.me.jailed ? null : view.rescue?.by === view.me.id ? view.rescue : view.rescue ? null : claimed
-  const thumbDown = useRef(false)
-  const onThumb = useCallback((down: boolean) => void (thumbDown.current = down), [])
-  useRescuePings(code, !!myRescue && !view.paused, thumbDown)
   // The server's time right now, read fresh at the answer (the ticking clock can be a second behind): a view made
   // just before the scan must not count as one made after it.
   const viewAt = useRef({ server: view.now, local: 0 })
@@ -216,8 +199,9 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
         momentFor={momentFor}
         onScanned={onScanned}
       />
-      {/* My rescue covers the chase: the rescuer's job is the key, and the screen has to stay open for it. */}
-      {myRescue && <RescueHold code={code} rescue={myRescue} viewNow={view.now} paused={view.paused} onThumb={onThumb} />}
+      {/* My rescue covers the chase: the rescuer's job is the key, and the screen has to stay open for it (it sends the
+          rescue's fixes and heartbeat itself). */}
+      {myRescue && <RescueHold code={code} rescue={myRescue} viewNow={view.now} paused={view.paused} />}
     </>
   )
 }
