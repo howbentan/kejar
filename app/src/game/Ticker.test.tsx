@@ -21,25 +21,26 @@ describe('Ticker', () => {
     const { rerender } = render(<Ticker feed={[item(1)]} />)
     const stolen = item(2, { text: 'Toyol took your Mat Rempit!', means: null, label: null, act: true })
     rerender(<Ticker feed={[stolen, item(1)]} />)
-    expect(screen.getByRole('button', { name: 'Feed: Toyol took your Mat Rempit!' })).toHaveClass('ticker', 'act')
+    expect(screen.getByRole('button', { name: 'Feed: Toyol took your Mat Rempit!' })).toHaveClass('notif-bell', 'act')
     expect(vibrate).toHaveBeenCalledTimes(1)
   })
 
-  it('shows the newest line with its label and what it means', () => {
-    render(<Ticker feed={[item(2), item(1)]} />)
-    const t = screen.getByRole('button', { name: /feed/i })
-    expect(t).toHaveTextContent('PING')
-    expect(t).toHaveTextContent('Line 2.')
-    expect(t).toHaveTextContent('→ Means 2.')
+  it('is a bell, and a line that needs you stops glowing once the feed is opened', () => {
+    const { rerender } = render(<Ticker feed={[item(1)]} />)
+    rerender(<Ticker feed={[item(2, { act: true }), item(1)]} />)
+    const bell = screen.getByRole('button', { name: /feed/i })
+    expect(bell).toHaveClass('notif-bell', 'act')
+    fireEvent.click(bell)
+    expect(bell).not.toHaveClass('act')
   })
 
   it('counts lines that came in since the feed was last opened', () => {
     const { rerender } = render(<Ticker feed={[item(1)]} />)
-    expect(screen.queryByText('+2')).toBeNull()
+    expect(screen.queryByText('2')).toBeNull()
     rerender(<Ticker feed={[item(3), item(2), item(1)]} />)
-    expect(screen.getByText('+2')).toBeInTheDocument()
+    expect(screen.getByText('2')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /feed/i }))
-    expect(screen.queryByText('+2')).toBeNull()
+    expect(screen.queryByText('2')).toBeNull()
   })
 
   it('outlines a line that needs you to act, and buzzes once when it first arrives', () => {
@@ -68,8 +69,9 @@ describe('Ticker', () => {
     expect(screen.getByRole('button', { name: 'Feed: Line 2. Means 2.' })).toBeInTheDocument()
   })
 
-  it('shows nothing to open before anything has happened', () => {
+  it('before anything has happened: no count, and the feed says so', () => {
     render(<Ticker feed={[]} />)
-    expect(screen.getByRole('button', { name: /feed/i })).toHaveTextContent('Nothing yet')
+    fireEvent.click(screen.getByRole('button', { name: 'Feed' }))
+    expect(screen.getByRole('dialog', { name: 'Feed' })).toHaveTextContent('Nothing yet')
   })
 })

@@ -38,7 +38,7 @@ type Scanned = Exclude<ScanTarget, { error: string }>
 /**
  * The one-screen chase (motion design §8.1): a 44 px top bar, the status row (chips on the left; the SOS
  * icon sits on its right, drawn by GameScreen), the map filling the middle, and the dock with the slot, one
- * Scan button and the ticker. Nothing scrolls.
+ * Scan button; the feed is the bell at the top right. Nothing scrolls.
  */
 export default function ChaseLayout(props: {
   code: string
@@ -150,8 +150,8 @@ export default function ChaseLayout(props: {
             <Busy busy={busy} label="Checking" height={props.scanClass === 'scan-runner' ? 18 : 24} stack={props.scanClass === 'scan-runner'}>{props.scanLabel}</Busy>
           </button>
         </div>
-        <Ticker feed={view.feed} />
       </footer>
+      <Ticker feed={view.feed} />
       {moment}
       {view.sideQuest && !questHidden && (
         <SideQuest

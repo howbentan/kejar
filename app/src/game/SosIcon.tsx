@@ -163,10 +163,7 @@ export default function SosIcon({ code, view }: { code: string; view: View }) {
           show()
         }}
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" aria-hidden="true">
-          <path d="M12 5.5v8" />
-          <path d="M12 18h.01" />
-        </svg>
+        <span aria-hidden="true">sos</span>
       </button>
       {open && (
         <>
