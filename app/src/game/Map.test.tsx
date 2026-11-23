@@ -12,6 +12,8 @@ const created = vi.hoisted(() => ({
   data: {} as Record<string, unknown>,
   markers: [] as { el: HTMLElement; lngLat?: number[]; removed: boolean }[],
   options: [] as Record<string, unknown>[],
+  vis: [] as string[],
+  eases: [] as Record<string, unknown>[],
 }))
 const reduce = vi.hoisted(() => ({ on: false }))
 vi.mock('motion/react', async (orig) => ({ ...(await orig<typeof import('motion/react')>()), useReducedMotion: () => reduce.on }))
@@ -69,6 +71,15 @@ vi.mock('maplibre-gl', () => ({
       getSource(id: string) {
         return created.data[id] === undefined ? undefined : { setData: (d: unknown) => (created.data[id] = d) }
       }
+      getLayer(id: string) {
+        return id.startsWith('buildings') ? { id } : undefined
+      }
+      setLayoutProperty(id: string, prop: string, v: string) {
+        created.vis.push(`${id}:${prop}:${v}`)
+      }
+      easeTo(o: Record<string, unknown>) {
+        created.eases.push(o)
+      }
       flyTo(opts: unknown) {
         created.flights.push(opts)
       }
@@ -98,6 +109,23 @@ describe('GameMap', () => {
     render(<GameMap arena={arena} dots={[]} />)
     expect(created.options.at(-1)!.attributionControl).toBe(false)
     expect(screen.getByText(/OpenMapTiles/).closest('.map-credit')).toBeInTheDocument()
+  })
+
+  it('applies the stored view at load without animation, then on each toggle', () => {
+    created.vis = []
+    created.eases = []
+    localStorage.setItem('kejar.map3d', '1')
+    try {
+      render(<GameMap arena={arena} dots={[]} />)
+      act(() => created.load!())
+      expect(created.vis).toContain('buildings-3d:visibility:visible')
+      expect(created.eases).toEqual([{ pitch: 58, duration: 0 }])
+      fireEvent.click(screen.getByRole('button', { name: 'Show buildings flat' }))
+      expect(created.eases.at(-1)).toEqual({ pitch: 0, duration: 900 })
+      expect(localStorage.getItem('kejar.map3d')).toBe('0')
+    } finally {
+      localStorage.clear()
+    }
   })
 
   it('runs a small j over the map until its first load, then takes it away', () => {

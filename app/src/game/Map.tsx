@@ -1,4 +1,6 @@
 import MapCredit from './MapCredit'
+import MapViewButton from './MapViewButton'
+import { applyMapView, useMapView } from './mapView'
 import type { Feature as GeoFeature, FeatureCollection, Geometry } from 'geojson'
 import maplibregl, { type GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -285,6 +287,9 @@ export default function GameMap({
   tollGates?: LatLng[]
 }) {
   const reduce = useReducedMotion()
+  const [threeD, toggleThreeD] = useMapView()
+  const latestThreeD = useRef(threeD)
+  latestThreeD.current = threeD
   const [loaded, setLoaded] = useState(false)
   // The tiles' small j gives up on a map error or after MAP_LOADER_MS, so a map that never loads isn't covered for good.
   const [gaveUp, setGaveUp] = useState(false)
@@ -343,6 +348,7 @@ export default function GameMap({
     })
     m.on('load', () => {
       window.clearTimeout(giveUp)
+      applyMapView(m, latestThreeD.current, { animate: false })
       m.addSource('arena', {
         type: 'geojson',
         data: collection([{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: ring(arena.boundary) } }]),
@@ -767,6 +773,15 @@ export default function GameMap({
     return () => window.clearInterval(timer)
   }, [loaded, hasNext, reduce])
 
+  // A toggle after load (the load itself applied the stored view without animation).
+  const appliedThreeD = useRef(threeD)
+  useEffect(() => {
+    const mp = map.current
+    if (!loaded || !mp || appliedThreeD.current === threeD) return
+    appliedThreeD.current = threeD
+    applyMapView(mp, threeD, { animate: !reduce })
+  }, [loaded, threeD, reduce])
+
   useEffect(() => {
     if (!ready.current || !map.current) return
     let frame = 0
@@ -864,6 +879,7 @@ export default function GameMap({
     <div style={{ position: 'relative', height: typeof height === 'string' ? height : undefined }}>
       <div ref={el} style={{ height, borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hair)' }} />
       <MapCredit />
+      <MapViewButton threeD={threeD} onToggle={toggleThreeD} />
       {/* Until the map's first load, a small j runs in the middle (loaders design). Taps go straight through. */}
       {!loaded && !gaveUp && (
         <div className="map-loading" data-testid="map-loading" aria-hidden="true">

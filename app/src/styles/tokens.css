@@ -179,6 +179,14 @@ select.input option { background: #141614; color: var(--white); }
   background: rgba(10, 10, 11, 0.82); color: var(--white); border: 1px solid var(--hair2, rgba(255,255,255,0.18));
   font: 600 12px var(--font); backdrop-filter: blur(8px);
 }
+.view-btn {
+  position: absolute; z-index: 3; right: 14px; bottom: 20px; width: 44px; height: 44px; border-radius: 50%; padding: 0;
+  display: grid; place-items: center; cursor: pointer; appearance: none; color: var(--white);
+  background: rgba(10, 10, 11, 0.78); border: 1px solid rgba(245, 245, 243, 0.16); backdrop-filter: blur(8px);
+  transition: transform 0.25s cubic-bezier(0.3, 1.6, 0.5, 1), background 0.2s;
+}
+.view-btn:active { transform: scale(0.9); }
+.view-btn.on { color: var(--black); background: var(--white); border-color: var(--white); }
 .map-me span { color: var(--volt); font-size: 14px; line-height: 1; }
 
 /* Centre marker for the play-area picker */
