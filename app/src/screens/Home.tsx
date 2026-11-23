@@ -36,7 +36,8 @@ export default function Home() {
   const [joining, setJoining] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [scanError, setScanError] = useState('')
-  const [story, setStory] = useState(false)
+  // The how-to-play story: first the link asks which side, then that side's story plays.
+  const [story, setStory] = useState<'ask' | 'runner' | 'chaser' | null>(null)
   // run-in: lime, j running in; flip: colours changing over; home: settled.
   const [stage, setStage] = useState<'run-in' | 'flip' | 'home'>(() => (openedThisVisit() ? 'home' : 'run-in'))
   const [tip, setTip] = useState(() => pickTip(Math.random))
@@ -88,7 +89,7 @@ export default function Home() {
   }
 
   const settled = stage === 'home'
-  const busy = joining || story || scanning
+  const busy = joining || (story !== null && story !== 'ask') || scanning
   return (
     <main className={`home${stage === 'run-in' ? ' opening' : ''}${stage !== 'home' ? ' arriving' : ''}`}>
       <div className="home-play">
@@ -141,9 +142,20 @@ export default function Home() {
           <a className="btn btn-ghost" href="/host/new">
             create
           </a>
-          <button type="button" className="home-link" onClick={() => setStory(true)}>
-            if dk how to play click here :)
-          </button>
+          {story === 'ask' ? (
+            <span className="home-sides">
+              <button type="button" className="home-link" onClick={() => setStory('runner')}>
+                dikejar
+              </button>
+              <button type="button" className="home-link" onClick={() => setStory('chaser')}>
+                kejar
+              </button>
+            </span>
+          ) : (
+            <button type="button" className="home-link" onClick={() => setStory('ask')}>
+              if dk how to play click here :)
+            </button>
+          )}
         </div>
       )}
       {scanning && (
@@ -151,7 +163,7 @@ export default function Home() {
           <Scanner onResult={onScan} onCancel={() => setScanning(false)} hint="point at the game's qr code" />
         </div>
       )}
-      {story && <HowToPlay side="runner" mode="core" snapshot={false} onClose={() => setStory(false)} />}
+      {(story === 'runner' || story === 'chaser') && <HowToPlay side={story} mode="core" snapshot={false} onClose={() => setStory(null)} />}
     </main>
   )
 }

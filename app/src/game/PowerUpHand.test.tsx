@@ -85,6 +85,16 @@ describe('PowerUpHand', () => {
     expect(call).not.toHaveBeenCalled()
   })
 
+  it('the pop-up has a ? that shows the questions and answers for that card', () => {
+    render(<PowerUpHand code="ABC234" view={testView({ hand: [decoy] })} />)
+    fireEvent.click(screen.getByRole('button', { name: /gostan/i }))
+    const pop = screen.getByRole('dialog', { name: 'Gostan' })
+    expect(within(pop).queryByText('Where do I show up?')).toBeNull()
+    fireEvent.click(within(pop).getByRole('button', { name: 'Questions about Gostan' }))
+    expect(within(pop).getByText('Where do I show up?')).toBeInTheDocument()
+    expect(within(pop).getByText('When does it work?')).toBeInTheDocument()
+  })
+
   it('tapping a card pops it up in the middle with what it does, how it works, and Use', async () => {
     call.mockResolvedValue({ ok: true, kind: 'decoy' })
     render(<PowerUpHand code="ABC234" view={testView({ hand: [decoy] })} />)

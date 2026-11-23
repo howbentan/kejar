@@ -33,10 +33,16 @@ export default function AlertsCard({ code, view, onDone }: { code: string; view:
     <div className="card">
       <p style={{ fontWeight: 600 }}>Turn on check-in alerts</p>
       {support === 'needs-install' && (
-        <p className="muted">
-          You joined in Safari, so alerts can&apos;t reach this iPhone. Open this page at each check-in (the countdown shows
-          when).
-        </p>
+        <>
+          {/* iPhones only send alerts to a site added to the Home Screen and opened from its icon. */}
+          <p className="muted">Alerts only reach an iPhone from the Home Screen:</p>
+          <ol className="muted" style={{ margin: '6px 0 0', paddingLeft: 20, lineHeight: 1.6 }}>
+            <li>Tap Share</li>
+            <li>Add to Home Screen</li>
+            <li>Open kejar. from the icon</li>
+            <li>Tap Turn on</li>
+          </ol>
+        </>
       )}
       {support === 'denied' && <p className="muted">Notifications are blocked. Allow them in your phone settings.</p>}
       {support === 'unsupported' && <p className="muted">This browser can’t get alerts. Keep the page open at check-ins.</p>}

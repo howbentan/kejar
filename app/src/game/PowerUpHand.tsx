@@ -1,4 +1,5 @@
 import * as m from 'motion/react-m'
+import { FAQ, type FaqKind } from './faq'
 import { useEffect, useRef, useState } from 'react'
 import type { ClaimJudgement } from '../../shared/powerups.js'
 import type { PowerUp, PowerUpKind } from '../../shared/types.js'
@@ -322,6 +323,8 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
 function CardPop({ u, onUse, onClose }: { u: PowerUp; onUse: () => void; onClose: () => void }) {
   const info = INFO[u.kind]
   const usable = u.kind !== 'dato' && u.kind !== 'ring'
+  const faq = u.kind in FAQ ? FAQ[u.kind as FaqKind] : null
+  const [asking, setAsking] = useState(false)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     document.addEventListener('keydown', onKey)
@@ -339,6 +342,21 @@ function CardPop({ u, onUse, onClose }: { u: PowerUp; onUse: () => void; onClose
         <PowerCard kind={u.kind} big />
         <h2 className="card-pop-name">{info.name}</h2>
         <p className="card-pop-how">{HOW[u.kind]}</p>
+        {faq && (
+          <button type="button" className="card-pop-ask" aria-label={`Questions about ${info.name}`} aria-expanded={asking} onClick={() => setAsking(!asking)}>
+            ?
+          </button>
+        )}
+        {faq && asking && (
+          <dl className="card-pop-faq">
+            {faq.map((f) => (
+              <div key={f.q}>
+                <dt>{f.q}</dt>
+                <dd>{f.a}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
         <div className="card-pop-actions">
           {usable && (
             <button type="button" className="btn" onClick={onUse}>

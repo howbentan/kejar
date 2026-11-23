@@ -128,12 +128,20 @@ describe('Home', () => {
     expect(screen.getByRole('button', { name: 'join' })).toBeInTheDocument()
   })
 
-  it('the how-to-play link opens the runner story and closing returns', () => {
+  it('the how-to-play link asks which side, then opens that story; closing returns', () => {
     render(<Home />)
     fireEvent.click(screen.getByRole('button', { name: 'if dk how to play click here :)' }))
+    fireEvent.click(screen.getByRole('button', { name: 'dikejar' }))
     expect(screen.getByRole('heading')).toHaveTextContent("You're Dikejar.")
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     expect(screen.queryByRole('button', { name: 'Close' })).toBeNull()
+  })
+
+  it('the how-to-play link has a Kejar story too', () => {
+    render(<Home />)
+    fireEvent.click(screen.getByRole('button', { name: 'if dk how to play click here :)' }))
+    fireEvent.click(screen.getByRole('button', { name: 'kejar' }))
+    expect(screen.getByRole('heading')).toHaveTextContent("You're Kejar")
   })
 })
 

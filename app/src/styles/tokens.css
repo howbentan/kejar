@@ -330,6 +330,10 @@ select.input option { background: #141614; color: var(--white); }
 .card-pop-body { width: min(340px, 100%); display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
 .card-pop-name { margin: 10px 0 0; font: 800 28px var(--font); letter-spacing: -0.04em; color: var(--white); }
 .card-pop-how { margin: 0; font: 400 14px/1.45 var(--font); color: var(--white); opacity: 0.8; }
+.card-pop-ask { width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--hair); background: transparent; color: var(--white); font: 400 18px var(--font); cursor: pointer; }
+.card-pop-faq { margin: 0; max-width: 300px; text-align: left; display: flex; flex-direction: column; gap: 8px; }
+.card-pop-faq dt { font: 400 15px var(--font); color: var(--volt); }
+.card-pop-faq dd { margin: 2px 0 0; font: 400 14px/1.4 var(--font); opacity: 0.85; }
 .card-pop-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; margin-top: 10px; }
 .scan-overlay { position: fixed; inset: 0; z-index: 45; background: rgba(10, 10, 11, 0.94); display: flex; flex-direction: column; justify-content: center; padding: 16px; }
 
@@ -821,6 +825,7 @@ body:has(.notif-bell) .sos-icon { right: 56px; }
 .home-actions .btn { font-size: 17px; font-weight: 800; text-align: center; text-decoration: none; display: block; margin: 0 auto 5px; box-sizing: border-box; }
 .home-actions .btn-ghost { font-weight: 700; }
 .btn.btn-paper { background: var(--white); color: var(--black); }
+.home-sides { display: flex; gap: 18px; justify-content: center; }
 .home-link { all: unset; cursor: pointer; align-self: center; min-height: 36px; display: inline-flex; align-items: center; padding: 0 6px; margin-top: 4px; font-size: 13px; color: var(--dim); text-decoration: underline; }
 .home-code-q { margin: 0 0 4px; font-size: 26px; font-weight: 800; letter-spacing: -0.05em; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
