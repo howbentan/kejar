@@ -68,6 +68,14 @@ function layersData(p: Props): Record<string, FeatureCollection> {
   }
 }
 
+/** The station number badges are setup-only, so the setup map flips them itself (the shared view lists are the game's). */
+const FLAT_BADGES = ['station-badge-bg', 'station-badge']
+const FLOAT_BADGES = ['float-station-badge-bg', 'float-station-badge']
+function showBadges(m: maplibregl.Map, threeD: boolean) {
+  for (const id of FLAT_BADGES) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', threeD ? 'none' : 'visible')
+  for (const id of FLOAT_BADGES) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', threeD ? 'visible' : 'none')
+}
+
 /** A map for setting up a play area by tapping: the circle's centre, stations, the jail or the start. */
 export default function PlaceMap(props: Props) {
   const el = useRef<HTMLDivElement>(null)
@@ -112,20 +120,14 @@ export default function PlaceMap(props: Props) {
         layout: { 'text-field': 'WC', 'text-font': MAP_FONT, 'text-size': 10, 'text-transform': 'lowercase', 'text-allow-overlap': true },
         paint: { 'text-color': WHITE },
       })
+      addMapIcons(m)
+      // Penjara and the start are their doodles, standing on their spot (upright in 3D too).
       m.addLayer({
         id: 'marks',
-        type: 'circle',
-        source: 'marks',
-        paint: { 'circle-radius': 10, 'circle-color': BLACK, 'circle-stroke-color': WHITE, 'circle-stroke-width': 1.5 },
-      })
-      m.addLayer({
-        id: 'marks-label',
         type: 'symbol',
         source: 'marks',
-        layout: { 'text-field': ['get', 't'], 'text-font': MAP_FONT, 'text-size': 11, 'text-transform': 'lowercase', 'text-allow-overlap': true },
-        paint: { 'text-color': WHITE },
+        layout: { 'icon-image': ['match', ['get', 't'], 'J', 'penjara', 'start'], 'icon-size': 1, 'icon-anchor': 'bottom', 'icon-allow-overlap': true, 'icon-ignore-placement': true },
       })
-      addMapIcons(m)
       // The diamond lies flat on the ground; in 3D the gem floats over a soft shadow instead (as in the game).
       m.addLayer({
         id: 'stations',
@@ -141,7 +143,26 @@ export default function PlaceMap(props: Props) {
         layout: { 'icon-image': 'gem-volt-float', 'icon-size': GEM_SIZE, ...FLOAT_ICON },
         paint: INSTANT_TRANSLATE,
       })
+      // Setup only: each station's number in a small black badge with a volt edge, above the diamond or the gem.
+      const badge = (id: string, up: number) => {
+        m.addLayer({
+          id: `${id}-bg`,
+          type: 'circle',
+          source: 'stations',
+          paint: { 'circle-radius': 10, 'circle-color': BLACK, 'circle-stroke-color': VOLT, 'circle-stroke-width': 2, 'circle-translate': [0, -up], 'circle-translate-anchor': 'viewport' },
+        })
+        m.addLayer({
+          id,
+          type: 'symbol',
+          source: 'stations',
+          layout: { 'text-field': ['get', 'n'], 'text-font': MAP_FONT, 'text-size': 14, 'text-transform': 'lowercase', 'text-allow-overlap': true, 'text-ignore-placement': true },
+          paint: { 'text-color': VOLT, 'text-translate': [0, -up], 'text-translate-anchor': 'viewport' },
+        })
+      }
+      badge('station-badge', 24)
+      badge('float-station-badge', Math.round(HOVER + 46))
       applyMapView(m, latestThreeD.current, { animate: false })
+      showBadges(m, latestThreeD.current)
       appliedThreeD.current = latestThreeD.current
       ready.current = true
       setLoaded(true)
@@ -188,6 +209,7 @@ export default function PlaceMap(props: Props) {
     if (!loaded || !m || appliedThreeD.current === threeD) return
     appliedThreeD.current = threeD
     applyMapView(m, threeD, { animate: !reduce })
+    showBadges(m, threeD)
   }, [loaded, threeD, reduce])
 
   // In 3D the gems bob: never for reduced motion, and not while the page is hidden.

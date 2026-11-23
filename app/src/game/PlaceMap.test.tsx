@@ -79,6 +79,7 @@ vi.mock('maplibre-gl', () => ({
 
 import PlaceMap from './PlaceMap'
 import { FLOAT_MARKER_LAYERS } from './mapView'
+import { MAP_FONT } from './mapStyle'
 import { FLOAT_TRANSLATE_LAYERS } from './floatMotion'
 
 afterEach(() => {
@@ -134,8 +135,29 @@ describe('PlaceMap', () => {
     it('every text layer is lowercase, since Kejar Hand has no capitals', () => {
       load()
       const text = map.layers.filter((l) => l.layout?.['text-field'] !== undefined)
-      expect(text.map((l) => l.id)).toEqual(expect.arrayContaining(['toilets', 'marks-label']))
+      expect(text.map((l) => l.id)).toEqual(expect.arrayContaining(['toilets', 'station-badge', 'float-station-badge']))
       for (const l of text) expect(l.layout!['text-transform'], l.id).toBe('lowercase')
+    })
+
+    it('Penjara and the start are their doodle icons, standing on their spot', () => {
+      load()
+      const marks = map.layers.find((l) => l.id === 'marks')!
+      expect(marks.type).toBe('symbol')
+      expect(marks.layout!['icon-image']).toEqual(['match', ['get', 't'], 'J', 'penjara', 'start'])
+      expect(marks.layout!['icon-anchor']).toBe('bottom')
+      expect(map.layers.find((l) => l.id === 'marks-label')).toBeUndefined()
+    })
+
+    it("each station wears its number in a badge above it, flat and in 3D (setup only)", () => {
+      load()
+      for (const id of ['station-badge', 'float-station-badge']) {
+        const l = map.layers.find((x) => x.id === id)!
+        expect(l.layout!['text-field'], id).toEqual(['get', 'n'])
+        expect(l.layout!['text-font'], id).toEqual(MAP_FONT)
+      }
+      // Flat by default: the flat badge shows, the floating one waits for 3D.
+      expect(map.vis['station-badge']).toBe('visible')
+      expect(map.vis['float-station-badge']).toBe('none')
     })
 
     it('has the view button, which toggles buildings-3d and the stations', () => {
