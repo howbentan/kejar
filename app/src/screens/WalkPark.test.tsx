@@ -40,6 +40,18 @@ beforeEach(() => {
   onErr = null
   call.mockReset()
   call.mockResolvedValue({ ok: true })
+  // The organiser's slips: Dikejar 1 used, 2 and 3 free; Kejar 1 bound to another game, 2 free.
+  call.mockImplementation(async (action: string) =>
+    action === 'listSlips'
+      ? [
+          { side: 'dikejar', number: 1, state: 'used' },
+          { side: 'dikejar', number: 2, state: 'unused' },
+          { side: 'dikejar', number: 3, state: 'unused' },
+          { side: 'kejar', number: 1, state: 'bound' },
+          { side: 'kejar', number: 2, state: 'unused' },
+        ]
+      : { ok: true },
+  )
   refresh.mockReset()
   onBack.mockReset()
   Object.defineProperty(navigator, 'geolocation', {
@@ -119,6 +131,15 @@ describe('WalkPark', () => {
   const TD = { id: 'tupper-dikejar', label: 'Dikejar Tupperware', lat: 3.002, lng: 101.0, tone: 'red' as const }
   const TK = { id: 'tupper-kejar', label: 'Kejar Tupperware', lat: 3.003, lng: 101.0, tone: 'red' as const }
 
+  it('a side with no unused slip says so and links to printing more, never a null number', async () => {
+    call.mockImplementation(async (action: string) => (action === 'listSlips' ? [{ side: 'kejar', number: 1, state: 'used' }] : { ok: true }))
+    open(view([S1, TD, TK], { 'station-1': true, 'tupper-dikejar': true }))
+    act(() => onFix!(at(TK, 0, 100)))
+    expect(await screen.findByText('No Kejar slip left.')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Print more' })).toHaveAttribute('href', '/print/slips')
+    expect(document.body.textContent).not.toMatch(/null/)
+  })
+
   it('the organiser walk hides the Dikejar Tupperware, then the Kejar one, each with the hide panel and its own drop', async () => {
     open(view([S1, TD, TK], { 'station-1': true }))
     expect(mapCalls.at(-1)!.pins!.slice(-2)).toMatchObject([
@@ -129,7 +150,7 @@ describe('WalkPark', () => {
     act(() => onFix!(at(TD, 0, 100)))
     expect(screen.getByText('SECRET · 2 OF 3')).toBeInTheDocument()
     expect(screen.getByText('Hide the Dikejar Tupperware')).toBeInTheDocument()
-    expect(screen.getByText('Put any unused Dikejar slip inside.')).toBeInTheDocument()
+    expect(await screen.findByText('Put Dikejar slip 2 inside.')).toBeInTheDocument()
     expect(screen.getByText('Not in a surau, drain or bin.')).toBeInTheDocument()
     expect(screen.getByText('Hide it out of sight, like under a bench.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Drop it here' }))
@@ -138,14 +159,14 @@ describe('WalkPark', () => {
     expect(drop[1]).toMatchObject({ code: 'ABC234', organiserToken: 'h1', side: 'dikejar' })
     expect(drop[1].lat).toBeCloseTo(TD.lat, 6)
     expect(drop[1].lng).toBeCloseTo(TD.lng + 100 / M_LNG, 6)
-    expect(call.mock.calls.map((c) => c[0])).toEqual(['dropTupperware', 'setKit'])
+    expect(call.mock.calls.map((c) => c[0]).filter((a) => a !== 'listSlips')).toEqual(['dropTupperware', 'setKit'])
     cleanup()
     call.mockClear()
     open(view([S1, TD, TK], { 'station-1': true, 'tupper-dikejar': true }))
     act(() => onFix!(at(TK, 0, 100)))
     expect(screen.getByText('SECRET · 3 OF 3')).toBeInTheDocument()
     expect(screen.getByText('Hide the Kejar Tupperware')).toBeInTheDocument()
-    expect(screen.getByText('Put any unused Kejar slip inside.')).toBeInTheDocument()
+    expect(await screen.findByText('Put Kejar slip 2 inside.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Drop it here' }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('dropTupperware', expect.objectContaining({ side: 'kejar' })))
   })

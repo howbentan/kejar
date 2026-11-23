@@ -77,6 +77,47 @@ const SECRET: Record<SecretTone, { token: string; button: string; drop: string; 
 const sideOfBox = (id: string): 'dikejar' | 'kejar' => (id === 'tupper-kejar' ? 'kejar' : 'dikejar')
 const boxSide = (id: string) => sideName(sideOfBox(id))
 
+type NextSlips = Record<'dikejar' | 'kejar', number | null>
+
+/**
+ * This game's slip for each side: the lowest-numbered one not yet used or bound to a game. It's guidance (any unused
+ * slip still works), so the organiser knows which printed number goes in which box. Organiser only.
+ */
+function useNextSlips(credentials: WalkCredentials): NextSlips | null {
+  const organiserToken = 'organiserToken' in credentials ? credentials.organiserToken : null
+  const [next, setNext] = useState<NextSlips | null>(null)
+  useEffect(() => {
+    if (!organiserToken) return
+    let live = true
+    call<{ side: 'dikejar' | 'kejar'; number: number; state: string }[]>('listSlips', { organiserToken }).then(
+      (slips) => {
+        if (!live || !Array.isArray(slips)) return
+        const lowest = (side: 'dikejar' | 'kejar') =>
+          slips.filter((s) => s.side === side && s.state === 'unused').reduce<number | null>((m, s) => (m === null || s.number < m ? s.number : m), null)
+        setNext({ dikejar: lowest('dikejar'), kejar: lowest('kejar') })
+      },
+      () => undefined,
+    )
+    return () => {
+      live = false
+    }
+  }, [organiserToken])
+  return next
+}
+
+/** Which slip goes in this box: named once the slips are in, or a prompt to print more when none is left. */
+function SlipLine({ side, number }: { side: 'dikejar' | 'kejar'; number: number | null | undefined }) {
+  const name = sideName(side)
+  if (number === null) {
+    return (
+      <p>
+        {`No ${name} slip left.`} <a href="/print/slips">Print more</a>
+      </p>
+    )
+  }
+  return <p>{number === undefined ? `Put any unused ${name} slip inside.` : `Put ${name} slip ${number} inside.`}</p>
+}
+
 const cardStyle = (here: boolean, tone: SecretTone | null) => ({
   border: '1px solid var(--hair)',
   borderRadius: 18,
@@ -115,6 +156,7 @@ export default function WalkPark({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const { here, lost } = useHere()
+  const slipNo = useNextSlips(credentials)
 
   const done = (id: string) => local[id] === true || view.kit?.placed[id] === true
   const nextIndex = places.findIndex((p) => !done(p.id))
@@ -207,7 +249,7 @@ export default function WalkPark({
               <>
                 <p className="eyebrow" style={here ? { color: 'inherit', opacity: 0.6 } : { color: `var(--${look.token}-2)` }}>{`SECRET · ${count}`}</p>
                 <p style={{ fontWeight: 800, fontSize: 21, letterSpacing: '-0.04em' }}>{hideLineFor(next!.id)}</p>
-                <p>{`Put any unused ${boxSide(next!.id)} slip inside.`}</p>
+                <SlipLine side={sideOfBox(next!.id)} number={slipNo?.[sideOfBox(next!.id)]} />
                 <p>Hide it out of sight, like under a bench.</p>
                 <p>Not in a surau, drain or bin.</p>
               </>
