@@ -28,8 +28,9 @@ const VOLT = '#C6FF3D'
 const WHITE = '#F5F5F3'
 const BLACK = '#0A0A0B'
 /** The diamond images (Task 4) by Tupperware side, and the 3D view's floating gems. */
-const DIAMOND: Record<TupperSide, string> = { dikejar: 'dia-gold', kejar: 'dia-purple' }
-const FLOAT_GEM: Record<TupperSide, string> = { dikejar: 'gem-gold-float', kejar: 'gem-purple-float' }
+// Both sides' boxes are gold: purple now means an epic power-up.
+const DIAMOND: Record<TupperSide, string> = { dikejar: 'dia-gold', kejar: 'dia-gold' }
+const FLOAT_GEM: Record<TupperSide, string> = { dikejar: 'gem-gold-float', kejar: 'gem-gold-float' }
 const LOCKED_RED = '#E5484D'
 
 type MapCircle = { lat: number; lng: number; radiusM: number }
@@ -636,7 +637,7 @@ export default function GameMap({
         type: 'circle',
         source: 'pins',
         filter: ['==', ['get', 'state'], 'next'],
-        paint: { 'circle-radius': 14, 'circle-color': ['case', ['==', ['get', 'side'], 'kejar'], '#C9A4FF', ['==', ['get', 'side'], 'dikejar'], '#FFD60A', VOLT], 'circle-opacity': 0.3 },
+        paint: { 'circle-radius': 14, 'circle-color': ['case', ['==', ['get', 'side'], ''], VOLT, '#FFD60A'], 'circle-opacity': 0.3 },
       })
       m.addLayer({
         id: 'pins',
@@ -657,7 +658,7 @@ export default function GameMap({
         source: 'pins',
         filter: ['!=', ['get', 'side'], ''],
         layout: {
-          'icon-image': ['case', ['==', ['get', 'side'], 'kejar'], 'dia-purple', 'dia-gold'],
+          'icon-image': 'dia-gold',
           'icon-size': 1.3,
           'icon-allow-overlap': true,
           'icon-ignore-placement': true,
@@ -713,7 +714,7 @@ export default function GameMap({
         type: 'symbol',
         source: 'pins',
         filter: isTupper,
-        layout: { 'icon-image': ['case', ['==', ['get', 'side'], 'kejar'], 'gem-purple-float', 'gem-gold-float'], 'icon-size': GEM_SIZE, ...FLOAT_ICON },
+        layout: { 'icon-image': 'gem-gold-float', 'icon-size': GEM_SIZE, ...FLOAT_ICON },
         paint: INSTANT_TRANSLATE,
       })
       addFloat({

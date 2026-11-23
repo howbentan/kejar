@@ -386,12 +386,14 @@ select.input option { background: #141614; color: var(--white); }
 /* A legendary is the ordinary dark card in its own colour (Dato Seri yellow, Super Ring orange, Mak Kau Hijau green),
    with marker scribbles drawn round the outside to say it's the big one. No gradient, foil or glow. */
 .power-card.legendary { --leg: var(--legendary-2); --leg-soft: rgba(255, 214, 10, 0.35); --leg-tint: rgba(255, 214, 10, 0.1); border-color: var(--leg); overflow: visible; }
-.power-card.legendary.ring { --leg: var(--ring-2); --leg-soft: rgba(255, 169, 77, 0.35); --leg-tint: rgba(255, 169, 77, 0.1); }
-.power-card.legendary.hijau { --leg: var(--hijau-2); --leg-soft: rgba(63, 168, 107, 0.4); --leg-tint: rgba(63, 168, 107, 0.12); }
-.power-card.legendary.bomoh { --leg: var(--bomoh-2); --leg-soft: rgba(201, 164, 255, 0.4); --leg-tint: rgba(155, 93, 229, 0.16); }
+/* Every legendary shares Dato Seri's yellow frame; each keeps its own colour only in the circle behind its doodle. */
+.power-card.legendary { --own: 255, 214, 10; }
+.power-card.legendary.ring { --own: 255, 169, 77; }
+.power-card.legendary.hijau { --own: 63, 168, 107; }
+.power-card.legendary.bomoh { --own: 245, 240, 230; }
 .power-card.legendary::before { border-color: var(--leg-soft); }
 .power-card.legendary .pc-eyebrow { color: var(--leg); font-weight: 600; line-height: 1.25; letter-spacing: 0.08em; text-align: center; }
-.power-card.legendary .pc-art { background: var(--leg-tint); }
+.power-card.legendary .pc-art { background: radial-gradient(circle, rgba(var(--own), 0.38) 0 58%, rgba(var(--own), 0.14) 59% 100%); }
 .pc-scribbles { position: absolute; left: -26px; top: -30px; width: calc(100% + 52px); height: calc(100% + 56px); pointer-events: none; overflow: visible; z-index: 3; }
 .pc-foil {
   position: absolute; inset: 0; z-index: 1; pointer-events: none; mix-blend-mode: soft-light; opacity: 0.85;
@@ -407,7 +409,6 @@ select.input option { background: #141614; color: var(--white); }
 }
 
 /* Plan E2: Super Ring's cheese orange and Mak Kau Hijau's deep green, on the same legendary face and slot. */
-.slot.legendary.ring { --leg: var(--ring-2); }
 @keyframes ring-glow { 50% { box-shadow: 0 0 24px rgba(255, 169, 77, 0.85); } }
 
 /* Mak Kau Hijau's takeover (tap screen A): flat green fills the runner's screen, black type, a black countdown panel
@@ -727,9 +728,7 @@ body:has(.notif-bell) .sos-icon { right: 56px; }
 @keyframes reel-shake { 25% { transform: translateY(-3px); } 75% { transform: translateY(2px); } }
 @media (prefers-reduced-motion: reduce) { .reel-machine.shake, .reel-flash { animation: none; } .reel-flash { opacity: 0; } .reel-handle { transition: none; } }
 .btn.btn-legendary { background: var(--legendary-2); color: var(--legendary-ink); border-color: var(--legendary-3); }
-.btn.btn-bomoh { background: var(--bomoh-2); color: var(--bomoh-ink); border-color: var(--bomoh-3); }
-.btn.btn-ring { background: var(--ring-2); color: var(--ring-ink); border-color: var(--ring-3); }
-.btn.btn-hijau { background: var(--hijau-2); color: var(--hijau-ink); border-color: var(--hijau-3); }
+.btn.btn-bomoh, .btn.btn-ring, .btn.btn-hijau { background: var(--legendary-2); color: var(--legendary-ink); border-color: var(--legendary-3); }
 .btn.btn-tupper { background: var(--tupper-btn); color: var(--white); border-color: var(--tupper-3); }
 
 /* How to play doodle scenes (motion design 8.8): marker strokes that draw themselves, then stay still. */
@@ -900,9 +899,7 @@ html { -webkit-tap-highlight-color: transparent; }
   padding: 24px; box-sizing: border-box; text-align: center; overflow: hidden; background: var(--black); color: var(--white);
 }
 .to.leg-dato { --leg: var(--legendary-2); }
-.to.leg-ring { --leg: var(--ring-2); }
-.to.leg-hijau { --leg: var(--hijau-2); }
-.to.leg-bomoh { --leg: var(--bomoh-2); }
+.to.leg-ring, .to.leg-hijau, .to.leg-bomoh { --leg: var(--legendary-2); }
 .to-doodles { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .to-doodles .dd { stroke-dasharray: 1; stroke-dashoffset: 1; animation: to-draw 0.5s ease-out forwards; }
 @keyframes to-draw { to { stroke-dashoffset: 0; } }

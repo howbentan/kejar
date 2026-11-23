@@ -64,6 +64,9 @@ function Scribbles({ big }: { big: boolean }) {
   )
 }
 
+/** Each legendary's own colour, shown only in the circle behind its doodle and in setup's dot (the frame is yellow). */
+export const LEGENDARY_OWN = { dato: '#FFD60A', ring: '#FFA94D', bomoh: '#F5F0E6', hijau: '#3FA86B' } as const
+
 /**
  * A deck card, 96×150 (motion design §7). Face up: the same lime-framed layout for every power-up, no rarity
  * colours. Face down: the ornate brand back, identical for every card, so it gives nothing away.

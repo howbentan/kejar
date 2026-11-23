@@ -6,6 +6,7 @@ import { DEFAULT_SETTINGS, type Arena, type LatLng, type PowerUpKind, type Setti
 import { call } from '../game/api'
 import { loadOrganiserSession } from '../game/organiserSession'
 import PlaceMap from '../game/PlaceMap'
+import { LEGENDARY_OWN } from '../game/PowerCard'
 import SetupSteps from '../game/SetupSteps'
 import EndgameLogo, { ENDGAME_COPY } from '../game/EndgameLogo'
 import Sticker from '../game/Sticker'
@@ -111,17 +112,22 @@ const label = (text: string) => (
   </p>
 )
 
-/** Each side's two legendaries, either of which the app may pick: their stickers, names and colours. */
+/** Each side's two legendaries, either of which the app may pick: stickers, names in the shared legendary yellow, and each one's own colour for its dot. */
 const SIDE_LEGENDARIES = {
   runner: [
-    { kind: 'dato', name: 'DATO SERI', colour: 'var(--legendary-2)', tint: 'rgba(255,214,10,.07)' },
-    { kind: 'ring', name: 'SUPER RING', colour: 'var(--ring-2)', tint: 'rgba(255,169,77,.08)' },
+    { kind: 'dato', name: 'DATO SERI', colour: 'var(--legendary-2)', tint: 'rgba(255,214,10,.07)', own: LEGENDARY_OWN.dato },
+    { kind: 'ring', name: 'SUPER RING', colour: 'var(--legendary-2)', tint: 'rgba(255,214,10,.07)', own: LEGENDARY_OWN.ring },
   ],
   chaser: [
-    { kind: 'bomoh', name: 'BOMOH', colour: 'var(--bomoh-2)', tint: 'rgba(155,93,229,.09)' },
-    { kind: 'hijau', name: 'MAK KAU HIJAU', colour: 'var(--hijau-2)', tint: 'rgba(63,168,107,.1)' },
+    { kind: 'bomoh', name: 'BOMOH', colour: 'var(--legendary-2)', tint: 'rgba(255,214,10,.07)', own: LEGENDARY_OWN.bomoh },
+    { kind: 'hijau', name: 'MAK KAU HIJAU', colour: 'var(--legendary-2)', tint: 'rgba(255,214,10,.07)', own: LEGENDARY_OWN.hijau },
   ],
 } as const
+
+/** A small dot in a legendary's own colour, beside its yellow name. */
+const OwnDot = ({ colour }: { colour: string }) => (
+  <span data-own={colour} aria-hidden="true" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: colour, marginRight: 5, verticalAlign: 1 }} />
+)
 
 /** The Off / On choice's On colour for a side: both its legendaries' colours, since either may be picked. */
 const sideOn = (side: 'runner' | 'chaser') => {
@@ -153,8 +159,10 @@ function Legendary(props: { side: 'runner' | 'chaser'; title: ReactNode; seg: Re
         <div>
           <b style={{ fontSize: 15 }}>{props.title}</b>
           <small style={{ display: 'block', marginTop: 2, font: '700 12px var(--mono)', letterSpacing: '0.06em' }}>
+            <OwnDot colour={a.own} />
             <span style={{ color: a.colour }}>{a.name}</span>
             <span style={{ color: 'var(--dim)' }}> OR </span>
+            <OwnDot colour={b.own} />
             <span style={{ color: b.colour }}>{b.name}</span>
           </small>
         </div>

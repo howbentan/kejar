@@ -431,7 +431,7 @@ describe('GameMap', () => {
       const { rerender } = render(<GameMap arena={arena} dots={[]} stash={{ lat: 3.03, lng: 101.03 }} stashSide="kejar" />)
       act(() => created.load!())
       expect(created.data.stash).toMatchObject({ features: [{ geometry: { type: 'Point', coordinates: [101.03, 3.03] } }] })
-      expect(layer('stash').layout['icon-image']).toBe('dia-purple')
+      expect(layer('stash').layout['icon-image']).toBe('dia-gold')
       rerender(<GameMap arena={arena} dots={[]} stash={null} stashSide="kejar" />)
       expect(created.data.stash).toMatchObject({ features: [] })
     })
@@ -444,7 +444,7 @@ describe('GameMap', () => {
       expect(layer('stash').layout['icon-image']).toBe('dia-gold')
     })
 
-    it('a Tupperware pin is a gold or purple diamond by side; plain pins stay circles', () => {
+    it('a Tupperware pin is a gold diamond on both sides (purple means epic); plain pins stay circles', () => {
       created.layers = []
       created.data = {}
       const pins = [
@@ -457,7 +457,7 @@ describe('GameMap', () => {
       expect(created.data.pins).toMatchObject({
         features: [{ properties: { side: 'dikejar' } }, { properties: { side: 'kejar' } }, { properties: { side: '' } }],
       })
-      expect(layer('pins-tupper').layout['icon-image']).toEqual(['case', ['==', ['get', 'side'], 'kejar'], 'dia-purple', 'dia-gold'])
+      expect(layer('pins-tupper').layout['icon-image']).toBe('dia-gold')
       expect(layer('pins-tupper').filter).toEqual(['!=', ['get', 'side'], ''])
       expect(layer('pins').filter).toEqual(['==', ['get', 'side'], ''])
     })
@@ -703,7 +703,7 @@ describe('GameMap', () => {
       expect(layer('float-gem-rising').layout).toEqual(layer('float-gem').layout)
       expect(layer('float-gem').layout).toMatchObject({ 'icon-image': 'gem-volt-float', 'icon-size': 1.2, 'icon-anchor': 'bottom' })
       expect(layer('float-j').layout['icon-image']).toEqual(['concat', ['match', ['get', 'kind'], 'chaser', 'j-chaser', 'j-runner'], '-float'])
-      expect(layer('float-tupper').layout['icon-image']).toEqual(['case', ['==', ['get', 'side'], 'kejar'], 'gem-purple-float', 'gem-gold-float'])
+      expect(layer('float-tupper').layout['icon-image']).toBe('gem-gold-float')
     })
 
     it('with reduced motion no frame is scheduled and nothing is translated', () => {

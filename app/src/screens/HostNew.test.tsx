@@ -319,6 +319,16 @@ describe('HostNew step 3, how long', () => {
     expect(within(row('Kejar Legendary')).getAllByRole('img').map((i) => i.getAttribute('aria-label'))).toEqual(['Bomoh', 'Mak Kau Hijau'])
   })
 
+  it('every legendary name is in Dato Seri yellow, with a dot in its own colour', async () => {
+    render(<HostNew />)
+    await toStep3('Full')
+    for (const name of ['DATO SERI', 'SUPER RING', 'BOMOH', 'MAK KAU HIJAU']) {
+      expect(screen.getByText(name)).toHaveStyle({ color: 'var(--legendary-2)' })
+    }
+    const dots = [...document.querySelectorAll('[data-own]')].map((d) => d.getAttribute('data-own'))
+    expect(dots).toEqual(['#FFD60A', '#FFA94D', '#F5F0E6', '#3FA86B'])
+  })
+
   it('sends legendarySides', async () => {
     render(<HostNew />)
     await toStep3('Full')
