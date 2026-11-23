@@ -24,10 +24,23 @@ describe('SideQuest', () => {
     })
     // The real words are always there for a screen reader; the glyph copy is hidden from it and has settled too.
     expect(screen.getAllByText('Find the Tupperware')).toHaveLength(2)
-    expect(screen.getAllByText('SIDE QUEST')).toHaveLength(2)
+    expect(screen.getAllByText('TUPPERWARE')).toHaveLength(2)
     expect(screen.queryByText('BUZZING')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Found' }))
     expect(onFound).toHaveBeenCalledTimes(1)
+  })
+
+  it('fades by itself after 8 s', () => {
+    const onTimeout = vi.fn()
+    render(<SideQuest onFound={() => {}} onClose={() => {}} onTimeout={onTimeout} />)
+    act(() => {
+      vi.advanceTimersByTime(7_999)
+    })
+    expect(onTimeout).not.toHaveBeenCalled()
+    act(() => {
+      vi.advanceTimersByTime(1)
+    })
+    expect(onTimeout).toHaveBeenCalledTimes(1)
   })
 
   it('the close button calls onClose', () => {

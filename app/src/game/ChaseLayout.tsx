@@ -129,7 +129,7 @@ export default function ChaseLayout(props: {
             {props.chips}
             {view.sideQuest && questHidden && (
               <button type="button" className="chip chip-quest" onClick={() => { setQuestClosed(false); setQuestAside(false) }}>
-                Side quest
+                Tupperware
               </button>
             )}
             <HowToPlayLink code={code} view={view} />
@@ -157,6 +157,7 @@ export default function ChaseLayout(props: {
       {view.sideQuest && !questHidden && (
         <SideQuest
           onClose={closeQuest}
+          onTimeout={() => setQuestAside(true)}
           onFound={() => {
             setQuestAside(true)
             openScanner('Scan the slip inside')

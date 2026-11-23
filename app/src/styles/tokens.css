@@ -875,7 +875,7 @@ html { -webkit-tap-highlight-color: transparent; }
 .sq { position: fixed; inset: 0; z-index: 30; background: rgba(5, 5, 5, 0.55); display: flex; align-items: center; justify-content: center; padding: 18px; box-sizing: border-box; }
 .sq-card { position: relative; width: 100%; max-width: 360px; background: var(--white); color: #0A0A0B; border-radius: 26px; padding: 20px 18px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6); animation: sq-pop 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
 @keyframes sq-pop { from { transform: scale(0.7) translateY(20px); opacity: 0; } to { transform: none; opacity: 1; } }
-.sq-eyebrow { margin: 0; font: 500 10px var(--mono); letter-spacing: 0.22em; color: #fff; background: var(--tupper-btn); padding: 4px 9px; border-radius: 999px; }
+.sq-eyebrow { margin: 0; font: 500 10px var(--mono); letter-spacing: 0.22em; color: var(--legendary-ink); background: var(--legendary-2); padding: 4px 9px; border-radius: 999px; }
 .sq-card h2 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.05em; line-height: 1.05; }
 .sq-cipher { min-height: 2.1em; display: grid; place-items: center; }
 .decrypt { font-variant-ligatures: none; }
@@ -885,7 +885,7 @@ html { -webkit-tap-highlight-color: transparent; }
 .sq-buzz { margin: 2px 0 4px; font: 500 10.5px var(--mono); letter-spacing: 0.06em; color: #555; display: flex; align-items: center; gap: 6px; }
 .sq-buzz .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tupper-2); animation: sq-blink 1.4s infinite; }
 @keyframes sq-blink { 50% { opacity: 0.25; } }
-.sq-card .sq-found { width: 100%; background: var(--tupper-btn); color: #fff; border-color: var(--tupper-3); }
+.sq-card .sq-found { width: 100%; background: var(--legendary-2); color: var(--legendary-ink); border-color: var(--legendary-3); box-shadow: 0 5px 0 var(--legendary-3); }
 .sq-close { position: absolute; top: 8px; right: 10px; width: 36px; height: 36px; border: 0; background: none; font-size: 26px; line-height: 1; color: #444; cursor: pointer; }
 .chip.chip-quest { pointer-events: auto; cursor: pointer; color: var(--white); border-color: var(--tupper-2); }
 @media (prefers-reduced-motion: reduce) { .sq-card, .sq-tub, .sq-buzz .dot { animation: none; } }

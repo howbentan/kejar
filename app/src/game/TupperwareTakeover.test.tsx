@@ -40,7 +40,7 @@ describe('the Tupperware unlock', () => {
   it('the box, the face-down card in its colour, then the flip to its front; Keep it for a held legendary', () => {
     const onDone = vi.fn()
     const { container } = render(<>{dipFor('KEJAR:SLIP:x', { ok: true, kind: 'ring', slip: true }, 5, onDone)}</>)
-    expect(screen.getByText('SIDE QUEST COMPLETE')).toBeInTheDocument()
+    expect(screen.getByText('TUPPERWARE OPENED')).toBeInTheDocument()
     expect(container.querySelector('.to-tub .tw-lid.open')).not.toBeNull()
     expect(screen.getByLabelText('Face-down card')).toHaveClass('big')
     expect(container.querySelector('.face-front .power-card.legendary.ring')).not.toBeNull()

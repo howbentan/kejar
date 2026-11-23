@@ -530,18 +530,18 @@ describe('RunnerChase: alerts after New phone', () => {
     const quest = () => testView({ sideQuest: true })
     it('shows the card; closing hides it and leaves a chip that reopens it, and the close is remembered', () => {
       render(<RunnerChase code="ABC234" view={quest()} />)
-      expect(screen.getByRole('dialog', { name: 'Side quest' })).toBeInTheDocument()
+      expect(screen.getByRole('dialog', { name: 'Tupperware' })).toBeInTheDocument()
       fireEvent.click(screen.getByRole('button', { name: 'Close' }))
       expect(screen.queryByRole('dialog')).toBeNull()
       expect(localStorage.getItem('sidequest-closed:ABC234')).toBe('1')
-      fireEvent.click(screen.getByRole('button', { name: 'Side quest' }))
-      expect(screen.getByRole('dialog', { name: 'Side quest' })).toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Tupperware' }))
+      expect(screen.getByRole('dialog', { name: 'Tupperware' })).toBeInTheDocument()
     })
     it('stays closed after a reload', () => {
       localStorage.setItem('sidequest-closed:ABC234', '1')
       render(<RunnerChase code="ABC234" view={quest()} />)
       expect(screen.queryByRole('dialog')).toBeNull()
-      expect(screen.getByRole('button', { name: 'Side quest' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Tupperware' })).toBeInTheDocument()
     })
     it('Found hides the card for now but does not remember it: a remount shows it again', () => {
       const { unmount } = render(<RunnerChase code="ABC234" view={quest()} />)
@@ -550,12 +550,23 @@ describe('RunnerChase: alerts after New phone', () => {
       expect(localStorage.getItem('sidequest-closed:ABC234')).toBeNull()
       unmount()
       render(<RunnerChase code="ABC234" view={quest()} />)
-      expect(screen.getByRole('dialog', { name: 'Side quest' })).toBeInTheDocument()
+      expect(screen.getByRole('dialog', { name: 'Tupperware' })).toBeInTheDocument()
+    })
+    it('the card fades after 8 s, leaving the chip to reopen it, and nothing is remembered', () => {
+      vi.useFakeTimers()
+      render(<RunnerChase code="ABC234" view={quest()} />)
+      act(() => {
+        vi.advanceTimersByTime(8_000)
+      })
+      expect(screen.queryByRole('dialog', { name: 'Tupperware' })).toBeNull()
+      expect(screen.getByRole('button', { name: 'Tupperware' })).toBeInTheDocument()
+      expect(localStorage.getItem('sidequest-closed:ABC234')).toBeNull()
+      vi.useRealTimers()
     })
     it('is absent when the view has no side quest', () => {
       render(<RunnerChase code="ABC234" view={testView()} />)
       expect(screen.queryByRole('dialog')).toBeNull()
-      expect(screen.queryByRole('button', { name: 'Side quest' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Tupperware' })).toBeNull()
     })
     it('the slip scanner has no station-number fallback, the usual scanner does', () => {
       render(<RunnerChase code="ABC234" view={quest()} />)

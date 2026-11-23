@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import Decrypt from './Decrypt'
 
 /** Android buzzes while the card is up: 300 ms on, 200 ms off, 300 ms on, every 2 s. */
@@ -26,7 +26,16 @@ function Tupper() {
  * The private side quest card: it shows while this side's Tupperware is still out there and the player is near it.
  * It never says where (the server never tells the phone). On Android it buzzes until the player taps Found.
  */
-export default function SideQuest({ onFound, onClose }: { onFound: () => void; onClose: () => void }) {
+/** The card fades by itself after this long; the chip stays so it can be reopened. */
+export const QUEST_SHOW_MS = 8_000
+
+export default function SideQuest({ onFound, onClose, onTimeout }: { onFound: () => void; onClose: () => void; onTimeout?: () => void }) {
+  const timeout = useRef(onTimeout)
+  timeout.current = onTimeout
+  useEffect(() => {
+    const id = window.setTimeout(() => timeout.current?.(), QUEST_SHOW_MS)
+    return () => window.clearTimeout(id)
+  }, [])
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('vibrate' in navigator)) return
     navigator.vibrate(BUZZ)
@@ -37,13 +46,13 @@ export default function SideQuest({ onFound, onClose }: { onFound: () => void; o
     }
   }, [])
   return (
-    <div className="sq" role="dialog" aria-label="Side quest">
+    <div className="sq" role="dialog" aria-label="Tupperware">
       <div className="sq-card">
         <button type="button" className="sq-close" aria-label="Close" onClick={onClose}>
           ×
         </button>
         <p className="sq-eyebrow">
-          <Decrypt text="SIDE QUEST" delay={250} duration={700} />
+          <Decrypt text="TUPPERWARE" delay={250} duration={700} />
         </p>
         <h2 className="sq-cipher">
           <Decrypt text="Find the Tupperware" delay={0} duration={900} />

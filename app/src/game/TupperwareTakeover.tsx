@@ -101,7 +101,7 @@ export default function TupperwareTakeover({ kind, onDone }: { kind: LegendaryKi
   return (
     <div className={`to leg-${kind}${ended ? ' to-end' : ''}`} role="status" onClick={skip}>
       <Doodles />
-      <p className="to-eyebrow">SIDE QUEST COMPLETE</p>
+      <p className="to-eyebrow">TUPPERWARE OPENED</p>
       <div className="to-stage">
         <div className="to-card">
           {/* Face down first: the same back as every card, in this legendary's colour. Then it flips. */}
