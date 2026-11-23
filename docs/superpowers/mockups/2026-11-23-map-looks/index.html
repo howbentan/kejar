@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>kejar. map looks</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono&display=swap" rel="stylesheet" />
+<style>
+  :root { --black: #0A0A0B; --white: #F5F5F3; --volt: #C6FF3D; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #050506; color: var(--white); font-family: Geist, system-ui, sans-serif; }
+  header { padding: 28px 24px 8px; max-width: 1400px; margin: 0 auto; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h1 span { color: var(--volt); }
+  header p { margin: 0; color: rgba(245,245,243,.6); font-size: 14px; line-height: 1.5; max-width: 760px; }
+  .toggle { display: flex; align-items: center; gap: 8px; margin-top: 16px; flex-wrap: wrap; font-size: 13px; color: rgba(245,245,243,.6); }
+  .toggle button { font: inherit; color: var(--white); background: transparent; border: 1px solid rgba(245,245,243,.18); border-radius: 999px; padding: 7px 14px; cursor: pointer; }
+  .toggle button small { color: rgba(245,245,243,.45); margin-left: 4px; }
+  .toggle button.on { background: var(--white); color: var(--black); border-color: var(--white); }
+  .toggle button.on small { color: rgba(10,10,11,.55); }
+  .grid { display: grid; grid-template-columns: minmax(0, 400px); justify-content: center; gap: 20px; padding: 20px 16px 40px; margin: 0 auto; }
+  .legend { justify-content: center; }
+  .look { display: flex; flex-direction: column; gap: 10px; }
+  .phone { position: relative; aspect-ratio: 9 / 16; max-height: 640px; border-radius: 28px; overflow: hidden; border: 1px solid rgba(245,245,243,.12); background: var(--black); }
+  .phone .map { position: absolute; inset: 0; }
+  .phone.grid-overlay::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+    background-image: linear-gradient(rgba(245,245,243,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(245,245,243,.05) 1px, transparent 1px);
+    background-size: 32px 32px; }
+  .hud { position: absolute; top: 14px; left: 14px; right: 14px; display: flex; justify-content: space-between; pointer-events: none; z-index: 2; }
+  .pill { font-family: 'Geist Mono', monospace; font-size: 12px; padding: 6px 10px; border-radius: 999px; background: rgba(10,10,11,.75); border: 1px solid rgba(245,245,243,.12); backdrop-filter: blur(6px); }
+  .pill.volt { color: var(--black); background: var(--volt); border-color: var(--volt); }
+  .name { font-weight: 600; font-size: 15px; }
+  .name small { font-family: 'Geist Mono', monospace; font-weight: 400; color: rgba(245,245,243,.45); margin-left: 6px; font-size: 11px; }
+  .desc { color: rgba(245,245,243,.62); font-size: 13px; line-height: 1.5; margin: 0; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 0 24px 32px; max-width: 1400px; margin: 0 auto; font-size: 12px; color: rgba(245,245,243,.6); }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+  .note { margin: 10px 0 0; font-size: 12px; color: rgba(245,245,243,.5); }
+  .demo-btn { font: 600 12px Geist, sans-serif; margin-left: 8px; padding: 6px 12px; border-radius: 999px; border: 0; background: var(--volt); color: var(--black); cursor: pointer; }
+  .demo-btn:disabled { opacity: .35; cursor: default; }
+  .view-btn { position: absolute; z-index: 3; right: 14px; bottom: 30px; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+    color: var(--white); background: rgba(10,10,11,.78); border: 1px solid rgba(245,245,243,.16); backdrop-filter: blur(8px); transition: transform .25s cubic-bezier(.3,1.6,.5,1), background .2s; }
+  .view-btn:active { transform: scale(.9); }
+  .view-btn.on { color: var(--black); background: var(--white); border-color: var(--white); }
+  .credit { position: absolute; z-index: 2; left: 50%; bottom: 10px; transform: translateX(-50%); white-space: nowrap; pointer-events: none;
+    font-size: 9px; color: rgba(245,245,243,.55); background: rgba(10,10,11,.6); padding: 3px 8px; border-radius: 6px; }
+  .credit.slim { left: 14px; transform: none; font-family: 'Geist Mono', monospace; font-size: 8px; letter-spacing: .04em; color: rgba(245,245,243,.32); background: none; padding: 0; }
+  .maplibregl-ctrl-attrib { font-size: 9px; background: rgba(10,10,11,.6) !important; color: rgba(245,245,243,.5); }
+  .maplibregl-ctrl-attrib a { color: rgba(245,245,243,.6); }
+</style>
+</head>
+<body>
+<header>
+  <h1>kejar<span>.</span> map looks</h1>
+  <p>The chosen look: Ink, with map names in Kejar Hand and the slim credit, on a live park (KLCC Park, sample game on top). Lime is kept for game pieces only.</p>
+  <p class="note">Tap the round button at the bottom right to flip between flat and 3D. Drag to pan; in 3D, right-drag or two-finger drag to tilt and turn.</p>
+  <div class="toggle" data-group="view">
+    <span>View as</span>
+    <button class="on" data-value="player">Player</button>
+    <button data-value="organiser">Organiser <small>sees both Tupperware</small></button>
+  </div>
+  <p class="note">A claimed station turns red and is locked for 60 s (the game's station lock), then turns volt again. Station 2 starts mid-lock. <button id="claim-btn" class="demo-btn">Simulate a claim</button></p>
+</header>
+
+<div class="grid" id="grid"></div>
+
+<div class="legend">
+  <span><img src="markers/j-runner.png" height="16" alt="" style="vertical-align:-3px;margin-right:6px">Dikejar (runner)</span>
+  <span><img src="markers/j-chaser.png" height="16" alt="" style="vertical-align:-3px;margin-right:6px">Kejar (chaser)</span>
+  <span><img src="markers/j-ghost.png" height="16" alt="" style="vertical-align:-3px;margin-right:6px">Pinged runner (last ping)</span>
+  <span><i style="border:2px solid #F5F5F3;width:12px;height:12px"></i>Marshal</span>
+  <span><i style="background:#C6FF3D;border-radius:2px;transform:rotate(45deg);width:11px;height:11px"></i>Power-up station (floats in 3D)</span>
+  <span><i style="background:#E5484D;border-radius:2px;transform:rotate(45deg);width:11px;height:11px"></i>Claimed, locked (lands with a countdown in 3D)</span>
+  <span><i style="background:#FFD60A;border-radius:2px;transform:rotate(45deg);width:11px;height:11px"></i>Dikejar Tupperware (organiser only)</span>
+  <span><i style="background:#C9A4FF;border-radius:2px;transform:rotate(45deg);width:11px;height:11px"></i>Kejar Tupperware (organiser only)</span>
+  <span>Thin white line = game boundary · sample positions, rough boundary</span>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+<script>
+const CENTER = [101.7130, 3.1551]
+const SRC = { omt: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } }
+const HERE = location.origin + location.pathname.replace(/[^/]*$/, '')
+const FONTSETS = {
+  // Kejar Hand has only lowercase letters and digits; anything else falls back to Geist inside the same font files.
+  hand: { glyphs: HERE + 'fonts/{fontstack}/{range}.pbf', regular: 'Kejar Hand Regular', medium: 'Kejar Hand Regular', italic: 'Kejar Hand Regular', mono: 'Kejar Hand Regular', case: 'lowercase', spacing: 0 },
+  geist: { glyphs: HERE + 'fonts/{fontstack}/{range}.pbf', regular: 'Geist Regular', medium: 'Geist Medium', italic: 'Geist Regular', mono: 'Geist Mono Regular' },
+  noto: { glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', regular: 'Noto Sans Regular', medium: 'Noto Sans Regular', italic: 'Noto Sans Italic', mono: 'Noto Sans Regular' },
+}
+let F = FONTSETS.hand
+let THREE_D = false
+const SLIM_CREDIT = true
+let VIEW = 'player'
+const PATHS = ['in', ['get', 'class'], ['literal', ['path', 'track']]]
+const ROADS = ['!', PATHS]
+
+const label = (field, size, color, extra = {}) => ({
+  layout: { 'text-field': ['get', 'name'], 'text-font': [F.regular], 'text-size': size, ...extra,
+    ...(F.case ? { 'text-transform': F.case, 'text-letter-spacing': F.spacing, 'text-size': size + 5 } : {}) },
+  paint: { 'text-color': color, 'text-halo-color': '#0A0A0B', 'text-halo-width': 1.2 },
+})
+
+/** Builds a style from a palette, using the current label fonts. */
+function style(p) {
+  const layers = [
+    { id: 'bg', type: 'background', paint: { 'background-color': p.bg } },
+    { id: 'landcover', type: 'fill', source: 'omt', 'source-layer': 'landcover', paint: { 'fill-color': p.land, 'fill-opacity': p.landOpacity ?? 1 } },
+    { id: 'park', type: 'fill', source: 'omt', 'source-layer': 'park', paint: { 'fill-color': p.park } },
+    p.parkLine && { id: 'park-line', type: 'line', source: 'omt', 'source-layer': 'park', paint: { 'line-color': p.parkLine, 'line-width': 0.8 } },
+    { id: 'water', type: 'fill', source: 'omt', 'source-layer': 'water', paint: { 'fill-color': p.water } },
+    p.waterLine && { id: 'water-line', type: 'line', source: 'omt', 'source-layer': 'water', paint: { 'line-color': p.waterLine, 'line-width': 1 } },
+    !THREE_D && { id: 'buildings', type: 'fill', source: 'omt', 'source-layer': 'building', minzoom: 14, paint: { 'fill-color': p.building } },
+    !THREE_D && p.buildingLine && { id: 'buildings-line', type: 'line', source: 'omt', 'source-layer': 'building', minzoom: 14, paint: { 'line-color': p.buildingLine, 'line-width': 0.6 } },
+    { id: 'roads', type: 'line', source: 'omt', 'source-layer': 'transportation', filter: p.splitPaths ? ROADS : true,
+      paint: { 'line-color': p.road, 'line-width': ['interpolate', ['linear'], ['zoom'], 14, p.roadW[0], 18, p.roadW[1]] } },
+    p.splitPaths && { id: 'paths', type: 'line', source: 'omt', 'source-layer': 'transportation', filter: PATHS,
+      paint: { 'line-color': p.path, 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 0.6, 18, 2], ...(p.pathDash ? { 'line-dasharray': p.pathDash } : {}) } },
+    THREE_D && { id: 'buildings-3d', type: 'fill-extrusion', source: 'omt', 'source-layer': 'building', minzoom: 14,
+      paint: {
+        'fill-extrusion-color': p.building3d,
+        'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 8],
+        'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0],
+        'fill-extrusion-opacity': p.building3dOpacity ?? 0.9,
+        'fill-extrusion-vertical-gradient': true,
+      } },
+    { id: 'water-names', type: 'symbol', source: 'omt', 'source-layer': 'water_name', ...label('name', 12, p.label, { 'text-font': [F.italic] }) },
+    { id: 'street-names', type: 'symbol', source: 'omt', 'source-layer': 'transportation_name', minzoom: 14,
+      ...label('name', 10, p.label, { 'symbol-placement': 'line', 'text-font': [F.mono], 'text-transform': 'uppercase', 'text-letter-spacing': 0.08 }) },
+    { id: 'park-names', type: 'symbol', source: 'omt', 'source-layer': 'park', ...label('name', 13, p.labelStrong, { 'text-font': [F.medium], ...(p.upperLabels ? { 'text-transform': 'uppercase', 'text-letter-spacing': 0.12 } : {}) }) },
+  ].filter(Boolean)
+  return { version: 8, glyphs: F.glyphs, sources: { ...SRC }, layers }
+}
+
+const LOOKS = [
+  {
+    name: 'Now', tag: 'current', desc: 'What the game ships today: dark greens, blue water. Readable, but the green and blue are outside the brand colours.',
+    palette: ({ bg: '#0E120F', land: '#152219', park: '#172A1D', water: '#173A55', building: '#1D221F', building3d: '#2C3430', road: '#2E3832', roadW: [1, 6], label: 'rgba(245,245,243,.45)', labelStrong: 'rgba(245,245,243,.6)' }),
+  },
+  {
+    name: 'Ink', tag: 'black & white only', desc: 'Strictly the brand: black, white and greys, nothing else. Footpaths drawn as their own fine dashed lines, so runners can see escape routes.',
+    palette: ({ bg: '#0A0A0B', land: '#121213', park: '#161618', water: '#232428', building: '#1B1B1D', building3d: '#2E2E33', buildingLine: '#26262A', road: '#2C2C2F', roadW: [1, 6], splitPaths: true, path: 'rgba(245,245,243,.32)', pathDash: [2, 1.5], label: 'rgba(245,245,243,.42)', labelStrong: 'rgba(245,245,243,.62)' }),
+  },
+  {
+    name: 'Blueprint', tag: 'tactical lines', desc: 'No fills, just thin white outlines on black with a faint grid. Feels like a mission map; the most distinctive, but busier to read at a glance.',
+    grid: true,
+    palette: ({ bg: '#0A0A0B', land: '#0A0A0B', park: '#0A0A0B', parkLine: 'rgba(245,245,243,.22)', water: '#101113', waterLine: 'rgba(245,245,243,.28)', building: '#0A0A0B', building3d: '#1E2024', building3dOpacity: 0.75, buildingLine: 'rgba(245,245,243,.14)', road: 'rgba(245,245,243,.2)', roadW: [0.6, 3], splitPaths: true, path: 'rgba(245,245,243,.42)', pathDash: [1, 2], label: 'rgba(245,245,243,.4)', labelStrong: 'rgba(245,245,243,.7)', upperLabels: true }),
+  },
+  {
+    name: 'Volt shade', tag: 'lime-tinted dark', desc: 'Near-black with a hint of the Volt hue in every surface, so the map quietly belongs to the brand while lime itself stays for game pieces.',
+    palette: ({ bg: '#0B0C08', land: '#10130A', park: '#13170C', water: '#090B0A', waterLine: 'rgba(198,255,61,.25)', building: '#16190F', building3d: '#282E1B', road: '#262B1C', roadW: [1, 6], splitPaths: true, path: 'rgba(198,255,61,.22)', pathDash: [2, 1.5], label: 'rgba(245,245,243,.42)', labelStrong: 'rgba(245,245,243,.6)' }),
+  },
+]
+
+// Sample game on top: rough boundary around KLCC Park and a few players.
+const BOUNDARY = [[101.7118,3.1569],[101.7139,3.1572],[101.7163,3.1561],[101.7168,3.1538],[101.7160,3.1517],[101.7137,3.1511],[101.7117,3.1523],[101.7112,3.1546],[101.7118,3.1569]]
+const SHIFT = [-0.0016, 0.0016] // nudges the sample game onto the park itself
+BOUNDARY.forEach(c => { c[0] = 101.7140 + (c[0] - 101.7140) * 0.8 + SHIFT[0]; c[1] = 3.1541 + (c[1] - 3.1541) * 0.8 + SHIFT[1] })
+const pt = (lng, lat, kind) => ({ type: 'Feature', properties: { kind }, geometry: { type: 'Point', coordinates: [lng + SHIFT[0], lat + SHIFT[1]] } })
+// Kinds follow the game: runner = Dikejar (volt j), chaser = Kejar (white j), ping = a runner's last ping (faded j).
+const PIECES = { type: 'FeatureCollection', features: [
+  pt(101.7131, 3.1552, 'chaser'), pt(101.7152, 3.1531, 'chaser'),
+  pt(101.7145, 3.1549, 'runner'), pt(101.7127, 3.1535, 'runner'), pt(101.7157, 3.1546, 'runner'),
+  pt(101.7140, 3.1525, 'marshal'),
+  pt(101.7122, 3.1558, 'ping'), pt(101.7149, 3.1560, 'ping'),
+  // Each side's Tupperware: only the organiser's map shows them (players find them by the side quest, no map hint).
+  { ...pt(101.7129, 3.1546, 'tupper'), properties: { kind: 'tupper', side: 'dikejar' } },
+  { ...pt(101.7152, 3.1541, 'tupper'), properties: { kind: 'tupper', side: 'kejar' } },
+  { ...pt(101.7136, 3.1541, 'station'), properties: { kind: 'station', n: 1, claimed: false, left: '' } },
+  { ...pt(101.7160, 3.1527, 'station'), properties: { kind: 'station', n: 2, claimed: false, left: '' } },
+] }
+const is = k => ['==', ['get', 'kind'], k]
+const CLAIMED = ['==', ['get', 'claimed'], true]
+const OPEN_STATION = ['all', is('station'), ['!', CLAIMED]]
+const CLAIMED_STATION = ['all', is('station'), CLAIMED]
+
+/* ---------- station claims (the game locks a station for 60 s after each claim: STATION_LOCK_MS) ---------- */
+const LOCK_MS = 60_000
+const claimedAt = { 2: Date.now() - 15_000 } // station 2 starts mid-lock so the countdown is already running
+const motion = { dropAt: -1e9, riseAt: -1e9 } // when the last gem landed / took off, for the animation
+function claim(n) { claimedAt[n] = Date.now(); motion.dropAt = performance.now(); refreshStations() }
+function refreshStations() {
+  const now = Date.now()
+  for (const f of PIECES.features) {
+    if (f.properties.kind !== 'station') continue
+    const left = claimedAt[f.properties.n] ? claimedAt[f.properties.n] + LOCK_MS - now : 0
+    if (left <= 0 && claimedAt[f.properties.n]) { delete claimedAt[f.properties.n]; motion.riseAt = performance.now() }
+    f.properties.claimed = left > 0
+    const s = Math.ceil(left / 1000)
+    f.properties.left = left > 0 ? `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : ''
+  }
+  for (const m of maps) m.getSource('pieces')?.setData(PIECES)
+  const btn = document.getElementById('claim-btn')
+  if (btn) btn.disabled = !PIECES.features.some(f => f.properties.kind === 'station' && !f.properties.claimed)
+}
+setInterval(refreshStations, 250)
+const J_KINDS = ['match', ['get', 'kind'], ['runner', 'chaser', 'ping'], true, false]
+const J_IMAGE = ['match', ['get', 'kind'], 'chaser', 'chaser', 'ping', 'ghost', 'runner']
+
+function addGame(map) {
+  map.addSource('boundary', { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: BOUNDARY } } })
+  map.addSource('pieces', { type: 'geojson', data: PIECES })
+  map.addLayer({ id: 'boundary', type: 'line', source: 'boundary', paint: { 'line-color': '#F5F5F3', 'line-width': 1.4, 'line-opacity': 0.85 } })
+  if (VIEW === 'organiser') {
+    // Each side's Tupperware in the station design, in its legendary's colour: Dato Seri gold (Dikejar), Bomoh purple (Kejar).
+    const tone = ['match', ['get', 'side'], 'dikejar', 'gold', 'purple']
+    if (THREE_D) {
+      map.addLayer({ id: 'tupper-shadow', type: 'circle', source: 'pieces', filter: is('tupper'),
+        paint: { 'circle-radius': 13, 'circle-color': '#000', 'circle-opacity': 0.55, 'circle-blur': 0.7, 'circle-pitch-alignment': 'map' } })
+      map.addLayer({ id: 'tupper-gem', type: 'symbol', source: 'pieces', filter: is('tupper'),
+        layout: { 'icon-image': ['concat', 'gem-', tone, '-float'], 'icon-size': 1.2, 'icon-anchor': 'bottom', 'icon-allow-overlap': true, 'icon-ignore-placement': true } })
+    } else {
+      map.addLayer({ id: 'tupper', type: 'symbol', source: 'pieces', filter: is('tupper'),
+        layout: { 'icon-image': ['concat', 'dia-', tone], 'icon-size': 1.3, 'icon-allow-overlap': true, 'icon-ignore-placement': true } })
+    }
+  }
+  map.addLayer({ id: 'marshal', type: 'circle', source: 'pieces', filter: is('marshal'), paint: { 'circle-radius': 6, 'circle-color': 'rgba(0,0,0,0)', 'circle-stroke-color': '#F5F5F3', 'circle-stroke-width': 2 } })
+  if (!THREE_D) {
+    // Flat: a volt diamond (a square turned 45°) on each station, red while claimed; the j stands on its spot.
+    map.addLayer({ id: 'diamond', type: 'symbol', source: 'pieces', filter: is('station'),
+      layout: { 'icon-image': ['case', CLAIMED, 'dia-red', 'dia'], 'icon-size': 1.3, 'icon-allow-overlap': true, 'icon-ignore-placement': true } })
+    map.addLayer({ id: 'j', type: 'symbol', source: 'pieces', filter: J_KINDS,
+      layout: { 'icon-image': J_IMAGE, 'icon-size': 0.85, 'icon-allow-overlap': true, 'icon-ignore-placement': true } })
+    return
+  }
+  // 3D: a soft shadow on the ground, then the j (and a gem over each station) hovering above it on a faint dotted stem.
+  map.addLayer({ id: 'float-shadow', type: 'circle', source: 'pieces', filter: ['any', J_KINDS, OPEN_STATION],
+    paint: { 'circle-radius': ['case', is('station'), 13, 8], 'circle-color': '#000', 'circle-opacity': 0.55, 'circle-blur': 0.7, 'circle-pitch-alignment': 'map' } })
+  map.addLayer({ id: 'float-gem', type: 'symbol', source: 'pieces', filter: OPEN_STATION,
+    layout: { 'icon-image': 'gem-float', 'icon-size': 1.2, 'icon-anchor': 'bottom', 'icon-allow-overlap': true, 'icon-ignore-placement': true } })
+  // Claimed: the gem has dropped to the ground, turned red, with the time left until it lifts off again.
+  map.addLayer({ id: 'landed-glow', type: 'circle', source: 'pieces', filter: CLAIMED_STATION,
+    paint: { 'circle-radius': 16, 'circle-color': '#E5484D', 'circle-opacity': 0.22, 'circle-blur': 0.8, 'circle-pitch-alignment': 'map' } })
+  map.addLayer({ id: 'landed-gem', type: 'symbol', source: 'pieces', filter: CLAIMED_STATION,
+    layout: { 'icon-image': 'gem-red', 'icon-size': 1.2, 'icon-anchor': 'bottom', 'icon-offset': [0, 6], 'icon-allow-overlap': true, 'icon-ignore-placement': true } })
+  map.addLayer({ id: 'landed-timer', type: 'symbol', source: 'pieces', filter: CLAIMED_STATION,
+    layout: { 'text-field': ['get', 'left'], 'text-font': [F.regular], 'text-size': 11, 'text-anchor': 'top', 'text-offset': [0, 0.6], 'text-allow-overlap': true, 'text-ignore-placement': true },
+    paint: { 'text-color': '#E5484D', 'text-halo-color': '#0A0A0B', 'text-halo-width': 2 } })
+  map.addLayer({ id: 'float-j', type: 'symbol', source: 'pieces', filter: J_KINDS,
+    layout: { 'icon-image': ['concat', J_IMAGE, '-float'], 'icon-size': 0.85, 'icon-anchor': 'bottom', 'icon-allow-overlap': true, 'icon-ignore-placement': true } })
+}
+
+/* ---------- marker images ---------- */
+const loadImg = src => new Promise((ok, fail) => { const i = new Image(); i.onload = () => ok(i); i.onerror = fail; i.src = src })
+const canvas = (w, h) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return [c, c.getContext('2d')] }
+const STEM = 64 // 2x px: how high a floating marker hovers above its spot
+
+/** A marker lifted on a faint dotted stem whose foot is the map spot. */
+function floating(img, stemColor) {
+  const [c, g] = canvas(img.width, img.height + STEM)
+  g.drawImage(img, 0, 0)
+  g.strokeStyle = stemColor; g.lineWidth = 2; g.setLineDash([3, 4])
+  g.beginPath(); g.moveTo(img.width / 2, img.height + 2); g.lineTo(img.width / 2, img.height + STEM); g.stroke()
+  return c
+}
+
+/** A volt gem (an octahedron seen from slightly above): lit faces on top, shaded faces below. 2x pixels. */
+const VOLT_FACES = ['#DDFF85', '#C6FF3D', '#8CBD20', '#668A16']
+const RED_FACES = ['#FF8A8D', '#E5484D', '#B8343A', '#8C252A']
+const GOLD_FACES = ['#FFF27A', '#FFD60A', '#F5B800', '#B88700'] // tokens.css --legendary-1/2/3 (Dato Seri)
+const PURPLE_FACES = ['#F0E0FF', '#C9A4FF', '#9B5DE5', '#6B35AD'] // tokens.css --bomoh-1/2/3 (Bomoh)
+function gem(faces = VOLT_FACES) {
+  const [c, g] = canvas(44, 58)
+  const T = [22, 3], L = [3, 25], F = [22, 31], R = [41, 25], B = [22, 55]
+  const face = (pts, fill) => { g.beginPath(); g.moveTo(...pts[0]); pts.slice(1).forEach(p => g.lineTo(...p)); g.closePath(); g.fillStyle = fill; g.fill() }
+  face([T, L, F], faces[0]); face([T, F, R], faces[1]); face([L, F, B], faces[2]); face([F, R, B], faces[3])
+  g.lineJoin = 'round'; g.strokeStyle = '#0A0A0B'; g.lineWidth = 2.5
+  g.beginPath(); g.moveTo(...T); g.lineTo(...R); g.lineTo(...B); g.lineTo(...L); g.closePath(); g.stroke()
+  g.lineWidth = 1.2; g.strokeStyle = 'rgba(10,10,11,.6)'
+  g.beginPath(); g.moveTo(...L); g.lineTo(...F); g.lineTo(...R); g.moveTo(...T); g.lineTo(...F); g.lineTo(...B); g.stroke()
+  return c
+}
+
+/** The flat view's station: a plain square turned 45°, black edge. 2x pixels. */
+function flatDiamond(fill) {
+  const [c, g] = canvas(40, 40)
+  g.translate(20, 20); g.rotate(Math.PI / 4)
+  g.fillStyle = fill; g.strokeStyle = '#0A0A0B'; g.lineWidth = 3
+  g.beginPath(); g.rect(-10, -10, 20, 20); g.fill(); g.stroke()
+  return c
+}
+
+const MARKERS = {}
+async function loadMarkers() {
+  const [runner, chaser, ghost] = await Promise.all(['j-runner', 'j-chaser', 'j-ghost'].map(n => loadImg(`markers/${n}.png`)))
+  Object.assign(MARKERS, {
+    runner, chaser, ghost,
+    'runner-float': floating(runner, 'rgba(198,255,61,.5)'),
+    'chaser-float': floating(chaser, 'rgba(245,245,243,.5)'),
+    'ghost-float': floating(ghost, 'rgba(198,255,61,.25)'),
+    dia: flatDiamond('#C6FF3D'),
+    'dia-red': flatDiamond('#E5484D'),
+    'gem-float': floating(gem(), 'rgba(198,255,61,.45)'),
+    'gem-red': gem(RED_FACES),
+    'dia-gold': flatDiamond('#FFD60A'),
+    'dia-purple': flatDiamond('#C9A4FF'),
+    'gem-gold-float': floating(gem(GOLD_FACES), 'rgba(255,214,10,.45)'),
+    'gem-purple-float': floating(gem(PURPLE_FACES), 'rgba(201,164,255,.45)'),
+  })
+}
+function addMarkers(map) {
+  for (const [name, img] of Object.entries(MARKERS)) {
+    if (map.hasImage(name)) continue
+    const data = img instanceof HTMLCanvasElement ? img.getContext('2d').getImageData(0, 0, img.width, img.height) : img
+    map.addImage(name, data, { pixelRatio: 2 })
+  }
+}
+
+// In 3D the floating markers bob gently; the gems on a different beat from the j's.
+// A claimed gem drops from its hover height with a small bounce; a refilled one rises back up.
+const HOVER = 38 // css px between a floating gem's base and the ground
+const easeOutBounce = x => x < 1 / 2.75 ? 7.5625 * x * x : x < 2 / 2.75 ? 7.5625 * (x -= 1.5 / 2.75) * x + 0.75 : x < 2.5 / 2.75 ? 7.5625 * (x -= 2.25 / 2.75) * x + 0.9375 : 7.5625 * (x -= 2.625 / 2.75) * x + 0.984375
+const easeOutCubic = x => 1 - (1 - x) ** 3
+function bob(t) {
+  if (THREE_D) for (const m of maps) {
+    const drop = Math.min((t - motion.dropAt) / 650, 1)
+    const rise = Math.min((t - motion.riseAt) / 700, 1)
+    if (m.getLayer('float-j')) m.setPaintProperty('float-j', 'icon-translate', [0, Math.sin(t / 650) * 3])
+    if (m.getLayer('float-gem')) m.setPaintProperty('float-gem', 'icon-translate', [0, Math.sin(t / 900 + 1.4) * 4 + (1 - easeOutCubic(rise)) * HOVER])
+    if (m.getLayer('tupper-gem')) m.setPaintProperty('tupper-gem', 'icon-translate', [0, Math.sin(t / 900 + 2.6) * 4])
+    if (m.getLayer('landed-gem')) m.setPaintProperty('landed-gem', 'icon-translate', [0, -(1 - easeOutBounce(drop)) * HOVER])
+  }
+  requestAnimationFrame(bob)
+}
+
+const markersReady = loadMarkers()
+document.getElementById('claim-btn').addEventListener('click', () => {
+  const open = PIECES.features.find(f => f.properties.kind === 'station' && !f.properties.claimed)
+  if (open) claim(open.properties.n)
+})
+const grid = document.getElementById('grid')
+const SHOWN = LOOKS.filter(l => l.name === 'Ink') // the owner's pick; the other palettes stay above for reference
+const maps = []
+requestAnimationFrame(bob)
+let syncing = false
+for (const look of SHOWN) {
+  const el = document.createElement('div'); el.className = 'look'
+  el.innerHTML = `<div class="phone${look.grid ? ' grid-overlay' : ''}"><div class="map"></div>
+      <div class="hud"><span class="pill">12:48</span><span class="pill volt">CHASE</span></div>
+      <button class="view-btn" aria-label="Show buildings in 3D"></button><div class="credit"></div></div>
+    <div class="name">${look.name}<small>${look.tag}</small></div><p class="desc">${look.desc}</p>`
+  grid.appendChild(el)
+  const map = new maplibregl.Map({ container: el.querySelector('.map'), style: style(look.palette), center: CENTER, zoom: 15.4, attributionControl: false, maxPitch: 70 })
+  map.look = look
+  map.on('style.load', () => markersReady.then(() => { addMarkers(map); if (!map.getSource('pieces')) addGame(map) }))
+  // The phone frames can settle size after the map starts; re-fit so all four show the same view.
+  map.once('load', () => { map.resize(); map.jumpTo({ center: CENTER, zoom: 15.4 }) })
+  map.on('move', () => {
+    if (syncing) return
+    syncing = true
+    for (const m of maps) if (m !== map) m.jumpTo({ center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() })
+    syncing = false
+  })
+  maps.push(map)
+}
+
+const CREDITS = {
+  now: 'OpenFreeMap © OpenMapTiles &nbsp; Data from OpenStreetMap',
+  slim: '© OpenStreetMap',
+}
+function setCredit() {
+  document.querySelectorAll('.credit').forEach(el => {
+    el.innerHTML = CREDITS[SLIM_CREDIT ? 'slim' : 'now']
+    el.classList.toggle('slim', SLIM_CREDIT)
+  })
+}
+setCredit()
+
+document.querySelectorAll('.toggle button').forEach(btn => btn.addEventListener('click', () => {
+  const group = btn.parentElement
+  group.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn))
+  const v = btn.dataset.value
+  switch (group.dataset.group) {
+    case 'fonts':
+      F = FONTSETS[v]
+      for (const m of maps) m.setStyle(style(m.look.palette))
+      break
+    case 'view':
+      VIEW = v
+      for (const m of maps) m.setStyle(style(m.look.palette))
+      break
+  }
+}))
+
+// The 2D/3D button shows what a tap switches to: a cube while flat, a flat square while in 3D.
+const ICON_3D = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3 4 7.5v9L12 21l8-4.5v-9L12 3Z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/></svg>'
+const ICON_2D = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 4 3 9l9 5 9-5-9-5Z"/><path d="M3 14l9 5 9-5" opacity=".45"/></svg>'
+function paintViewButtons() {
+  document.querySelectorAll('.view-btn').forEach(b => {
+    b.innerHTML = THREE_D ? ICON_2D : ICON_3D
+    b.classList.toggle('on', THREE_D)
+    b.setAttribute('aria-label', THREE_D ? 'Show buildings flat' : 'Show buildings in 3D')
+  })
+}
+paintViewButtons()
+document.querySelectorAll('.view-btn').forEach((btn, i) => btn.addEventListener('click', () => {
+  THREE_D = !THREE_D
+  paintViewButtons()
+  for (const m of maps) m.setStyle(style(m.look.palette))
+  maps[i].easeTo(THREE_D ? { pitch: 58, bearing: -28, zoom: 16.3, duration: 1200 } : { pitch: 0, bearing: 0, zoom: 15.4, duration: 900 })
+}))
+</script>
+</body>
+</html>
