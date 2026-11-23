@@ -329,7 +329,7 @@ export default function MarshalTools({
       {removing && (
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <p style={{ fontWeight: 700 }}>{`Remove ${removing.name} from the game?`}</p>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="btn-pair">
             <button
               type="button"
               className="btn"

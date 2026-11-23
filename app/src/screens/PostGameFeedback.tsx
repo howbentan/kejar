@@ -115,7 +115,7 @@ export default function PostGameFeedback({ code, view }: { code: string; view: V
             </label>
             <textarea id="report-note" className="input" rows={2} maxLength={NOTE_MAX} value={note} onChange={(e) => setNote(e.target.value)} />
             <ErrorText>{reportError}</ErrorText>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div className="btn-pair">
               <button type="button" className="btn" disabled={reportBusy || !target} aria-busy={reportBusy || undefined} onClick={sendReport}>
                 <Busy busy={reportBusy} label="Sending report">Send report</Busy>
               </button>

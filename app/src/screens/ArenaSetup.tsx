@@ -347,7 +347,7 @@ export default function ArenaSetup({
             Name this park
           </label>
           <input id="park-name" className="input" maxLength={40} value={name} onChange={(e) => setName(e.target.value)} />
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div className="btn-pair">
             <button type="button" className="btn" disabled={busy || !!preview?.problem || !name.trim()} aria-busy={busyOn === 'save' || undefined} onClick={() => void save()}>
               <Busy busy={busyOn === 'save'} label="Saving park">Save park</Busy>
             </button>

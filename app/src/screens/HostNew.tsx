@@ -485,7 +485,7 @@ export default function HostNew() {
               {deleting && (
                 <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <p style={{ fontWeight: 700 }}>{`Delete ${deleting.name}? Games already made keep their map.`}</p>
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div className="btn-pair">
                     <button type="button" className="btn" disabled={busy} onClick={() => void remove(deleting)}>
                       Yes, delete
                     </button>
