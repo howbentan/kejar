@@ -9,7 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "glyphs": "python -I scripts/build-glyphs.py public/fonts/kejar-hand.ttf \"Kejar Hand Regular\" public/fonts node_modules/geist/dist/fonts/geist-sans/Geist-Regular.ttf",
+    "glyphs": "python -I scripts/build-glyphs.py public/fonts/kejar-hand.ttf \"Kejar Hand Regular\" public/fonts scripts/hand-font/Geist-Regular.ttf",
     "typecheck": "tsc -b && tsc -p api/tsconfig.json"
   },
   "dependencies": {
@@ -33,7 +33,6 @@
     "@types/web-push": "^3.6.4",
     "@vercel/node": "^25.0.0",
     "@vitejs/plugin-react": "^6.1.2",
-    "geist": "^1.9.2",
     "jsdom": "^30.1.3",
     "oxlint": "^1.88.0",
     "typescript": "~7.0.2",

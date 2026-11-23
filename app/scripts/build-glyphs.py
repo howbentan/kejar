@@ -1,5 +1,7 @@
 """Builds MapLibre glyph PBFs (SDF, 24px, 3px buffer) from a TTF.
 
+Needs Python 3 with Pillow, NumPy, SciPy and fontTools installed.
+
 usage: python -I build-glyphs.py <font.ttf> "<Fontstack Name>" <out_dir> [fallback.ttf]
 """
 import os
