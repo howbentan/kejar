@@ -8,7 +8,7 @@ const created = vi.hoisted(() => ({
   fitOpts: [] as unknown[],
   load: null as null | (() => void),
   error: null as null | (() => void),
-  layers: [] as { id: string; source: string }[],
+  layers: [] as { id: string; source: string; before?: string }[],
   data: {} as Record<string, unknown>,
   markers: [] as { el: HTMLElement; lngLat?: number[]; removed: boolean }[],
   options: [] as Record<string, unknown>[],
@@ -66,8 +66,8 @@ vi.mock('maplibre-gl', () => ({
       addSource(id: string, s: { data: unknown }) {
         created.data[id] = s.data
       }
-      addLayer(l: { id: string; source: string }) {
-        created.layers.push(l)
+      addLayer(l: { id: string; source: string }, before?: string) {
+        created.layers.push(before ? { ...l, before } : l)
       }
       getSource(id: string) {
         return created.data[id] === undefined ? undefined : { setData: (d: unknown) => (created.data[id] = d) }
@@ -97,6 +97,7 @@ vi.mock('maplibre-gl', () => ({
 
 import GameMap, { stationFeatures } from './Map'
 import { MAP_FONT } from './mapStyle'
+import { FLOAT_MARKER_LAYERS } from './mapView'
 
 afterEach(cleanup)
 
@@ -673,6 +674,28 @@ describe('GameMap', () => {
       expect(translates('float-j').length).toBe(1)
       fireEvent.click(screen.getByRole('button', { name: 'Show buildings flat' }))
       expect(frames).toEqual([])
+    })
+
+    it('every float layer goes under the alert pins, so an SOS is never covered', () => {
+      render(<GameMap arena={arena} dots={[]} />)
+      act(() => created.load!())
+      for (const id of FLOAT_MARKER_LAYERS) expect(created.layers.find((l) => l.id === id)?.before).toBe('pins-pulse')
+    })
+
+    it("the Tupperware '?' label hides with its flat diamond in 3D; alert labels stay", () => {
+      render(<GameMap arena={arena} dots={[]} />)
+      act(() => created.load!())
+      expect(layer('pins-tupper-labels').filter).toEqual(['!=', ['get', 'side'], ''])
+      expect(layer('pin-labels').filter).toEqual(['==', ['get', 'side'], ''])
+      expect(created.vis).toContain('pins-tupper-labels:visibility:none')
+      expect(created.vis.some((v) => v.startsWith('pin-labels:'))).toBe(false)
+    })
+
+    it('a just-locked gem is placed at hover height at once, with no frame on the ground first', () => {
+      const { rerender } = render(<GameMap arena={arena} dots={[]} stations={open} />)
+      act(() => created.load!())
+      rerender(<GameMap arena={arena} dots={[]} stations={locked(30_000)} />)
+      expect((translates('landed-gem').at(-1)!.v as number[])[1]).toBeLessThan(-30)
     })
 
     it('a station turning locked drops its gem from hover height', () => {

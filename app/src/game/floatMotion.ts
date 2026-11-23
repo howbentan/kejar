@@ -41,25 +41,30 @@ export function floatTranslates(t: number, ev: FloatEvents): Record<string, [num
   }
 }
 
-function setAll(m: maplibregl.Map, tr: Record<string, [number, number]>) {
+/** Sets each layer's `icon-translate` (layers the map lacks are skipped). */
+export function setFloat(m: maplibregl.Map, tr: Record<string, [number, number]>): void {
   for (const [id, v] of Object.entries(tr)) if (m.getLayer(id)) m.setPaintProperty(id, 'icon-translate', v)
 }
 
 /** Every moving layer back at rest: floats at hover height, landed gems on the ground. */
 export function restFloat(m: maplibregl.Map): void {
-  setAll(m, Object.fromEntries(Object.keys(floatTranslates(0, { dropAt: -1e9, riseAt: -1e9 })).map((id) => [id, at(0)])))
+  setFloat(m, Object.fromEntries(Object.keys(floatTranslates(0, { dropAt: -1e9, riseAt: -1e9 })).map((id) => [id, at(0)])))
 }
 
-/** Runs the float motion until the returned stop is called or the page is hidden. `getEvents` is read every frame. */
-export function startFloatMotion(m: maplibregl.Map, getEvents: () => FloatEvents): () => void {
+/**
+ * Runs the float motion until the returned stop is called, the page is hidden, or `isLive` says the map is gone (it is
+ * checked before each frame touches the map). `getEvents` is read every frame.
+ */
+export function startFloatMotion(m: maplibregl.Map, getEvents: () => FloatEvents, isLive: () => boolean = () => true): () => void {
   let frame = 0
   let last = -Infinity
   let stopped = false
   const tick = (t: number) => {
     if (stopped) return
+    if (!isLive()) return stop()
     if (t - last >= FRAME_MS) {
       last = t
-      setAll(m, floatTranslates(t, getEvents()))
+      setFloat(m, floatTranslates(t, getEvents()))
     }
     frame = requestAnimationFrame(tick)
   }

@@ -4,7 +4,7 @@ import { BUILDINGS_3D, FLAT_BUILDING_LAYERS } from './mapStyle'
 
 const KEY = 'kejar.map3d'
 /** Marker layers drawn flat on the ground vs floating above the buildings (GameMap adds both; `points` shows in either). */
-export const FLAT_MARKER_LAYERS: string[] = ['points-j', 'fuzzy-j', 'stations', 'pins-tupper', 'stash']
+export const FLAT_MARKER_LAYERS: string[] = ['points-j', 'fuzzy-j', 'stations', 'pins-tupper', 'pins-tupper-labels', 'stash']
 export const FLOAT_MARKER_LAYERS: string[] = [
   'float-shadow-j',
   'float-shadow-ghost',

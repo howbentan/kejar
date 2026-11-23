@@ -107,6 +107,18 @@ describe('startFloatMotion', () => {
     expect(queue.size).toBe(0)
   })
 
+  it('never touches a map that has gone (isLive false): stops instead', () => {
+    const { m, set } = fakeMap()
+    let live = true
+    startFloatMotion(m, () => ({ dropAt: -1e9, riseAt: -1e9 }), () => live)
+    runFrame(1000)
+    const n = set.length
+    live = false
+    runFrame(2000)
+    expect(set.length).toBe(n)
+    expect(queue.size).toBe(0)
+  })
+
   it('skips layers the map lacks', () => {
     const set: string[] = []
     const m = { getLayer: (id: string) => (id === 'float-j' ? { id } : undefined), setPaintProperty: (id: string) => set.push(id) }

@@ -1,7 +1,7 @@
 import MapCredit from './MapCredit'
 import MapViewButton from './MapViewButton'
 import { applyMapView, useMapView } from './mapView'
-import { restFloat, startFloatMotion, type FloatEvents } from './floatMotion'
+import { floatTranslates, restFloat, setFloat, startFloatMotion, type FloatEvents } from './floatMotion'
 import type { Feature as GeoFeature, FeatureCollection, Geometry } from 'geojson'
 import maplibregl, { type GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -311,6 +311,8 @@ export default function GameMap({
   // When a station's gem last landed (locked) or took off (opened), for the 3D view's drop and rise.
   const floatEvents = useRef<FloatEvents>({ dropAt: -1e9, riseAt: -1e9 })
   const stationLocked = useRef(new Map<string, boolean>())
+  // True while the float motion runs, so a drop or rise can be shown from its first frame.
+  const floatMoving = useRef(false)
   const [loaded, setLoaded] = useState(false)
   // The tiles' small j gives up on a map error or after MAP_LOADER_MS, so a map that never loads isn't covered for good.
   const [gaveUp, setGaveUp] = useState(false)
@@ -689,60 +691,72 @@ export default function GameMap({
           'icon-ignore-placement': true,
         },
       })
+      const pinLabel: maplibregl.SymbolLayerSpecification['layout'] = { 'text-field': ['get', 'label'], 'text-font': MAP_FONT, 'text-size': 10, 'text-allow-overlap': true }
       m.addLayer({
         id: 'pin-labels',
         type: 'symbol',
         source: 'pins',
-        layout: { 'text-field': ['get', 'label'], 'text-font': MAP_FONT, 'text-size': 10, 'text-allow-overlap': true },
-        paint: { 'text-color': ['case', ['!=', ['get', 'side'], ''], BLACK, ['==', ['get', 'state'], 'todo'], WHITE, BLACK] },
+        filter: ['==', ['get', 'side'], ''],
+        layout: pinLabel,
+        paint: { 'text-color': ['case', ['==', ['get', 'state'], 'todo'], WHITE, BLACK] },
+      })
+      // The Tupperware step's label sits on its flat diamond, so it goes with it in 3D.
+      m.addLayer({
+        id: 'pins-tupper-labels',
+        type: 'symbol',
+        source: 'pins',
+        filter: ['!=', ['get', 'side'], ''],
+        layout: pinLabel,
+        paint: { 'text-color': BLACK },
       })
       // The 3D view's markers (hidden in flat): each floats on a dotted stem over a soft shadow on its spot. Added
-      // after the style's buildings-3d, so they always draw over the buildings.
+      // after the style's buildings-3d, so they always draw over the buildings; under the alert pins, so an SOS is never covered.
+      const addFloat = (l: maplibregl.LayerSpecification) => m.addLayer(l, 'pins-pulse')
       const isJ: maplibregl.FilterSpecification = ['match', ['get', 'kind'], ['runner', 'chaser'], true, false]
       const openStation: maplibregl.FilterSpecification = ['!', ['get', 'locked']]
       const lockedStation: maplibregl.FilterSpecification = ['get', 'locked']
       const isTupper: maplibregl.FilterSpecification = ['!=', ['get', 'side'], '']
-      m.addLayer({ id: 'float-shadow-j', type: 'circle', source: 'points', filter: isJ, paint: shadowPaint(8) })
-      m.addLayer({ id: 'float-shadow-ghost', type: 'circle', source: 'ghosts', paint: shadowPaint(8) })
-      m.addLayer({ id: 'float-shadow-gem', type: 'circle', source: 'stations', filter: openStation, paint: shadowPaint(13) })
-      m.addLayer({ id: 'float-shadow-tupper', type: 'circle', source: 'pins', filter: isTupper, paint: shadowPaint(13) })
-      m.addLayer({ id: 'float-shadow-stash', type: 'circle', source: 'stash', paint: shadowPaint(13) })
-      m.addLayer({
+      addFloat({ id: 'float-shadow-j', type: 'circle', source: 'points', filter: isJ, paint: shadowPaint(8) })
+      addFloat({ id: 'float-shadow-ghost', type: 'circle', source: 'ghosts', paint: shadowPaint(8) })
+      addFloat({ id: 'float-shadow-gem', type: 'circle', source: 'stations', filter: openStation, paint: shadowPaint(13) })
+      addFloat({ id: 'float-shadow-tupper', type: 'circle', source: 'pins', filter: isTupper, paint: shadowPaint(13) })
+      addFloat({ id: 'float-shadow-stash', type: 'circle', source: 'stash', paint: shadowPaint(13) })
+      addFloat({
         id: 'float-gem',
         type: 'symbol',
         source: 'stations',
         filter: openStation,
         layout: { 'icon-image': 'gem-volt-float', 'icon-size': 1.2, ...FLOAT_ICON },
       })
-      m.addLayer({
+      addFloat({
         id: 'float-tupper',
         type: 'symbol',
         source: 'pins',
         filter: isTupper,
         layout: { 'icon-image': ['case', ['==', ['get', 'side'], 'kejar'], 'gem-purple-float', 'gem-gold-float'], 'icon-size': 1.2, ...FLOAT_ICON },
       })
-      m.addLayer({
+      addFloat({
         id: 'float-tupper-stash',
         type: 'symbol',
         source: 'stash',
         layout: { 'icon-image': FLOAT_GEM[latestStashSide.current], 'icon-size': 1.2, ...FLOAT_ICON },
       })
       // A claimed station: its gem has dropped to the ground, red, with the time left until it lifts off again.
-      m.addLayer({
+      addFloat({
         id: 'landed-glow',
         type: 'circle',
         source: 'stations',
         filter: lockedStation,
         paint: { 'circle-radius': 16, 'circle-color': LOCKED_RED, 'circle-opacity': 0.22, 'circle-blur': 0.8, 'circle-pitch-alignment': 'map' },
       })
-      m.addLayer({
+      addFloat({
         id: 'landed-gem',
         type: 'symbol',
         source: 'stations',
         filter: lockedStation,
         layout: { 'icon-image': 'gem-red', 'icon-size': 1.2, 'icon-offset': [0, 6], ...FLOAT_ICON },
       })
-      m.addLayer({
+      addFloat({
         id: 'landed-timer',
         type: 'symbol',
         source: 'stations',
@@ -758,14 +772,14 @@ export default function GameMap({
         },
         paint: { 'text-color': LOCKED_RED, 'text-halo-color': BLACK, 'text-halo-width': 2 },
       })
-      m.addLayer({
+      addFloat({
         id: 'float-j',
         type: 'symbol',
         source: 'points',
         filter: isJ,
         layout: { 'icon-image': ['concat', ['match', ['get', 'kind'], 'chaser', 'j-chaser', 'j-runner'], '-float'], 'icon-size': 0.85, ...FLOAT_ICON },
       })
-      m.addLayer({
+      addFloat({
         id: 'float-j-ghost',
         type: 'symbol',
         source: 'ghosts',
@@ -797,14 +811,18 @@ export default function GameMap({
       const now = Date.now()
       const features = stationFeatures(latestStations.current, now)
       // A gem lands as its station locks and takes off as it opens (a station seen for the first time just appears).
+      let turned = false
       for (const f of features.features) {
         const n = String(f.properties?.n)
         const was = stationLocked.current.get(n)
         const locked = !!f.properties?.locked
         if (was === false && locked) floatEvents.current.dropAt = performance.now()
         if (was === true && !locked) floatEvents.current.riseAt = performance.now()
+        if (was !== undefined && was !== locked) turned = true
         stationLocked.current.set(n, locked)
       }
+      // Place the gems before the new data draws, so a just-locked gem never flashes on the ground (or a just-opened one at hover) for a frame.
+      if (turned && floatMoving.current && map.current) setFloat(map.current, floatTranslates(performance.now(), floatEvents.current))
       ;(map.current?.getSource('stations') as GeoJSONSource | undefined)?.setData(features)
       return latestStations.current.some((s) => s.lockedUntil && Date.parse(s.lockedUntil) > now)
     }
@@ -904,8 +922,14 @@ export default function GameMap({
   useEffect(() => {
     const mp = map.current
     if (!loaded || !mp || !threeD || reduce || pageHidden) return
-    const stop = startFloatMotion(mp, () => floatEvents.current)
+    const stop = startFloatMotion(
+      mp,
+      () => floatEvents.current,
+      () => map.current === mp,
+    )
+    floatMoving.current = true
     return () => {
+      floatMoving.current = false
       stop()
       // A removed map has no style to reset.
       if (map.current === mp && ready.current) restFloat(mp)
