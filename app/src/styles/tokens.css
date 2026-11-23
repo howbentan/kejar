@@ -846,13 +846,15 @@ body:has(.notif-bell) .sos-icon { right: 56px; }
 @media (prefers-reduced-motion: reduce) { .rv-di { animation-duration: 0s; animation-delay: 0s; } .rv-di > span { animation-duration: 0s; animation-delay: 0s; } }
 .rv-line { margin: 4px 0 0; font: 400 20px var(--font); color: var(--white); }
 /* The Tupperware drop card on the walk: the box doodle, a big title, three numbered steps. */
+.screen:has(.drop-card) { min-height: 100dvh; box-sizing: border-box; padding-bottom: 24px; }
+.drop-card { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-evenly; min-height: 340px; }
 .drop-eyebrow { color: var(--legendary-2); }
-.drop-head { display: flex; align-items: center; gap: 12px; margin: 6px 0 10px; }
-.drop-title { margin: 0; font: 400 30px/1.05 var(--font); }
-.drop-steps { margin: 0; padding: 0; list-style: none; counter-reset: drop; display: flex; flex-direction: column; gap: 10px; }
-.drop-steps li { counter-increment: drop; display: flex; align-items: center; gap: 12px; font: 400 19px/1.3 var(--font); }
-.drop-steps li::before { content: counter(drop); flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
-  background: var(--legendary-2); color: var(--legendary-ink); font: 600 14px Geist, sans-serif; }
+.drop-head { display: flex; align-items: center; gap: 14px; margin: 6px 0 10px; }
+.drop-title { margin: 0; font: 400 38px/1.05 var(--font); }
+.drop-steps { margin: 0; padding: 0; list-style: none; counter-reset: drop; display: flex; flex-direction: column; gap: 18px; }
+.drop-steps li { counter-increment: drop; display: flex; align-items: center; gap: 14px; font: 400 24px/1.25 var(--font); }
+.drop-steps li::before { content: counter(drop); flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--legendary-2); color: var(--legendary-ink); font: 600 17px Geist, sans-serif; }
 .drop-steps a { color: var(--legendary-2); }
 .htp-art { transform: scale(1.6); transform-origin: center; }
 @media (max-height: 720px) { .htp-art { transform: scale(1.3); } }

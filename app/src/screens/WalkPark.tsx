@@ -244,13 +244,13 @@ export default function WalkPark({
 
       {next && !(lost && !here) && (
         <>
-          <div style={cardStyle(secret ? !!here : isHere, tone)}>
+          <div className={tone ? 'drop-card' : undefined} style={cardStyle(secret ? !!here : isHere, tone)}>
             {tone && look ? (
               <>
                 <p className="eyebrow drop-eyebrow">{`SECRET · ${count}`}</p>
                 {/* The box doodle beside a big title, then three short steps. */}
                 <div className="drop-head">
-                  <Tupper size={78} />
+                  <Tupper size={112} />
                   <h2 className="drop-title">{hideLineFor(next!.id)}</h2>
                 </div>
                 <ol className="drop-steps">
