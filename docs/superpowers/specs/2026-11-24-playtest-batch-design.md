@@ -82,8 +82,14 @@ guide covering only Dikejar, notifications that stay up for good, and confusing 
   banners. Anything that needs the player to act stays until it's handled (check-in, SOS, a catch).
 
 ### 2.8 Legendary colours
-- **Every legendary is Dato Seri yellow** (`--legendary-1/2/3/ink`): cards, hand slot, setup list, map marks and
-  Tupperware markers on both sides. Each **doodle keeps its own colours**.
+- **The middle path** (owner chose it from the mockup, `/#legendary` → "middle"):
+  - Every legendary uses **Dato Seri yellow** (`--legendary-1/2/3/ink`) for its frame, crown and star scribbles,
+    eyebrow and name. This applies to cards, the hand slot, the setup list, map marks and Tupperware markers on both
+    sides.
+  - Each card keeps **its own colour only in the art circle** behind the doodle: Dato Seri yellow, Super Ring orange
+    `#FFA94D`, Mak Kau Hijau green `#3FA86B`, Bomoh **off-white** `#F5F0E6`.
+  - In the setup list, the rows are yellow with a small dot in each card's own colour.
+  - Each **doodle keeps its own colours**.
 - **Exception:** Mak Kau Hijau's takeover stays **full-screen green** (owner).
 - Purple now only ever means epic.
 
@@ -121,8 +127,7 @@ guide covering only Dikejar, notifications that stay up for good, and confusing 
 - **Slip numbers:** (a) work out the lowest unused slip each time, *chosen*: no migration, and a slip bound to a game
   is crossed off by itself; (b) reserve a slip for the game in a new column, which needs a migration and is only
   better when two games are set up at once.
-- **Legendary yellow:** point the other legendaries' colour tokens at Dato Seri's yellow, and give the Hijau takeover
-  its own token so it stays green.
+- **Legendary colours:** (a) all yellow; (b) the middle path, a yellow frame with each card's own colour in the art circle, *chosen by the owner*. Built by keeping the colour tokens for the inner circle and the Hijau takeover, and using the yellow ones for frames.
 
 ## 6. Left to the builder
 - The exact deal mechanics in `shared/deck.ts`, provided that deck counts stay right, the 4 unpicked cards stay in the
