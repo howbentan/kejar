@@ -79,7 +79,6 @@ vi.mock('maplibre-gl', () => ({
 
 import PlaceMap from './PlaceMap'
 import { FLOAT_MARKER_LAYERS } from './mapView'
-import { MAP_FONT } from './mapStyle'
 import { FLOAT_TRANSLATE_LAYERS } from './floatMotion'
 
 afterEach(() => {
@@ -132,6 +131,11 @@ describe('PlaceMap', () => {
       for (const l of moved) expect(l.paint?.['icon-translate-transition'], l.id).toEqual({ duration: 0, delay: 0 })
     })
 
+    it('Geist ships its own glyphs for the station numbers', async () => {
+      const fs = await import('node:fs')
+      expect(fs.existsSync('public/fonts/Geist Regular/0-255.pbf')).toBe(true)
+    })
+
     it('every text layer is lowercase, since Kejar Hand has no capitals', () => {
       load()
       const text = map.layers.filter((l) => l.layout?.['text-field'] !== undefined)
@@ -153,7 +157,8 @@ describe('PlaceMap', () => {
       for (const id of ['station-badge', 'float-station-badge']) {
         const l = map.layers.find((x) => x.id === id)!
         expect(l.layout!['text-field'], id).toEqual(['get', 'n'])
-        expect(l.layout!['text-font'], id).toEqual(MAP_FONT)
+        // Numbers in Geist (owner's call): the handwriting stays for names.
+        expect(l.layout!['text-font'], id).toEqual(['Geist Regular'])
       }
       // Flat by default: the flat badge shows, the floating one waits for 3D.
       expect(map.vis['station-badge']).toBe('visible')

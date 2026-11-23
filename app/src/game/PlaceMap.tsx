@@ -11,7 +11,7 @@ import { FLOAT_ICON, GEM_SIZE, INSTANT_TRANSLATE, addMapIcons, shadowPaint } fro
 import MapViewButton from './MapViewButton'
 import { HOVER, restFloat, startFloatMotion } from './floatMotion'
 import { applyMapView, useMapView } from './mapView'
-import { MAP_FONT, kejarMapStyle } from './mapStyle'
+import { MAP_FONT, MAP_NUMBER_FONT, kejarMapStyle } from './mapStyle'
 
 const VOLT = '#C6FF3D'
 const WHITE = '#F5F5F3'
@@ -155,7 +155,7 @@ export default function PlaceMap(props: Props) {
           id,
           type: 'symbol',
           source: 'stations',
-          layout: { 'text-field': ['get', 'n'], 'text-font': MAP_FONT, 'text-size': 14, 'text-transform': 'lowercase', 'text-allow-overlap': true, 'text-ignore-placement': true },
+          layout: { 'text-field': ['get', 'n'], 'text-font': MAP_NUMBER_FONT, 'text-size': 13, 'text-transform': 'lowercase', 'text-allow-overlap': true, 'text-ignore-placement': true },
           paint: { 'text-color': VOLT, 'text-translate': [0, -up], 'text-translate-anchor': 'viewport' },
         })
       }

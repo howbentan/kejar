@@ -2,6 +2,8 @@ import type { FilterSpecification, StyleSpecification, SymbolLayerSpecification 
 
 /** The owner's handwriting; glyph files live in public/fonts/Kejar Hand Regular. */
 export const MAP_FONT = ['Kejar Hand Regular']
+/** Station numbers on the map stay in Geist (owner's call): the handwriting is for names. */
+export const MAP_NUMBER_FONT = ['Geist Regular']
 export const FLAT_BUILDING_LAYERS = ['buildings', 'buildings-line']
 export const BUILDINGS_3D = 'buildings-3d'
 
