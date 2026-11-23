@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { MAP_ICONS } from './Map'
+import { MAP_ICONS } from './mapMarkers'
 
 // The logo's j is cut at 47 px wide (odd), so the even-width guard covers the drawn art, not the j cut-outs.
 const J_CUTS = /^j-/

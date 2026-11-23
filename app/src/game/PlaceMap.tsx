@@ -7,9 +7,9 @@ import { useEffect, useRef, useState } from 'react'
 import { KL_FALLBACK } from '../../shared/arenaDraft.js'
 import { circlePolygon } from '../../shared/geo.js'
 import type { LatLng } from '../../shared/types.js'
-import { FLOAT_ICON, addMapIcons, shadowPaint } from './Map'
+import { FLOAT_ICON, addMapIcons, shadowPaint } from './mapMarkers'
 import MapViewButton from './MapViewButton'
-import { restFloat, startFloatMotion } from './floatMotion'
+import { HOVER, restFloat, startFloatMotion } from './floatMotion'
 import { applyMapView, useMapView } from './mapView'
 import { MAP_FONT, kejarMapStyle } from './mapStyle'
 
@@ -18,6 +18,9 @@ const WHITE = '#F5F5F3'
 const BLACK = '#0A0A0B'
 /** How close (in screen pixels) a tap must be to a station to remove it. */
 const REMOVE_PX = 25
+/** The floating gem's drawn body: its middle sits this far above the hover height, and a tap within GEM_PX of that hits it. */
+const GEM_MID = 20
+const GEM_PX = 30
 
 export type PlaceMode = 'circle' | 'stations' | 'jail' | 'start'
 
@@ -130,7 +133,7 @@ export default function PlaceMap(props: Props) {
         source: 'stations',
         layout: { 'icon-image': 'dia-volt', 'icon-size': 1.3, 'icon-allow-overlap': true, 'icon-ignore-placement': true },
       })
-      m.addLayer({ id: 'float-shadow-stations', type: 'circle', source: 'stations', paint: shadowPaint(13) })
+      m.addLayer({ id: 'float-shadow-gem', type: 'circle', source: 'stations', paint: shadowPaint(13), layout: { visibility: 'none' } })
       m.addLayer({
         id: 'float-gem',
         type: 'symbol',
@@ -147,7 +150,9 @@ export default function PlaceMap(props: Props) {
       if (p.mode === 'stations') {
         const hit = p.stations.findIndex((s) => {
           const q = m.project([s.lng, s.lat])
-          return Math.hypot(q.x - e.point.x, q.y - e.point.y) <= REMOVE_PX
+          if (Math.hypot(q.x - e.point.x, q.y - e.point.y) <= REMOVE_PX) return true
+          // In 3D the visible gem floats above its spot: hit its drawn body too.
+          return latestThreeD.current && Math.hypot(q.x - e.point.x, q.y - HOVER - GEM_MID - e.point.y) <= GEM_PX
         })
         if (hit >= 0) return p.onStationRemove(hit)
       }

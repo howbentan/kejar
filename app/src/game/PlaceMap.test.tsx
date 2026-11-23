@@ -78,6 +78,7 @@ vi.mock('maplibre-gl', () => ({
 }))
 
 import PlaceMap from './PlaceMap'
+import { FLOAT_MARKER_LAYERS } from './mapView'
 
 afterEach(() => {
   cleanup()
@@ -117,7 +118,9 @@ describe('PlaceMap', () => {
     it('floats the gem over a shadow in 3D', () => {
       load()
       expect(map.layers.find((l) => l.id === 'float-gem')!.layout!['icon-image']).toBe('gem-volt-float')
-      expect(map.layers.some((l) => l.id.startsWith('float-shadow-'))).toBe(true)
+      expect(map.layers.some((l) => l.id === 'float-shadow-gem')).toBe(true)
+      expect(FLOAT_MARKER_LAYERS).toContain('float-shadow-gem')
+      expect(map.vis['float-shadow-gem']).toBe('none')
     })
 
     it('has the view button, which toggles buildings-3d and the stations', () => {
@@ -137,6 +140,25 @@ describe('PlaceMap', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Show buildings in 3D' }))
       map.handlers.click({ point: { x: 101_010, y: 3_010 }, lngLat: { lat: 3, lng: 101 } })
       expect(onStationRemove).toHaveBeenCalledWith(0)
+    })
+
+    it('in 3D a tap on the lifted gem removes the station instead of placing one', () => {
+      const onTap = vi.fn()
+      const onStationRemove = vi.fn()
+      render(<PlaceMap {...base} mode="stations" onTap={onTap} onStationRemove={onStationRemove} />)
+      act(() => map.handlers.load({} as Click))
+      fireEvent.click(screen.getByRole('button', { name: 'Show buildings in 3D' }))
+      map.handlers.click({ point: { x: 101_000, y: 3_000 - 58 }, lngLat: { lat: 3.1, lng: 101 } })
+      expect(onStationRemove).toHaveBeenCalledWith(0)
+      expect(onTap).not.toHaveBeenCalled()
+    })
+
+    it('flat, a tap up where the gem would float still places', () => {
+      const onTap = vi.fn()
+      render(<PlaceMap {...base} mode="stations" onTap={onTap} onStationRemove={vi.fn()} />)
+      act(() => map.handlers.load({} as Click))
+      map.handlers.click({ point: { x: 101_000, y: 3_000 - 58 }, lngLat: { lat: 3.1, lng: 101 } })
+      expect(onTap).toHaveBeenCalled()
     })
   })
 
