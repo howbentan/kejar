@@ -5,6 +5,11 @@ import { isOut } from './players.js'
 import type { Game, LatLng, Player, Position, RescueRecord } from './types.js'
 
 /** How long a rescuer must keep a thumb on the key, in all, before everyone eligible is freed (rules §9a). */
+/** The Penjara reel stays shut this long after a tag, so nobody spins straight out of a catch. */
+export const REEL_OPEN_AFTER_MS = 60_000
+/** The words on the reel's black slots, top to bottom. The lime slot says SETTLED. */
+export const REEL_WORDS = ['HAILAT', 'ALMOST', 'NEARLY', 'ALAMAK', 'ADUH', 'NOPE', 'TRY LAH', 'HAMPIR', 'NEXT TIME'] as const
+
 export const RESCUE_HOLD_MS = 20_000
 /** Let go, and the key waits this long for the thumb to come back before the whole hold resets. */
 export const RESCUE_RESET_MS = 5_000

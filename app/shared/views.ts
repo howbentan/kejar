@@ -7,7 +7,7 @@ import { distanceM, fuzz } from './geo.js'
 import { cardsLeft, deckFor, setsFor } from './deck.js'
 import { isTicked, kitOf, packItems, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS, type KitItem, type PlaceItem } from './kit.js'
 import { MOMENT_WINDOW_MS } from './moments.js'
-import { legacyRescue, reelPulledThisStay, RESCUE_RESET_MS, rescueProgress } from './penjara.js'
+import { legacyRescue, REEL_OPEN_AFTER_MS, reelPulledThisStay, RESCUE_RESET_MS, rescueProgress } from './penjara.js'
 import { isOut, undoableArrestId, undoableCatchId } from './players.js'
 import { ARREST_OPEN_MS, arrestEndsAt } from './arrest.js'
 import { hijauCounts, hijauTargets, penjaraLockLeft } from './hijau.js'
@@ -223,7 +223,8 @@ export interface View {
    * spent. A spent pull that left them jailed was black, so `result` is 'black' then; null before the pull. A free
    * pull frees them, so it never shows here.
    */
-  reel: { pulled: boolean; result: 'free' | 'black' | null } | null
+  /** `opensAt`: the reel stays shut until a minute after the tag (ISO). */
+  reel: { pulled: boolean; result: 'free' | 'black' | null; opensAt?: string } | null
   /** Cheese Ais: the chasers a runner holding an unused one can freeze (live, not Luar Garisan, not frozen), by name; null otherwise. */
   freezeTargets: { id: string; name: string }[] | null
   /** When my own power-up freeze ends (chasers), or null when I'm not frozen. */
@@ -739,7 +740,8 @@ function freezeTargetsFor(i: ViewInput): View['freezeTargets'] {
 function reelFor(i: ViewInput): View['reel'] {
   if (i.me.role !== 'runner' || !i.me.jailed) return null
   const pulled = reelPulledThisStay(i.me)
-  return { pulled, result: pulled ? 'black' : null }
+  const opensAt = new Date((i.me.caught_at ? Date.parse(i.me.caught_at) : 0) + REEL_OPEN_AFTER_MS).toISOString()
+  return { pulled, result: pulled ? 'black' : null, opensAt }
 }
 
 /**

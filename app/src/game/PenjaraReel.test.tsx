@@ -41,21 +41,41 @@ const pull = async () => {
 }
 
 describe('PenjaraReel', () => {
-  it('shows the copy and ten cards, one lime and nine black, with no text on them', () => {
+  it('shows the copy and ten cards: nine black ones with words, and the lime one SETTLED with the settle doodle', () => {
     reel()
     expect(screen.getByText('PENJARA')).toBeInTheDocument()
     expect(screen.getByText('Your pull.')).toBeInTheDocument()
     expect(screen.getByText('One pull. One slot sets you free.')).toBeInTheDocument()
     const cards = screen.getAllByTestId('reel-card')
     expect(cards).toHaveLength(10)
-    expect(cards.filter((c) => c.dataset.kind === 'lime')).toHaveLength(1)
-    expect(cards.filter((c) => c.dataset.kind === 'black')).toHaveLength(9)
-    expect(cards.every((c) => c.textContent === '')).toBe(true)
+    const lime = cards.filter((c) => c.dataset.kind === 'lime')
+    expect(lime).toHaveLength(1)
+    expect(lime[0].textContent).toBe('SETTLED')
+    expect(lime[0].querySelector('svg')).not.toBeNull()
+    const words = cards.filter((c) => c.dataset.kind === 'black').map((c) => c.textContent)
+    expect(words).toEqual(['HAILAT', 'ALMOST', 'NEARLY', 'ALAMAK', 'ADUH', 'NOPE', 'TRY LAH', 'HAMPIR', 'NEXT TIME'])
   })
 
-  it('a runner whose escape is used sees ten black cards', () => {
+  it('a runner whose escape is used sees ten black word cards', () => {
     reel({ freedOnce: true })
-    expect(screen.getAllByTestId('reel-card').every((c) => c.dataset.kind === 'black')).toBe(true)
+    const cards = screen.getAllByTestId('reel-card')
+    expect(cards.every((c) => c.dataset.kind === 'black')).toBe(true)
+    expect(cards.map((c) => c.textContent)).toEqual(['HAILAT', 'ALMOST', 'NEARLY', 'ALAMAK', 'ADUH', 'NOPE', 'TRY LAH', 'HAMPIR', 'NEXT TIME', 'HAILAT'])
+  })
+
+  it('before it opens, a countdown stands where the lever is; then the lever comes back', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-11-24T10:00:00Z'))
+    reel({ reel: { pulled: false, result: null, opensAt: '2026-11-24T10:00:42Z' } })
+    expect(screen.getByText('opens in 0:42')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Pull the lever' })).toBeNull()
+    for (let s = 0; s < 42; s++) {
+      act(() => {
+        vi.advanceTimersByTime(1_000)
+      })
+    }
+    expect(screen.queryByText(/opens in/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Pull the lever' })).toBeInTheDocument()
   })
 
   it('a black result: calls pullReel, plays the clip, says wait, and spends the lever', async () => {

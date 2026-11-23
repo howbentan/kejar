@@ -359,6 +359,11 @@ describe('Jail', () => {
       expect(screen.queryByText('Your pull.')).toBeNull()
       act(() => arrive({ coords: { latitude: 3, longitude: 101 } }))
       expect(screen.getByText('Your pull.')).toBeInTheDocument()
+      // Walking away hides it again (about 1.1 km), and coming back shows it, with no reload.
+      act(() => arrive({ coords: { latitude: 3.01, longitude: 101 } }))
+      expect(screen.queryByText('Your pull.')).toBeNull()
+      act(() => arrive({ coords: { latitude: 3, longitude: 101 } }))
+      expect(screen.getByText('Your pull.')).toBeInTheDocument()
     } finally {
       Object.defineProperty(navigator, 'geolocation', { configurable: true, value: undefined })
     }

@@ -27,7 +27,7 @@ import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS,
 import { HIJAU_FIX_FRESH_MS, HIJAU_MS, hijauCounts, hijauLockEnd, hijauStartsAt, hijauTargets, penjaraLockLeft } from '../../shared/hijau.js'
 import { isSlipQr, slipTokenFromQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
 import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, judgeHijauClaim, judgeRingClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS, TOLL_FRESH_MS } from '../../shared/powerups.js'
-import { confirmedHeldMs, fiveLeftDue, HEAD_START_MS, legacyRescue, pickReel, reelPulledThisStay, RESCUE_HOLD_MS, RESCUE_RESET_MS, rescueProgress, rescueSuccessAt, rescueVerdict, sentDuringPause } from '../../shared/penjara.js'
+import { confirmedHeldMs, fiveLeftDue, HEAD_START_MS, legacyRescue, pickReel, REEL_OPEN_AFTER_MS, reelPulledThisStay, RESCUE_HOLD_MS, RESCUE_RESET_MS, rescueProgress, rescueSuccessAt, rescueVerdict, sentDuringPause } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeIdFor, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS } from '../../shared/kit.js'
 import { LEGENDARY_KINDS, pickLegendaries, SIDE_PAIRS, sidesOf, type SideSwitch } from '../../shared/legendaries.js'
@@ -1518,6 +1518,9 @@ const pullReel: Action = async (ctx, body) => {
   // Locked after Mak Kau Hijau: no free slot for anyone, so the pull waits (it isn't spent).
   const lockedMs = penjaraLockLeft(fresh, ctx.now)
   if (lockedMs > 0) return { ok: false, reason: 'penjara-locked', lockedMs }
+  // Shut for the first minute after the tag (the pull isn't spent).
+  const opensAt = (current.caught_at ? Date.parse(current.caught_at) : 0) + REEL_OPEN_AFTER_MS
+  if (ctx.now < opensAt) return { ok: false, reason: 'reel-too-soon', readyInMs: opensAt - ctx.now }
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   if (!atJail(latest(positions[me.id]), game.arena.jail, ctx.now)) return { ok: false, reason: 'too-far-from-jail' }
   if (!(await ctx.store.pullReel(me.id, iso(ctx.now)))) return { ok: false, reason: 'already-pulled' }

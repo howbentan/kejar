@@ -10,7 +10,8 @@ import PenjaraGate from '../game/rescue/PenjaraGate'
 import RescueWatch from '../game/rescue/RescueWatch'
 import SettlePanel from '../game/SettlePanel'
 import Stamp from '../game/Stamp'
-import { WalkGuide } from '../game/WalkGuide'
+import { ARRIVED_M, WalkGuide } from '../game/WalkGuide'
+import { distanceM } from '../../shared/geo.js'
 import { shouldPlay } from '../game/moments'
 import GameMap from '../game/Map'
 import { clock, useServerNow, wallClock } from '../game/time'
@@ -193,6 +194,20 @@ function WalkThenWatch({
   const reel = view.me.jailed || holding ? lastReel.current : null
   const [lost, setLost] = useState(false)
   const onArrived = useCallback(() => setArrived(true), [])
+  // At Penjara the reel stays only while the runner does: walking off brings the walk guide back.
+  const jail = view.arena.jail
+  useEffect(() => {
+    const geo = typeof navigator === 'undefined' ? undefined : navigator.geolocation
+    if (!arrived || !geo) return
+    const id = geo.watchPosition(
+      (p) => {
+        if (distanceM({ lat: p.coords.latitude, lng: p.coords.longitude }, jail) > ARRIVED_M) setArrived(false)
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 5_000 },
+    )
+    return () => geo.clearWatch(id)
+  }, [arrived, jail])
   const onLost = useCallback(() => setLost(true), [])
   return (
     <>

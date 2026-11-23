@@ -706,6 +706,10 @@ body:has(.notif-bell) .sos-icon { right: 56px; }
 .reel-strip { position: absolute; left: 0; right: 0; top: 0; will-change: transform; }
 .reel-card { height: 150px; background: #0A0A0B; border-bottom: 1px solid #1d1f1d; }
 .reel-card.lime { background: var(--volt); }
+.reel-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.reel-word { font: 400 30px var(--font); color: rgba(245, 245, 243, 0.82); }
+.reel-card.lime .reel-word { color: var(--black); font-size: 32px; }
+.reel-wait { margin: 18px 0 6px; text-align: center; font: 400 26px var(--font); color: var(--volt); }
 .reel-mark { position: absolute; left: -2px; right: -2px; top: 50%; height: 0; z-index: 3; }
 .reel-mark::before, .reel-mark::after { content: ''; position: absolute; top: -7px; border: 7px solid transparent; }
 .reel-mark::before { left: 0; border-left-color: var(--volt); }

@@ -1,12 +1,13 @@
 import { animate, useReducedMotion } from 'motion/react'
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { penjaraLockedLine } from '../../shared/hijau.js'
-import { REEL_SLOTS } from '../../shared/penjara.js'
+import { REEL_SLOTS, REEL_WORDS } from '../../shared/penjara.js'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
 import { currentCoords } from './here'
 import { loadSession } from './session'
 import { isMuted, playBlackSlot, playClunk, playFree, playTick, setMuted } from './sounds'
+import SettleDoodle from './doodles/SettleDoodle'
 import { ErrorText } from './ui'
 
 /** The scroll's length, eased so it slows into the result (the mockup's 2.8 s). */
@@ -43,9 +44,10 @@ const REFUSALS: Record<string, string> = {
   paused: 'Game is paused',
   disqualified: "You're Luar Garisan, so the reel is closed to you.",
   'penjara-closed': 'Penjara is closed (PKP)',
+  'reel-too-soon': 'The reel opens a minute after you’re caught.',
 }
 
-/** The ten slots: one lime (none once the escape is used), the rest black. */
+/** The ten slots: one lime (none once the escape is used), the rest black, each black one with a word. */
 const slotsFor = (freedOnce: boolean): ('lime' | 'black')[] =>
   Array.from({ length: REEL_SLOTS }, (_, i) => (!freedOnce && i === LIME_AT ? 'lime' : 'black'))
 
@@ -82,6 +84,15 @@ export default function PenjaraReel({
   const drag = useRef<{ startY: number; moved: boolean } | null>(null)
   const swallowClick = useRef(false)
   const stop = useRef<(() => void) | null>(null)
+  // Shut for the first minute after the tag: a countdown stands where the lever goes.
+  const opensAt = reel.opensAt ? Date.parse(reel.opensAt) : 0
+  const [now, setNow] = useState(() => Date.now())
+  const waitMs = Math.max(0, opensAt - now)
+  useEffect(() => {
+    if (waitMs <= 0) return
+    const id = window.setTimeout(() => setNow(Date.now()), Math.min(1_000, waitMs))
+    return () => window.clearTimeout(id)
+  }, [now, waitMs])
   const spent = phase !== 'idle'
   // Closed works like spent: nothing to pull (the server says penjara-closed anyway).
   const locked = spent || closed
@@ -232,13 +243,30 @@ export default function PenjaraReel({
       <p className="muted">One pull. One slot sets you free.</p>
       <div className="reel-win">
         <div ref={strip} className="reel-strip">
-          {cards.map((kind, i) => (
-            <div key={i} data-testid="reel-card" data-kind={kind} className={`reel-card ${kind}`} aria-hidden="true" />
-          ))}
+          {cards.map((kind, i) => {
+            // Black slots read the words in order, skipping the lime slot's place.
+            const n = i % REEL_SLOTS
+            const word = REEL_WORDS[(n < LIME_AT || wasFreedOnce ? n : n - 1) % REEL_WORDS.length]
+            return (
+              <div key={i} data-testid="reel-card" data-kind={kind} className={`reel-card ${kind}`} aria-hidden="true">
+                {kind === 'lime' ? (
+                  <>
+                    <SettleDoodle size={78} />
+                    <b className="reel-word">SETTLED</b>
+                  </>
+                ) : (
+                  <b className="reel-word">{word}</b>
+                )}
+              </div>
+            )
+          })}
         </div>
         <div className="reel-mark" aria-hidden="true" />
         {phase === 'landed' && result === 'free' && <div className="reel-flash" aria-hidden="true" />}
       </div>
+      {waitMs > 0 && !spent ? (
+        <p className="reel-wait">{`opens in ${Math.floor(Math.ceil(waitMs / 1000) / 60)}:${String(Math.ceil(waitMs / 1000) % 60).padStart(2, '0')}`}</p>
+      ) : (
       <button
         type="button"
         className={`reel-lever${spent ? ' spent' : ''}`}
@@ -262,6 +290,7 @@ export default function PenjaraReel({
           </i>
         </span>
       </button>
+      )}
       <p className="reel-hint">{closed && !spent ? 'PENJARA IS CLOSED (PKP)' : spent ? 'ONE PULL PER STAY' : 'PULL THE LEVER DOWN ↓'}</p>
       {phase === 'landed' && result === 'black' && (
         <div role="status" className="reel-out">

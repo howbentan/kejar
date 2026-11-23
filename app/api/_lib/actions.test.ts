@@ -1035,7 +1035,8 @@ describe('the held-key rescue at Penjara (rules §9a)', () => {
 
     it('the reel’s free slot sets the same head start (Review Focus 5)', async () => {
       const g = await inPenjara()
-      now += 1_000
+      // Past the reel's first minute after the catch.
+      now += 60_000
       const pulled = await actions.pullReel(
         { store, now, rng: () => 0, push: async () => {}, fetchJson: async () => ({}) },
         { code: g.code, token: g.aina.token, ...at(10) },
@@ -5012,7 +5013,8 @@ describe('the Penjara reel', () => {
     now = T0 + 7 * MIN
     await run('state', { code: g.code, organiserToken: g.organiserToken })
     const gameId = (await store.gameByCode(g.code))!.id
-    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: true, caught_at: new Date(now).toISOString(), caught_by: g.ben.playerId } }])
+    // Caught two minutes ago, so the reel's first-minute lock is over.
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: true, caught_at: new Date(now - 2 * MIN).toISOString(), caught_by: g.ben.playerId } }])
     return { ...g, gameId }
   }
   type G = Awaited<ReturnType<typeof jailedAina>>
@@ -5023,6 +5025,15 @@ describe('the Penjara reel', () => {
   const BLACK = 0.99
   const aina = async (g: G) => (await store.players(g.gameId)).find((p) => p.id === g.aina.playerId)!
   const events = async (g: G, type: string) => (await store.events(g.gameId)).filter((e) => e.type === type)
+
+  it('the reel opens a minute after the tag: a pull before then is refused and not spent', async () => {
+    const g = await jailedAina()
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { caught_at: new Date(now - 59_000).toISOString() } }])
+    expect(await pull(g, g.aina.token, FREE)).toEqual({ ok: false, reason: 'reel-too-soon', readyInMs: 1_000 })
+    expect((await aina(g)).reel_pulled_at).toBeNull()
+    await store.updatePlayers([{ id: g.aina.playerId, patch: { caught_at: new Date(now - 60_000).toISOString() } }])
+    expect(await pull(g, g.aina.token, BLACK)).toEqual({ ok: true, result: 'black' })
+  })
 
   it('a pull away from Penjara is refused and does not spend the pull', async () => {
     const g = await jailedAina()
@@ -5068,6 +5079,8 @@ describe('the Penjara reel', () => {
     now += MIN
     await store.updatePlayers([{ id: g.aina.playerId, patch: { jailed: false, caught_at: null } }])
     await store.catchRunner(g.aina.playerId, g.ben.playerId)
+    // The new stay's reel opens a minute after this catch.
+    now += MIN
     expect(await pull(g, g.aina.token, BLACK)).toEqual({ ok: true, result: 'black' })
   })
 
@@ -5096,9 +5109,10 @@ describe('the Penjara reel', () => {
 
   it('the jailed runner sees whether they have pulled', async () => {
     const g = await jailedAina()
-    expect((await run<View>('state', { code: g.code, token: g.aina.token })).reel).toEqual({ pulled: false, result: null })
+    const opensAt = new Date(now - 2 * MIN + 60_000).toISOString()
+    expect((await run<View>('state', { code: g.code, token: g.aina.token })).reel).toEqual({ pulled: false, result: null, opensAt })
     await pull(g, g.aina.token, BLACK)
-    expect((await run<View>('state', { code: g.code, token: g.aina.token })).reel).toEqual({ pulled: true, result: 'black' })
+    expect((await run<View>('state', { code: g.code, token: g.aina.token })).reel).toEqual({ pulled: true, result: 'black', opensAt })
     expect((await run<View>('state', { code: g.code, token: g.hafiz.token })).reel).toBeNull()
   })
 
@@ -6771,9 +6785,9 @@ describe('Hang Hebat: the wanted runner decides the game (Plan E3 task 5)', () =
 
   it('hebat: a rescue and the reel during the hold free runners, but the whistle stays and the Kejar still win', async () => {
     const g = await live()
-    await catchAt(g, 'ravi', T0 + 7.5 * MIN)
+    await catchAt(g, 'ravi', T0 + 7 * MIN)
     await catchAt(g, 'aina', T0 + 8 * MIN)
-    // Ravi's reel lands on the free slot.
+    // Ravi's reel lands on the free slot (more than a minute after his catch, so the reel is open).
     now = T0 + 8 * MIN + 5 * S
     const pulled = await actions.pullReel(
       { store, now, rng: () => 0, push: async () => {}, fetchJson: async () => ({}) },
