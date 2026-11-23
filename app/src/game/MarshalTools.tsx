@@ -157,6 +157,21 @@ export default function MarshalTools({
     }
   }
 
+  /** Add back: undoes the removal and makes the rejoin link in one go. */
+  async function addBack(playerId: string) {
+    setBusy(true)
+    setError('')
+    try {
+      const { inviteToken } = await call<{ inviteToken: string }>('restorePlayer', { code, ...credentials(code), playerId })
+      setPhoneLinks((l) => ({ ...l, [playerId]: `${window.location.origin}/p/${code}/${inviteToken}` }))
+      refresh()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   /** Called straight from a tap: nothing is awaited before `navigator.share`, or iPhone drops the share. */
   function sendPhoneLink(name: string, link: string) {
     setError('')
@@ -326,6 +341,7 @@ export default function MarshalTools({
       )}
 
       <p className="eyebrow">Players</p>
+      <p className="muted" style={{ fontSize: 13 }}>Lost their tab? Send them a rejoin link.</p>
       {removing && (
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <p style={{ fontWeight: 700 }}>{`Remove ${removing.name} from the game?`}</p>
@@ -371,8 +387,8 @@ export default function MarshalTools({
                       </button>
                     </>
                   ) : (
-                    <button type="button" className="pill" aria-label={`New phone for ${p.name}`} disabled={busy} onClick={() => makePhoneLink(p.id)}>
-                      New phone
+                    <button type="button" className="pill" aria-label={`Rejoin link for ${p.name}`} disabled={busy} onClick={() => makePhoneLink(p.id)}>
+                      Rejoin link
                     </button>
                   ))}
                 <button
@@ -388,6 +404,28 @@ export default function MarshalTools({
           ))}
         </tbody>
       </table>
+      {(view.removed?.length ?? 0) > 0 && (
+        <>
+          <p className="eyebrow">Removed</p>
+          {view.removed!.map((p) =>
+            phoneLinks[p.id] ? (
+              <p key={p.id}>
+                <span className="muted">{`${p.name} is back in. Send them their rejoin link.`}</span>{' '}
+                <button type="button" className="pill" onClick={() => sendPhoneLink(p.name, phoneLinks[p.id])}>
+                  Send link
+                </button>
+              </p>
+            ) : (
+              <p key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>{p.name}</span>
+                <button type="button" className="pill" aria-label={`Add back ${p.name}`} disabled={busy} onClick={() => addBack(p.id)}>
+                  Add back
+                </button>
+              </p>
+            ),
+          )}
+        </>
+      )}
     </div>
   )
 }

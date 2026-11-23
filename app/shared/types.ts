@@ -366,6 +366,8 @@ export type EventType =
   | 'paused'
   | 'resumed'
   | 'removed'
+  /** A marshal added a removed player back. data: { name } */
+  | 'restored'
   | 'auto-jailed'
   | 'auto-jail-undone'
   | 'sos-details'

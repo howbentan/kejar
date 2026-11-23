@@ -240,7 +240,7 @@ const briefOpened: Action = (ctx, body) => markBriefing(ctx, body, 'brief_opened
 const briefReady: Action = (ctx, body) => markBriefing(ctx, body, 'brief_ready_at')
 
 function requireLobby(game: Game, now: number) {
-  if (phaseAt(game, now).phase !== 'lobby') throw new ActionError(409, 'Game already started')
+  if (phaseAt(game, now).phase !== 'lobby') throw new ActionError(409, 'The game has started. Ask the organiser for a rejoin link.')
 }
 
 const LEGENDARY_ERROR = 'Legendary cards must be off or on'
@@ -2444,6 +2444,21 @@ async function passBounty(ctx: Ctx, game: Game, removed: Player) {
   }
 }
 
+/**
+ * Add back: a marshal undoes a removal mid-game (a tester who wiped their tab, a mistaken tap). The player comes back
+ * as they were, with a one-time rejoin link for their phone, exactly as New phone makes.
+ */
+const restorePlayer: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const marshal = await requireMarshal(ctx, game, body)
+  const target = (await ctx.store.removedPlayers(game.id)).find((p) => p.id === str(body.playerId))
+  if (!target) throw new ActionError(400, 'That player is still in the game')
+  if (!(await ctx.store.restorePlayer(target.id))) throw new ActionError(400, 'That player is still in the game')
+  await ctx.store.addEvent({ game_id: game.id, type: 'restored', actor_id: marshal?.id ?? null, target_id: target.id, data: { name: target.name } })
+  const { inviteToken } = (await createPhoneMove(ctx, body)) as { inviteToken: string }
+  return { ok: true, inviteToken }
+}
+
 const removePlayer: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   const marshal = await requireMarshal(ctx, game, body)
@@ -2754,6 +2769,7 @@ export const actions = {
   undoAutoJail,
   undoKejar,
   removePlayer,
+  restorePlayer,
   searchParks,
   nearbyParks,
   parkFeatures,

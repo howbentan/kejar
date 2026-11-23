@@ -4823,6 +4823,23 @@ describe('New phone (fair-play §1.7)', () => {
     return g
   }
 
+  it('Add back: a removed runner comes back in, with a rejoin link that works and a feed line', async () => {
+    const g = await jailedAina()
+    await run('removePlayer', { code: g.code, token: g.siti.token, playerId: g.aina.playerId })
+    expect((await store.removedPlayers(g.gameId)).map((p) => p.id)).toEqual([g.aina.playerId])
+    const { inviteToken } = await run<{ ok: true; inviteToken: string }>('restorePlayer', { code: g.code, token: g.siti.token, playerId: g.aina.playerId })
+    expect((await row(g, g.aina.playerId)).removed_at).toBeNull()
+    const moved = await run<{ token: string; playerId: string }>('redeemPhoneMove', { code: g.code, inviteToken })
+    expect(moved.playerId).toBe(g.aina.playerId)
+    const v = await run<View>('state', { code: g.code, token: moved.token })
+    expect(v.feed.map((f) => f.text)).toContain('Aina is back in')
+  })
+
+  it('Add back on a player who was never removed is refused', async () => {
+    const g = await jailedAina()
+    await rejects(run('restorePlayer', { code: g.code, token: g.siti.token, playerId: g.aina.playerId }), 400)
+  })
+
   it('moves a jailed runner mid-chase onto a new token: same player, old token dead, push cleared', async () => {
     const g = await jailedAina()
     await store.updatePlayers([{ id: g.aina.playerId, patch: { freed_once: true } }])

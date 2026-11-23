@@ -160,7 +160,7 @@ describe('MarshalLive Undo kejar', () => {
   })
 })
 
-describe('MarshalLive New phone', () => {
+describe('MarshalLive Rejoin link', () => {
   const roster = [
     { id: 'r1', name: 'Aina', role: 'runner' as const, tag_id: 7, jailed: false },
     { id: 'c1', name: 'Ben', role: 'chaser' as const, tag_id: null, jailed: false },
@@ -178,13 +178,13 @@ describe('MarshalLive New phone', () => {
 
   it('is offered on runner and chaser rows only', () => {
     render(<MarshalLive code="ABC234" view={organiser({ roster })} refresh={refresh} />)
-    expect(screen.getAllByRole('button', { name: /^New phone/ })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: /^Rejoin link/ })).toHaveLength(2)
   })
 
   it('makes the link on the first tap, then Send link shares it inside that tap', async () => {
     call.mockResolvedValue({ inviteToken: 'tk9' })
     render(<MarshalLive code="ABC234" view={organiser({ roster })} refresh={refresh} />)
-    fireEvent.click(screen.getByRole('button', { name: 'New phone for Aina' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Rejoin link for Aina' }))
     await waitFor(() =>
       expect(call).toHaveBeenCalledWith('createPhoneMove', { code: 'ABC234', organiserToken: 'h1', playerId: 'r1' }),
     )
@@ -196,10 +196,26 @@ describe('MarshalLive New phone', () => {
     expect(share.mock.calls[0][0].text).toContain(`${window.location.origin}/p/ABC234/tk9`)
   })
 
+  it('explains what the rejoin link is for', () => {
+    render(<MarshalLive code="ABC234" view={organiser({ roster })} refresh={refresh} />)
+    expect(screen.getByText('Lost their tab? Send them a rejoin link.')).toBeInTheDocument()
+  })
+
+  it('lists removed players with Add back, which brings them back and makes their rejoin link', async () => {
+    call.mockResolvedValue({ ok: true, inviteToken: 'tk7' })
+    render(<MarshalLive code="ABC234" view={organiser({ roster, removed: [{ id: 'r9', name: 'Wei' }] })} refresh={refresh} />)
+    expect(screen.getByText('Removed')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Add back Wei' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('restorePlayer', { code: 'ABC234', organiserToken: 'h1', playerId: 'r9' }))
+    expect(await screen.findByText("Wei is back in. Send them their rejoin link.")).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Send link' }))
+    expect(share.mock.calls[0][0].text).toContain(`${window.location.origin}/p/ABC234/tk7`)
+  })
+
   it('shows the error when the link cannot be made', async () => {
     call.mockRejectedValue(new Error('The game has ended'))
     render(<MarshalLive code="ABC234" view={organiser({ roster })} refresh={refresh} />)
-    fireEvent.click(screen.getByRole('button', { name: 'New phone for Aina' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Rejoin link for Aina' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('The game has ended')
     expect(screen.queryByRole('button', { name: 'Send link' })).toBeNull()
   })

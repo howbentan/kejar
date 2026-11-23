@@ -445,6 +445,13 @@ export class SupabaseStore implements GameStore {
     )
     return (rows ?? []).length > 0
   }
+  async removedPlayers(gameId: string): Promise<Player[]> {
+    return check(await this.db.from('players').select(PLAYER_COLUMNS).eq('game_id', gameId).not('removed_at', 'is', null)) as Player[]
+  }
+  async restorePlayer(id: string) {
+    const rows = check(await this.db.from('players').update({ removed_at: null }).eq('id', id).not('removed_at', 'is', null).select('id'))
+    return (rows ?? []).length > 0
+  }
   async addSafetyRecord(r: SafetyRecord) {
     check(await this.db.from('safety_records').insert({ ...r, at: this.nowIso() }))
   }

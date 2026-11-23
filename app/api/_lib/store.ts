@@ -285,6 +285,10 @@ export interface GameStore {
   clearOutWarning(playerId: string): Promise<void>
   /** Sets removed_at only if it was unset; true for the first caller. */
   removePlayer(id: string): Promise<boolean>
+  /** A game's removed players (players() leaves them out). */
+  removedPlayers(gameId: string): Promise<Player[]>
+  /** Undoes a removal; false when the player wasn't removed. */
+  restorePlayer(id: string): Promise<boolean>
   /** Kept apart from game data (spec §6); at = store clock. The app never reads these back. */
   addSafetyRecord(r: SafetyRecord): Promise<void>
   /**
@@ -1062,6 +1066,15 @@ export class MemoryStore implements GameStore {
     const p = this.playerRows.find((x) => x.id === id)
     if (!p || p.removed_at) return false
     p.removed_at = this.nowIso()
+    return true
+  }
+  async removedPlayers(gameId: string) {
+    return this.playerRows.filter((x) => x.game_id === gameId && !!x.removed_at).map((p) => this.strip(p, 'token_hash'))
+  }
+  async restorePlayer(id: string) {
+    const p = this.playerRows.find((x) => x.id === id)
+    if (!p || !p.removed_at) return false
+    p.removed_at = null
     return true
   }
   async addSafetyRecord(r: SafetyRecord) {

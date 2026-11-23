@@ -190,6 +190,8 @@ export interface View {
   counts: { runnersFree: number; runnersJailed: number; runnersLuarGarisan: number; chasers: number }
   /** Everyone in the game: shown in the lobby and to marshals; empty for players mid-game. */
   roster: RosterEntry[]
+  /** Removed players a marshal can add back (marshals only), oldest first. */
+  removed?: { id: string; name: string }[]
   /** Reports filed once the game had already ended; marshals and the organiser only, for the After game tab. */
   reports: PostGameReport[]
   /** "How fun was it?" ratings; marshals and the organiser only, for the After game tab. */
@@ -1051,6 +1053,8 @@ function feedText(e: GameEvent, byId: Map<string, Player>): string | null {
       return 'Game resumed'
     case 'removed':
       return `${String(e.data.name ?? 'A player')} left the game`
+    case 'restored':
+      return `${String(e.data.name ?? 'A player')} is back in`
     case 'auto-jail-undone':
       return target ? `${tagLabel(target)} is back in the game (marshal)` : 'A runner is back in the game (marshal)'
     case 'kejar-undone':
@@ -1186,6 +1190,15 @@ function fullView(input: ViewInput): View {
   const runners = i.players.filter((p) => p.role === 'runner')
   const organiser = i.me.id === 'host'
   const showRoster = phase === 'lobby' || phase === 'ended' || role === 'marshal'
+  // Still removed: the last removed/restored event for that player is a removal.
+  const removedNow = new Map<string, string>()
+  if (role === 'marshal') {
+    for (const e of i.events) {
+      if (!e.target_id) continue
+      if (e.type === 'removed') removedNow.set(e.target_id, String(e.data.name ?? 'A player'))
+      if (e.type === 'restored') removedNow.delete(e.target_id)
+    }
+  }
 
   return {
     phase,
@@ -1236,6 +1249,7 @@ function fullView(input: ViewInput): View {
       runnersLuarGarisan: runners.filter((p) => !p.removed_at && !!p.disqualified_at).length,
       chasers: i.players.filter((p) => p.role === 'chaser').length,
     },
+    removed: [...removedNow].map(([id, name]) => ({ id, name })),
     roster: showRoster
       ? i.players.map((p) => ({
           id: p.id,
