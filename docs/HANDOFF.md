@@ -1,6 +1,6 @@
 # Kejar: handoff notes
 
-Start here on a new machine or in a new Claude session. Last updated 2026-11-13.
+Start here on a new machine or in a new Claude session. Last updated 2026-11-23.
 
 **Read `docs/superpowers/specs/2026-10-30-kejar-rules.md` first.** It's the single source of truth for the game (Core and Full modes, every number, which spec owns what, and what's still open). The notes below are history and status.
 
@@ -85,6 +85,14 @@ A web app for organised, real-world chase games (runners vs chasers, with marsha
   - **Secret kept.** Only the organiser's setup screen has the endgame switches. Players and marshals get just "an endgame may happen" for the how-to-play card. Jailed runners see the reveal live.
   - **To check in a real game:** how the takeover and the chip feel on a phone with push, whether Bomba's pings feel fair to runners, and whether Hang Hebat's wanted poster is clear to the Kejar.
   - **Next design: Banjir Kilat** (the flood). It has a name, logo and colour only, and needs rules worked out against Luar Garisan and the outside alerts (design §10).
+- **The Ink map (branch `feat/ink-map`, built 2026-11-23, not merged yet).** Spec: `docs/superpowers/specs/2026-11-23-kejar-map-look-design.md`; plan: `docs/superpowers/plans/2026-11-23-kejar-map-look.md`. No migration.
+  - **What changed on every map.** The Ink look: black, white and greys, with lime only for game pieces. Map names are lowercase in the owner's Kejar Hand font, from our own glyph files in `app/public/fonts/Kejar Hand Regular/`. The credit is now the slim `MapCredit`, which still names OpenFreeMap as its terms require.
+  - **Flat/3D button.** A round button flips the map between flat and 3D; the choice is remembered per device in localStorage `kejar.map3d`. In 3D, players' j's float.
+  - **Stations** are volt diamonds with no numbers, and turn red while locked (the server now sends `lockedUntil` per station). In 3D the gem drops to the ground with a small m:ss countdown and rises when the lock ends. On organiser maps the Tupperware are gold (Dikejar) and purple (Kejar) diamonds.
+  - **Arena setup** (`PlaceMap`) has the same look and button. Float layers sit under the alert pins, so alerts are never covered. Motion is off under reduced motion and when the page is hidden.
+  - **Rebuilding assets.** `npm run glyphs` (in `app/`; needs Python 3 with Pillow, NumPy, SciPy and fontTools; the Geist fallback TTF is vendored in `app/scripts/hand-font/`) rebuilds the glyph files. `python -I scripts/build-map-markers.py` rebuilds the marker PNGs.
+  - **Checked.** Typecheck clean, 2231 tests pass. In a browser on local arena setup: handwritten names, dashed paths, slim credit and volt diamonds; the 3D button raised buildings and floated the gems and was remembered; tapping a floating gem removed the station; glyphs load from our own origin; no console errors.
+  - **Not done yet.** Phase 2 (our own Malaysia map file on Cloudflare R2, credit down to "© OpenStreetMap") is a separate plan. The in-game map (players, the claimed-station drop and countdown) is covered by unit tests but has not been seen in a browser during a live game.
 - **Plan 6 (polish): not started.** Replay, share card, 24 h deletion, 12-month safety-record deletion.
 
 ## Decisions made since the design doc (not yet in the spec)
