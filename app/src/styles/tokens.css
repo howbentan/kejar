@@ -63,7 +63,7 @@
    spacing: the old label tracking pulls drawn letters apart. Geist keeps only the smallest bits, below. */
 html body, html body * { text-transform: lowercase !important; letter-spacing: normal !important; font-synthesis: none; }
 html body p, html body li, html body td, html body label { line-height: 1.5; }
-.eyebrow, th, .feed-list, .feed-list *, .slot-deck, .chase-who, .chase-count, .map-credit, .map-credit *,
+.eyebrow, th, .feed-list, .feed-list *, .slot-deck, .chase-who, .chase-count,
 html body small, html body input, html body textarea { font-family: 'Geist', system-ui, sans-serif !important; }
 .eyebrow, th, .slot-deck, .chase-who { text-transform: uppercase !important; letter-spacing: 0.14em !important; }
 html body input, html body textarea { text-transform: none !important; }
@@ -165,8 +165,12 @@ select.input option { background: #141614; color: var(--white); }
 /* The map credit: required, kept to one small dim line in the corner. Geist Mono (the owner's rule: credits stay Geist). */
 .map-credit {
   position: absolute; left: 14px; bottom: 4px; z-index: 2; background: none; pointer-events: auto;
-  font: 400 8px/1.4 'Geist Mono', ui-monospace, monospace !important; letter-spacing: 0.04em !important;
-  color: rgba(245, 245, 243, 0.32);
+  line-height: 1.4; color: rgba(245, 245, 243, 0.32);
+}
+/* Beats the app-wide `html body *` rules and the Geist list, on the links too: verbatim text, Geist Mono, tracked. */
+.map-credit, .map-credit * {
+  font-family: 'Geist Mono', ui-monospace, monospace !important; font-size: 8px; font-weight: 400;
+  letter-spacing: 0.04em !important; text-transform: none !important;
 }
 .map-credit a { color: inherit; text-decoration: none; }
 .map-me {
