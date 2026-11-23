@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { KL_FALLBACK } from '../../shared/arenaDraft.js'
 import { circlePolygon } from '../../shared/geo.js'
 import type { LatLng } from '../../shared/types.js'
-import { FLOAT_ICON, addMapIcons, shadowPaint } from './mapMarkers'
+import { FLOAT_ICON, GEM_SIZE, INSTANT_TRANSLATE, addMapIcons, shadowPaint } from './mapMarkers'
 import MapViewButton from './MapViewButton'
 import { HOVER, restFloat, startFloatMotion } from './floatMotion'
 import { applyMapView, useMapView } from './mapView'
@@ -109,7 +109,7 @@ export default function PlaceMap(props: Props) {
         id: 'toilets',
         type: 'symbol',
         source: 'toilets',
-        layout: { 'text-field': 'WC', 'text-font': MAP_FONT, 'text-size': 10, 'text-allow-overlap': true },
+        layout: { 'text-field': 'WC', 'text-font': MAP_FONT, 'text-size': 10, 'text-transform': 'lowercase', 'text-allow-overlap': true },
         paint: { 'text-color': WHITE },
       })
       m.addLayer({
@@ -122,7 +122,7 @@ export default function PlaceMap(props: Props) {
         id: 'marks-label',
         type: 'symbol',
         source: 'marks',
-        layout: { 'text-field': ['get', 't'], 'text-font': MAP_FONT, 'text-size': 11, 'text-allow-overlap': true },
+        layout: { 'text-field': ['get', 't'], 'text-font': MAP_FONT, 'text-size': 11, 'text-transform': 'lowercase', 'text-allow-overlap': true },
         paint: { 'text-color': WHITE },
       })
       addMapIcons(m)
@@ -138,7 +138,8 @@ export default function PlaceMap(props: Props) {
         id: 'float-gem',
         type: 'symbol',
         source: 'stations',
-        layout: { 'icon-image': 'gem-volt-float', 'icon-size': 1.2, ...FLOAT_ICON },
+        layout: { 'icon-image': 'gem-volt-float', 'icon-size': GEM_SIZE, ...FLOAT_ICON },
+        paint: INSTANT_TRANSLATE,
       })
       applyMapView(m, latestThreeD.current, { animate: false })
       appliedThreeD.current = latestThreeD.current

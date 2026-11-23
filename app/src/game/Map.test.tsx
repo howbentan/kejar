@@ -98,6 +98,8 @@ vi.mock('maplibre-gl', () => ({
 import GameMap, { stationFeatures } from './Map'
 import { MAP_FONT } from './mapStyle'
 import { FLOAT_MARKER_LAYERS } from './mapView'
+import { FLOAT_TRANSLATE_LAYERS } from './floatMotion'
+import { featureFilter, type FilterSpecification } from '@maplibre/maplibre-gl-style-spec'
 
 afterEach(cleanup)
 
@@ -495,6 +497,32 @@ describe('GameMap', () => {
       expect(stationFeatures([{ n: 1, lat: 3, lng: 101 }], now).features[0].properties).toMatchObject({ locked: false, left: '' })
     })
 
+    it('the last second of a lock reads 0:01, never 0:00 while still red (rounded up like the other countdowns)', () => {
+      const now = 1_000_000
+      const f = (until: number) => stationFeatures([{ n: 1, lat: 3, lng: 101, lockedUntil: new Date(until).toISOString() }], now).features[0].properties
+      expect(f(now + 400)).toMatchObject({ locked: true, left: '0:01' })
+      expect(f(now + 60_000)).toMatchObject({ locked: true, left: '1:00' })
+      expect(f(now + 60_001)).toMatchObject({ locked: true, left: '1:01' })
+    })
+
+    it("uses the server's clock, not the phone's: on a phone 60 s fast a station 30 s past the phone clock is still locked", () => {
+      created.layers = []
+      created.data = {}
+      const phone = Date.now()
+      render(<GameMap arena={arena} dots={[]} serverNow={phone - 60_000} stations={[{ n: 1, lat: 3.01, lng: 101.01, lockedUntil: new Date(phone - 30_000).toISOString() }]} />)
+      act(() => created.load!())
+      const props = (created.data.stations as { features: { properties: Record<string, unknown> }[] }).features[0].properties
+      expect(props).toMatchObject({ locked: true, left: '0:30' })
+    })
+
+    it('without serverNow the phone clock is used', () => {
+      created.layers = []
+      created.data = {}
+      render(<GameMap arena={arena} dots={[]} stations={[{ n: 1, lat: 3.01, lng: 101.01, lockedUntil: new Date(Date.now() - 30_000).toISOString() }]} />)
+      act(() => created.load!())
+      expect((created.data.stations as { features: { properties: Record<string, unknown> }[] }).features[0].properties.locked).toBe(false)
+    })
+
     it('turns a locked station back by itself when the lock ends, with no new props', () => {
       vi.useFakeTimers()
       try {
@@ -505,7 +533,10 @@ describe('GameMap', () => {
         const props = () => (created.data.stations as { features: { properties: Record<string, unknown> }[] }).features[0].properties
         expect(props().locked).toBe(true)
         act(() => vi.advanceTimersByTime(2000))
-        expect(props()).toMatchObject({ locked: false, left: '' })
+        expect(props()).toMatchObject({ locked: false, left: '', rising: true })
+        // One more refresh once its gem has risen, then no more.
+        act(() => vi.advanceTimersByTime(1000))
+        expect(props()).toMatchObject({ locked: false, rising: false })
         const before = created.data.stations
         act(() => vi.advanceTimersByTime(3000))
         expect(created.data.stations).toBe(before)
@@ -601,6 +632,21 @@ describe('GameMap', () => {
       expect(created.data.house).toMatchObject({ features: [] })
     })
   })
+  describe('map lettering', () => {
+    it('every text layer is lowercase, since Kejar Hand has no capitals', () => {
+      created.layers = []
+      created.data = {}
+      render(<GameMap arena={arena} dots={[]} />)
+      act(() => created.load!())
+      const text = created.layers.filter((l) => (l as unknown as { layout?: Record<string, unknown> }).layout?.['text-field'] !== undefined) as unknown as {
+        id: string
+        layout: Record<string, unknown>
+      }[]
+      expect(text.map((l) => l.id)).toEqual(expect.arrayContaining(['toilets', 'wanted-pin-label', 'toll-gate-labels', 'pin-labels', 'labels', 'snapshot-labels']))
+      for (const l of text) expect(l.layout['text-transform'], l.id).toBe('lowercase')
+    })
+  })
+
   describe('floating markers in 3D', () => {
     const layer = (id: string) =>
       created.layers.find((l) => l.id === id) as unknown as { source: string; filter?: unknown; layout: Record<string, unknown>; paint?: Record<string, unknown> }
@@ -653,6 +699,8 @@ describe('GameMap', () => {
       expect(layer('landed-timer').layout['text-font']).toEqual(MAP_FONT)
       expect(layer('landed-timer').source).toBe('stations')
       expect(layer('landed-gem').layout).toMatchObject({ 'icon-image': 'gem-red', 'icon-size': 1.2, 'icon-anchor': 'bottom', 'icon-offset': [0, 6] })
+      expect(layer('landed-gem-dropping').layout).toEqual(layer('landed-gem').layout)
+      expect(layer('float-gem-rising').layout).toEqual(layer('float-gem').layout)
       expect(layer('float-gem').layout).toMatchObject({ 'icon-image': 'gem-volt-float', 'icon-size': 1.2, 'icon-anchor': 'bottom' })
       expect(layer('float-j').layout['icon-image']).toEqual(['concat', ['match', ['get', 'kind'], 'chaser', 'j-chaser', 'j-runner'], '-float'])
       expect(layer('float-tupper').layout['icon-image']).toEqual(['case', ['==', ['get', 'side'], 'kejar'], 'gem-purple-float', 'gem-gold-float'])
@@ -695,17 +743,65 @@ describe('GameMap', () => {
       const { rerender } = render(<GameMap arena={arena} dots={[]} stations={open} />)
       act(() => created.load!())
       rerender(<GameMap arena={arena} dots={[]} stations={locked(30_000)} />)
-      expect((translates('landed-gem').at(-1)!.v as number[])[1]).toBeLessThan(-30)
+      expect((translates('landed-gem-dropping').at(-1)!.v as number[])[1]).toBeLessThan(-30)
     })
 
     it('a station turning locked drops its gem from hover height', () => {
       const { rerender } = render(<GameMap arena={arena} dots={[]} stations={open} />)
       act(() => created.load!())
       runFrame(performance.now())
-      expect((translates('landed-gem').at(-1)!.v as number[])[1]).toBe(0)
+      expect((translates('landed-gem-dropping').at(-1)!.v as number[])[1]).toBe(0)
       rerender(<GameMap arena={arena} dots={[]} stations={locked(30_000)} />)
       runFrame(performance.now() + 40)
-      expect((translates('landed-gem').at(-1)!.v as number[])[1]).toBeLessThan(-30)
+      expect((translates('landed-gem-dropping').at(-1)!.v as number[])[1]).toBeLessThan(-30)
+    })
+
+    it('every layer the motion moves has no transition (MapLibre would otherwise ease each frame over 300 ms)', () => {
+      render(<GameMap arena={arena} dots={[]} stations={open} />)
+      act(() => created.load!())
+      for (const id of FLOAT_TRANSLATE_LAYERS) {
+        expect(layer(id), id).toBeDefined()
+        expect(layer(id).paint?.['icon-translate-transition'], id).toEqual({ duration: 0, delay: 0 })
+      }
+    })
+
+    it('the dropping and rising gem layers float and hide with the rest of the 3D markers', () => {
+      for (const id of ['landed-gem-dropping', 'float-gem-rising']) expect(FLOAT_MARKER_LAYERS).toContain(id)
+    })
+
+    it("locking station 2 moves only station 2's gem to the dropping layer; the other open gems stay on the steady one", () => {
+      vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'setTimeout', 'clearTimeout', 'Date', 'performance'] })
+      try {
+        const three = (s2: string | null) => [
+          { n: 1, lat: 3.01, lng: 101.01, lockedUntil: null },
+          { n: 2, lat: 3.02, lng: 101.02, lockedUntil: s2 },
+          { n: 3, lat: 3.03, lng: 101.03, lockedUntil: null },
+        ]
+        const { rerender } = render(<GameMap arena={arena} dots={[]} stations={three(null)} />)
+        act(() => created.load!())
+        const on = (id: string, n: string) => {
+          const f = (created.data.stations as { features: { properties: Record<string, unknown> }[] }).features.find((x) => x.properties.n === n)!
+          return featureFilter(layer(id).filter as FilterSpecification).filter({ zoom: 16 }, { type: 1, properties: f.properties, geometry: [] } as never)
+        }
+        const layersOf = (n: string) => ['float-gem', 'float-gem-rising', 'landed-gem', 'landed-gem-dropping'].filter((id) => on(id, n))
+        for (const n of ['1', '2', '3']) expect(layersOf(n)).toEqual(['float-gem'])
+        rerender(<GameMap arena={arena} dots={[]} stations={three(new Date(Date.now() + 1500).toISOString())} />)
+        expect(layersOf('2')).toEqual(['landed-gem-dropping'])
+        expect(layersOf('1')).toEqual(['float-gem'])
+        expect(layersOf('3')).toEqual(['float-gem'])
+        act(() => vi.advanceTimersByTime(1000))
+        expect(layersOf('2')).toEqual(['landed-gem'])
+        // The lock ends by itself: station 2 rises; the others never leave the steady layer.
+        act(() => vi.advanceTimersByTime(1000))
+        expect(layersOf('2')).toEqual(['float-gem-rising'])
+        expect(layersOf('1')).toEqual(['float-gem'])
+        // The refresh keeps going until the rise is over, so the gem goes back to the steady layer.
+        act(() => vi.advanceTimersByTime(1000))
+        expect(layersOf('2')).toEqual(['float-gem'])
+        expect(layersOf('3')).toEqual(['float-gem'])
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 })

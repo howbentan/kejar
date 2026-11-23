@@ -7,7 +7,7 @@ export default function SetupMap({ view }: { view: View }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <p className="eyebrow">Setup: where things go</p>
-      <GameMap arena={view.arena} dots={[]} stations={stations} height={260} />
+      <GameMap arena={view.arena} dots={[]} stations={stations} serverNow={view.now} height={260} />
       <ul className="muted" style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
         {stations.map((s) => (
           <li key={s.n}>{`Station ${s.n}`}</li>

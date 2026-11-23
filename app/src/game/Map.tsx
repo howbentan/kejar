@@ -1,8 +1,9 @@
 import MapCredit from './MapCredit'
 import MapViewButton from './MapViewButton'
-import { FLOAT_ICON, addMapIcons, shadowPaint } from './mapMarkers'
+import { FLOAT_ICON, GEM_SIZE, INSTANT_TRANSLATE, LANDED_OFFSET, addMapIcons, shadowPaint } from './mapMarkers'
 import { applyMapView, useMapView } from './mapView'
-import { floatTranslates, restFloat, setFloat, startFloatMotion, type FloatEvents } from './floatMotion'
+import { floatTranslates, markStationMotion, restFloat, setFloat, startFloatMotion, type FloatEvents, type StationTurn } from './floatMotion'
+import { useClockSkew } from './time'
 import type { Feature as GeoFeature, FeatureCollection, Geometry } from 'geojson'
 import maplibregl, { type GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -104,10 +105,17 @@ function dotFeatures(dots: MapDot[], origin: LatLng | null = null) {
 /** The game map: arena boundary, jail, and role dots (spec §9 colour + shape rules). */
 type StationMark = { n: number; lat: number; lng: number; lockedUntil?: string | null }
 
-/** `m:ss` for a lock with `ms` left. */
-const lockLeft = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor((ms % 60_000) / 1000)).padStart(2, '0')}`
+/** `m:ss` for a lock with `ms` left, rounded up to the second like the app's other countdowns (never 0:00 while locked). */
+const lockLeft = (ms: number) => {
+  const s = Math.ceil(ms / 1000)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
 
-/** A station is locked while its `lockedUntil` is ahead of `now`; `left` is the time still to go (empty when open). Worked out on the phone, so a lock ends on its own. */
+/**
+ * A station is locked while its `lockedUntil` is ahead of `now` (server time: `lockedUntil` is the server's); `left` is
+ * the time still to go (empty when open). Worked out on the phone, so a lock ends on its own. `dropping` and `rising`
+ * start false: markStationMotion sets them for a gem that just turned.
+ */
 export function stationFeatures(stations: StationMark[], now: number): FeatureCollection {
   return collection(
     stations.map((s) => {
@@ -115,7 +123,7 @@ export function stationFeatures(stations: StationMark[], now: number): FeatureCo
       const locked = ms > 0
       return {
         type: 'Feature',
-        properties: { n: String(s.n), locked, left: locked ? lockLeft(ms) : '' },
+        properties: { n: String(s.n), locked, left: locked ? lockLeft(ms) : '', dropping: false, rising: false },
         geometry: { type: 'Point', coordinates: [s.lng, s.lat] },
       }
     }),
@@ -224,6 +232,7 @@ export default function GameMap({
   stash = null,
   stashSide = 'dikejar',
   tollGates = [],
+  serverNow,
 }: {
   arena: Arena
   dots: MapDot[]
@@ -259,6 +268,8 @@ export default function GameMap({
   stashSide?: TupperSide
   /** Chasers: where Tee And Gee's hidden toll gates stand. */
   tollGates?: LatLng[]
+  /** The view's `now` (server time), so station locks end on the server's clock, not a phone's that is off. */
+  serverNow?: number
 }) {
   const reduce = useReducedMotion()
   const [threeD, toggleThreeD] = useMapView()
@@ -266,9 +277,11 @@ export default function GameMap({
   latestThreeD.current = threeD
   // The view last applied to the map: the load applies the stored one, a toggle after load eases to the new one.
   const appliedThreeD = useRef(threeD)
-  // When a station's gem last landed (locked) or took off (opened), for the 3D view's drop and rise.
+  // The latest gem to land (locked) or take off (opened), timing the 3D view's dropping and rising layers; and each
+  // station's own last turn, so only that station's gem moves to them.
   const floatEvents = useRef<FloatEvents>({ dropAt: -1e9, riseAt: -1e9 })
-  const stationLocked = useRef(new Map<string, boolean>())
+  const stationTurns = useRef(new Map<string, StationTurn>())
+  const skew = useClockSkew(serverNow)
   // True while the float motion runs, so a drop or rise can be shown from its first frame.
   const floatMoving = useRef(false)
   const [loaded, setLoaded] = useState(false)
@@ -389,7 +402,7 @@ export default function GameMap({
         id: 'toilets',
         type: 'symbol',
         source: 'toilets',
-        layout: { 'text-field': 'WC', 'text-font': MAP_FONT, 'text-size': 10, 'text-allow-overlap': true },
+        layout: { 'text-field': 'WC', 'text-font': MAP_FONT, 'text-size': 10, 'text-transform': 'lowercase', 'text-allow-overlap': true },
         paint: { 'text-color': WHITE },
       })
       if (showJailAndStartRef.current) {
@@ -426,7 +439,7 @@ export default function GameMap({
         id: 'snapshot-labels',
         type: 'symbol',
         source: 'snapshot',
-        layout: { 'text-field': ['get', 'label'], 'text-font': MAP_FONT, 'text-size': 11 },
+        layout: { 'text-field': ['get', 'label'], 'text-font': MAP_FONT, 'text-size': 11, 'text-transform': 'lowercase' },
         paint: { 'text-color': VOLT, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
       })
       m.addSource('stash', { type: 'geojson', data: stashFeatures(latestStash.current) })
@@ -436,8 +449,9 @@ export default function GameMap({
         source: 'stash',
         layout: { 'icon-image': DIAMOND[latestStashSide.current], 'icon-size': 1.3, 'icon-allow-overlap': true, 'icon-ignore-placement': true },
       })
-      const firstStations = stationFeatures(latestStations.current, Date.now())
-      stationLocked.current = new Map(firstStations.features.map((f) => [String(f.properties?.n), !!f.properties?.locked]))
+      const firstStations = stationFeatures(latestStations.current, Date.now() + skew.current)
+      stationTurns.current = new Map()
+      markStationMotion(firstStations, stationTurns.current, performance.now(), floatEvents.current)
       m.addSource('stations', { type: 'geojson', data: firstStations })
       m.addLayer({
         id: 'stations',
@@ -577,7 +591,7 @@ export default function GameMap({
         id: 'wanted-pin-label',
         type: 'symbol',
         source: 'wanted',
-        layout: { 'text-field': 'WANTED', 'text-font': MAP_FONT, 'text-size': 9, 'text-offset': [0, -3.2], 'text-allow-overlap': true },
+        layout: { 'text-field': 'WANTED', 'text-font': MAP_FONT, 'text-size': 9, 'text-transform': 'lowercase', 'text-offset': [0, -3.2], 'text-allow-overlap': true },
         paint: { 'text-color': eg.hebatInk, 'text-halo-color': eg.hebat, 'text-halo-width': 2 },
       })
       // Tee And Gee's reveal: a soft lime halo (Pak Guard's is a thin ring), so the two never look alike.
@@ -605,7 +619,7 @@ export default function GameMap({
         id: 'toll-gate-labels',
         type: 'symbol',
         source: 'toll-gates',
-        layout: { 'text-field': 'GATE', 'text-font': MAP_FONT, 'text-size': 9, 'text-offset': [0, 1.6], 'text-allow-overlap': true },
+        layout: { 'text-field': 'GATE', 'text-font': MAP_FONT, 'text-size': 9, 'text-transform': 'lowercase', 'text-offset': [0, 1.6], 'text-allow-overlap': true },
         paint: { 'text-color': VOLT, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
       })
       m.addLayer({
@@ -613,7 +627,7 @@ export default function GameMap({
         type: 'symbol',
         source: 'fuzzy',
         // Under the faded j, so the tag number never sits on it.
-        layout: { 'text-field': ['get', 'label'], 'text-font': MAP_FONT, 'text-size': 11, 'text-offset': [0, 2.1], 'text-allow-overlap': true },
+        layout: { 'text-field': ['get', 'label'], 'text-font': MAP_FONT, 'text-size': 11, 'text-transform': 'lowercase', 'text-offset': [0, 2.1], 'text-allow-overlap': true },
         paint: { 'text-color': WHITE, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
       })
       m.addSource('pins', { type: 'geojson', data: pinFeatures(latestPins.current) })
@@ -649,7 +663,13 @@ export default function GameMap({
           'icon-ignore-placement': true,
         },
       })
-      const pinLabel: maplibregl.SymbolLayerSpecification['layout'] = { 'text-field': ['get', 'label'], 'text-font': MAP_FONT, 'text-size': 10, 'text-allow-overlap': true }
+      const pinLabel: maplibregl.SymbolLayerSpecification['layout'] = {
+        'text-field': ['get', 'label'],
+        'text-font': MAP_FONT,
+        'text-size': 10,
+        'text-transform': 'lowercase',
+        'text-allow-overlap': true,
+      }
       m.addLayer({
         id: 'pin-labels',
         type: 'symbol',
@@ -673,31 +693,35 @@ export default function GameMap({
       const isJ: maplibregl.FilterSpecification = ['match', ['get', 'kind'], ['runner', 'chaser'], true, false]
       const openStation: maplibregl.FilterSpecification = ['!', ['get', 'locked']]
       const lockedStation: maplibregl.FilterSpecification = ['get', 'locked']
+      // A gem that just turned draws on its own layer for the drop or rise; every other gem stays on the steady one.
+      const steadyOpen: maplibregl.FilterSpecification = ['all', openStation, ['!', ['get', 'rising']]]
+      const risingOpen: maplibregl.FilterSpecification = ['all', openStation, ['get', 'rising']]
+      const steadyLocked: maplibregl.FilterSpecification = ['all', lockedStation, ['!', ['get', 'dropping']]]
+      const droppingLocked: maplibregl.FilterSpecification = ['all', lockedStation, ['get', 'dropping']]
+      const floatGem: maplibregl.SymbolLayerSpecification['layout'] = { 'icon-image': 'gem-volt-float', 'icon-size': GEM_SIZE, ...FLOAT_ICON }
+      const landedGem: maplibregl.SymbolLayerSpecification['layout'] = { 'icon-image': 'gem-red', 'icon-size': GEM_SIZE, 'icon-offset': LANDED_OFFSET, ...FLOAT_ICON }
       const isTupper: maplibregl.FilterSpecification = ['!=', ['get', 'side'], '']
       addFloat({ id: 'float-shadow-j', type: 'circle', source: 'points', filter: isJ, paint: shadowPaint(8) })
       addFloat({ id: 'float-shadow-ghost', type: 'circle', source: 'ghosts', paint: shadowPaint(8) })
       addFloat({ id: 'float-shadow-gem', type: 'circle', source: 'stations', filter: openStation, paint: shadowPaint(13) })
       addFloat({ id: 'float-shadow-tupper', type: 'circle', source: 'pins', filter: isTupper, paint: shadowPaint(13) })
       addFloat({ id: 'float-shadow-stash', type: 'circle', source: 'stash', paint: shadowPaint(13) })
-      addFloat({
-        id: 'float-gem',
-        type: 'symbol',
-        source: 'stations',
-        filter: openStation,
-        layout: { 'icon-image': 'gem-volt-float', 'icon-size': 1.2, ...FLOAT_ICON },
-      })
+      addFloat({ id: 'float-gem', type: 'symbol', source: 'stations', filter: steadyOpen, layout: floatGem, paint: INSTANT_TRANSLATE })
+      addFloat({ id: 'float-gem-rising', type: 'symbol', source: 'stations', filter: risingOpen, layout: floatGem, paint: INSTANT_TRANSLATE })
       addFloat({
         id: 'float-tupper',
         type: 'symbol',
         source: 'pins',
         filter: isTupper,
-        layout: { 'icon-image': ['case', ['==', ['get', 'side'], 'kejar'], 'gem-purple-float', 'gem-gold-float'], 'icon-size': 1.2, ...FLOAT_ICON },
+        layout: { 'icon-image': ['case', ['==', ['get', 'side'], 'kejar'], 'gem-purple-float', 'gem-gold-float'], 'icon-size': GEM_SIZE, ...FLOAT_ICON },
+        paint: INSTANT_TRANSLATE,
       })
       addFloat({
         id: 'float-tupper-stash',
         type: 'symbol',
         source: 'stash',
-        layout: { 'icon-image': FLOAT_GEM[latestStashSide.current], 'icon-size': 1.2, ...FLOAT_ICON },
+        layout: { 'icon-image': FLOAT_GEM[latestStashSide.current], 'icon-size': GEM_SIZE, ...FLOAT_ICON },
+        paint: INSTANT_TRANSLATE,
       })
       // A claimed station: its gem has dropped to the ground, red, with the time left until it lifts off again.
       addFloat({
@@ -707,13 +731,8 @@ export default function GameMap({
         filter: lockedStation,
         paint: { 'circle-radius': 16, 'circle-color': LOCKED_RED, 'circle-opacity': 0.22, 'circle-blur': 0.8, 'circle-pitch-alignment': 'map' },
       })
-      addFloat({
-        id: 'landed-gem',
-        type: 'symbol',
-        source: 'stations',
-        filter: lockedStation,
-        layout: { 'icon-image': 'gem-red', 'icon-size': 1.2, 'icon-offset': [0, 6], ...FLOAT_ICON },
-      })
+      addFloat({ id: 'landed-gem', type: 'symbol', source: 'stations', filter: steadyLocked, layout: landedGem, paint: INSTANT_TRANSLATE })
+      addFloat({ id: 'landed-gem-dropping', type: 'symbol', source: 'stations', filter: droppingLocked, layout: landedGem, paint: INSTANT_TRANSLATE })
       addFloat({
         id: 'landed-timer',
         type: 'symbol',
@@ -723,6 +742,7 @@ export default function GameMap({
           'text-field': ['get', 'left'],
           'text-font': MAP_FONT,
           'text-size': 11,
+          'text-transform': 'lowercase',
           'text-anchor': 'top',
           'text-offset': [0, 0.6],
           'text-allow-overlap': true,
@@ -736,13 +756,14 @@ export default function GameMap({
         source: 'points',
         filter: isJ,
         layout: { 'icon-image': ['concat', ['match', ['get', 'kind'], 'chaser', 'j-chaser', 'j-runner'], '-float'], 'icon-size': 0.85, ...FLOAT_ICON },
+        paint: INSTANT_TRANSLATE,
       })
       addFloat({
         id: 'float-j-ghost',
         type: 'symbol',
         source: 'ghosts',
         layout: { 'icon-image': 'j-ghost-float', 'icon-size': 0.85, ...FLOAT_ICON },
-        paint: { 'icon-opacity': ['case', ['get', 'missed'], 0.45, 1] },
+        paint: { 'icon-opacity': ['case', ['get', 'missed'], 0.45, 1], ...INSTANT_TRANSLATE },
       })
       // Only now that every marker layer exists: show the stored view's set (no animation on load).
       applyMapView(m, latestThreeD.current, { animate: false })
@@ -759,37 +780,30 @@ export default function GameMap({
       m.remove()
       map.current = null
     }
-  }, [arenaKey])
+  }, [arenaKey, skew])
 
   const stationKey = JSON.stringify(stations)
-  // Draw now; then, only while some station is locked, redraw every second so a lock turns back by itself (and its time ticks).
+  // Draw now; then, while some station is locked or its gem is still dropping or rising, redraw every second so a lock
+  // turns back by itself (and its time ticks) and a gem that has landed or risen goes back to its steady layer.
   useEffect(() => {
     if (!ready.current || !map.current) return
     const draw = () => {
-      const now = Date.now()
-      const features = stationFeatures(latestStations.current, now)
+      // The server's time: lockedUntil is the server's, and a phone's clock can be off.
+      const features = stationFeatures(latestStations.current, Date.now() + skew.current)
       // A gem lands as its station locks and takes off as it opens (a station seen for the first time just appears).
-      let turned = false
-      for (const f of features.features) {
-        const n = String(f.properties?.n)
-        const was = stationLocked.current.get(n)
-        const locked = !!f.properties?.locked
-        if (was === false && locked) floatEvents.current.dropAt = performance.now()
-        if (was === true && !locked) floatEvents.current.riseAt = performance.now()
-        if (was !== undefined && was !== locked) turned = true
-        stationLocked.current.set(n, locked)
-      }
+      const t = performance.now()
+      const { turned, moving } = markStationMotion(features, stationTurns.current, t, floatEvents.current)
       // Place the gems before the new data draws, so a just-locked gem never flashes on the ground (or a just-opened one at hover) for a frame.
-      if (turned && floatMoving.current && map.current) setFloat(map.current, floatTranslates(performance.now(), floatEvents.current))
+      if (turned && floatMoving.current && map.current) setFloat(map.current, floatTranslates(t, floatEvents.current))
       ;(map.current?.getSource('stations') as GeoJSONSource | undefined)?.setData(features)
-      return latestStations.current.some((s) => s.lockedUntil && Date.parse(s.lockedUntil) > now)
+      return moving || features.features.some((f) => f.properties?.locked)
     }
     if (!draw()) return
     const timer = window.setInterval(() => {
       if (!draw()) window.clearInterval(timer)
     }, 1000)
     return () => window.clearInterval(timer)
-  }, [stationKey, loaded])
+  }, [stationKey, loaded, skew])
 
   const snapshotKey = JSON.stringify(snapshot)
   useEffect(() => {

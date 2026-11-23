@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 type Click = { point: { x: number; y: number }; lngLat: { lat: number; lng: number } }
 type Pin = { options: { draggable?: boolean; element?: HTMLElement }; at: number[]; handlers: Record<string, () => void>; removed: boolean }
-type Layer = { id: string; type: string; source?: string; layout?: Record<string, unknown> }
+type Layer = { id: string; type: string; source?: string; layout?: Record<string, unknown>; paint?: Record<string, unknown> }
 const map = vi.hoisted(() => ({
   handlers: {} as Record<string, (e: Click) => void>,
   fits: [] as unknown[],
@@ -79,6 +79,7 @@ vi.mock('maplibre-gl', () => ({
 
 import PlaceMap from './PlaceMap'
 import { FLOAT_MARKER_LAYERS } from './mapView'
+import { FLOAT_TRANSLATE_LAYERS } from './floatMotion'
 
 afterEach(() => {
   cleanup()
@@ -121,6 +122,20 @@ describe('PlaceMap', () => {
       expect(map.layers.some((l) => l.id === 'float-shadow-gem')).toBe(true)
       expect(FLOAT_MARKER_LAYERS).toContain('float-shadow-gem')
       expect(map.vis['float-shadow-gem']).toBe('none')
+    })
+
+    it('every layer the float motion moves has no transition, so the bob is drawn as set', () => {
+      load()
+      const moved = map.layers.filter((l) => FLOAT_TRANSLATE_LAYERS.includes(l.id))
+      expect(moved.map((l) => l.id)).toContain('float-gem')
+      for (const l of moved) expect(l.paint?.['icon-translate-transition'], l.id).toEqual({ duration: 0, delay: 0 })
+    })
+
+    it('every text layer is lowercase, since Kejar Hand has no capitals', () => {
+      load()
+      const text = map.layers.filter((l) => l.layout?.['text-field'] !== undefined)
+      expect(text.map((l) => l.id)).toEqual(expect.arrayContaining(['toilets', 'marks-label']))
+      for (const l of text) expect(l.layout!['text-transform'], l.id).toBe('lowercase')
     })
 
     it('has the view button, which toggles buildings-3d and the stations', () => {

@@ -43,3 +43,14 @@ export const shadowPaint = (radius: number) => ({
   'circle-pitch-alignment': 'map' as const,
 })
 export const FLOAT_ICON = { 'icon-anchor': 'bottom' as const, 'icon-allow-overlap': true, 'icon-ignore-placement': true }
+/** The 3D view's gems (floating and landed) draw at this icon-size. */
+export const GEM_SIZE = 1.2
+/** CSS px of dotted stem under a floating marker's art (64 px in the 2x images: STEM in scripts/build-map-markers.py). */
+export const STEM_PX = 32
+/** A landed gem sits a little under its spot, in icon units (MapLibre scales icon-offset by icon-size). */
+export const LANDED_OFFSET: [number, number] = [0, 6]
+/**
+ * Paint for every layer the float motion moves: MapLibre eases each icon-translate change over 300 ms by default, which
+ * would turn a per-frame bob or drop into a lagging slide.
+ */
+export const INSTANT_TRANSLATE = { 'icon-translate-transition': { duration: 0, delay: 0 } }

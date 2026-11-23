@@ -116,6 +116,7 @@ export default function ChaseLayout(props: {
           arena={view.arena}
           dots={view.dots}
           stations={view.stations}
+          serverNow={view.now}
           height="100%"
           snapshot={view.chaserSnapshot}
           tollGates={view.tollGates}

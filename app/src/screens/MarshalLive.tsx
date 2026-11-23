@@ -63,7 +63,7 @@ export default function MarshalLive({ code, view, refresh }: { code: string; vie
       )}
       <RescueBanner view={view} />
       <PingRipple role="marshal" lastRevealAt={view.lastRevealAt} now={now} />
-      <GameMap arena={view.arena} dots={view.dots} stations={view.stations} pins={pins} height={340} flood={view.endgame?.flood ?? null} />
+      <GameMap arena={view.arena} dots={view.dots} stations={view.stations} serverNow={view.now} pins={pins} height={340} flood={view.endgame?.flood ?? null} />
       <MarshalTools
         code={code}
         view={view}

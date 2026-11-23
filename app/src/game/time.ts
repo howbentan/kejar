@@ -2,14 +2,27 @@ import { useEffect, useRef, useState } from 'react'
 
 /** Server time, estimated locally and ticking every second (phone clocks can be off). */
 export function useServerNow(serverNow: number): number {
-  const base = useRef({ server: serverNow, local: Date.now() })
-  if (base.current.server !== serverNow) base.current = { server: serverNow, local: Date.now() }
+  const skew = useClockSkew(serverNow)
   const [, setTick] = useState(0)
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1_000)
     return () => clearInterval(id)
   }, [])
-  return base.current.server + (Date.now() - base.current.local)
+  return Date.now() + skew.current
+}
+
+/**
+ * How far the server's clock is ahead of this phone's, in ms (`.current`), re-read whenever a new `serverNow` (a view's
+ * `now`) arrives; 0 until one does. For code that reads the time on its own timer: the server's now is Date.now() + it.
+ */
+export function useClockSkew(serverNow: number | undefined): { readonly current: number } {
+  const seen = useRef<number | undefined>(undefined)
+  const skew = useRef(0)
+  if (serverNow !== undefined && seen.current !== serverNow) {
+    seen.current = serverNow
+    skew.current = serverNow - Date.now()
+  }
+  return skew
 }
 
 /** A wall-clock time as players say it in the park: `3:25` (12-hour, no am/pm), on this phone's clock. */
