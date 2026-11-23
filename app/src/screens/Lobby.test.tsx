@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { testView } from './testView'
 
@@ -125,5 +125,38 @@ describe('Lobby waiting lines', () => {
       expect(text.closest('p')!.querySelector('[data-testid="mini-runner"]')).not.toBeNull()
     }
     expect(screen.queryByText(/…$/)).toBeNull()
+  })
+})
+
+describe('Lobby: the role reveal', () => {
+  const runner = () => testView({ me: { ...testView().me, role: 'runner' } })
+  const chaser = () => testView({ me: { ...testView().me, role: 'chaser' } })
+  afterEach(() => {
+    localStorage.clear()
+    vi.useRealTimers()
+  })
+
+  it('plays once when this phone gets its side, then the lobby carries on; not again on a reload', () => {
+    vi.useFakeTimers()
+    const { unmount } = render(<Lobby code="ABC234" view={runner()} refresh={() => {}} />)
+    expect(screen.getByRole('status', { name: 'You are Dikejar' })).toBeInTheDocument()
+    act(() => {
+      vi.advanceTimersByTime(3_600)
+    })
+    expect(screen.queryByRole('status', { name: 'You are Dikejar' })).toBeNull()
+    unmount()
+    render(<Lobby code="ABC234" view={runner()} refresh={() => {}} />)
+    expect(screen.queryByRole('status', { name: 'You are Dikejar' })).toBeNull()
+  })
+
+  it('plays again if a redraw changes the side', () => {
+    localStorage.setItem('kejar-role-seen:ABC234', 'runner')
+    render(<Lobby code="ABC234" view={chaser()} refresh={() => {}} />)
+    expect(screen.getByRole('status', { name: 'You are Kejar' })).toBeInTheDocument()
+  })
+
+  it('a marshal gets no reveal', () => {
+    render(<Lobby code="ABC234" view={testView({ me: { ...testView().me, role: 'marshal' } })} refresh={() => {}} />)
+    expect(screen.queryByRole('status', { name: /You are/ })).toBeNull()
   })
 })

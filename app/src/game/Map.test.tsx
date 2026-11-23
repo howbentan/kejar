@@ -459,7 +459,18 @@ describe('GameMap', () => {
       })
       expect(layer('pins-tupper').layout['icon-image']).toBe('dia-gold')
       expect(layer('pins-tupper').filter).toEqual(['!=', ['get', 'side'], ''])
-      expect(layer('pins').filter).toEqual(['==', ['get', 'side'], ''])
+      expect(layer('pins').filter).toEqual(['all', ['==', ['get', 'side'], ''], ['==', ['get', 'icon'], '']])
+    })
+
+    it('a pin with an icon (Penjara, the start) draws as its doodle, never as a plain circle or label', () => {
+      created.layers = []
+      created.data = {}
+      render(<GameMap arena={arena} dots={[]} pins={[{ id: 'penjara', lat: 3.2, lng: 101.2, icon: 'penjara' }, { id: 'start', lat: 3.1, lng: 101.1, icon: 'start' }]} />)
+      act(() => created.load!())
+      expect(created.data.pins).toMatchObject({ features: [{ properties: { icon: 'penjara' } }, { properties: { icon: 'start' } }] })
+      expect(layer('pins-icon').layout['icon-image']).toEqual(['get', 'icon'])
+      expect(layer('pins-icon').filter).toEqual(['!=', ['get', 'icon'], ''])
+      expect(layer('pins').filter).toEqual(['all', ['==', ['get', 'side'], ''], ['==', ['get', 'icon'], '']])
     })
 
     it('draws no hint zone layers: the ? zones are gone since the Tupperware', () => {
@@ -734,7 +745,7 @@ describe('GameMap', () => {
       render(<GameMap arena={arena} dots={[]} />)
       act(() => created.load!())
       expect(layer('pins-tupper-labels').filter).toEqual(['!=', ['get', 'side'], ''])
-      expect(layer('pin-labels').filter).toEqual(['==', ['get', 'side'], ''])
+      expect(layer('pin-labels').filter).toEqual(['all', ['==', ['get', 'side'], ''], ['==', ['get', 'icon'], '']])
       expect(created.vis).toContain('pins-tupper-labels:visibility:none')
       expect(created.vis.some((v) => v.startsWith('pin-labels:'))).toBe(false)
     })

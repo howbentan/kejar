@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { View } from '../../shared/views.js'
 
-const mapCalls = vi.hoisted(() => [] as { pins?: { id: string; label?: string; state?: string }[]; route?: unknown; fit?: unknown }[])
+const mapCalls = vi.hoisted(() => [] as { pins?: { id: string; label?: string; state?: string; icon?: string }[]; route?: unknown; fit?: unknown }[])
 const call = vi.hoisted(() => vi.fn())
 vi.mock('../game/Map', () => ({
   default: (props: (typeof mapCalls)[number]) => {
@@ -81,9 +81,11 @@ describe('WalkPark', () => {
     expect(screen.getByText('Station 2')).toBeInTheDocument()
     expect(screen.getByText('210 M · EAST')).toBeInTheDocument()
     const pins = mapCalls.at(-1)!.pins!
-    expect(pins.map((p) => p.id)).toEqual(['station-1', 'station-2', 'penjara'])
-    expect(pins.map((p) => p.label)).toEqual(['1', '2', 'PENJARA'])
-    expect(pins.map((p) => p.state)).toEqual(['placed', 'next', 'todo'])
+    expect(pins.map((p) => p.id)).toEqual(['start', 'station-1', 'station-2', 'penjara'])
+    expect(pins.map((p) => p.label)).toEqual([undefined, '1', '2', 'PENJARA'])
+    expect(pins.map((p) => p.state)).toEqual([undefined, 'placed', 'next', 'todo'])
+    // Penjara and the start are their doodles.
+    expect(pins.map((p) => p.icon)).toEqual(['start', undefined, undefined, 'penjara'])
     expect(mapCalls.at(-1)!.route).toBeTruthy()
   })
 
@@ -120,7 +122,7 @@ describe('WalkPark', () => {
   it("the helper's walk has no secret pin, step, letter or count", () => {
     // The server leaves the secret place and card out of a marshal's view; the screen adds nothing of its own.
     const { container } = open(view([S1, S2, PEN], { 'station-1': true, 'station-2': true, penjara: true }), { token: 'p1' })
-    expect(mapCalls.at(-1)!.pins!.map((p) => p.id)).toEqual(['station-1', 'station-2', 'penjara'])
+    expect(mapCalls.at(-1)!.pins!.map((p) => p.id)).toEqual(['start', 'station-1', 'station-2', 'penjara'])
     expect(container.textContent).not.toMatch(/secret|yellow|purple|Dato|Bomoh|hide|\?/i)
     cleanup()
     open(view([S1, S2, PEN], { 'station-1': true }), { token: 'p1' })
@@ -149,10 +151,10 @@ describe('WalkPark', () => {
     expect(screen.queryByRole('button', { name: 'Drop it here' })).not.toBeInTheDocument()
     act(() => onFix!(at(TD, 0, 100)))
     expect(screen.getByText('SECRET · 2 OF 3')).toBeInTheDocument()
-    expect(screen.getByText('Hide the Dikejar Tupperware')).toBeInTheDocument()
-    expect(await screen.findByText('Put Dikejar slip 2 inside.')).toBeInTheDocument()
-    expect(screen.getByText('Not in a surau, drain or bin.')).toBeInTheDocument()
-    expect(screen.getByText('Hide it out of sight, like under a bench.')).toBeInTheDocument()
+    expect(screen.getByText('Hide the Dikejar box')).toBeInTheDocument()
+    expect(await screen.findByText('Dikejar slip 2 inside')).toBeInTheDocument()
+    expect(screen.getByText('No surau, drain or bin')).toBeInTheDocument()
+    expect(screen.getByText('Hide it low, out of sight')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Drop it here' }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('setKit', { code: 'ABC234', organiserToken: 'h1', placed: { id: 'tupper-dikejar', on: true } }))
     const drop = call.mock.calls.find((c) => c[0] === 'dropTupperware')!
@@ -165,8 +167,8 @@ describe('WalkPark', () => {
     open(view([S1, TD, TK], { 'station-1': true, 'tupper-dikejar': true }))
     act(() => onFix!(at(TK, 0, 100)))
     expect(screen.getByText('SECRET · 3 OF 3')).toBeInTheDocument()
-    expect(screen.getByText('Hide the Kejar Tupperware')).toBeInTheDocument()
-    expect(await screen.findByText('Put Kejar slip 2 inside.')).toBeInTheDocument()
+    expect(screen.getByText('Hide the Kejar box')).toBeInTheDocument()
+    expect(await screen.findByText('Kejar slip 2 inside')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Drop it here' }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('dropTupperware', expect.objectContaining({ side: 'kejar' })))
   })
@@ -174,8 +176,8 @@ describe('WalkPark', () => {
   it('without location the list names each Tupperware, which waits for a fix', () => {
     open(view([S1, TD, TK]))
     act(() => onErr!({}))
-    expect(screen.getByText('Hide the Dikejar Tupperware')).toBeInTheDocument()
-    expect(screen.getByText('Hide the Kejar Tupperware')).toBeInTheDocument()
+    expect(screen.getByText('Hide the Dikejar box')).toBeInTheDocument()
+    expect(screen.getByText('Hide the Kejar box')).toBeInTheDocument()
     expect(screen.getAllByText('Needs location')).toHaveLength(2)
     expect(screen.queryByRole('button', { name: 'Drop it here' })).not.toBeInTheDocument()
   })

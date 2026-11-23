@@ -135,7 +135,8 @@ export function stationFeatures(stations: StationMark[], now: number): FeatureCo
  * A pin. The walk-the-park guide sets a `label` (drawn on the pin), a `state` (todo is outlined, next pulses, placed is
  * filled) and, for a Tupperware's step, its `side` (a gold Dikejar or purple Kejar diamond). Plain pins (safety alerts) leave them out and draw as filled lime.
  */
-type Pin = { id: string; lat: number; lng: number; label?: string; state?: 'todo' | 'next' | 'placed'; side?: TupperSide }
+/** `icon`: drawn as that map doodle (Penjara's gate, the start flag) instead of a circle. */
+type Pin = { id: string; lat: number; lng: number; label?: string; state?: 'todo' | 'next' | 'placed'; side?: TupperSide; icon?: 'penjara' | 'start' }
 
 function pinFeatures(pins: Pin[]): FeatureCollection {
   return collection(
@@ -146,6 +147,7 @@ function pinFeatures(pins: Pin[]): FeatureCollection {
         label: p.label ?? '',
         state: p.state ?? 'placed',
         side: p.side ?? '',
+        icon: p.icon ?? '',
       },
       geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
     })),
@@ -643,7 +645,7 @@ export default function GameMap({
         id: 'pins',
         type: 'circle',
         source: 'pins',
-        filter: ['==', ['get', 'side'], ''],
+        filter: ['all', ['==', ['get', 'side'], ''], ['==', ['get', 'icon'], '']],
         paint: {
           'circle-radius': ['case', ['!=', ['get', 'label'], ''], 11, 10],
           'circle-color': ['case', ['==', ['get', 'state'], 'todo'], BLACK, VOLT],
@@ -664,6 +666,14 @@ export default function GameMap({
           'icon-ignore-placement': true,
         },
       })
+      // Penjara and the start: their doodles, standing on their spot.
+      m.addLayer({
+        id: 'pins-icon',
+        type: 'symbol',
+        source: 'pins',
+        filter: ['!=', ['get', 'icon'], ''],
+        layout: { 'icon-image': ['get', 'icon'], 'icon-size': 0.9, 'icon-anchor': 'bottom', 'icon-allow-overlap': true, 'icon-ignore-placement': true },
+      })
       const pinLabel: maplibregl.SymbolLayerSpecification['layout'] = {
         'text-field': ['get', 'label'],
         'text-font': MAP_FONT,
@@ -675,7 +685,7 @@ export default function GameMap({
         id: 'pin-labels',
         type: 'symbol',
         source: 'pins',
-        filter: ['==', ['get', 'side'], ''],
+        filter: ['all', ['==', ['get', 'side'], ''], ['==', ['get', 'icon'], '']],
         layout: pinLabel,
         paint: { 'text-color': ['case', ['==', ['get', 'state'], 'todo'], WHITE, BLACK] },
       })

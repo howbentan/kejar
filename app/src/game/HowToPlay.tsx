@@ -109,15 +109,18 @@ export default function HowToPlay({ side, mode, snapshot, endgame = false, onClo
         <ModeBadge mode={mode} />
       </div>
       <div style={{ flex: '1 1 auto', minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
-        <div data-testid="scene-box" style={{ flex: '0 1 auto', height: 'min(250px, 40dvh)', minHeight: 0, display: 'grid', placeItems: 'center', overflow: 'hidden' }}>
-          <Scene key={`${card.scene}-${i}`} id={card.scene} stickers={card.scene.endsWith('powerups') ? stickers : undefined} />
+        {/* The doodle takes all the room the words leave, drawn big (the 220 px scene scaled up). */}
+        <div data-testid="scene-box" style={{ flex: '1 1 0%', minHeight: 0, display: 'grid', placeItems: 'center', overflow: 'hidden' }}>
+          <div className="htp-art">
+            <Scene key={`${card.scene}-${i}`} id={card.scene} stickers={card.scene.endsWith('powerups') ? stickers : undefined} />
+          </div>
         </div>
-        <div style={{ flex: '1 1 auto', minHeight: 0, overflowY: 'auto', padding: '16px 16px 0' }}>
-          <h2 style={{ margin: '0 0 8px', fontSize: 30, fontWeight: 800, letterSpacing: '-0.055em', lineHeight: 1 }}>
+        <div style={{ flex: 'none', maxHeight: '48%', overflowY: 'auto', padding: '8px 18px 4px' }}>
+          <h2 style={{ margin: '0 0 12px', fontSize: 42, fontWeight: 800, letterSpacing: '-0.055em', lineHeight: 1 }}>
             {card.headline}
             <span style={{ color: 'var(--volt)' }}>.</span>
           </h2>
-          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.4, opacity: 0.85 }}>{renderLine(card.line)}</p>
+          <p style={{ margin: 0, fontSize: 21, lineHeight: 1.4, opacity: 0.9 }}>{renderLine(card.line)}</p>
         </div>
         <div style={{ position: 'absolute', inset: 0, display: 'flex', zIndex: 2 }}>
           <button type="button" aria-label="Previous card" onClick={() => setI((n) => Math.max(n - 1, 0))} style={{ all: 'unset', flex: 1, cursor: 'pointer' }} />

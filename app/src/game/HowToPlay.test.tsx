@@ -101,8 +101,11 @@ describe('HowToPlay', () => {
     expect(dialog.style.display).toBe('flex')
     expect(dialog.style.flexDirection).toBe('column')
     const scene = screen.getByTestId('scene-box')
-    expect(scene.style.height).toBe('min(250px, 40dvh)')
+    // The doodle takes the free space and is drawn big; the words below are big too (owner, 2026-11-24).
+    expect(scene.style.flex).toBe('1 1 0%')
     expect(scene.style.minHeight).toBe('0px')
+    expect(scene.querySelector('.htp-art')).not.toBeNull()
+    expect(screen.getByRole('heading', { level: 2 }).style.fontSize).toBe('42px')
     const ready = screen.getByRole('button', { name: "I'm ready" })
     expect(ready.style.position).not.toBe('absolute')
     expect(dialog.contains(ready)).toBe(true)

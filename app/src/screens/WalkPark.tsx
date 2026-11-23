@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import Tupper from '../game/doodles/Tupper'
 import { distanceM } from '../../shared/geo.js'
 import type { SecretTone } from '../../shared/kit.js'
 import { sideName } from '../../shared/tupperware.js'
@@ -110,12 +111,12 @@ function SlipLine({ side, number }: { side: 'dikejar' | 'kejar'; number: number 
   const name = sideName(side)
   if (number === null) {
     return (
-      <p>
+      <span>
         {`No ${name} slip left.`} <a href="/print/slips">Print more</a>
-      </p>
+      </span>
     )
   }
-  return <p>{number === undefined ? `Put any unused ${name} slip inside.` : `Put ${name} slip ${number} inside.`}</p>
+  return <span>{number === undefined ? `Any ${name} slip inside` : `${name} slip ${number} inside`}</span>
 }
 
 const cardStyle = (here: boolean, tone: SecretTone | null) => ({
@@ -123,14 +124,7 @@ const cardStyle = (here: boolean, tone: SecretTone | null) => ({
   borderRadius: 18,
   padding: '14px 16px',
   ...(tone === null && here ? { background: 'var(--volt)', color: 'var(--black)', borderColor: 'var(--volt)' } : {}),
-  ...(tone !== null && !here ? { borderColor: `var(--${SECRET[tone].token}-2)` } : {}),
-  ...(tone !== null && here
-    ? {
-        background: `linear-gradient(135deg, var(--${SECRET[tone].token}-1), var(--${SECRET[tone].token}-2) 50%, var(--${SECRET[tone].token}-3))`,
-        color: `var(--${SECRET[tone].token}-ink)`,
-        borderColor: `var(--${SECRET[tone].token}-2)`,
-      }
-    : {}),
+  ...(tone !== null ? { borderColor: 'var(--legendary-2)', borderWidth: 2, background: here ? 'rgba(255, 214, 10, 0.08)' : undefined } : {}),
 })
 
 /**
@@ -168,7 +162,7 @@ export default function WalkPark({
   // The secret step has no spot to reach: any place nearby will do, so only stations and Penjara use the 15 m rule.
   const isHere = !secret && metres !== null && metres <= WALK_HERE_M
   // The server only sends a secret place to the organiser, so a step shows up here only when it's theirs to see.
-  const hideLineFor = (id: string) => `Hide the ${boxSide(id)} Tupperware`
+  const hideLineFor = (id: string) => `Hide the ${boxSide(id)} box`
 
   async function mark(id: string, beforeSave?: () => Promise<unknown>) {
     if (busy) return
@@ -186,14 +180,20 @@ export default function WalkPark({
     }
   }
 
-  const pins = places.map((p, i) => ({
-    id: p.id,
-    lat: p.lat,
-    lng: p.lng,
-    label: p.id === 'penjara' ? 'PENJARA' : p.tone ? '?' : String(i + 1),
-    state: (done(p.id) ? 'placed' : p.id === next?.id ? 'next' : 'todo') as 'placed' | 'next' | 'todo',
-    ...(p.tone ? { side: sideOfBox(p.id) } : {}),
-  }))
+  const pins = [
+    // The start flag first, for reference (not a step of the walk).
+    ...(view.arena.start ? [{ id: 'start', lat: view.arena.start.lat, lng: view.arena.start.lng, icon: 'start' as const }] : []),
+    ...places.map((p, i) => ({
+      id: p.id,
+      lat: p.lat,
+      lng: p.lng,
+      label: p.id === 'penjara' ? 'PENJARA' : p.tone ? '?' : String(i + 1),
+      state: (done(p.id) ? 'placed' : p.id === next?.id ? 'next' : 'todo') as 'placed' | 'next' | 'todo',
+      ...(p.tone ? { side: sideOfBox(p.id) } : {}),
+      // Penjara is its gate doodle, as on the setup map.
+      ...(p.id === 'penjara' ? { icon: 'penjara' as const } : {}),
+    })),
+  ]
 
   const eyebrow = secret ? 'WALK THE PARK · ONLY YOU SEE THIS' : 'WALK THE PARK'
   const count = `${nextIndex + 1} OF ${places.length}`
@@ -247,11 +247,19 @@ export default function WalkPark({
           <div style={cardStyle(secret ? !!here : isHere, tone)}>
             {tone && look ? (
               <>
-                <p className="eyebrow" style={here ? { color: 'inherit', opacity: 0.6 } : { color: `var(--${look.token}-2)` }}>{`SECRET · ${count}`}</p>
-                <p style={{ fontWeight: 800, fontSize: 21, letterSpacing: '-0.04em' }}>{hideLineFor(next!.id)}</p>
-                <SlipLine side={sideOfBox(next!.id)} number={slipNo?.[sideOfBox(next!.id)]} />
-                <p>Hide it out of sight, like under a bench.</p>
-                <p>Not in a surau, drain or bin.</p>
+                <p className="eyebrow drop-eyebrow">{`SECRET · ${count}`}</p>
+                {/* The box doodle beside a big title, then three short steps. */}
+                <div className="drop-head">
+                  <Tupper size={78} />
+                  <h2 className="drop-title">{hideLineFor(next!.id)}</h2>
+                </div>
+                <ol className="drop-steps">
+                  <li>
+                    <SlipLine side={sideOfBox(next!.id)} number={slipNo?.[sideOfBox(next!.id)]} />
+                  </li>
+                  <li>Hide it low, out of sight</li>
+                  <li>No surau, drain or bin</li>
+                </ol>
               </>
             ) : isHere ? (
               <>

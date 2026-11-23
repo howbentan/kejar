@@ -759,6 +759,11 @@ body:has(.notif-bell) .sos-icon { right: 56px; }
 .btn.btn-legendary { background: var(--legendary-2); color: var(--legendary-ink); border-color: var(--legendary-3); }
 .btn.btn-bomoh, .btn.btn-ring, .btn.btn-hijau { background: var(--legendary-2); color: var(--legendary-ink); border-color: var(--legendary-3); }
 .btn.btn-tupper { background: var(--tupper-btn); color: var(--white); border-color: var(--tupper-3); }
+/* Coloured buttons stand on a ledge of their own colour, not the volt button's green. */
+.btn.btn-tupper { box-shadow: 0 5px 0 var(--tupper-3); }
+.btn.btn-legendary, .btn.btn-bomoh, .btn.btn-ring, .btn.btn-hijau { box-shadow: 0 5px 0 var(--legendary-3); }
+.btn.btn-tupper:active:not(:disabled) { box-shadow: 0 1px 0 var(--tupper-3); }
+.btn.btn-legendary:active:not(:disabled), .btn.btn-bomoh:active:not(:disabled), .btn.btn-ring:active:not(:disabled), .btn.btn-hijau:active:not(:disabled) { box-shadow: 0 1px 0 var(--legendary-3); }
 
 /* How to play doodle scenes (motion design 8.8): marker strokes that draw themselves, then stay still. */
 .kd-doodle path, .kd-doodle circle, .kd-doodle rect { fill: none; stroke: var(--volt); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
@@ -825,6 +830,33 @@ body:has(.notif-bell) .sos-icon { right: 56px; }
 .home-actions .btn { font-size: 17px; font-weight: 800; text-align: center; text-decoration: none; display: block; margin: 0 auto 5px; box-sizing: border-box; }
 .home-actions .btn-ghost { font-weight: 700; }
 .btn.btn-paper { background: var(--white); color: var(--black); }
+/* The role reveal: full screen, black, the logo landing in the side's colour. */
+.rv { position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--black); }
+.rv-you { margin: 0 0 34px; font: 400 26px var(--font); color: var(--white); opacity: 0.85; }
+.rv-row { display: flex; align-items: flex-end; justify-content: center; }
+.rv-logo { position: relative; width: 230px; aspect-ratio: 900 / 543; }
+.rv-ltr { position: absolute; inset: 0; background-color: var(--c); -webkit-mask: var(--m) center / 100% 100% no-repeat; mask: var(--m) center / 100% 100% no-repeat; }
+.rv-j { position: absolute; overflow: visible; }
+.rv-j .s { fill: none; stroke: var(--c); stroke-width: 36; stroke-linecap: round; stroke-linejoin: round; }
+.rv-di { display: inline-block; overflow: hidden; white-space: nowrap; font: 400 118px/0.9 var(--font); margin-bottom: 10px; width: 0; opacity: 0;
+  animation: rv-di-gap 0.55s cubic-bezier(0.32, 0.72, 0, 1) 1.5s forwards; }
+.rv-di > span { display: inline-block; padding-right: 6px; clip-path: inset(0 100% 0 0); animation: rv-di-write 0.5s ease-out 1.6s forwards; }
+@keyframes rv-di-gap { to { width: 92px; opacity: 1; } }
+@keyframes rv-di-write { to { clip-path: inset(0 0 0 0); } }
+@media (prefers-reduced-motion: reduce) { .rv-di { animation-duration: 0s; animation-delay: 0s; } .rv-di > span { animation-duration: 0s; animation-delay: 0s; } }
+.rv-line { margin: 4px 0 0; font: 400 20px var(--font); color: var(--white); }
+/* The Tupperware drop card on the walk: the box doodle, a big title, three numbered steps. */
+.drop-eyebrow { color: var(--legendary-2); }
+.drop-head { display: flex; align-items: center; gap: 12px; margin: 6px 0 10px; }
+.drop-title { margin: 0; font: 400 30px/1.05 var(--font); }
+.drop-steps { margin: 0; padding: 0; list-style: none; counter-reset: drop; display: flex; flex-direction: column; gap: 10px; }
+.drop-steps li { counter-increment: drop; display: flex; align-items: center; gap: 12px; font: 400 19px/1.3 var(--font); }
+.drop-steps li::before { content: counter(drop); flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--legendary-2); color: var(--legendary-ink); font: 600 14px Geist, sans-serif; }
+.drop-steps a { color: var(--legendary-2); }
+.htp-art { transform: scale(1.6); transform-origin: center; }
+@media (max-height: 720px) { .htp-art { transform: scale(1.3); } }
+@media (max-height: 600px) { .htp-art { transform: scale(1.05); } }
 .home-sides { display: flex; gap: 18px; justify-content: center; }
 .home-link { all: unset; cursor: pointer; align-self: center; min-height: 36px; display: inline-flex; align-items: center; padding: 0 6px; margin-top: 4px; font-size: 13px; color: var(--dim); text-decoration: underline; }
 .home-code-q { margin: 0 0 4px; font-size: 26px; font-weight: 800; letter-spacing: -0.05em; }

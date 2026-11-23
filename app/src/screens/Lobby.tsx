@@ -3,6 +3,7 @@ import { tagIdFromQr } from '../../shared/ids.js'
 import type { View } from '../../shared/views.js'
 import AlertsCard from '../game/AlertsCard'
 import HowToPlay from '../game/HowToPlay'
+import RoleReveal from '../game/RoleReveal'
 import { call } from '../game/api'
 import { loadSession } from '../game/session'
 import Scanner from '../game/Scanner'
@@ -44,6 +45,25 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
   const side = role === 'runner' || role === 'chaser' ? role : null
   const briefing = view.briefing && 'open' in view.briefing ? view.briefing : null
   const showStory = side !== null && (story ?? briefing?.open === true)
+  // The role reveal plays once per side on this phone (again if a redraw changes it), over whatever is below.
+  const seenKey = `kejar-role-seen:${code}`
+  const [seen, setSeen] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(seenKey)
+    } catch {
+      return null
+    }
+  })
+  const revealDone = useCallback(() => {
+    if (!side) return
+    try {
+      localStorage.setItem(seenKey, side)
+    } catch {
+      // Storage blocked: it just plays again next time.
+    }
+    setSeen(side)
+  }, [seenKey, side])
+  const reveal = side && seen !== side ? <RoleReveal key={side} side={side} onDone={revealDone} /> : null
   const tell = (action: 'briefOpened' | 'briefReady') => {
     if (!token) return
     void call(action, { code, token }).then(refresh, () => {})
@@ -54,6 +74,8 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
 
   if (showStory && side) {
     return (
+      <>
+      {reveal}
       <HowToPlay
         side={side}
         mode={view.settings.mode}
@@ -62,11 +84,13 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
         onOpened={() => tell('briefOpened')}
         onReady={() => tell('briefReady')}
       />
+      </>
     )
   }
 
   return (
     <Screen eyebrow={`kejar. · game ${code}`}>
+      {reveal}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.04em' }}>Hi {view.me.name}</h1>
         <ModeBadge mode={view.settings.mode} />
