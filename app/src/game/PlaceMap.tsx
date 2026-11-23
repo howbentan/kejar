@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react'
 import { KL_FALLBACK } from '../../shared/arenaDraft.js'
 import { circlePolygon } from '../../shared/geo.js'
 import type { LatLng } from '../../shared/types.js'
-import { kejarMapStyle } from './mapStyle'
+import { MAP_FONT, kejarMapStyle } from './mapStyle'
 
 const VOLT = '#C6FF3D'
 const WHITE = '#F5F5F3'
@@ -94,7 +94,7 @@ export default function PlaceMap(props: Props) {
         id: 'toilets',
         type: 'symbol',
         source: 'toilets',
-        layout: { 'text-field': 'WC', 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
+        layout: { 'text-field': 'WC', 'text-font': MAP_FONT, 'text-size': 10, 'text-allow-overlap': true },
         paint: { 'text-color': WHITE },
       })
       m.addLayer({
@@ -107,7 +107,7 @@ export default function PlaceMap(props: Props) {
         id: 'marks-label',
         type: 'symbol',
         source: 'marks',
-        layout: { 'text-field': ['get', 't'], 'text-font': ['Noto Sans Regular'], 'text-size': 11, 'text-allow-overlap': true },
+        layout: { 'text-field': ['get', 't'], 'text-font': MAP_FONT, 'text-size': 11, 'text-allow-overlap': true },
         paint: { 'text-color': WHITE },
       })
       m.addLayer({
@@ -120,7 +120,7 @@ export default function PlaceMap(props: Props) {
         id: 'station-numbers',
         type: 'symbol',
         source: 'stations',
-        layout: { 'text-field': ['get', 'n'], 'text-font': ['Noto Sans Regular'], 'text-size': 11, 'text-allow-overlap': true },
+        layout: { 'text-field': ['get', 'n'], 'text-font': MAP_FONT, 'text-size': 11, 'text-allow-overlap': true },
         paint: { 'text-color': VOLT },
       })
       ready.current = true

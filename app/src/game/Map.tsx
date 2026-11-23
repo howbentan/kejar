@@ -10,7 +10,7 @@ import { BANJIR, floodFeatures } from './floodMap'
 import type { SecretTone } from '../../shared/kit.js'
 import type { Arena, LatLng } from '../../shared/types.js'
 import { CHASER_SNAPSHOT_FUZZ_M, FUZZ_RADIUS_M, type ChaserSnapshot, type MapDot } from '../../shared/views.js'
-import { kejarMapStyle } from './mapStyle'
+import { MAP_FONT, kejarMapStyle } from './mapStyle'
 import { RIPPLE_MS } from './ripple'
 import { SlideTracker } from './slideOff'
 import { MiniRunner } from './Runner'
@@ -390,7 +390,7 @@ export default function GameMap({
         id: 'toilets',
         type: 'symbol',
         source: 'toilets',
-        layout: { 'text-field': 'WC', 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
+        layout: { 'text-field': 'WC', 'text-font': MAP_FONT, 'text-size': 10, 'text-allow-overlap': true },
         paint: { 'text-color': WHITE },
       })
       if (showJailAndStartRef.current) {
@@ -427,7 +427,7 @@ export default function GameMap({
         id: 'snapshot-labels',
         type: 'symbol',
         source: 'snapshot',
-        layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 11 },
+        layout: { 'text-field': ['get', 'label'], 'text-font': MAP_FONT, 'text-size': 11 },
         paint: { 'text-color': VOLT, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
       })
       m.addSource('stash', { type: 'geojson', data: stashFeatures(latestStash.current) })
@@ -449,7 +449,7 @@ export default function GameMap({
         id: 'station-numbers',
         type: 'symbol',
         source: 'stations',
-        layout: { 'text-field': ['get', 'n'], 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
+        layout: { 'text-field': ['get', 'n'], 'text-font': MAP_FONT, 'text-size': 10, 'text-allow-overlap': true },
         paint: { 'text-color': VOLT },
       })
       const { fuzzy, points, wanted } = dotFeatures(latest.current)
@@ -583,7 +583,7 @@ export default function GameMap({
         id: 'wanted-pin-label',
         type: 'symbol',
         source: 'wanted',
-        layout: { 'text-field': 'WANTED', 'text-font': ['Noto Sans Regular'], 'text-size': 9, 'text-offset': [0, -3.2], 'text-allow-overlap': true },
+        layout: { 'text-field': 'WANTED', 'text-font': MAP_FONT, 'text-size': 9, 'text-offset': [0, -3.2], 'text-allow-overlap': true },
         paint: { 'text-color': eg.hebatInk, 'text-halo-color': eg.hebat, 'text-halo-width': 2 },
       })
       // Tee And Gee's reveal: a soft lime halo (Pak Guard's is a thin ring), so the two never look alike.
@@ -611,7 +611,7 @@ export default function GameMap({
         id: 'toll-gate-labels',
         type: 'symbol',
         source: 'toll-gates',
-        layout: { 'text-field': 'GATE', 'text-font': ['Noto Sans Regular'], 'text-size': 9, 'text-offset': [0, 1.6], 'text-allow-overlap': true },
+        layout: { 'text-field': 'GATE', 'text-font': MAP_FONT, 'text-size': 9, 'text-offset': [0, 1.6], 'text-allow-overlap': true },
         paint: { 'text-color': VOLT, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
       })
       m.addLayer({
@@ -619,7 +619,7 @@ export default function GameMap({
         type: 'symbol',
         source: 'fuzzy',
         // Under the faded j, so the tag number never sits on it.
-        layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 11, 'text-offset': [0, 2.1], 'text-allow-overlap': true },
+        layout: { 'text-field': ['get', 'label'], 'text-font': MAP_FONT, 'text-size': 11, 'text-offset': [0, 2.1], 'text-allow-overlap': true },
         paint: { 'text-color': WHITE, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
       })
       m.addSource('pins', { type: 'geojson', data: pinFeatures(latestPins.current) })
@@ -645,7 +645,7 @@ export default function GameMap({
         id: 'pin-labels',
         type: 'symbol',
         source: 'pins',
-        layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
+        layout: { 'text-field': ['get', 'label'], 'text-font': MAP_FONT, 'text-size': 10, 'text-allow-overlap': true },
         paint: { 'text-color': ['case', ...toned('ink'), ['==', ['get', 'state'], 'todo'], WHITE, BLACK] },
       })
       fitTo(m, latestFit.current)
