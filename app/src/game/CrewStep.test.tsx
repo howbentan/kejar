@@ -83,24 +83,36 @@ describe('CrewStep', () => {
     render(<CrewStep code="ABC234" view={view()} organiserToken="h1" />)
     fireEvent.click(screen.getByText('+ Add a marshal'))
     await waitFor(() => expect(screen.getAllByText('INVITE')).toHaveLength(2))
-    const send = screen.getByRole('button', { name: 'Send invite links' })
-    fireEvent.click(send)
+    fireEvent.click(screen.getByRole('button', { name: 'Send 2 invites' }))
     // Nothing awaited: the share is already called when the click returns.
     expect(share).toHaveBeenCalledTimes(1)
     expect(share).toHaveBeenLastCalledWith({ text: 'Join my Kejar crew as a marshal: https://kejar.test/m/ABC234/tok1' })
     await waitFor(() => expect(screen.getAllByText('SENT')).toHaveLength(1))
-    fireEvent.click(send)
+    fireEvent.click(screen.getByRole('button', { name: 'Send 1 invite' }))
     expect(share).toHaveBeenCalledTimes(2)
     expect(share).toHaveBeenLastCalledWith({ text: 'Join my Kejar crew as a marshal: https://kejar.test/m/ABC234/tok2' })
     await waitFor(() => expect(screen.getAllByText('SENT')).toHaveLength(2))
-    expect(send).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'All sent' })).toBeDisabled()
+  })
+
+  it('a sent invite turns JOINED once its helper has used the link', async () => {
+    const share = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'share', { configurable: true, value: share })
+    call.mockImplementation(async (action: string) =>
+      action === 'createMarshalInvite' ? { inviteToken: `tok${++tokens}` } : action === 'crewStatus' ? { joined: ['tok1'] } : {},
+    )
+    render(<CrewStep code="ABC234" view={view()} organiserToken="h1" />)
+    await screen.findByText('INVITE')
+    fireEvent.click(screen.getByRole('button', { name: 'Send 1 invite' }))
+    expect(await screen.findByText('JOINED')).toBeInTheDocument()
+    expect(call).toHaveBeenCalledWith('crewStatus', { code: 'ABC234', organiserToken: 'h1', inviteTokens: ['tok1'] })
   })
 
   it('is disabled until a link is ready', async () => {
     render(<CrewStep code="ABC234" view={view()} organiserToken="h1" />)
-    expect(screen.getByRole('button', { name: 'Send invite links' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Making links' })).toBeDisabled()
     await screen.findByText('INVITE')
-    expect(screen.getByRole('button', { name: 'Send invite links' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Send 1 invite' })).toBeEnabled()
   })
 
   it('a row\'s INVITE pill shares that row, ignores a closed sheet and shows other errors on the row', async () => {
@@ -135,9 +147,19 @@ describe('CrewStep', () => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
     render(<CrewStep code="ABC234" view={view()} organiserToken="h1" />)
     await screen.findByText('INVITE')
-    fireEvent.click(screen.getByRole('button', { name: 'Send invite links' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send 1 invite' }))
     expect(writeText).toHaveBeenCalledWith('https://kejar.test/m/ABC234/tok1')
-    expect(screen.getByText('Links copied.')).toBeInTheDocument()
+    expect(await screen.findByText('Links copied.')).toBeInTheDocument()
+  })
+
+  it('a copy the browser blocks says so, and nothing counts as sent', async () => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error('no')) } })
+    render(<CrewStep code="ABC234" view={view()} organiserToken="h1" />)
+    await screen.findByText('INVITE')
+    fireEvent.click(screen.getByRole('button', { name: 'Send 1 invite' }))
+    expect(await screen.findByText(/Couldn't copy here/)).toBeInTheDocument()
+    expect(screen.queryByText('Links copied.')).toBeNull()
+    expect(screen.getByText('INVITE')).toBeInTheDocument()
   })
 
   it('Next goes to the pack step, carrying no card notice (the colour cards are retired)', () => {

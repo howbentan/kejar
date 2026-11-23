@@ -309,6 +309,8 @@ export interface GameStore {
   createMarshalInvite(inv: Omit<MarshalInviteRow, 'id'>): Promise<MarshalInviteRow>
   /** Atomically claims the invite (unredeemed, unexpired at `now`, for this specific game). */
   redeemMarshalInvite(tokenHash: string, now: number, gameId: string): Promise<RedeemMarshalInviteResult>
+  /** Which of these invite hashes, for this game, have been redeemed. */
+  redeemedMarshalInvites(gameId: string, tokenHashes: string[]): Promise<string[]>
   createPhoneMove(row: Omit<PhoneMoveRow, 'id'>): Promise<void>
   /** Atomically claims the move (unredeemed, unexpired at `now`, this game), swaps that player's token to `newTokenHash` and clears their push. */
   redeemPhoneMove(tokenHash: string, nowMs: number, gameId: string, newTokenHash: string): Promise<RedeemPhoneMoveResult>
@@ -1121,6 +1123,9 @@ export class MemoryStore implements GameStore {
     if (now >= Date.parse(inv.expires_at)) return { ok: false, reason: 'expired' }
     inv.redeemed_at = new Date(now).toISOString()
     return { ok: true, gameId: inv.game_id }
+  }
+  async redeemedMarshalInvites(gameId: string, tokenHashes: string[]) {
+    return this.marshalInviteRows.filter((x) => x.game_id === gameId && x.redeemed_at && tokenHashes.includes(x.token_hash)).map((x) => x.token_hash)
   }
   async createPhoneMove(row: Omit<PhoneMoveRow, 'id'>) {
     this.phoneMoveRows.push({ ...row, id: this.id('pm') })

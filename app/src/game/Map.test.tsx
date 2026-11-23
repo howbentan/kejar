@@ -179,7 +179,7 @@ describe('GameMap', () => {
     render(<GameMap arena={withLake} dots={[]} />)
     created.load!()
     const ids = created.layers.map((l) => l.id)
-    expect(ids).toEqual(expect.arrayContaining(['holes', 'toilets', 'start', 'start-label']))
+    expect(ids).toEqual(expect.arrayContaining(['holes', 'toilets', 'start']))
     expect(created.data.holes).toMatchObject({ features: [{ geometry: { type: 'LineString' } }] })
     expect(created.data.toilets).toMatchObject({ features: [{ geometry: { coordinates: [101.003, 3.003] } }] })
     expect(created.data.start).toMatchObject({ features: [{ geometry: { coordinates: [101.004, 3.004] } }] })
@@ -191,7 +191,7 @@ describe('GameMap', () => {
     render(<GameMap arena={arena} dots={[]} />)
     created.load!()
     const ids = created.layers.map((l) => l.id)
-    expect(ids).toEqual(expect.arrayContaining(['jail', 'jail-label', 'start', 'start-label']))
+    expect(ids).toEqual(expect.arrayContaining(['jail', 'start']))
   })
 
   it("draws a lime reveal ring around a dot revealed by Pak Guard's Focus", () => {
@@ -278,7 +278,7 @@ describe('GameMap', () => {
     render(<GameMap arena={arena} dots={[]} showJailAndStart={false} />)
     created.load!()
     const ids = created.layers.map((l) => l.id)
-    expect(ids).not.toEqual(expect.arrayContaining(['jail', 'jail-label', 'start', 'start-label']))
+    expect(ids).not.toEqual(expect.arrayContaining(['jail', 'start']))
     expect(created.data.jail).toBeUndefined()
     expect(created.data.start).toBeUndefined()
   })

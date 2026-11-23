@@ -10,9 +10,9 @@ export const RESCUE_HOLD_MS = 20_000
 export const RESCUE_RESET_MS = 5_000
 /**
  * A thumb that sends no heartbeat for this long counts as let go, at the last beat (the phone died or lost signal).
- * With a beat every RESCUE_BEAT_MS that is about two missed beats, so one slow request never lets go.
+ * With a beat every RESCUE_BEAT_MS that is about three missed beats, so slow mobile data never lets go; still under the 5 s reset.
  */
-export const RESCUE_BEAT_LAPSE_MS = 3_000
+export const RESCUE_BEAT_LAPSE_MS = 4_000
 /** A freed runner cannot be tagged again for this long (rules §9a); see `judgeCatch`. */
 export const HEAD_START_MS = 10_000
 /** A rescue's reach: the same as a jailbreak scan's. */

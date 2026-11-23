@@ -45,11 +45,11 @@ afterEach(() => {
 })
 
 describe('Home', () => {
-  it('shows the logo, join game, organise game and the how-to-play link, and no tagline', () => {
+  it('shows the logo, join game, create game and the how-to-play link, and no tagline', () => {
     render(<Home />)
     expect(screen.getByTestId('hl')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'join game' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'organise game' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'join' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'create' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'if dk how to play click here :)' })).toBeInTheDocument()
     expect(screen.queryByText(/refereed/i)).toBeNull()
   })
@@ -64,7 +64,7 @@ describe('Home', () => {
     })
     try {
       render(<Home />)
-      expect(screen.getByRole('button', { name: 'join game' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'join' })).toBeInTheDocument()
       expect(screen.queryByRole('link', { name: /reconnect/ })).toBeNull()
     } finally {
       Object.defineProperty(window, 'localStorage', real)
@@ -75,7 +75,7 @@ describe('Home', () => {
     render(<Home />)
     // Without a measured screen (jsdom) the j arrives at once, so the opening hands over straight away.
     expect(sessionStorage.getItem('kejar.opened')).toBe('1')
-    expect(screen.getByRole('button', { name: 'join game' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'join' })).toBeInTheDocument()
   })
 
   it('once opened this visit, home starts straight away with the j running', () => {
@@ -104,28 +104,28 @@ describe('Home', () => {
     expect(screen.getByRole('link', { name: /reconnect/ })).toHaveAttribute('href', '/host/ABC234')
   })
 
-  it('organise game links to /host/new', () => {
+  it('create game links to /host/new', () => {
     render(<Home />)
-    expect(screen.getByRole('link', { name: 'organise game' })).toHaveAttribute('href', '/host/new')
+    expect(screen.getByRole('link', { name: 'create' })).toHaveAttribute('href', '/host/new')
   })
 
   it('the buttons sit outside the logo, so a tap on them never makes the j jump', () => {
     render(<Home />)
     const toy = screen.getByTestId('hl')
-    expect(toy).not.toContainElement(screen.getByRole('button', { name: 'join game' }))
-    expect(toy).not.toContainElement(screen.getByRole('link', { name: 'organise game' }))
+    expect(toy).not.toContainElement(screen.getByRole('button', { name: 'join' }))
+    expect(toy).not.toContainElement(screen.getByRole('link', { name: 'create' }))
     expect(toy).not.toContainElement(screen.getByRole('button', { name: 'if dk how to play click here :)' }))
   })
 
   it('join game opens the join step and back returns', () => {
     render(<Home />)
-    fireEvent.click(screen.getByRole('button', { name: 'join game' }))
+    fireEvent.click(screen.getByRole('button', { name: 'join' }))
     expect(screen.getByRole('heading', { name: 'code?' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'join game' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'create' })).toBeNull()
     // Scanning lives on home's green camera button only; the join step is just the code box.
     expect(screen.queryByRole('button', { name: 'scan qr' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'back' }))
-    expect(screen.getByRole('button', { name: 'join game' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'join' })).toBeInTheDocument()
   })
 
   it('the how-to-play link opens the runner story and closing returns', () => {
@@ -140,7 +140,7 @@ describe('Home', () => {
 describe('join step', () => {
   const openJoin = () => {
     render(<Home />)
-    fireEvent.click(screen.getByRole('button', { name: 'join game' }))
+    fireEvent.click(screen.getByRole('button', { name: 'join' }))
   }
 
   it('joins when Enter is pressed in the code box', () => {

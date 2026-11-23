@@ -12,9 +12,9 @@ import { ErrorText, ModeBadge, Screen, tagText } from '../game/ui'
 import { WaitingLine } from '../game/Runner'
 
 const ROLE_COPY = {
-  runner: 'You’re a Dikejar. Hide when the game starts.',
-  chaser: 'You’re a Kejar. Stay put while Dikejar hide.',
-  marshal: 'You’re a Marshal. Keep everyone safe.',
+  runner: 'You’re Dikejar. Hide when it starts.',
+  chaser: 'You’re Kejar. Wait while Dikejar hide.',
+  marshal: 'You’re a marshal. Keep everyone safe.',
 }
 
 export default function Lobby({ code, view, refresh }: { code: string; view: View; refresh: () => void }) {
@@ -71,7 +71,7 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
         <h1 style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.04em' }}>Hi {view.me.name}</h1>
         <ModeBadge mode={view.settings.mode} />
       </div>
-      {role ? <p className="muted">{ROLE_COPY[role]}</p> : <WaitingLine>Waiting for the organiser to give you a role</WaitingLine>}
+      {role ? <p className="muted">{ROLE_COPY[role]}</p> : <WaitingLine>Waiting for your side</WaitingLine>}
       {/* Marshals are the helper: the hidden card is the organiser's alone (rules doc §9b), so no panel here. */}
       {role === 'marshal' && <SetupMap view={view} />}
       {role === 'marshal' && token && (
@@ -88,7 +88,7 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
           </p>
           {!scanning && (
             <button className="btn" style={{ marginTop: 10 }} onClick={() => setScanning(true)}>
-              {view.me.tag_id === null ? 'Scan your tag' : 'Scan a different tag'}
+              {view.me.tag_id === null ? 'Scan tag' : 'Rescan'}
             </button>
           )}
         </div>
@@ -107,7 +107,7 @@ export default function Lobby({ code, view, refresh }: { code: string; view: Vie
       )}
       <ErrorText>{error}</ErrorText>
       <AlertsCard code={code} view={view} onDone={refresh} />
-      <WaitingLine>Waiting for the organiser to start the game</WaitingLine>
+      <WaitingLine>Waiting for the start</WaitingLine>
     </Screen>
   )
 }

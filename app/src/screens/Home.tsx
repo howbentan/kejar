@@ -28,8 +28,8 @@ const codeOf = (href: string) => href.split('/').pop() ?? ''
 /**
  * The home screen (design 2026-11-12, running-j revision, plus the home upgrades): the logo with its j running on
  * the spot (tap to jump, three quick taps to backflip), a tip or the countdown to your game's planned start under it,
- * and the ways out below: reconnect (a card that says where your game is at), join game with a scan button beside
- * it, organise game. On a fresh open it plays the opening first. The buttons, the tip and the countdown sit outside
+ * and the ways out below: reconnect (a card that says where your game is at), join with a scan button beside
+ * it, create. On a fresh open it plays the opening first. The buttons, the tip and the countdown sit outside
  * the logo's tap area, so a tap on them never makes the j jump.
  */
 export default function Home() {
@@ -121,7 +121,7 @@ export default function Home() {
               }} />}
           <div className="home-join-row">
             <button type="button" className="btn" onClick={() => setJoining(true)}>
-              join game
+              join
             </button>
             <button
               type="button"
@@ -139,7 +139,7 @@ export default function Home() {
             </button>
           </div>
           <a className="btn btn-ghost" href="/host/new">
-            organise game
+            create
           </a>
           <button type="button" className="home-link" onClick={() => setStory(true)}>
             if dk how to play click here :)

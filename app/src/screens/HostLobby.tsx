@@ -19,6 +19,21 @@ import Cancelled from './Cancelled'
 
 type Side = Extract<Role, 'runner' | 'chaser'>
 
+type RolesMode = 'random' | 'manual'
+const MODES: { value: RolesMode; text: string }[] = [
+  { value: 'random', text: 'Random' },
+  { value: 'manual', text: 'Manual' },
+]
+/** How this phone picks sides for a game: random by default; only Manual shows the per-player picker. */
+const modeKey = (code: string) => `kejar-roles-mode-${code}`
+function loadRolesMode(code: string): RolesMode {
+  try {
+    return localStorage.getItem(modeKey(code)) === 'manual' ? 'manual' : 'random'
+  } catch {
+    return 'random'
+  }
+}
+
 const SIDES: { value: Side; text: string }[] = [
   { value: 'runner', text: 'Dikejar' },
   { value: 'chaser', text: 'Kejar' },
@@ -33,6 +48,17 @@ export default function HostLobby({ code }: { code: string }) {
   // Which button was tapped ('start', 'mode', 'invite', or `role:<player id>`), so only it shows the running j.
   const [busyOn, setBusyOn] = useState<string | null>(null)
   const [marshalInviteUrl, setMarshalInviteUrl] = useState('')
+  const [rolesMode, setRolesModeState] = useState<RolesMode>(() => loadRolesMode(code))
+  const setRolesMode = (m: RolesMode) => {
+    setRolesModeState(m)
+    try {
+      localStorage.setItem(modeKey(code), m)
+    } catch {
+      // Blocked storage: the choice lasts until the page reloads.
+    }
+  }
+  // The row whose Remove was tapped once: a second tap removes them.
+  const [removing, setRemoving] = useState<string | null>(null)
   const joinUrl = `${window.location.origin}/join/${code}`
   // The planned start's time field: shows the saved time, and only sends once the organiser leaves it (or presses
   // Enter), never on each keystroke, where a half-typed 07:30 reads as 07:03.
@@ -121,6 +147,25 @@ export default function HostLobby({ code }: { code: string }) {
   const runners = players.filter((p) => p.role === 'runner').length
   const chasers = players.filter((p) => p.role === 'chaser').length
   const suggested = Math.max(1, Math.round(players.length / 4))
+  const unpicked = players.length - runners - chasers
+  const sideText = (role: string | null) => (role === 'runner' ? 'Dikejar' : role === 'chaser' ? 'Kejar' : 'No side yet')
+  const removeButton = (id: string, name: string) => (
+    <button
+      type="button"
+      className="home-link"
+      style={{ marginLeft: 10, color: removing === id ? 'var(--red, #E63946)' : undefined }}
+      disabled={busy}
+      aria-busy={busyOn === `remove:${id}` || undefined}
+      onClick={() => {
+        if (removing !== id) return setRemoving(id)
+        setRemoving(null)
+        void act('removePlayer', { playerId: id }, `remove:${id}`)
+      }}
+      aria-label={removing === id ? `Tap again to remove ${name}` : `Remove ${name}`}
+    >
+      {removing === id ? 'Sure?' : 'Remove'}
+    </button>
+  )
   const gate = useLoaderGate(!!view || !!loadError, !!loadError)
 
   if (!organiser) {
@@ -159,7 +204,7 @@ export default function HostLobby({ code }: { code: string }) {
         </h1>
         {view && <ModeBadge mode={view.settings.mode} />}
         {view && (
-          <button type="button" className="btn btn-ghost" style={{ width: 'auto', padding: '4px 10px', fontSize: 12 }} disabled={busy} aria-busy={busyOn === 'mode' || undefined} onClick={changeMode}>
+          <button type="button" className="btn btn-ghost btn-mini" disabled={busy} aria-busy={busyOn === 'mode' || undefined} onClick={changeMode}>
             <Busy busy={busyOn === 'mode'} label={`Switching to ${view.settings.mode === 'full' ? 'Core' : 'Full'}`} colour="var(--volt)" height={16}>Change</Busy>
           </button>
         )}
@@ -210,7 +255,7 @@ export default function HostLobby({ code }: { code: string }) {
       </div>
 
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <button className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} disabled={busy} aria-busy={busyOn === 'invite' || undefined} onClick={inviteMarshal}>
+        <button className="btn btn-ghost" disabled={busy} aria-busy={busyOn === 'invite' || undefined} onClick={inviteMarshal}>
           <Busy busy={busyOn === 'invite'} label="Inviting marshal" colour="var(--volt)">Invite a marshal</Busy>
         </button>
         {marshalInviteUrl && (
@@ -222,9 +267,35 @@ export default function HostLobby({ code }: { code: string }) {
 
       <p className="eyebrow">Players ({players.length})</p>
       {players.length > 0 && (
-        <div>
-          <p className="mono">{`${runners} Dikejar · ${chasers} Kejar · ${players.length - runners - chasers} to pick`}</p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <span className="eyebrow">Sides</span>
+            <Pills<RolesMode> label="How sides are picked" value={rolesMode} disabled={busy} options={MODES} onChange={setRolesMode} />
+          </div>
+          <p className="mono">{`${runners} Dikejar · ${chasers} Kejar · ${unpicked} to pick`}</p>
           <p className="muted">{`About 1 Kejar for every 4 players: ${suggested} for ${players.length} players.`}</p>
+          {rolesMode === 'random' ? (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {unpicked > 0 && runners + chasers > 0 && (
+                <button className="btn" style={{ width: 'auto' }} disabled={busy} aria-busy={busyOn === 'draw:unassigned' || undefined} onClick={() => act('setRoles', { draw: 'unassigned' }, 'draw:unassigned')}>
+                  <Busy busy={busyOn === 'draw:unassigned'} label="Drawing sides">{`Draw ${unpicked} new`}</Busy>
+                </button>
+              )}
+              <button
+                className={runners + chasers > 0 ? 'btn btn-ghost' : 'btn'}
+                style={{ width: 'auto' }}
+                disabled={busy}
+                aria-busy={busyOn === 'draw:all' || undefined}
+                onClick={() => act('setRoles', { draw: 'all' }, 'draw:all')}
+              >
+                <Busy busy={busyOn === 'draw:all'} label="Drawing sides" colour={runners + chasers > 0 ? 'var(--volt)' : undefined}>
+                  {runners + chasers > 0 ? 'Draw again' : 'Draw'}
+                </Busy>
+              </button>
+            </div>
+          ) : (
+            <p className="muted">Pick each player&apos;s side below.</p>
+          )}
         </div>
       )}
       <table>
@@ -233,15 +304,20 @@ export default function HostLobby({ code }: { code: string }) {
             <tr key={p.id}>
               <td>{p.name}</td>
               <td className="mono">{p.role === 'runner' ? tagText(p.tag_id) : ''}</td>
-              <td style={{ textAlign: 'right' }}>
-                <Pills<Side>
-                  label={p.name}
-                  value={p.role === 'runner' || p.role === 'chaser' ? p.role : null}
-                  disabled={busy}
-                  busyValue={busyOn?.startsWith(`role:${p.id}:`) ? (busyOn.slice(`role:${p.id}:`.length) as Side) : null}
-                  options={SIDES}
-                  onChange={(role) => act('setRoles', { roles: { [p.id]: role } }, `role:${p.id}:${role}`)}
-                />
+              <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                {rolesMode === 'manual' ? (
+                  <Pills<Side>
+                    label={p.name}
+                    value={p.role === 'runner' || p.role === 'chaser' ? p.role : null}
+                    disabled={busy}
+                    busyValue={busyOn?.startsWith(`role:${p.id}:`) ? (busyOn.slice(`role:${p.id}:`.length) as Side) : null}
+                    options={SIDES}
+                    onChange={(role) => act('setRoles', { roles: { [p.id]: role } }, `role:${p.id}:${role}`)}
+                  />
+                ) : (
+                  <span className="eyebrow">{sideText(p.role)}</span>
+                )}
+                {removeButton(p.id, p.name)}
               </td>
             </tr>
           ))}
@@ -249,8 +325,9 @@ export default function HostLobby({ code }: { code: string }) {
             <tr key={p.id}>
               <td>{p.name}</td>
               <td />
-              <td className="eyebrow" style={{ textAlign: 'right' }}>
+              <td className="eyebrow" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                 Marshal
+                {removeButton(p.id, p.name)}
               </td>
             </tr>
           ))}
@@ -259,7 +336,7 @@ export default function HostLobby({ code }: { code: string }) {
 
       <ErrorText>{error || loadError}</ErrorText>
       <button className="btn" disabled={busy} aria-busy={busyOn === 'start' || undefined} onClick={() => act('start', {}, 'start')}>
-        <Busy busy={busyOn === 'start'} label="Starting game">Start game</Busy>
+        <Busy busy={busyOn === 'start'} label="Starting game">Start</Busy>
       </button>
       <CancelGame code={code} onCancelled={refresh} />
     </Screen>

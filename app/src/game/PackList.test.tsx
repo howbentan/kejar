@@ -96,13 +96,13 @@ describe('PackList', () => {
 
   it('Go to the lobby drops the setup', () => {
     render(<PackList code="ABC234" view={view()} refresh={refresh} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Go to the lobby' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lobby' }))
     expect(assign).toHaveBeenCalledWith('/host/ABC234')
   })
 
   it('Back returns to step 4, the crew', () => {
     render(<PackList code="ABC234" view={view()} refresh={refresh} />)
-    expect(screen.getByRole('button', { name: 'Back' })).toHaveTextContent('‹')
+    expect(screen.getByRole('button', { name: 'Back' })).toHaveTextContent(/^Back$/)
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(assign).toHaveBeenCalledWith('/host/ABC234?setup=crew')
   })

@@ -190,7 +190,7 @@ export default function WalkPark({
                 ) : p.tone ? (
                   <span className="muted">Needs location</span>
                 ) : (
-                  <button type="button" className="btn btn-ghost" style={{ padding: '6px 12px' }} disabled={busy} onClick={() => void mark(p.id)}>
+                  <button type="button" className="btn btn-ghost btn-mini" disabled={busy} onClick={() => void mark(p.id)}>
                     {upText(p.id, p.label)}
                   </button>
                 )}
@@ -207,13 +207,9 @@ export default function WalkPark({
               <>
                 <p className="eyebrow" style={here ? { color: 'inherit', opacity: 0.6 } : { color: `var(--${look.token}-2)` }}>{`SECRET · ${count}`}</p>
                 <p style={{ fontWeight: 800, fontSize: 21, letterSpacing: '-0.04em' }}>{hideLineFor(next!.id)}</p>
-                <p>{`Any unused ${boxSide(next!.id)} slip inside`}</p>
-                <p>
-                  <b>Good spots</b> under a wakaf bench · behind the park map board · in the roots of a big angsana · by the outdoor gym
-                </p>
-                <p>
-                  <b>Not there</b> surau or any place of worship · drains · private property · bins (the cleaner will take it)
-                </p>
+                <p>{`Put any unused ${boxSide(next!.id)} slip inside.`}</p>
+                <p>Hide it out of sight, like under a bench.</p>
+                <p>Not in a surau, drain or bin.</p>
               </>
             ) : isHere ? (
               <>

@@ -129,13 +129,12 @@ export default function PackList({ code, view, refresh, compact = false }: { cod
       {ready && <Ready />}
       <ErrorText>{error}</ErrorText>
       {!compact && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-          <button type="button" className="btn btn-ghost" style={{ flex: '0 0 34%' }} onClick={() => window.location.assign(`/host/${code}?setup=crew`)}>
-            <span aria-hidden="true">‹ </span>
+        <div className="btn-pair" style={{ marginTop: 14 }}>
+          <button type="button" className="btn btn-ghost" onClick={() => window.location.assign(`/host/${code}?setup=crew`)}>
             Back
           </button>
-          <button type="button" className="btn" style={{ flex: 1 }} onClick={() => window.location.assign(`/host/${code}`)}>
-            Go to the lobby
+          <button type="button" className="btn" onClick={() => window.location.assign(`/host/${code}`)}>
+            Lobby
           </button>
         </div>
       )}

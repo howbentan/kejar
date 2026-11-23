@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PowerUp } from '../../shared/types.js'
 import { testView } from '../screens/testView'
@@ -36,7 +36,7 @@ describe('PowerUpHand', () => {
     call.mockResolvedValue({ ok: true, kind: 'decoy' })
     render(<PowerUpHand code="ABC234" view={testView({ hand: [decoy] })} />)
     fireEvent.click(screen.getByRole('button', { name: /gostan/i }))
-    fireEvent.click(screen.getByRole('button', { name: 'Use Gostan' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
     await waitFor(() => expect(call).toHaveBeenCalledWith('usePowerup', { code: 'ABC234', token: 't1', powerupId: 'u1' }))
     expect(await screen.findByText('Gostan set for your next ping')).toBeInTheDocument()
   })
@@ -48,7 +48,7 @@ describe('PowerUpHand', () => {
     call.mockResolvedValue({ ok: false, reason: 'nothing-to-steal' })
     render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind }] })} />)
     fireEvent.click(screen.getByRole('button', { name: new RegExp(name, 'i') }))
-    fireEvent.click(screen.getByRole('button', { name: `Use ${name}` }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
     expect(await screen.findByText(`Nothing to steal. You keep your ${name}.`)).toBeInTheDocument()
   })
 
@@ -59,7 +59,7 @@ describe('PowerUpHand', () => {
     call.mockResolvedValue({ ok: true, kind })
     render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind }] })} />)
     fireEvent.click(screen.getByRole('button', { name: new RegExp(name, 'i') }))
-    fireEvent.click(screen.getByRole('button', { name: `Use ${name}` }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
     const status = await screen.findByRole('status')
     expect(status).toHaveTextContent(new RegExp(`^${line}$`))
     expect(screen.queryByText(/durian/i)).toBeNull()
@@ -69,21 +69,37 @@ describe('PowerUpHand', () => {
     call.mockResolvedValue({ ok: false, reason: 'taken' })
     render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'shield' }] })} />)
     fireEvent.click(screen.getByRole('button', { name: /durian/i }))
-    fireEvent.click(screen.getByRole('button', { name: 'Use Durian' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
     expect(await screen.findByText('Your Durian was taken.')).toBeInTheDocument()
   })
 
-  it('a held Dato Seri has no Use: it says to use it at Penjara', () => {
+  it('a held Dato Seri has no Use: it says to use it at Penjara, and its pop-up only closes', () => {
     render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'dato' }] })} />)
-    expect(screen.queryByRole('button', { name: /dato seri/i })).toBeNull()
     expect(screen.getByText('Use it at Penjara')).toBeInTheDocument()
     expect(screen.getByText('★ LEGENDARY')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /dato seri/i }))
+    const pop = screen.getByRole('dialog', { name: 'Dato Seri' })
+    expect(within(pop).queryByRole('button', { name: /^use/i })).toBeNull()
+    fireEvent.click(within(pop).getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
     expect(call).not.toHaveBeenCalled()
+  })
+
+  it('tapping a card pops it up in the middle with what it does, how it works, and Use', async () => {
+    call.mockResolvedValue({ ok: true, kind: 'decoy' })
+    render(<PowerUpHand code="ABC234" view={testView({ hand: [decoy] })} />)
+    fireEvent.click(screen.getByRole('button', { name: /gostan/i }))
+    const pop = screen.getByRole('dialog', { name: 'Gostan' })
+    expect(within(pop).getByRole('heading', { name: 'Gostan' })).toBeInTheDocument()
+    expect(within(pop).getByText('Your next ping shows you somewhere else')).toBeInTheDocument() // on the card face
+    expect(within(pop).getByText('Works on your next ping.')).toBeInTheDocument()
+    fireEvent.click(within(pop).getByRole('button', { name: 'Use' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('usePowerup', { code: 'ABC234', token: 't1', powerupId: decoy.id }))
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('a held Super Ring has no Use: it is on and waiting, in cheese orange', () => {
     const { container } = render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'ring', station: null }] })} />)
-    expect(screen.queryByRole('button', { name: /super ring/i })).toBeNull()
     expect(screen.getByText('Super Ring')).toBeInTheDocument()
     expect(screen.getByText('Super Ring is on')).toBeInTheDocument()
     expect(screen.getByText('ON · WAITING')).toBeInTheDocument()
@@ -99,6 +115,7 @@ describe('PowerUpHand', () => {
       call.mockResolvedValue({ ok: true, kind: 'cheese', name: 'Aini' })
       render(<PowerUpHand code="ABC234" view={testView({ hand: [cheese], freezeTargets: chasers })} />)
       fireEvent.click(screen.getByRole('button', { name: /cheese ais/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'Pick' }))
       expect(call).not.toHaveBeenCalled()
       fireEvent.click(screen.getByRole('button', { name: 'Aini' }))
       await waitFor(() => expect(call).toHaveBeenCalledWith('usePowerup', { code: 'ABC234', token: 't1', powerupId: 'ch1', targetId: 'c2' }))
@@ -109,6 +126,7 @@ describe('PowerUpHand', () => {
     it('no targets: the picker says so and sends nothing', () => {
       render(<PowerUpHand code="ABC234" view={testView({ hand: [cheese], freezeTargets: [] })} />)
       fireEvent.click(screen.getByRole('button', { name: /cheese ais/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'Pick' }))
       expect(screen.getByText('No Kejar to freeze right now.')).toBeInTheDocument()
       expect(screen.queryByRole('dialog')).toBeNull()
       expect(call).not.toHaveBeenCalled()
@@ -117,6 +135,7 @@ describe('PowerUpHand', () => {
     it('cancelling the picker sends nothing', () => {
       render(<PowerUpHand code="ABC234" view={testView({ hand: [cheese], freezeTargets: chasers })} />)
       fireEvent.click(screen.getByRole('button', { name: /cheese ais/i }))
+      fireEvent.click(screen.getByRole('button', { name: 'Pick' }))
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
       expect(screen.queryByRole('dialog')).toBeNull()
       expect(call).not.toHaveBeenCalled()
@@ -168,7 +187,7 @@ describe('PowerUpHand', () => {
       call.mockResolvedValue(reply)
       render(<PowerUpHand code="ABC234" view={testView({ hand: [decoy] })} />)
       fireEvent.click(screen.getByRole('button', { name: /gostan/i }))
-      fireEvent.click(screen.getByRole('button', { name: 'Use Gostan' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Use' }))
       expect(await screen.findByText(text)).toBeInTheDocument()
     })
 
@@ -176,7 +195,7 @@ describe('PowerUpHand', () => {
       call.mockResolvedValue({ ok: true, kind: 'combo', wasted: true })
       render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'combo' }] })} />)
       fireEvent.click(screen.getByRole('button', { name: /nasi lemak/i }))
-      fireEvent.click(screen.getByRole('button', { name: 'Use Nasi Lemak KFC' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Use' }))
       expect(await screen.findByText("Combo already ready. This one's spent.")).toBeInTheDocument()
     })
 
@@ -184,7 +203,7 @@ describe('PowerUpHand', () => {
       call.mockResolvedValue({ ok: true, kind: 'toll' })
       render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'toll' }] })} />)
       fireEvent.click(screen.getByRole('button', { name: /tee and gee/i }))
-      fireEvent.click(screen.getByRole('button', { name: 'Use Tee And Gee' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Use' }))
       expect(await screen.findByText('Tee And Gee! Toll gate up. Runners checking in near it get charged.')).toBeInTheDocument()
     })
 
@@ -199,7 +218,7 @@ describe('PowerUpHand', () => {
     const grab: PowerUp = { ...decoy, id: 'g1', kind: 'grab' }
     const openGrab = async () => {
       fireEvent.click(screen.getByRole('button', { name: /abang grab/i }))
-      fireEvent.click(screen.getByRole('button', { name: 'Use Abang Grab' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Use' }))
       return screen.findByRole('dialog', { name: 'What should Abang Grab bring?' })
     }
 
@@ -304,7 +323,7 @@ describe('PowerUpHand', () => {
     call.mockResolvedValue({ ok: false, reason: 'flare-pending', readyInMs: 210_000 })
     render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'flare' }] })} />)
     fireEvent.click(screen.getByRole('button', { name: /mat rempit/i }))
-    fireEvent.click(screen.getByRole('button', { name: 'Use Mat Rempit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
     expect(await screen.findByText('Another Mat Rempit is already on its way. Ready again in 3:30.')).toBeInTheDocument()
   })
 
@@ -312,7 +331,7 @@ describe('PowerUpHand', () => {
     call.mockResolvedValue({ ok: false, reason: 'flare-cooldown', readyInMs: 133_000 })
     render(<PowerUpHand code="ABC234" view={testView({ hand: [{ ...decoy, kind: 'flare' }] })} />)
     fireEvent.click(screen.getByRole('button', { name: /mat rempit/i }))
-    fireEvent.click(screen.getByRole('button', { name: 'Use Mat Rempit' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
     expect(await screen.findByText('Mat Rempit is ready again in 2:13.')).toBeInTheDocument()
   })
 

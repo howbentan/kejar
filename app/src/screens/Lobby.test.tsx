@@ -120,7 +120,7 @@ describe('Lobby waiting lines', () => {
   it('runs the small j beside the waiting lines, which drop their "…"', () => {
     const base = testView({ phase: 'lobby' })
     render(<Lobby code="ABC234" view={{ ...base, me: { ...base.me, role: null as unknown as typeof base.me.role } }} refresh={vi.fn()} />)
-    for (const line of ['Waiting for the organiser to give you a role', 'Waiting for the organiser to start the game']) {
+    for (const line of ['Waiting for your side', 'Waiting for the start']) {
       const text = screen.getByText(line)
       expect(text.closest('p')!.querySelector('[data-testid="mini-runner"]')).not.toBeNull()
     }

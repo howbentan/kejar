@@ -51,6 +51,8 @@ export default function CrewStep({ code, view, organiserToken }: { code: string;
   })
   const [error, setError] = useState('')
   const [copied, setCopied] = useState(false)
+  // Invite links (by token) a helper has already used: their rows say JOINED.
+  const [joined, setJoined] = useState<Set<string>>(() => new Set())
   const requested = useRef(new Set<number>())
   const sharing = useRef(false)
   const initial = (view.me?.name ?? '').trim().charAt(0).toUpperCase() || 'Y'
@@ -85,16 +87,44 @@ export default function CrewStep({ code, view, organiserToken }: { code: string;
 
   const mark = (key: number, patch: Partial<Row>) => setRows((r) => r.map((x) => (x.key === key ? { ...x, ...patch } : x)))
 
+  const tokenOf = (link: string) => link.slice(link.lastIndexOf('/') + 1)
+  const isJoined = (r: Row) => !!r.link && joined.has(tokenOf(r.link))
+
+  // While a sent invite is still waiting for its helper, ask every 5 s which links have been used.
+  const waitingKey = rows
+    .filter((r) => r.link && r.sent && !isJoined(r))
+    .map((r) => tokenOf(r.link!))
+    .join(',')
+  useEffect(() => {
+    if (!waitingKey) return
+    const ask = () =>
+      call<{ joined: string[] }>('crewStatus', { code, organiserToken, inviteTokens: waitingKey.split(',') }).then(
+        (r) => {
+          if (r.joined?.length) setJoined((j) => new Set([...j, ...r.joined]))
+        },
+        () => undefined,
+      )
+    void ask()
+    const id = window.setInterval(() => void ask(), 5_000)
+    return () => window.clearInterval(id)
+  }, [waitingKey, code, organiserToken])
+
+  /** Copies links where there is no share sheet; only a copy that worked counts as sent. */
+  function copy(links: Row[]) {
+    const failed = () => setError("Couldn't copy here. Open this step on your phone to share the links.")
+    const write = navigator.clipboard?.writeText(links.map((r) => r.link).join('\n'))
+    if (!write) return failed()
+    write.then(() => {
+      setCopied(true)
+      setRows((r) => r.map((x) => (links.some((l) => l.key === x.key) ? { ...x, sent: true } : x)))
+    }, failed)
+  }
+
   /** Called straight from a tap: nothing is awaited before `navigator.share`. */
   function shareRow(row: Row) {
     if (!row.link || sharing.current) return
     setError('')
-    if (typeof navigator.share !== 'function') {
-      void navigator.clipboard.writeText(row.link)
-      setCopied(true)
-      mark(row.key, { sent: true })
-      return
-    }
+    if (typeof navigator.share !== 'function') return copy([row])
     sharing.current = true
     navigator.share({ text: `Join my Kejar crew as a marshal: ${row.link}` }).then(
       () => mark(row.key, { sent: true, error: undefined }),
@@ -106,19 +136,24 @@ export default function CrewStep({ code, view, organiserToken }: { code: string;
     })
   }
 
-  const nextUnsent = rows.find((r) => r.link && !r.sent)
+  // Still to send: made, not sent and not joined. Each tap on a phone shares the next one (a share sheet needs a tap
+  // of its own); without a share sheet one tap copies them all.
+  const unsent = rows.filter((r) => r.link && !r.sent && !isJoined(r))
 
   function sendAll() {
+    setError('')
     if (typeof navigator.share !== 'function') {
-      const ready = rows.filter((r) => r.link)
-      if (ready.length === 0) return
-      void navigator.clipboard.writeText(ready.map((r) => r.link).join('\n'))
-      setCopied(true)
-      setRows((r) => r.map((x) => (x.link ? { ...x, sent: true } : x)))
+      if (unsent.length) copy(unsent)
       return
     }
-    if (nextUnsent) shareRow(nextUnsent)
+    if (unsent[0]) shareRow(unsent[0])
   }
+  const sendLabel =
+    unsent.length > 0
+      ? `Send ${unsent.length} ${unsent.length === 1 ? 'invite' : 'invites'}`
+      : rows.some((r) => !r.link)
+        ? 'Making links'
+        : 'All sent'
 
   function next() {
     window.location.assign(`/host/${code}?setup=pack`)
@@ -154,9 +189,9 @@ export default function CrewStep({ code, view, organiserToken }: { code: string;
             disabled={!r.link}
             aria-label={!r.link ? 'Creating invite link' : undefined}
             onClick={() => shareRow(r)}
-            style={{ ...pill, background: 'none', border: 0, padding: 4, cursor: 'pointer', color: r.sent ? 'var(--volt)' : 'inherit', opacity: r.sent ? 1 : 0.7 }}
+            style={{ ...pill, background: 'none', border: 0, padding: 4, cursor: 'pointer', color: r.sent || isJoined(r) ? 'var(--volt)' : 'inherit', opacity: r.sent || isJoined(r) ? 1 : 0.7 }}
           >
-            {!r.link ? <MiniRunner height={16} colour="currentColor" /> : r.sent ? 'SENT' : 'INVITE'}
+            {!r.link ? <MiniRunner height={16} colour="currentColor" /> : isJoined(r) ? 'JOINED' : r.sent ? 'SENT' : 'INVITE'}
           </button>,
           r.key,
           r.error,
@@ -172,12 +207,11 @@ export default function CrewStep({ code, view, organiserToken }: { code: string;
       </button>
       {copied && <p className="muted">Links copied.</p>}
       <ErrorText>{error}</ErrorText>
-      <button className="btn" disabled={!nextUnsent && !(typeof navigator.share !== 'function' && rows.some((r) => r.link))} onClick={sendAll}>
-        Send invite links
+      <button className="btn" disabled={unsent.length === 0} onClick={sendAll}>
+        {sendLabel}
       </button>
       <button className="btn btn-ghost" onClick={next}>
         Next
-        <span aria-hidden="true"> ›</span>
       </button>
     </>
   )

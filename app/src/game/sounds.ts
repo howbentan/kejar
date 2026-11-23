@@ -79,6 +79,12 @@ export function playTick(): void {
   tone(1400, 0.03, 'square', 0.05)
 }
 
+/** A main button going down: a soft, short tock (quieter than the reel's tick). */
+export function playPress(): void {
+  if (isMuted()) return
+  tone(880, 0.035, 'triangle', 0.05)
+}
+
 /** The lever's pull and the reel's clunk as it stops. */
 export function playClunk(): void {
   if (isMuted()) return

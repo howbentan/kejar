@@ -3,6 +3,7 @@ import { call } from '../game/api'
 import { currentPushEnv, pushSupport } from '../game/push'
 import { forgetName, loadName, saveName } from '../game/nameMemory'
 import { loadSession, saveSession } from '../game/session'
+import { loadOrganiserSession } from '../game/organiserSession'
 import { ErrorText, Screen } from '../game/ui'
 import { Busy } from '../game/Runner'
 
@@ -16,10 +17,33 @@ export default function Join({ code }: { code: string }) {
   // iPhone alerts only work from the Home Screen app, which has its own storage — join there, not in Safari.
   const iphoneNotInstalled = pushSupport(currentPushEnv()) === 'needs-install'
 
+  // This phone runs this game: joining too would give one phone two roles, and after the start the player would win.
+  const [hosting, setHosting] = useState(false)
+
   // Already joined on this phone? Go straight back into the game.
   useEffect(() => {
-    if (loadSession(localStorage, code).token) window.location.assign(`/g/${code}`)
+    if (loadSession(localStorage, code).token) {
+      window.location.assign(`/g/${code}`)
+      return
+    }
+    const organiser = loadOrganiserSession(localStorage)
+    if (!organiser) return
+    call('state', { code, organiserToken: organiser.organiserToken }).then(
+      () => setHosting(true),
+      () => undefined,
+    )
   }, [code])
+
+  if (hosting) {
+    return (
+      <Screen eyebrow={`kejar. · join game ${code}`}>
+        <p className="muted">{`This phone is running game ${code}, so it can't join as a player too. Join from another phone.`}</p>
+        <a className="btn" href={`/host/${code}`}>
+          Back to the lobby
+        </a>
+      </Screen>
+    )
+  }
 
   async function join() {
     setBusy(true)
@@ -85,7 +109,7 @@ export default function Join({ code }: { code: string }) {
       </label>
       <ErrorText>{error}</ErrorText>
       <button className="btn" disabled={!name.trim() || !conduct || !waiver || busy} aria-busy={busy || undefined} onClick={join}>
-        <Busy busy={busy} label="Joining">Join game</Busy>
+        <Busy busy={busy} label="Joining">Join</Busy>
       </button>
     </Screen>
   )

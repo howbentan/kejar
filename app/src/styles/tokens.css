@@ -66,14 +66,33 @@ body {
 .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .card { border: 1px solid var(--hair); border-radius: 20px; padding: 14px 16px; background: rgba(255, 255, 255, 0.03); }
 .btn {
-  appearance: none; border: 0; border-radius: 999px; padding: 14px 22px;
-  background: var(--volt); color: var(--black); font: 700 15px var(--font);
-  cursor: pointer; transition: transform 0.4s var(--spring);
+  /* Every button: wide enough to hit on the move (about 70% of a phone), 54 px tall, centred, with a ledge under it
+     that the press pushes down, like the HOLD button. The main action is volt; second choices are .btn-ghost. */
+  /* Block with auto side margins centres it in any box (a card, a row, a column); align-self covers flex columns. */
+  display: block; margin-left: auto; margin-right: auto;
+  width: fit-content; min-width: min(72%, 300px); max-width: 100%; min-height: 54px; align-self: center; box-sizing: border-box;
+  text-align: center;
+  appearance: none; border: 0; border-radius: 999px; padding: 14px 26px;
+  background: var(--volt); color: var(--black); font: 800 17px var(--font);
+  box-shadow: 0 5px 0 #5E7D12; margin-bottom: 5px;
+  cursor: pointer; transition: transform 0.12s var(--spring), box-shadow 0.12s var(--spring);
+  -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none;
 }
-.btn:active { transform: scale(0.98); }
-.btn:disabled { opacity: 0.5; }
-.btn-ghost { background: transparent; color: var(--white); border: 1px solid var(--hair); }
-.btn-danger { background: var(--danger); color: var(--white); }
+.btn:active:not(:disabled) { transform: translateY(4px) scale(0.98, 0.95); box-shadow: 0 1px 0 #5E7D12; }
+.btn:disabled { opacity: 0.5; box-shadow: none; transform: translateY(4px); }
+/* A second choice (create, cancel, draw again): the same size and place as the main button so every screen lines up
+   (owner's call), told apart only by being outlined, with a dark ledge, and staying quiet when pressed. */
+.btn-ghost { background: transparent; color: var(--white); border: 1px solid var(--hair); box-shadow: 0 5px 0 #000; }
+.btn-ghost:active:not(:disabled) { box-shadow: 0 1px 0 #000; }
+.btn-danger { background: var(--danger); color: var(--white); box-shadow: 0 5px 0 #8f1d27; }
+.btn-danger:active:not(:disabled) { box-shadow: 0 1px 0 #8f1d27; }
+/* Two choices side by side (back and next): each takes half, the same size. */
+.btn-pair { display: flex; gap: 10px; width: 100%; }
+.btn-pair > .btn { flex: 1 1 0; min-width: 0; }
+/* Alone in the row (the first step has no back): the usual size, centred. */
+.btn-pair > .btn:only-child { flex: none; min-width: min(72%, 300px); }
+/* A small chip-like button inside a row (change mode, mark a stop): no minimum size and no ledge. */
+.btn.btn-mini { display: inline-block; min-width: 0; min-height: 0; width: auto; padding: 4px 12px; font-size: 12px; margin: 0; box-shadow: none; }
 .input {
   width: 100%; border: 1px solid var(--hair); border-radius: 14px; padding: 14px 16px;
   background: rgba(255, 255, 255, 0.04); color: var(--white); font: 500 15px var(--font);
@@ -278,6 +297,12 @@ select.input option { background: #141614; color: var(--white); }
   width: 100%; border-radius: 14px; padding: 10px 12px; background: #141614; border: 1px solid #2a2a2a; color: var(--white);
 }
 .dock-pop-text { appearance: none; text-align: left; font: 600 13px var(--font); cursor: pointer; }
+/* A tapped power-up pops up in the middle of the screen: the big card, then what it does. */
+.card-pop { position: fixed; inset: 0; z-index: 46; background: rgba(10, 10, 11, 0.9); display: grid; place-items: center; padding: 16px; overflow-y: auto; }
+.card-pop-body { width: min(340px, 100%); display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.card-pop-name { margin: 10px 0 0; font: 800 28px var(--font); letter-spacing: -0.04em; color: var(--white); }
+.card-pop-how { margin: 0; font: 400 14px/1.45 var(--font); color: var(--white); opacity: 0.8; }
+.card-pop-actions { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 100%; margin-top: 10px; }
 .scan-overlay { position: fixed; inset: 0; z-index: 45; background: rgba(10, 10, 11, 0.94); display: flex; flex-direction: column; justify-content: center; padding: 16px; }
 
 /* Ticker: one line, newest first; tap for the whole feed. */
@@ -735,7 +760,7 @@ select.input option { background: #141614; color: var(--white); }
 .home .home-actions > :nth-child(4) { transition-delay: 0.18s; }
 .home-play { position: relative; flex: 1; min-height: 300px; margin: 0 -18px; }
 .home-actions { display: flex; flex-direction: column; gap: 10px; padding-top: 8px; }
-.home-actions .btn { width: 100%; padding: 15px; font-size: 16px; font-weight: 800; text-align: center; text-decoration: none; display: block; box-sizing: border-box; }
+.home-actions .btn { font-size: 17px; font-weight: 800; text-align: center; text-decoration: none; display: block; margin: 0 auto 5px; box-sizing: border-box; }
 .home-actions .btn-ghost { font-weight: 700; }
 .btn.btn-paper { background: var(--white); color: var(--black); }
 .home-link { all: unset; cursor: pointer; align-self: center; min-height: 36px; display: inline-flex; align-items: center; padding: 0 6px; margin-top: 4px; font-size: 13px; color: var(--dim); text-decoration: underline; }
@@ -764,8 +789,8 @@ select.input option { background: #141614; color: var(--white); }
 @media (prefers-reduced-motion: reduce) { .rc-live { animation: none; } }
 
 /* home upgrades: the scan button, the tip and the countdown under the logo, the scanner sheet */
-.home-join-row { display: flex; gap: 10px; align-items: center; }
-.home-join-row .btn { flex: 1; }
+.home-join-row { display: flex; gap: 10px; align-items: center; justify-content: center; }
+.home-join-row .btn { flex: none; margin: 0 0 5px; min-width: calc(min(72%, 300px) - 62px); } /* with the scan button beside it, as wide as create */
 .home-scan-btn { flex: 0 0 52px; width: 52px; height: 52px; border-radius: 50%; border: 0; background: var(--volt); display: grid; place-items: center; cursor: pointer; padding: 0; }
 .home-scan-btn svg { width: 24px; height: 24px; fill: none; stroke: var(--black); stroke-width: 2.2; stroke-linecap: round; }
 /* under the logo: the logo is centred in the play area and its half height is 19.8% of the width (102px at most) */

@@ -35,7 +35,7 @@ describe('the held-key rescue (rules §9a)', () => {
   it('holds the exact values', () => {
     expect(RESCUE_HOLD_MS).toBe(20_000)
     expect(RESCUE_RESET_MS).toBe(5_000)
-    expect(RESCUE_BEAT_LAPSE_MS).toBe(3_000)
+    expect(RESCUE_BEAT_LAPSE_MS).toBe(4_000)
     expect(RESCUE_BEAT_MS).toBe(1_000)
     expect(HEAD_START_MS).toBe(10_000)
     expect(RESCUE_RADIUS_M).toBe(30)
@@ -59,11 +59,11 @@ describe('the held-key rescue (rules §9a)', () => {
   })
   it('a thumb that stopped beating counts as lifted at the last beat (Review Focus 1)', () => {
     const r = rec({ heldMs: 0, holdSince: iso(T0), lastBeat: iso(T0 + 7_000) })
-    // 3.5 s after the last beat: held stops at that beat, and the 5 s window already runs from it.
-    expect(rescueProgress(r, T0 + 10_500)).toEqual({ heldMs: 7_000, holding: false, offSince: T0 + 7_000 })
-    expect(verdict(r, T0 + 10_500).kind).toBe('paused')
-    // Inside the lapse (two missed 1 s beats) it is still held.
-    expect(rescueProgress(r, T0 + 10_000)).toEqual({ heldMs: 10_000, holding: true, offSince: null })
+    // 4.5 s after the last beat: held stops at that beat, and the 5 s window already runs from it.
+    expect(rescueProgress(r, T0 + 11_500)).toEqual({ heldMs: 7_000, holding: false, offSince: T0 + 7_000 })
+    expect(verdict(r, T0 + 11_500).kind).toBe('paused')
+    // Inside the lapse (three missed 1 s beats) it is still held.
+    expect(rescueProgress(r, T0 + 11_000)).toEqual({ heldMs: 11_000, holding: true, offSince: null })
     expect(verdict(r, T0 + 12_000)).toEqual({ kind: 'reset' })
   })
   it('is never won on unconfirmed holding: last beat at 18.3 s, phone quiet, a poll at 20.1 s holds, then resets', () => {

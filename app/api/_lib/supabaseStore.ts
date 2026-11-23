@@ -521,6 +521,13 @@ export class SupabaseStore implements GameStore {
   async createMarshalInvite(inv: Omit<MarshalInviteRow, 'id'>): Promise<MarshalInviteRow> {
     return check(await this.db.from('marshal_invites').insert(inv).select('*').single()) as MarshalInviteRow
   }
+  async redeemedMarshalInvites(gameId: string, tokenHashes: string[]): Promise<string[]> {
+    if (tokenHashes.length === 0) return []
+    const rows = check(
+      await this.db.from('marshal_invites').select('token_hash').eq('game_id', gameId).in('token_hash', tokenHashes).not('redeemed_at', 'is', null),
+    ) as { token_hash: string }[] | null
+    return (rows ?? []).map((r) => r.token_hash)
+  }
   async redeemMarshalInvite(tokenHash: string, now: number, gameId: string): Promise<RedeemMarshalInviteResult> {
     const nowIso = new Date(now).toISOString()
     const claimed = check(

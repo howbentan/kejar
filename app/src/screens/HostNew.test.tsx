@@ -224,12 +224,12 @@ describe('HostNew step 2, which game', () => {
     expect(names.slice(-4)).toEqual(['Dato Seri', 'Super Ring', 'Bomoh', 'Mak Kau Hijau'])
   })
 
-  it("the phone's back gesture steps back one step, and Back does the same; the buttons carry arrows", async () => {
+  it("the phone's back gesture steps back one step, and Back does the same; the buttons carry no arrows", async () => {
     render(<HostNew />)
     await toStep2()
     expect(screen.getByText('NEW GAME · STEP 2 OF 5')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Back' })).toHaveTextContent('‹')
-    expect(screen.getByRole('button', { name: 'Next' })).toHaveTextContent('›')
+    expect(screen.getByRole('button', { name: 'Back' })).toHaveTextContent(/^Back$/)
+    expect(screen.getByRole('button', { name: 'Next' })).toHaveTextContent(/^Next$/)
     act(() => window.history.back())
     await waitFor(() => expect(screen.getByText('NEW GAME · STEP 1 OF 5')).toBeInTheDocument())
     next()

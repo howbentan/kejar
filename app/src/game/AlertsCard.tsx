@@ -42,7 +42,7 @@ export default function AlertsCard({ code, view, onDone }: { code: string; view:
       {support === 'unsupported' && <p className="muted">This browser can’t get alerts. Keep the page open at check-ins.</p>}
       {support === 'ok' && (
         <button className="btn" style={{ marginTop: 10 }} onClick={turnOn}>
-          Turn on alerts
+          Turn on
         </button>
       )}
       <ErrorText>{message}</ErrorText>

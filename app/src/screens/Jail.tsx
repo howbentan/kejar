@@ -153,7 +153,7 @@ function AutoJailed({ code, view, reason = 'missed-checkins' }: { code: string; 
         <WalkThenWatch code={code} view={view} spectate />
       ) : view.me.jailed || holding ? (
         <>
-          {!pkpClosed(view) && <p className="muted">A free runner can still break you out, but only once.</p>}
+          {!pkpClosed(view) && <p className="muted">A friend can free you once.</p>}
           <WalkThenWatch code={code} view={view} onDistance={setDistanceM} />
         </>
       ) : null}
@@ -203,7 +203,7 @@ function WalkThenWatch({
         <>
           <GameMap arena={view.arena} dots={view.dots} height={240} flood={view.endgame?.flood ?? null} />
           <p className="eyebrow" style={{ textAlign: 'center' }}>
-            {`Spectator view · ${view.settings.spectatorDelayMin} min delayed`}
+            {`${view.settings.spectatorDelayMin} min delayed`}
           </p>
         </>
       ) : null}
@@ -243,10 +243,10 @@ function Caught({ code, view }: { code: string; view: View }) {
       <p className="muted">{pick(CAUGHT_LINES, view.me.id)}</p>
       <p className="muted">
         {view.me.freed_once && view.me.jailed
-          ? 'You’ve already been broken out once, so you stay in Penjara this time.'
+          ? 'You’ve been freed once already. You stay this time.'
           : pkpClosed(view) && view.me.jailed
-            ? 'Nobody gets out now, so you stay in Penjara till the whistle. A marshal will give your tag back.'
-            : 'A free runner can still break you out, but only once. A marshal will give your tag back.'}
+            ? 'Nobody gets out now.'
+            : 'A friend can free you once.'}
       </p>
       {view.me.jailed && <PenjaraClosed view={view} />}
       {view.me.jailed && <PenjaraLock view={view} />}

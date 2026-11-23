@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import HowToPlay, { renderLine } from './HowToPlay'
+import HowToPlay, { cardMs, renderLine } from './HowToPlay'
+import { cardsFor } from '../../shared/howToPlay.js'
 
 afterEach(() => {
   cleanup()
@@ -23,10 +24,18 @@ describe('HowToPlay', () => {
     expect(screen.getByRole('heading')).toHaveTextContent("You're Dikejar.")
   })
 
-  it('advances every 7 seconds', () => {
+  it('gives each card time to read: 10 s at least, longer for longer text, 20 s at most', () => {
+    expect(cardMs('Short.')).toBe(10_000)
+    expect(cardMs(Array(30).fill('word').join(' '))).toBe(16_000)
+    expect(cardMs(Array(80).fill('<b>word</b>').join(' '))).toBe(20_000)
+  })
+
+  it('advances when the card has had its time, never before', () => {
     vi.useFakeTimers()
     setup()
-    act(() => void vi.advanceTimersByTime(6_900))
+    const first = cardsFor('runner', 'core', false, false)[0]
+    const ms = cardMs(`${first.headline} ${first.line}`)
+    act(() => void vi.advanceTimersByTime(ms - 100))
     expect(screen.getByRole('heading')).toHaveTextContent("You're Dikejar.")
     act(() => void vi.advanceTimersByTime(200))
     expect(screen.getByRole('heading')).toHaveTextContent('When it buzzes, check in.')

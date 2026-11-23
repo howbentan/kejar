@@ -242,7 +242,7 @@ describe('Jail', () => {
     const view = caught(60_000)
     render(<Jail code="ABC234" view={{ ...view, settings: { ...view.settings, spectatorDelayMin: 3 } }} />)
     expect(screen.getByText('Walk to the PENJARA pin on the map.')).toBeInTheDocument()
-    expect(screen.getByText('Spectator view · 3 min delayed')).toBeInTheDocument()
+    expect(screen.getByText('3 min delayed')).toBeInTheDocument()
   })
 
   it('auto-jailed: says why, gives a line, and points to a marshal', () => {
@@ -340,7 +340,7 @@ describe('Jail', () => {
     try {
       render(<Jail code="ABC234" view={caught(60_000)} />)
       expect(screen.getByText('Walk to the PENJARA pin on the map.')).toBeInTheDocument()
-      expect(screen.getByText(/Spectator view/)).toBeInTheDocument()
+      expect(screen.getByText(/min delayed/)).toBeInTheDocument()
     } finally {
       Object.defineProperty(navigator, 'geolocation', { configurable: true, value: undefined })
     }
@@ -371,14 +371,14 @@ describe('Jail', () => {
 
   it('already broken out once: says they stay this time', () => {
     render(<Jail code="ABC234" view={caught(60_000, { freed_once: true })} />)
-    expect(screen.getByText('You’ve already been broken out once, so you stay in Penjara this time.')).toBeInTheDocument()
+    expect(screen.getByText('You’ve been freed once already. You stay this time.')).toBeInTheDocument()
   })
 })
 
 describe('Jail: alerts after New phone', () => {
   it('a jailed runner in push mode with no subscription can turn alerts back on', () => {
     render(<Jail code="ABC234" view={caught(60_000)} />)
-    expect(screen.getByRole('button', { name: 'Turn on alerts' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Turn on' })).toBeInTheDocument()
   })
 })
 

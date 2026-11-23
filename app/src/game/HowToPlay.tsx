@@ -5,7 +5,14 @@ import { cardsFor, stickersFor } from '../../shared/howToPlay.js'
 import { Scene } from './doodles'
 import { ModeBadge } from './ui'
 
-const ADVANCE_MS = 7_000
+/**
+ * How long a card stays before the next: long enough to read the whole line on a phone while the doodle plays.
+ * About 0.45 s a word on top of 2.5 s to take in the scene, never under 10 s or over 20 s.
+ */
+export function cardMs(text: string): number {
+  const words = text.replace(/<\/?b>/g, '').split(/\s+/).filter(Boolean).length
+  return Math.min(20_000, Math.max(10_000, 2_500 + words * 450))
+}
 
 /** Renders only `<b>` as bold. Anything else, `<` included, stays plain text. Never raw HTML. */
 export function renderLine(line: string): ReactNode[] {
@@ -26,7 +33,7 @@ export interface HowToPlayProps {
   onOpened?: () => void
 }
 
-/** The how-to-play story: full-screen cards, tap right for next and left for back, 7 s per card. */
+/** The how-to-play story: full-screen cards, tap right for next and left for back; each card stays long enough to read (`cardMs`). */
 export default function HowToPlay({ side, mode, snapshot, endgame = false, onClose, onReady, onOpened }: HowToPlayProps) {
   const cards = useMemo(() => cardsFor(side, mode, snapshot, endgame), [side, mode, snapshot, endgame])
   const stickers = useMemo(() => stickersFor(side, mode), [side, mode])
@@ -35,6 +42,7 @@ export default function HowToPlay({ side, mode, snapshot, endgame = false, onClo
   const opened = useRef(false)
   const closeRef = useRef<HTMLButtonElement>(null)
   const last = i === cards.length - 1
+  const ms = cardMs(`${cards[i].headline} ${cards[i].line}`)
 
   useEffect(() => {
     if (opened.current) return
@@ -56,9 +64,9 @@ export default function HowToPlay({ side, mode, snapshot, endgame = false, onClo
 
   useEffect(() => {
     if (last) return
-    const t = window.setTimeout(() => setI((n) => Math.min(n + 1, cards.length - 1)), ADVANCE_MS)
+    const t = window.setTimeout(() => setI((n) => Math.min(n + 1, cards.length - 1)), ms)
     return () => window.clearTimeout(t)
-  }, [i, last, cards.length])
+  }, [i, last, cards.length, ms])
 
   const card = cards[i]
   const ready = () => {
@@ -81,7 +89,7 @@ export default function HowToPlay({ side, mode, snapshot, endgame = false, onClo
                 key={n === i ? `cur-${i}` : 'done'}
                 initial={{ scaleX: n < i || reduce ? 1 : 0 }}
                 animate={{ scaleX: 1 }}
-                transition={{ duration: n === i && !reduce && !last ? ADVANCE_MS / 1000 : 0, ease: 'linear' }}
+                transition={{ duration: n === i && !reduce && !last ? ms / 1000 : 0, ease: 'linear' }}
                 style={{ position: 'absolute', inset: 0, background: 'var(--volt)', transformOrigin: 'left' }}
               />
             )}
@@ -116,9 +124,9 @@ export default function HowToPlay({ side, mode, snapshot, endgame = false, onClo
           <button type="button" aria-label="Next card" onClick={() => setI((n) => Math.min(n + 1, cards.length - 1))} style={{ all: 'unset', flex: 2, cursor: 'pointer' }} />
         </div>
       </div>
-      <div style={{ flex: 'none', padding: '12px 16px 18px', minHeight: last ? undefined : 0, position: 'relative', zIndex: 5 }}>
+      <div style={{ flex: 'none', padding: '12px 16px 18px', minHeight: last ? undefined : 0, position: 'relative', zIndex: 5, textAlign: 'center' }}>
         {last && (
-          <button type="button" className="btn" onClick={ready} style={{ width: '100%' }}>
+          <button type="button" className="btn" onClick={ready}>
             I'm ready
           </button>
         )}

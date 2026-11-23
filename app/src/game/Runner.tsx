@@ -215,8 +215,8 @@ export function FullLoader({
       </div>
       <div className="home-actions" aria-hidden="true" style={{ visibility: 'hidden' }}>
         <span className="btn btn-paper">reconnect</span>
-        <span className="btn">join game</span>
-        <span className="btn btn-ghost">organise game</span>
+        <span className="btn">join</span>
+        <span className="btn btn-ghost">create</span>
         <span className="home-link">if dk how to play click here :)</span>
       </div>
     </main>

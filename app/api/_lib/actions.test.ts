@@ -367,9 +367,77 @@ describe('organiser controls', () => {
     await rejects(run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [siti.playerId]: 'runner' } }), 400)
   })
 
-  it('there is no random shuffle any more', async () => {
+  it('the old shuffle flag is still refused: random roles use draw', async () => {
     const g = await readyGame()
     await rejects(run('setRoles', { code: g.code, organiserToken: g.organiserToken, shuffle: true }), 400)
+  })
+
+  async function lobbyOf(n: number) {
+    const organiserToken = await createOrganiser()
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, organiserToken })
+    const ids: string[] = []
+    for (let i = 0; i < n; i++) ids.push((await run('join', { code, name: `P${i}`, accepted: true })).playerId)
+    return { code, organiserToken, ids }
+  }
+
+  it('draw all gives everyone a side, about 1 Kejar in 4, never a marshal', async () => {
+    const g = await lobbyOf(8)
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    const r = await run('setRoles', { code: g.code, organiserToken: g.organiserToken, draw: 'all' })
+    const sides = g.ids.map((id) => r.roles[id])
+    expect(sides.filter((s: string) => s === 'chaser')).toHaveLength(2)
+    expect(sides.filter((s: string) => s === 'runner')).toHaveLength(6)
+    expect(r.roles[siti.playerId]).toBe('marshal')
+  })
+
+  it('draw unassigned keeps picked sides and tops up Kejar to about 1 in 4', async () => {
+    const g = await lobbyOf(8)
+    await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [g.ids[0]]: 'runner', [g.ids[1]]: 'chaser' } })
+    const r = await run('setRoles', { code: g.code, organiserToken: g.organiserToken, draw: 'unassigned' })
+    expect(r.roles[g.ids[0]]).toBe('runner')
+    expect(r.roles[g.ids[1]]).toBe('chaser')
+    expect(Object.values(r.roles).filter((s) => s === 'chaser')).toHaveLength(2)
+    expect(Object.values(r.roles)).toHaveLength(8)
+  })
+
+  it('a draw that makes a runner a chaser clears their tag', async () => {
+    const g = await readyGame()
+    for (let i = 0; i < 3; i++) await run('setRoles', { code: g.code, organiserToken: g.organiserToken, draw: 'all' })
+    const players = await store.players((await store.gameByCode(g.code))!.id)
+    for (const p of players) if (p.role === 'chaser') expect(p.tag_id).toBeNull()
+  })
+
+  it('an unknown draw is refused (400)', async () => {
+    const g = await readyGame()
+    await rejects(run('setRoles', { code: g.code, organiserToken: g.organiserToken, draw: 'some' }), 400)
+  })
+
+  it('the organiser can remove a player in the lobby, and start no longer needs them', async () => {
+    const g = await readyGame()
+    const ghost = await run('join', { code: g.code, name: 'Ghost', accepted: true })
+    await rejects(run('start', { code: g.code, organiserToken: g.organiserToken }), 409, 'Ghost has no role')
+    expect(await run('removePlayer', { code: g.code, organiserToken: g.organiserToken, playerId: ghost.playerId })).toMatchObject({})
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    await rejects(run('location', { code: g.code, token: ghost.token, ...at(20) }), 403, 'You were removed')
+  })
+
+  it("crewStatus says which of the organiser's invite links have a helper on them", async () => {
+    const g = await readyGame()
+    const a = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    const b = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    expect(await run('crewStatus', { code: g.code, organiserToken: g.organiserToken, inviteTokens: [a.inviteToken, b.inviteToken] })).toEqual({ joined: [] })
+    await run('redeemMarshalInvite', { code: g.code, inviteToken: b.inviteToken, name: 'Siti' })
+    expect(await run('crewStatus', { code: g.code, organiserToken: g.organiserToken, inviteTokens: [a.inviteToken, b.inviteToken, 'made-up'] })).toEqual({ joined: [b.inviteToken] })
+    await rejects(run('crewStatus', { code: g.code, organiserToken: 'wrong', inviteTokens: [b.inviteToken] }), 403)
+  })
+
+  it("a phone that already joined as a player can't also redeem a marshal link, and the link stays unused", async () => {
+    const g = await readyGame()
+    const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
+    await rejects(run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Aina', token: g.aina.token }), 409, 'already in this game')
+    const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
+    expect(siti.playerId).toBeTruthy()
   })
 })
 
@@ -648,14 +716,14 @@ describe('the held-key rescue at Penjara (rules §9a)', () => {
     expect(await events(g, 'rescue-failed')).toMatchObject([{ data: { reason: 'reset' } }])
   })
 
-  it('beats stop while holding: held time stops 3 s after the last beat, and it resets 5 s after it (Review Focus 1)', async () => {
+  it('beats stop while holding: held time stops 4 s after the last beat, and it resets 5 s after it (Review Focus 1)', async () => {
     const g = await inPenjara()
     await scan(g, g.wei.token)
     const t = now
     await holdFor(g, 6_000) // last beat at t + 6 s
-    now = t + 8_999
-    expect(await held(g)).toMatchObject({ heldMs: 8_999, holding: true })
-    now = t + 9_001
+    now = t + 9_999
+    expect(await held(g)).toMatchObject({ heldMs: 9_999, holding: true })
+    now = t + 10_001
     expect(await held(g)).toMatchObject({ heldMs: 6_000, holding: false, offSince: t + 6_000 })
     now = t + 10_999
     await poll(g)
@@ -671,9 +739,9 @@ describe('the held-key rescue at Penjara (rules §9a)', () => {
     await scan(g, g.wei.token)
     const t = now
     await holdFor(g, 6_000)
-    now = t + 9_500 // 3.5 s without a beat: let go at t + 6 s
+    now = t + 10_500 // 4.5 s without a beat: let go at t + 6 s
     await beat(g)
-    expect(await live(g)).toMatchObject({ heldMs: 6_000, holdSince: stamp(t + 9_500), lastBeat: stamp(t + 9_500), releasedAt: null })
+    expect(await live(g)).toMatchObject({ heldMs: 6_000, holdSince: stamp(t + 10_500), lastBeat: stamp(t + 10_500), releasedAt: null })
     await holdFor(g, 13_999)
     expect(await jailedIds(g)).toEqual(BOTH(g))
     now += 1
@@ -686,7 +754,7 @@ describe('the held-key rescue at Penjara (rules §9a)', () => {
     await scan(g, g.wei.token)
     const t = now
     await holdFor(g, 6_000)
-    now = t + 9_500
+    now = t + 10_500
     expect(await press(g, false)).toEqual({ ok: true, heldMs: 6_000, holding: false })
     expect(await live(g)).toMatchObject({ heldMs: 6_000, holdSince: null, releasedAt: stamp(t + 6_000) })
     now = t + 11_000

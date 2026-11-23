@@ -99,6 +99,23 @@ function dotFeatures(dots: MapDot[], origin: LatLng | null = null) {
   return { fuzzy: collection(fuzzy), points: collection(points), wanted: collection(wanted) }
 }
 
+/**
+ * The map's drawn markers: the logo's own j (cut from the logo: volt for Dikejar and pings, white for Kejar), the
+ * Penjara gate and the start flag. Each is a 2x image in /map; a layer that uses one draws as soon as it has loaded.
+ */
+const MAP_ICONS = ['j-runner', 'j-chaser', 'j-ghost', 'penjara', 'start'] as const
+function addMapIcons(m: maplibregl.Map) {
+  if (typeof m.addImage !== 'function' || typeof Image === 'undefined') return
+  for (const name of MAP_ICONS) {
+    if (m.hasImage?.(name)) continue
+    const img = new Image()
+    img.onload = () => {
+      if (!m.hasImage?.(name)) m.addImage(name, img, { pixelRatio: 2 })
+    }
+    img.src = `/map/${name}.png`
+  }
+}
+
 /** The game map: arena boundary, jail, and role dots (spec §9 colour + shape rules). */
 type StationMark = { n: number; lat: number; lng: number }
 
@@ -326,18 +343,12 @@ export default function GameMap({
           type: 'geojson',
           data: collection([{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [arena.jail.lng, arena.jail.lat] } }]),
         })
+        addMapIcons(m)
         m.addLayer({
           id: 'jail',
-          type: 'circle',
-          source: 'jail',
-          paint: { 'circle-radius': 9, 'circle-color': BLACK, 'circle-stroke-color': WHITE, 'circle-stroke-width': 1.5 },
-        })
-        m.addLayer({
-          id: 'jail-label',
           type: 'symbol',
           source: 'jail',
-          layout: { 'text-field': 'PENJARA', 'text-font': ['Noto Sans Regular'], 'text-size': 11, 'text-offset': [0, 1.5], 'text-letter-spacing': 0.15 },
-          paint: { 'text-color': VOLT, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
+          layout: { 'icon-image': 'penjara', 'icon-size': 0.9, 'icon-allow-overlap': true, 'icon-ignore-placement': true },
         })
       }
       m.addSource('route', { type: 'geojson', data: routeFeatures(latestRoute.current) })
@@ -387,18 +398,12 @@ export default function GameMap({
           type: 'geojson',
           data: collection([{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [arena.start.lng, arena.start.lat] } }]),
         })
+        // Where Kejar wait while Dikejar hide: the checkered "mula" flag.
         m.addLayer({
           id: 'start',
-          type: 'circle',
-          source: 'start',
-          paint: { 'circle-radius': 9, 'circle-color': BLACK, 'circle-stroke-color': WHITE, 'circle-stroke-width': 1.5 },
-        })
-        m.addLayer({
-          id: 'start-label',
           type: 'symbol',
           source: 'start',
-          layout: { 'text-field': 'S', 'text-font': ['Noto Sans Regular'], 'text-size': 10, 'text-allow-overlap': true },
-          paint: { 'text-color': WHITE },
+          layout: { 'icon-image': 'start', 'icon-size': 0.9, 'icon-allow-overlap': true, 'icon-ignore-placement': true },
         })
       }
       // The chaser snapshot: lime like the chasers' own dots, under the live dots.
@@ -452,30 +457,54 @@ export default function GameMap({
       m.addSource('points', { type: 'geojson', data: points })
       m.addSource('wanted', { type: 'geojson', data: wanted })
       const eg = endgameColours()
-      m.addLayer({ id: 'fuzzy-fill', type: 'fill', source: 'fuzzy', paint: { 'fill-color': WHITE, 'fill-opacity': 0.12 } })
+      // A ping shows as the faded j alone (owner's call): the circle layers stay, invisible, for the ripple and Hang Hebat.
+      m.addLayer({ id: 'fuzzy-fill', type: 'fill', source: 'fuzzy', paint: { 'fill-color': WHITE, 'fill-opacity': 0 } })
       m.addLayer({
         id: 'fuzzy-line',
         type: 'line',
         source: 'fuzzy',
         filter: ['!', ['get', 'missed']],
-        paint: { 'line-color': WHITE, 'line-width': 1.2 },
+        paint: { 'line-color': WHITE, 'line-width': 1.2, 'line-opacity': 0 },
       })
       m.addLayer({
         id: 'fuzzy-missed',
         type: 'line',
         source: 'fuzzy',
         filter: ['get', 'missed'],
-        paint: { 'line-color': WHITE, 'line-width': 1.2, 'line-dasharray': [2, 2] },
+        paint: { 'line-color': WHITE, 'line-width': 1.2, 'line-dasharray': [2, 2], 'line-opacity': 0 },
+      })
+      addMapIcons(m)
+      m.addLayer({
+        id: 'fuzzy-j',
+        type: 'symbol',
+        source: 'fuzzy',
+        layout: { 'icon-image': 'j-ghost', 'icon-size': 0.85, 'icon-allow-overlap': true, 'icon-ignore-placement': true },
+        // A missed check-in is fainter still.
+        paint: { 'icon-opacity': ['case', ['get', 'missed'], 0.45, 1] },
       })
       m.addLayer({
         id: 'points',
         type: 'circle',
         source: 'points',
+        // Runners and chasers seen exactly are the j instead (points-j); me and marshals stay dots.
+        filter: ['match', ['get', 'kind'], ['runner', 'chaser'], false, true],
         paint: {
           'circle-radius': ['match', ['get', 'kind'], 'me', 7, 5],
           'circle-color': ['match', ['get', 'kind'], 'chaser', VOLT, 'marshal', 'rgba(0,0,0,0)', WHITE],
           'circle-stroke-color': ['match', ['get', 'kind'], 'me', 'rgba(245,245,243,0.35)', 'marshal', WHITE, BLACK],
           'circle-stroke-width': ['match', ['get', 'kind'], 'me', 6, 'marshal', 2, 1.5],
+        },
+      })
+      m.addLayer({
+        id: 'points-j',
+        type: 'symbol',
+        source: 'points',
+        filter: ['match', ['get', 'kind'], ['runner', 'chaser'], true, false],
+        layout: {
+          'icon-image': ['match', ['get', 'kind'], 'chaser', 'j-chaser', 'j-runner'],
+          'icon-size': 0.85,
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
         },
       })
       m.addLayer({
@@ -589,8 +618,9 @@ export default function GameMap({
         id: 'labels',
         type: 'symbol',
         source: 'fuzzy',
-        layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 11 },
-        paint: { 'text-color': WHITE },
+        // Under the faded j, so the tag number never sits on it.
+        layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Regular'], 'text-size': 11, 'text-offset': [0, 2.1], 'text-allow-overlap': true },
+        paint: { 'text-color': WHITE, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
       })
       m.addSource('pins', { type: 'geojson', data: pinFeatures(latestPins.current) })
       m.addLayer({
@@ -759,6 +789,7 @@ export default function GameMap({
       'fuzzy-line': ['!', ['get', 'missed']],
       'fuzzy-missed': ['get', 'missed'],
       'wanted-fuzzy-ring': ['get', 'wanted'],
+      'fuzzy-j': null,
       labels: null,
     }
     const start = performance.now()

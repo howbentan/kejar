@@ -158,7 +158,7 @@ export default function PlaceMap(props: Props) {
     for (const [id, d] of Object.entries(layersData(props))) (m.getSource(id) as GeoJSONSource | undefined)?.setData(d)
   })
 
-  // A lime handle at the circle's centre: drag it to move the circle. MapLibre marks the pointer event as handled
+  // A handle at the circle's centre: drag it to move the circle. MapLibre marks the pointer event as handled
   // when it lands on a draggable marker, so the map doesn't pan underneath; a tap on it must not also tap the map.
   const centreLat = props.circle?.center.lat
   const centreLng = props.circle?.center.lng
@@ -174,7 +174,8 @@ export default function PlaceMap(props: Props) {
     if (!handle.current) {
       const element = document.createElement('div')
       element.setAttribute('aria-label', 'Drag to move the circle')
-      element.style.cssText = `width:28px;height:28px;border-radius:50%;background:${VOLT};border:3px solid ${BLACK};box-shadow:0 0 0 2px ${VOLT};cursor:grab;touch-action:none`
+      // No dot of its own (owner's call): only the j shows, and this clear patch over the circle's centre is what you drag.
+      element.style.cssText = 'width:44px;height:44px;border-radius:50%;background:transparent;cursor:grab;touch-action:none'
       element.addEventListener('click', (e) => e.stopPropagation())
       const marker = new maplibregl.Marker({ element, draggable: true }).setLngLat([centreLng, centreLat]).addTo(m)
       marker.on('dragend', () => {
@@ -191,6 +192,34 @@ export default function PlaceMap(props: Props) {
     },
     [],
   )
+
+  // Where the organiser is right now, as the logo's j, so they can place stations and Penjara by where they stand.
+  const meMarker = useRef<maplibregl.Marker | null>(null)
+  useEffect(() => {
+    const geo = typeof navigator === 'undefined' ? undefined : navigator.geolocation
+    if (!geo?.watchPosition) return
+    const id = geo.watchPosition(
+      (pos) => {
+        const m = map.current
+        if (!m) return
+        const at: [number, number] = [pos.coords.longitude, pos.coords.latitude]
+        if (!meMarker.current) {
+          const element = document.createElement('img')
+          element.src = '/map/j-runner.png'
+          element.alt = 'You are here'
+          element.style.cssText = 'width:24px;height:auto;pointer-events:none'
+          meMarker.current = new maplibregl.Marker({ element }).setLngLat(at).addTo(m)
+        } else meMarker.current.setLngLat(at)
+      },
+      () => undefined,
+      { enableHighAccuracy: true, maximumAge: 5_000 },
+    )
+    return () => {
+      geo.clearWatch(id)
+      meMarker.current?.remove()
+      meMarker.current = null
+    }
+  }, [])
 
   // Frame the park (or a saved play area, or the circle) whenever a different one is chosen.
   const frame =

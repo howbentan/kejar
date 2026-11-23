@@ -1025,15 +1025,34 @@ const join: Action = async (ctx, body) => {
   return { token, playerId: p.id }
 }
 
+/**
+ * Random sides for the lobby's draw: about 1 Kejar for every 4 players (at least 1), the rest Dikejar. `all` draws
+ * everyone again; `unassigned` keeps every side already picked and only tops up the Kejar count from the new ones.
+ */
+function drawSides(players: Player[], draw: 'all' | 'unassigned', rng: () => number): Record<string, Role> {
+  const pool = players.filter((p) => p.role !== 'marshal')
+  const want = Math.max(1, Math.round(pool.length / 4))
+  const open = draw === 'all' ? pool : pool.filter((p) => !p.role)
+  const kept = draw === 'all' ? 0 : pool.filter((p) => p.role === 'chaser').length
+  const order = [...open]
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1))
+    ;[order[i], order[j]] = [order[j], order[i]]
+  }
+  const chasers = Math.max(0, want - kept)
+  return Object.fromEntries(order.map((p, i) => [p.id, i < chasers ? 'chaser' : 'runner']))
+}
+
 const setRoles: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   await requireOrganiser(ctx, game, body)
   requireLobby(game, ctx.now)
-  // The organiser picks each player's side: kit (vests, armbands) goes on in the lobby, so it's never a
-  // random draw. Marshals only join through their invite link and are never a player's option.
+  // Sides are drawn at random (the default) or picked one by one, always in the lobby so kit goes on before the
+  // start. Marshals only join through their invite link and are never a player's option.
   if (body.shuffle !== undefined) throw new ActionError(400, "Pick each player's side")
+  if (body.draw !== undefined && body.draw !== 'all' && body.draw !== 'unassigned') throw new ActionError(400, 'Draw all or unassigned')
   const players = await ctx.store.players(game.id)
-  const given = (body.roles ?? {}) as Record<string, Role>
+  const given = (body.draw ? drawSides(players, body.draw, ctx.rng) : (body.roles ?? {})) as Record<string, Role>
   const roles: Record<string, Role> = Object.fromEntries(players.filter((p) => p.role).map((p) => [p.id, p.role!]))
   const changes: { id: string; role: Role }[] = []
   for (const [id, role] of Object.entries(given)) {
@@ -1635,6 +1654,19 @@ const createMarshalInvite: Action = async (ctx, body) => {
   return { inviteToken }
 }
 
+/**
+ * The crew step's JOINED marks: of the invite links the organiser's phone made (at most 20), which have a helper on
+ * them. Only the organiser asks, and only about links they hold, so it says nothing about anyone else's.
+ */
+const crewStatus: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  await requireOrganiser(ctx, game, body)
+  const tokens = Array.isArray(body.inviteTokens) ? body.inviteTokens.map(str).filter(Boolean).slice(0, 20) : []
+  const byHash = new Map(tokens.map((t) => [hashToken(t), t]))
+  const redeemed = await ctx.store.redeemedMarshalInvites(game.id, [...byHash.keys()])
+  return { joined: redeemed.map((h) => byHash.get(h)!) }
+}
+
 const redeemMarshalInvite: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
   if (phaseAt(game, ctx.now).phase !== 'lobby') throw new ActionError(410, 'That invite link is no longer usable. The game already started.')
@@ -1642,6 +1674,12 @@ const redeemMarshalInvite: Action = async (ctx, body) => {
   if (!inviteToken) throw new ActionError(400, 'Missing invite token')
   const name = str(body.name).trim()
   if (name.length < 1 || name.length > 24) throw new ActionError(400, 'Name must be 1–24 characters')
+  // One phone, one place in a game: a phone that already joined keeps its player, and the link stays unused for
+  // the marshal's own phone. Checked before the invite is claimed.
+  if (body.token) {
+    const existing = await ctx.store.playerByToken(game.id, hashToken(str(body.token)))
+    if (existing && !existing.removed_at) throw new ActionError(409, 'This phone is already in this game. Open the marshal link on another phone.')
+  }
   const result = await ctx.store.redeemMarshalInvite(hashToken(inviteToken), ctx.now, game.id)
   if (!result.ok) {
     if (result.reason === 'invalid') throw new ActionError(404, 'That invite link is not valid')
@@ -2723,6 +2761,7 @@ export const actions = {
   createOrganiserInvite,
   redeemOrganiserInvite,
   createMarshalInvite,
+  crewStatus,
   redeemMarshalInvite,
   createPhoneMove,
   redeemPhoneMove,

@@ -154,12 +154,32 @@ describe('HostLobby', () => {
 
   it('shows the start problem from the server verbatim', async () => {
     render(<HostLobby code="ABC234" />)
-    fireEvent.click(await screen.findByRole('button', { name: /start game/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^start$/i }))
     expect(await screen.findByText('Need at least 1 chaser')).toBeInTheDocument()
   })
 
-  it("the organiser picks each player's side", async () => {
+  it('sides are random by default: no per-player picker, a draw button that draws the new ones', async () => {
     render(<HostLobby code="ABC234" />)
+    expect(await screen.findByRole('radio', { name: 'How sides are picked: Random' })).toBeChecked()
+    expect(screen.queryByRole('radio', { name: 'Aina: Kejar' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Draw 1 new' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('setRoles', { code: 'ABC234', organiserToken: 'h1', draw: 'unassigned' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Draw again' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('setRoles', { code: 'ABC234', organiserToken: 'h1', draw: 'all' }))
+  })
+
+  it('Remove takes two taps, for players and marshals', async () => {
+    render(<HostLobby code="ABC234" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove Wei' }))
+    expect(call).not.toHaveBeenCalledWith('removePlayer', expect.anything())
+    fireEvent.click(screen.getByRole('button', { name: 'Tap again to remove Wei' }))
+    await waitFor(() => expect(call).toHaveBeenCalledWith('removePlayer', { code: 'ABC234', organiserToken: 'h1', playerId: 'p3' }))
+    expect(screen.getByRole('button', { name: 'Remove Siti' })).toBeInTheDocument()
+  })
+
+  it("in Manual, the organiser picks each player's side", async () => {
+    render(<HostLobby code="ABC234" />)
+    fireEvent.click(await screen.findByRole('radio', { name: 'How sides are picked: Manual' }))
     expect(await screen.findByRole('radio', { name: 'Aina: Dikejar' })).toBeChecked()
     expect(screen.getByRole('radio', { name: 'Wei: Dikejar' })).not.toBeChecked()
     expect(screen.getByRole('radio', { name: 'Wei: Kejar' })).not.toBeChecked()
@@ -274,7 +294,7 @@ describe('HostLobby mode and checks', () => {
       return action === 'state' ? { ...fullView, phase: started ? 'hiding' : 'lobby' } : {}
     })
     render(<HostLobby code="ABC234" />)
-    fireEvent.click(await screen.findByRole('button', { name: /start game/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^start$/i }))
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/g/ABC234'))
   })
 
@@ -283,6 +303,6 @@ describe('HostLobby mode and checks', () => {
     render(<HostLobby code="ABC234" />)
     expect(await screen.findByText('BEFORE YOU START')).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: /Kit placed/ })).toHaveAttribute('aria-checked', 'false')
-    expect(screen.getByRole('button', { name: /start game/i })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /^start$/i })).toBeEnabled()
   })
 })

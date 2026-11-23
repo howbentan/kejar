@@ -400,10 +400,9 @@ export default function HostNew() {
     setStep(s)
   }
   const buttons = (primary: ReactNode, hasBack: boolean) => (
-    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+    <div className="btn-pair" style={{ marginTop: 8 }}>
       {hasBack && (
-        <button type="button" className="btn btn-ghost" style={{ flex: '0 0 34%' }} onClick={() => goTo((step - 1) as 1 | 2)}>
-          <span aria-hidden="true">‹ </span>
+        <button type="button" className="btn btn-ghost" onClick={() => goTo((step - 1) as 1 | 2)}>
           Back
         </button>
       )}
@@ -411,9 +410,8 @@ export default function HostNew() {
     </div>
   )
   const nextButton = (disabled = false) => (
-    <button type="button" className="btn" style={{ flex: 1 }} disabled={disabled} onClick={() => goTo((step + 1) as 2 | 3)}>
+    <button type="button" className="btn" disabled={disabled} onClick={() => goTo((step + 1) as 2 | 3)}>
       Next
-      <span aria-hidden="true"> ›</span>
     </button>
   )
   const headingStyle = { fontSize: 32, fontWeight: 800, letterSpacing: '-0.05em', lineHeight: 1.05 } as const
@@ -552,7 +550,7 @@ export default function HostNew() {
                   New organiser&apos;s name
                 </label>
                 <input id="peerName" className="input" maxLength={40} value={peerName} onChange={(e) => setPeerName(e.target.value)} />
-                <button className="btn btn-ghost" style={{ alignSelf: 'flex-start' }} disabled={!peerName.trim() || peerBusy} onClick={invitePeer}>
+                <button className="btn btn-ghost" disabled={!peerName.trim() || peerBusy} onClick={invitePeer}>
                   Send invite
                 </button>
                 {peerInviteUrl && (
@@ -758,7 +756,7 @@ export default function HostNew() {
 
           <ErrorText>{error}</ErrorText>
           {buttons(
-            <button type="button" className="btn" style={{ flex: 1 }} disabled={busy} aria-busy={creatingGame || undefined} onClick={create}>
+            <button type="button" className="btn" disabled={busy} aria-busy={creatingGame || undefined} onClick={create}>
               <Busy busy={creatingGame} label="Creating game">Create game</Busy>
             </button>,
             true,

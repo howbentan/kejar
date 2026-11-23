@@ -130,7 +130,7 @@ describe('RunnerChase', () => {
     await scan('KEJAR:JAIL')
     expect(call).toHaveBeenCalledWith('jailbreak', { code: 'ABC234', token: 't1', qr: 'KEJAR:JAIL' })
     expect(screen.getByRole('button', { name: 'HOLD' })).toBeInTheDocument()
-    expect(screen.getByText('Press and hold for 20 s. Let go and it waits 5 s, then resets.')).toBeInTheDocument()
+    expect(screen.getByText('Hold for 20 s. Off for 5 s and it resets.')).toBeInTheDocument()
   })
 
   it("the rescuer's own re-scan resumes: back on the rescue screen", async () => {
@@ -202,8 +202,8 @@ describe('RunnerChase', () => {
 
   it('warns that check-ins will be missed when location is off', () => {
     render(<RunnerChase code="ABC234" view={testView()} locationOff />)
-    expect(screen.getByText("Location is off, so you'll miss check-ins and be sent to Penjara.")).toBeInTheDocument()
-    expect(screen.getByText('Turn on location for this site in your browser settings.')).toBeInTheDocument()
+    expect(screen.getByText("Location is off. You'll miss check-ins.")).toBeInTheDocument()
+    expect(screen.getByText('Turn it on in your browser settings.')).toBeInTheDocument()
   })
 
   it('shows no location warning when location is working', () => {
@@ -270,7 +270,7 @@ describe('RunnerChase: hold the key (rules §9a)', () => {
     render(<RunnerChase code="ABC234" view={rescue()} />)
     expect(screen.getByRole('button', { name: 'HOLD' })).toBeInTheDocument()
     expect(screen.getByText('RESCUE ON')).toBeInTheDocument()
-    expect(screen.getByText('Press and hold for 20 s. Let go and it waits 5 s, then resets.')).toBeInTheDocument()
+    expect(screen.getByText('Hold for 20 s. Off for 5 s and it resets.')).toBeInTheDocument()
     expect(screen.getByRole('timer', { name: 'Seconds left to hold' })).toHaveTextContent('20')
   })
 
@@ -294,7 +294,7 @@ describe('RunnerChase: hold the key (rules §9a)', () => {
     const btn = screen.getByRole('button', { name: 'HOLD' })
     await act(async () => fireEvent.pointerDown(btn))
     expect(screen.getByRole('button', { name: 'HOLDING' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByText('Keep holding. Stay within 30 m of Penjara.')).toBeInTheDocument()
+    expect(screen.getByText('Keep holding. Stay within 30 m.')).toBeInTheDocument()
     await act(async () => fireEvent.pointerUp(btn))
     expect(holdCalls()).toEqual([
       { code: 'ABC234', token: 't1', down: true },
@@ -308,6 +308,23 @@ describe('RunnerChase: hold the key (rules §9a)', () => {
     await act(async () => fireEvent.pointerDown(btn))
     await act(async () => fireEvent.pointerCancel(btn))
     await act(async () => fireEvent.pointerUp(btn))
+    expect(holdCalls().map((b) => b.down)).toEqual([true, false])
+  })
+
+  it('on a touch screen, a long press the phone cancels as a pointer keeps holding; only the finger lifting lets go', async () => {
+    render(<RunnerChase code="ABC234" view={rescue()} />)
+    const btn = screen.getByRole('button', { name: 'HOLD' })
+    await act(async () => fireEvent.touchStart(btn, { changedTouches: [{ identifier: 4 }] }))
+    // The pointer events a phone fires around a long press change nothing for a touch hold.
+    await act(async () => fireEvent.pointerDown(btn, { pointerType: 'touch', pointerId: 9 }))
+    await act(async () => fireEvent.pointerCancel(btn, { pointerType: 'touch', pointerId: 9 }))
+    await act(async () => fireEvent.lostPointerCapture(btn, { pointerType: 'touch', pointerId: 9 }))
+    await act(async () => window.dispatchEvent(new Event('blur')))
+    expect(screen.getByRole('button', { name: 'HOLDING' })).toBeInTheDocument()
+    // Another finger lifting elsewhere changes nothing either.
+    await act(async () => fireEvent.touchEnd(window, { changedTouches: [{ identifier: 5 }] }))
+    expect(holdCalls().map((b) => b.down)).toEqual([true])
+    await act(async () => fireEvent.touchEnd(window, { changedTouches: [{ identifier: 4 }] }))
     expect(holdCalls().map((b) => b.down)).toEqual([true, false])
   })
 
@@ -335,10 +352,10 @@ describe('RunnerChase: hold the key (rules §9a)', () => {
     expect(holdCalls().map((b) => b.down)).toEqual([true, false])
   })
 
-  it('let go: LET GO, the count dims, and Resets in 3. Hold again to keep it.', () => {
+  it('let go: LET GO, the count dims, and Resets in 3.', () => {
     render(<RunnerChase code="ABC234" view={rescue({ heldMs: 7_000, holdSince: null, resetAt: 103_000 })} />)
     expect(screen.getByText('LET GO')).toBeInTheDocument()
-    expect(screen.getByText('Resets in 3. Hold again to keep it.')).toBeInTheDocument()
+    expect(screen.getByText('Resets in 3.')).toBeInTheDocument()
     expect(screen.getByRole('timer', { name: 'Seconds left to hold' })).toHaveClass('dim')
     expect(screen.getByRole('timer', { name: 'Seconds left to hold' })).toHaveTextContent('13')
   })
@@ -498,15 +515,15 @@ describe('RunnerChase: alerts after New phone', () => {
   }
   it('offers Turn on alerts in push mode when the runner has no subscription', () => {
     render(<RunnerChase code="ABC234" view={withMode('push', null)} />)
-    expect(screen.getByRole('button', { name: 'Turn on alerts' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Turn on' })).toBeInTheDocument()
   })
   it('does not when they are subscribed', () => {
     render(<RunnerChase code="ABC234" view={withMode('push', { endpoint: 'x' })} />)
-    expect(screen.queryByRole('button', { name: 'Turn on alerts' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Turn on' })).toBeNull()
   })
   it('does not in schedule mode', () => {
     render(<RunnerChase code="ABC234" view={withMode('schedule', null)} />)
-    expect(screen.queryByRole('button', { name: 'Turn on alerts' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Turn on' })).toBeNull()
   })
 
   describe('side quest', () => {

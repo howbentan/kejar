@@ -37,10 +37,10 @@ describe('Hide', () => {
 describe('Hide: alerts after New phone', () => {
   it('a runner in push mode with no subscription can turn alerts back on', () => {
     render(<Hide code="ABC234" view={as('runner')} />)
-    expect(screen.getByRole('button', { name: 'Turn on alerts' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Turn on' })).toBeInTheDocument()
   })
   it('a chaser is not asked', () => {
     render(<Hide code="ABC234" view={as('chaser')} />)
-    expect(screen.queryByRole('button', { name: 'Turn on alerts' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Turn on' })).toBeNull()
   })
 })

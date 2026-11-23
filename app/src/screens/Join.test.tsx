@@ -23,7 +23,7 @@ describe('Join', () => {
   it('keeps the button disabled until both checkboxes are ticked', () => {
     render(<Join code="ABC234" />)
     fireEvent.change(screen.getByLabelText(/your name/i), { target: { value: 'Aina' } })
-    const button = screen.getByRole('button', { name: /join game/i })
+    const button = screen.getByRole('button', { name: /^join$/i })
     expect(button).toBeDisabled()
     fireEvent.click(screen.getByLabelText(/no grabbing/i))
     expect(button).toBeDisabled()
@@ -62,7 +62,7 @@ describe('Join', () => {
     fireEvent.change(screen.getByLabelText(/your name/i), { target: { value: 'Zara' } })
     fireEvent.click(screen.getByLabelText(/no grabbing/i))
     fireEvent.click(screen.getByLabelText(/waiver/i))
-    fireEvent.click(screen.getByRole('button', { name: /join game/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^join$/i }))
     await waitFor(() => expect(localStorage.getItem('kejar.name')).toBe('Zara'))
   })
 
@@ -73,7 +73,7 @@ describe('Join', () => {
     fireEvent.change(screen.getByLabelText(/your name/i), { target: { value: 'Aina' } })
     fireEvent.click(screen.getByLabelText(/no grabbing/i))
     fireEvent.click(screen.getByLabelText(/waiver/i))
-    fireEvent.click(screen.getByRole('button', { name: /join game/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^join$/i }))
     const busy = await screen.findByRole('button', { name: 'Joining' })
     expect(busy).toHaveAttribute('aria-busy', 'true')
     expect(busy).toContainElement(screen.getByTestId('mini-runner'))

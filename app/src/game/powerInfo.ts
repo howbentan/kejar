@@ -22,3 +22,20 @@ export const INFO: Record<PowerUpKind, { name: string; effect: string; used: str
   // Used automatically: it waits in the hand until the runner would go to Penjara.
   ring: { name: POWER_NAME.ring, effect: "Next time you'd go to Penjara: house arrest instead", used: 'Super Ring is on' },
 }
+
+/** The short line under a power-up's pop-up card: only what the card face doesn't say (when, how long, how far). */
+export const HOW: Record<PowerUpKind, string> = {
+  decoy: 'Works on your next ping.',
+  shield: 'Lasts up to 10 min.',
+  cloak: 'Works on your next ping.',
+  flare: 'Ping in 30 s.',
+  focus: 'Next ping · 75 m.',
+  toyol: 'A random card from a Kejar.',
+  along: 'A random card from a Dikejar.',
+  grab: 'Pick 1 of 3.',
+  dato: 'Use it at Penjara. Frees you and 2 more.',
+  cheese: 'Freezes them for 3 min.',
+  combo: 'Your next card works twice.',
+  toll: 'Next ping · 40 m.',
+  ring: 'Already on.',
+}

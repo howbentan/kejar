@@ -184,8 +184,8 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
             )}
             {locationOff && (
               <div role="alert" className="chase-warning">
-                <p style={{ fontWeight: 700 }}>Location is off, so you'll miss check-ins and be sent to Penjara.</p>
-                <p className="muted">Turn on location for this site in your browser settings.</p>
+                <p style={{ fontWeight: 700 }}>Location is off. You'll miss check-ins.</p>
+                <p className="muted">Turn it on in your browser settings.</p>
               </div>
             )}
             {view.me.role === 'runner' && <AlertsCard code={code} view={view} />}

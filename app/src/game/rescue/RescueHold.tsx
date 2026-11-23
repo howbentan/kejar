@@ -14,7 +14,7 @@ type HoldAnswer = { ok: true; heldMs: number; holding: boolean } | { ok: false; 
 /** The hold as the last answer left it, read at `at` on the server's clock. */
 type Answered = Pick<RescueNow, 'heldMs' | 'holdSince' | 'resetAt'> & { at: number }
 
-/** A beat with no recent fix waits at most this long for a fresh one: it must land well inside the 3 s lapse. */
+/** A beat with no recent fix waits at most this long for a fresh one: it must land well inside the 4 s lapse. */
 export const BEAT_FIX_WAIT_MS = 300
 
 const isHoldKey = (e: KeyboardEvent) => e.key === ' ' || e.key === 'Enter'
@@ -55,6 +55,10 @@ export default function RescueHold({
   const downRef = useRef(false)
   // The pointer that pressed, so only it can let go (null for a key press).
   const pointer = useRef<number | null>(null)
+  // The finger holding the key on a touch screen. Touch runs on touch events, not pointer events: a phone cancels a
+  // long-pressed pointer (text selection, the long-press menu, a scroll guess) while the thumb is still on the glass.
+  const touch = useRef<number | null>(null)
+  const button = useRef<HTMLButtonElement>(null)
   const [answered, setAnswered] = useState<Answered | null>(null)
   const now = useRescueNow(viewNow, paused, down || rescue.holdSince !== null || answered?.holdSince != null)
   const clock = useRef(now)
@@ -135,21 +139,50 @@ export default function RescueHold({
     thumbRef.current = thumb
   }, [thumb])
   useEffect(() => {
-    const up = () => thumbRef.current(false)
+    const up = () => {
+      touch.current = null
+      thumbRef.current(false)
+    }
     const lifted = (e: globalThis.PointerEvent) => {
-      if (pointer.current !== null && e.pointerId === pointer.current) up()
+      if (e.pointerType !== 'touch' && pointer.current !== null && e.pointerId === pointer.current) up()
+    }
+    // A finger still on the glass holds the key whatever the window's focus does; the OS sends touchcancel if it
+    // really takes the screen (a call), and going to the background lets go below.
+    const blurred = () => {
+      if (touch.current === null) up()
+    }
+    const fingerOff = (e: TouchEvent) => {
+      if (touch.current === null) return
+      if (Array.from(e.changedTouches).some((t) => t.identifier === touch.current)) up()
     }
     const hidden = () => {
       if (document.visibilityState === 'hidden') up()
     }
+    // Pressing is on the button itself, not passive, so its default (long-press menu, selection, scroll) is stopped.
+    const el = button.current
+    const fingerOn = (e: TouchEvent) => {
+      e.preventDefault()
+      if (touch.current !== null || downRef.current || el?.disabled) return
+      touch.current = e.changedTouches[0]?.identifier ?? 0
+      thumbRef.current(true)
+    }
+    const still = (e: TouchEvent) => e.preventDefault()
+    el?.addEventListener('touchstart', fingerOn, { passive: false })
+    el?.addEventListener('touchmove', still, { passive: false })
+    window.addEventListener('touchend', fingerOff)
+    window.addEventListener('touchcancel', fingerOff)
     window.addEventListener('pointerup', lifted)
     window.addEventListener('pointercancel', lifted)
-    window.addEventListener('blur', up)
+    window.addEventListener('blur', blurred)
     document.addEventListener('visibilitychange', hidden)
     return () => {
+      el?.removeEventListener('touchstart', fingerOn)
+      el?.removeEventListener('touchmove', still)
+      window.removeEventListener('touchend', fingerOff)
+      window.removeEventListener('touchcancel', fingerOff)
       window.removeEventListener('pointerup', lifted)
       window.removeEventListener('pointercancel', lifted)
-      window.removeEventListener('blur', up)
+      window.removeEventListener('blur', blurred)
       document.removeEventListener('visibilitychange', hidden)
       // This screen going away (the rescue ended, the game paused, caught) lets go too.
       if (downRef.current) up()
@@ -164,14 +197,14 @@ export default function RescueHold({
 
   const line =
     mode === 'holding'
-      ? 'Keep holding. Stay within 30 m of Penjara.'
+      ? 'Keep holding. Stay within 30 m.'
       : mode === 'paused'
-        ? `Resets in ${resetsIn(live.resetAt, now)}. Hold again to keep it.`
-        : 'Press and hold for 20 s. Let go and it waits 5 s, then resets.'
+        ? `Resets in ${resetsIn(live.resetAt, now)}.`
+        : 'Hold for 20 s. Off for 5 s and it resets.'
 
   const press = (e: PointerEvent<HTMLButtonElement>) => {
-    // A second finger on the button changes nothing: the first one still holds it.
-    if (downRef.current) return
+    // Touch is handled by the touch events above; a second finger on the button changes nothing.
+    if (e.pointerType === 'touch' || downRef.current) return
     pointer.current = e.pointerId
     try {
       // Keeps the pointer on the button if the thumb slides off it.
@@ -182,6 +215,7 @@ export default function RescueHold({
     thumb(true)
   }
   const lift = (e: PointerEvent<HTMLButtonElement>) => {
+    if (e.pointerType === 'touch') return
     if (pointer.current === null || e.pointerId === pointer.current) thumb(false)
   }
 
@@ -196,6 +230,7 @@ export default function RescueHold({
         </div>
         <p className="rescue-line">{line}</p>
         <button
+          ref={button}
           type="button"
           className={`holdbtn${down ? ' down' : ''}`}
           aria-pressed={down}

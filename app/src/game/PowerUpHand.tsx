@@ -6,7 +6,8 @@ import type { View } from '../../shared/views.js'
 import { call } from './api'
 import { loadSession } from './session'
 import { clock, useServerNow } from './time'
-import { INFO } from './powerInfo'
+import { HOW, INFO } from './powerInfo'
+import PowerCard from './PowerCard'
 import FreezePicker from './FreezePicker'
 import GrabChooser from './GrabChooser'
 import Sticker from './Sticker'
@@ -137,9 +138,15 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
     setGrab({ powerupId: openOffer.id, offer: openOffer.offer! })
   }, [openOffer])
 
-  // Cheese Ais skips the confirm: the picker is its confirm, and Cancel keeps the card.
+  // Tapping a card pops it up in the middle of the screen with what it does. Cheese Ais's button opens the picker,
+  // which is its confirm (Cancel keeps the card).
   function open(u: PowerUp) {
-    if (u.kind !== 'cheese') return setConfirm(u)
+    setMessage('')
+    setError('')
+    setConfirm(u)
+  }
+  function pickFreeze(u: PowerUp) {
+    setConfirm(null)
     setError('')
     if (!view.freezeTargets || view.freezeTargets.length === 0) return setMessage('No Kejar to freeze right now.')
     setMessage('')
@@ -197,23 +204,13 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
 
   return (
     <div className="slot-wrap">
-      {(confirm || using || message || error) && (
+      {(using || message || error) && (
         <div className="dock-pop">
           {using ? (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <span style={{ flex: 1 }}>{`Use ${INFO[using.kind].name}?`}</span>
               <button type="button" className="btn" style={{ padding: '10px 16px' }} disabled aria-busy="true">
                 <BusyLabel label={`Using ${INFO[using.kind].name}`} height={20} />
-              </button>
-            </div>
-          ) : confirm ? (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <span style={{ flex: 1 }}>{`Use ${INFO[confirm.kind].name}?`}</span>
-              <button type="button" className="btn" style={{ padding: '10px 16px' }} onClick={() => use(confirm)}>
-                {`Use ${INFO[confirm.kind].name}`}
-              </button>
-              <button type="button" className="btn btn-ghost" style={{ padding: '10px 16px' }} onClick={() => setConfirm(null)}>
-                Cancel
               </button>
             </div>
           ) : (
@@ -231,12 +228,14 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
           // Dato Seri is only ever used through Settle, at Penjara: no Use here (jail design §4b).
           if (u.kind === 'dato') {
             return (
-              <m.div
+              <m.button
                 key={u.id}
+                type="button"
                 className="slot legendary"
                 initial={{ y: -16, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 500, damping: 18 }}
+                onClick={() => open(u)}
               >
                 <Sticker kind="dato" size={40} tilt={-4} />
                 <span>
@@ -244,18 +243,20 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
                   <span>{INFO.dato.used}</span>
                 </span>
                 <small className="slot-deck">★ LEGENDARY</small>
-              </m.div>
+              </m.button>
             )
           }
           // Super Ring switches on at claim and waits for the next time they'd go to Penjara: nothing to use.
           if (u.kind === 'ring') {
             return (
-              <m.div
+              <m.button
                 key={u.id}
+                type="button"
                 className="slot legendary ring"
                 initial={{ y: -16, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 500, damping: 18 }}
+                onClick={() => open(u)}
               >
                 <Sticker kind="ring" size={40} tilt={-4} />
                 <span>
@@ -263,7 +264,7 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
                   <span>{INFO.ring.used}</span>
                 </span>
                 <small className="slot-deck">ON · WAITING</small>
-              </m.div>
+              </m.button>
             )
           }
           return (
@@ -305,8 +306,48 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
           {deck}
         </div>
       )}
+      {confirm && <CardPop u={confirm} onUse={() => (confirm.kind === 'cheese' ? pickFreeze(confirm) : use(confirm))} onClose={() => setConfirm(null)} />}
       {freeze && <FreezePicker targets={view.freezeTargets ?? []} onPick={(id) => use(freeze, id)} onCancel={() => setFreeze(null)} />}
       {grab && <GrabChooser code={code} powerupId={grab.powerupId} offer={grab.offer} onClose={() => setGrab(null)} />}
+    </div>
+  )
+}
+
+/**
+ * A tapped power-up, popped up in the middle of the screen: the big card (its face says what it does) and how it works. Dato Seri
+ * and Super Ring have nothing to use here (Settle at Penjara; Super Ring is already on), so they only close.
+ */
+function CardPop({ u, onUse, onClose }: { u: PowerUp; onUse: () => void; onClose: () => void }) {
+  const info = INFO[u.kind]
+  const usable = u.kind !== 'dato' && u.kind !== 'ring'
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+  return (
+    <div className="card-pop" role="dialog" aria-modal="true" aria-label={info.name} onClick={onClose}>
+      <m.div
+        className="card-pop-body"
+        initial={{ scale: 0.6, y: 40, opacity: 0, rotate: -6 }}
+        animate={{ scale: 1, y: 0, opacity: 1, rotate: 0 }}
+        transition={{ type: 'spring', stiffness: 420, damping: 22 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <PowerCard kind={u.kind} big />
+        <h2 className="card-pop-name">{info.name}</h2>
+        <p className="card-pop-how">{HOW[u.kind]}</p>
+        <div className="card-pop-actions">
+          {usable && (
+            <button type="button" className="btn" onClick={onUse}>
+              {u.kind === 'cheese' ? 'Pick' : 'Use'}
+            </button>
+          )}
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
+            {usable ? 'Cancel' : 'Close'}
+          </button>
+        </div>
+      </m.div>
     </div>
   )
 }

@@ -1181,8 +1181,8 @@ describe('the live rescue (rules §9a)', () => {
     expect(view(aina, { game: { ...g, rescue: released } }).rescue).toMatchObject({ heldMs: 7_000, holdSince: null, resetAt: NOW + 3_000 })
   })
   it('a thumb that went quiet counts as let go at its last beat', () => {
-    const quiet = { ...rescue, lastBeat: iso(NOW - 4_000) }
-    expect(view(aina, { game: { ...g, rescue: quiet } }).rescue).toMatchObject({ heldMs: 3_000, holdSince: null, resetAt: NOW - 4_000 + 5_000 })
+    const quiet = { ...rescue, lastBeat: iso(NOW - 4_500) }
+    expect(view(aina, { game: { ...g, rescue: quiet } }).rescue).toMatchObject({ heldMs: 2_500, holdSince: null, resetAt: NOW - 4_500 + 5_000 })
   })
   it('reads an old record (no hold fields) as released at its start', () => {
     const old = { by: 'r3', startedAt: iso(NOW - 1_000) }
