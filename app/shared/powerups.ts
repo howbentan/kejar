@@ -185,6 +185,8 @@ export function shieldArmedAt(u: PowerUp, all: PowerUp[]): number | null {
 function usedRunning(u: PowerUp, powerUps: PowerUp[], pings: Ping[], now: number, me?: Pick<Player, 'arrest'>): boolean {
   // Super Ring: runs for as long as its holder is under the house arrest it brought on.
   if (u.kind === 'ring') return !!me?.arrest
+  // Sike is empty: nothing ever runs.
+  if (u.kind === 'sike') return false
   // Done the moment they succeed or act (power-ups §5a): nothing keeps running.
   if (u.kind === 'toyol' || u.kind === 'along' || u.kind === 'grab' || u.kind === 'dato' || u.kind === 'combo' || u.kind === 'cheese') return false
   const usedAt = Date.parse(u.used_at as string)

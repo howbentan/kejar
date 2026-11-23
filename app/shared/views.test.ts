@@ -366,7 +366,8 @@ describe('the endgame stays secret until its reveal (Review Focus 5)', () => {
 describe('deck and slot', () => {
   it("shows how many cards are left in my side's deck", () => {
     const v = view(aina, { game: { ...g, runner_sets: 1, runner_draws: 2 } })
-    expect(v.deckLeft).toBe(4)
+    // A Core runner set is 6 cards plus 2 Sikes.
+    expect(v.deckLeft).toBe(6)
   })
   it('has no deck count for a marshal', () => {
     expect(view(siti, { game: { ...g, runner_sets: 1, runner_draws: 2 } }).deckLeft).toBeNull()

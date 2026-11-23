@@ -25,8 +25,43 @@ export function setsFor(side: Side, players: number): number {
   return Math.max(1, Math.ceil(players / (side === 'runner' ? 10 : 5)))
 }
 
+export type Rarity = 'common' | 'rare' | 'epic'
+
+/** Each deck card's rarity (owner, 2026-11-24): its colour on the back and the frame. Legendaries have none. */
+export const RARITY: Record<Exclude<PowerUpKind, 'sike' | 'dato' | 'ring'>, Rarity> = {
+  shield: 'common', cloak: 'common', decoy: 'common', flare: 'common', focus: 'common',
+  cheese: 'rare', grab: 'rare', toll: 'rare',
+  toyol: 'epic', along: 'epic', combo: 'epic',
+}
+
+/** Empty cards in every set of the deck, so they grow with the players like the rest. */
+export const SIKE_PER_SET = 2
+
 export function deckFor(mode: Mode, side: Side, sets: number): PowerUpKind[] {
-  return Array.from({ length: sets }, () => SET[mode][side]).flat()
+  return Array.from({ length: sets }, () => [...SET[mode][side], ...Array<PowerUpKind>(SIKE_PER_SET).fill('sike')]).flat()
+}
+
+/**
+ * The 5 face-down cards a scan deals: drawn at random from what this round of the deck has left (the deck minus the
+ * cards already taken this round). The picked one is taken; the other 4 stay in the deck. With fewer than `n` left,
+ * the deal comes from a fresh round.
+ */
+export function dealFrom(deck: PowerUpKind[], takenThisRound: PowerUpKind[], rng: () => number, n = 5): PowerUpKind[] {
+  let left = [...deck]
+  for (const k of takenThisRound) {
+    const i = left.indexOf(k)
+    if (i !== -1) left.splice(i, 1)
+  }
+  if (left.length < n) left = [...deck]
+  const out: PowerUpKind[] = []
+  for (let i = 0; i < n && left.length; i++) out.push(left.splice(Math.floor(rng() * left.length), 1)[0])
+  return out
+}
+
+/** The colour on a card's back: a real card shows its rarity, a Sike borrows any of the three. */
+export function backOf(card: PowerUpKind, rng: () => number): Rarity {
+  if (card === 'sike') return (['common', 'rare', 'epic'] as const)[Math.min(2, Math.floor(rng() * 3))]
+  return RARITY[card as keyof typeof RARITY] ?? 'common'
 }
 
 /** mulberry32: small, fast, and the same everywhere for the same seed. */

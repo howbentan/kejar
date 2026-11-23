@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MIN, T0 } from '../../shared/fixtures.js'
 import { BONUS_SEQ_BASE } from '../../shared/clock.js'
 import { cardAt, deckFor } from '../../shared/deck.js'
@@ -54,6 +54,28 @@ const run = <T = any>(action: ActionName, body: object) =>
     },
     body,
   ) as Promise<T>
+
+/**
+ * A station scan now deals five face-down cards and the pick decides (playtest batch §2.1). Older tests that only
+ * care about getting a card scan, then pick the first real card in the deal (never a Sike), and get the pick's answer.
+ */
+let nextPick: PowerUpKind | null = null
+afterEach(() => {
+  nextPick = null
+})
+async function claimPick<T = any>(body: { code: string; token: string; qr: string } & Record<string, unknown>): Promise<T> {
+  const r = await run('claim', body)
+  if (!r?.ok || !r.deal) return r
+  const row = (await store.powerUps((await store.gameByCode(body.code))!.id)).find((u) => u.id === r.deal.id)!
+  const index = Math.max(0, row.deal!.cards.findIndex((k) => k !== 'sike'))
+  if (nextPick) {
+    const cards = [...row.deal!.cards]
+    cards[index] = nextPick
+    nextPick = null
+    await store.updatePowerUp(row.id, { deal: { ...row.deal!, cards } })
+  }
+  return run<T>('pickCard', { code: body.code, token: body.token, dealId: r.deal.id, index })
+}
 
 async function rejects(p: Promise<unknown>, status: number, message?: string) {
   const err = await p.then(
@@ -1183,7 +1205,7 @@ describe('power-up stations', () => {
 
   it('claim at a station gives the player a power-up for their role and logs a pickup', async () => {
     const g = await chasingWithStation()
-    const r = await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    const r = await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
     expect(r.ok).toBe(true)
     expect(['decoy', 'shield', 'cloak']).toContain(r.kind)
     const v = await run<View>('state', { code: g.code, token: g.aina.token })
@@ -1191,12 +1213,98 @@ describe('power-up stations', () => {
     expect(v.feed[0].text).toBe('Aina picked up a power-up')
   })
 
-  it('a Core game only ever deals Durian and Ponteng to runners, in deck order', async () => {
+  it('a Core game only ever deals Durian, Ponteng and Sike to runners', async () => {
     const g = await chasingWithStation()
     const r = await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
-    const seed = (await store.gameByCode(g.code))!.deck_seed
-    expect(r.kind).toBe(cardAt(`${seed}:runner`, deckFor('core', 'runner', 1), 0))
-    expect(['shield', 'cloak']).toContain(r.kind)
+    const row = (await store.powerUps(g.gameId)).find((u) => u.id === r.deal.id)!
+    expect(row.deal!.cards).toHaveLength(5)
+    for (const k of row.deal!.cards) expect(['shield', 'cloak', 'sike']).toContain(k)
+  })
+
+  describe('the pick (playtest batch §2.1)', () => {
+    const scan = (g: { code: string; aina: { token: string } }) => run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    const rowOf = async (g: { gameId: string }, id: string) => (await store.powerUps(g.gameId)).find((u) => u.id === id)!
+
+    it('a scan deals five backs and names no card anywhere until the pick (Review Focus 1)', async () => {
+      const g = await chasingWithStation()
+      const r = await scan(g)
+      expect(r).toEqual({ ok: true, deal: { id: expect.any(String), backs: expect.any(Array) } })
+      expect(r.deal.backs).toHaveLength(5)
+      for (const b of r.deal.backs) expect(['common', 'rare', 'epic']).toContain(b)
+      const v = await run<View>('state', { code: g.code, token: g.aina.token })
+      expect(v.hand).toEqual([])
+      expect(v.deal).toEqual({ id: r.deal.id, backs: r.deal.backs, endsAt: expect.any(String) })
+      expect(v.feed.map((f) => f.text)).not.toContain('Aina picked up a power-up')
+      const row = await rowOf(g, r.deal.id)
+      for (const k of new Set(row.deal!.cards)) {
+        expect(JSON.stringify(v.hand)).not.toContain(`"${k}"`)
+      }
+    })
+
+    it('the pick decides: the card at that index goes into the hand, then the feed says so', async () => {
+      const g = await chasingWithStation()
+      const r = await scan(g)
+      const row = await rowOf(g, r.deal.id)
+      const i = Math.max(0, row.deal!.cards.findIndex((k) => k !== 'sike'))
+      const picked = await run('pickCard', { code: g.code, token: g.aina.token, dealId: r.deal.id, index: i })
+      expect(picked).toEqual({ ok: true, kind: row.deal!.cards[i] })
+      const v = await run<View>('state', { code: g.code, token: g.aina.token })
+      expect(v.hand.map((u) => u.kind)).toEqual([row.deal!.cards[i]])
+      expect(v.deal).toBeNull()
+      expect(v.feed[0].text).toBe('Aina picked up a power-up')
+    })
+
+    it('a second pick gives the same card and never a second power-up (Review Focus 2)', async () => {
+      const g = await chasingWithStation()
+      const r = await scan(g)
+      const row = await rowOf(g, r.deal.id)
+      const first = await run('pickCard', { code: g.code, token: g.aina.token, dealId: r.deal.id, index: 0 })
+      const again = await run('pickCard', { code: g.code, token: g.aina.token, dealId: r.deal.id, index: 4 })
+      expect(again).toEqual({ ok: true, kind: first.kind })
+      expect(first.kind).toBe(row.deal!.cards[0])
+      expect((await store.powerUps(g.gameId)).filter((u) => u.player_id === g.aina.playerId)).toHaveLength(1)
+    })
+
+    it('a Sike leaves the slot empty: no card in hand, another station at once, this one still locked (Review Focus 3)', async () => {
+      const g = await chasingWithStation()
+      const r = await scan(g)
+      await store.updatePowerUp(r.deal.id, { deal: { cards: ['sike', 'sike', 'sike', 'sike', 'sike'], backs: r.deal.backs, auto: 0 } })
+      expect(await run('pickCard', { code: g.code, token: g.aina.token, dealId: r.deal.id, index: 2 })).toEqual({ ok: true, kind: 'sike' })
+      const v = await run<View>('state', { code: g.code, token: g.aina.token })
+      expect(v.hand).toEqual([])
+      expect(v.activePowerUp).toBeNull()
+      // The station locks for everyone as usual, and Aina can't claim it twice.
+      expect(await run('claim', { code: g.code, token: g.hafiz.token, qr: stationQr(1), ...atS1 })).toMatchObject({ ok: false, reason: 'locked' })
+      expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toMatchObject({ ok: false, reason: 'already-claimed' })
+    })
+
+    it('a combo-ready player who picks a Sike stays combo ready', async () => {
+      const g = await chasingWithStation()
+      const combo = await give(g.gameId, g.aina.playerId, 'combo')
+      await store.updatePowerUp(combo.id, { used_at: new Date(now).toISOString(), station: 9 })
+      const r = await scan(g)
+      await store.updatePowerUp(r.deal.id, { deal: { cards: ['sike', 'sike', 'sike', 'sike', 'sike'], backs: r.deal.backs, auto: 0 } })
+      await run('pickCard', { code: g.code, token: g.aina.token, dealId: r.deal.id, index: 0 })
+      expect((await run<View>('state', { code: g.code, token: g.aina.token })).comboReady).toBe(true)
+    })
+
+    it('a deal nobody answers is settled at its own pick 60 s after the scan', async () => {
+      const g = await chasingWithStation()
+      const r = await scan(g)
+      const row = await rowOf(g, r.deal.id)
+      now += 59_000
+      expect((await run<View>('state', { code: g.code, token: g.aina.token })).deal).not.toBeNull()
+      now += 1_000
+      const v = await run<View>('state', { code: g.code, token: g.aina.token })
+      expect(v.deal).toBeNull()
+      expect((await rowOf(g, r.deal.id)).kind).toBe(row.deal!.cards[row.deal!.auto])
+    })
+
+    it("someone else's deal can't be picked", async () => {
+      const g = await chasingWithStation()
+      const r = await scan(g)
+      expect(await run('pickCard', { code: g.code, token: g.hafiz.token, dealId: r.deal.id, index: 0 })).toEqual({ ok: false, reason: 'no-deal' })
+    })
   })
 
   it("the deck's order comes from a secret seed that no player ever sees", async () => {
@@ -1212,7 +1320,7 @@ describe('power-up stations', () => {
   it('a second claim while the slot is full is refused and draws nothing', async () => {
     const g = await chasingWithStation()
     await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'cloak', station: 9 })
-    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toEqual({
+    expect(await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toEqual({
       ok: false,
       reason: 'hand-full',
       busyKind: 'cloak',
@@ -1227,8 +1335,8 @@ describe('power-up stations', () => {
     await run('start', { code: g.code, organiserToken: g.organiserToken })
     now = T0 + 7 * MIN
     await Promise.all([
-      run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 }),
-      run('claim', { code: g.code, token: g.hafiz.token, qr: stationQr(2), lat: S2.lat, lng: S2.lng, accuracy_m: 8 }),
+      claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 }),
+      claimPick({ code: g.code, token: g.hafiz.token, qr: stationQr(2), lat: S2.lat, lng: S2.lng, accuracy_m: 8 }),
     ])
     expect((await store.gameByCode(g.code))!.runner_draws).toBe(2)
   })
@@ -1236,13 +1344,13 @@ describe('power-up stations', () => {
   it('a game started before decks existed still deals cards', async () => {
     const g = await chasingWithStation()
     await store.updateGame(g.gameId, { runner_sets: null, chaser_sets: null })
-    const r = await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    const r = await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
     expect(r.ok).toBe(true)
   })
 
   it('claim from far away is rejected and gives nothing', async () => {
     const g = await chasingWithStation()
-    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...at(0) })).toEqual({
+    expect(await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...at(0) })).toEqual({
       ok: false,
       reason: 'too-far',
     })
@@ -1404,8 +1512,8 @@ describe('review fixes', () => {
   it('two players scanning one station at the same moment: only one gets a power-up', async () => {
     const g = await chasingWithStation()
     const results = await Promise.all([
-      run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 }),
-      run('claim', { code: g.code, token: g.hafiz.token, qr: stationQr(1), ...atS1 }),
+      claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 }),
+      claimPick({ code: g.code, token: g.hafiz.token, qr: stationQr(1), ...atS1 }),
     ])
     expect(results.filter((r) => r.ok)).toHaveLength(1)
     expect(results.find((r) => !r.ok)).toMatchObject({ reason: 'locked' })
@@ -1415,8 +1523,8 @@ describe('review fixes', () => {
   it('a double-tapped claim gives only one power-up', async () => {
     const g = await chasingWithStation()
     const results = await Promise.all([
-      run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 }),
-      run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 }),
+      claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 }),
+      claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 }),
     ])
     expect(results.filter((r) => r.ok)).toHaveLength(1)
     expect(await store.powerUps(g.gameId)).toHaveLength(1)
@@ -1510,7 +1618,7 @@ describe('Toyol and Ah Long', () => {
     await give(g.gameId, g.ben.playerId, 'flare')
     const toyol = await give(g.gameId, g.aina.playerId, 'toyol')
     await use(g, g.aina.token, toyol.id)
-    const r = await run('claim', { code: g.code, token: g.ben.token, qr: stationQr(1), lat: S1.lat, lng: S1.lng, accuracy_m: 8 })
+    const r = await claimPick({ code: g.code, token: g.ben.token, qr: stationQr(1), lat: S1.lat, lng: S1.lng, accuracy_m: 8 })
     expect(r.ok).toBe(true)
   })
 
@@ -1643,7 +1751,7 @@ describe('Cheese Ais', () => {
     const g = await chasing()
     const cheese = await give(g.gameId, g.aina.playerId, 'cheese')
     await freeze(g, g.aina.token, cheese.id, g.ben.playerId)
-    const claim = () => run('claim', { code: g.code, token: g.ben.token, qr: stationQr(1), lat: S1.lat, lng: S1.lng, accuracy_m: 8 })
+    const claim = () => claimPick({ code: g.code, token: g.ben.token, qr: stationQr(1), lat: S1.lat, lng: S1.lng, accuracy_m: 8 })
     expect(await claim()).toMatchObject({ ok: false, reason: 'frozen' })
     const flare = await give(g.gameId, g.ben.playerId, 'flare')
     const useFlare = () => run('usePowerup', { code: g.code, token: g.ben.token, powerupId: flare.id })
@@ -1765,7 +1873,12 @@ describe('Abang Grab', () => {
   const expectedOffer = async (g: { code: string }, side: 'runner' | 'chaser', first: number) => {
     const row = await game(g)
     const deck = deckFor('full', side, (side === 'runner' ? row.runner_sets : row.chaser_sets)!)
-    return [0, 1, 2].map((k) => cardAt(`${row.deck_seed}:${side}`, deck, first + k))
+    const offer: PowerUpKind[] = []
+    for (let k = 0; offer.length < 3; k++) {
+      const card = cardAt(`${row.deck_seed}:${side}`, deck, first + k)
+      if (card !== 'sike') offer.push(card)
+    }
+    return offer
   }
 
   it('shows the top 3 cards of the holder\'s deck and reserves exactly those 3 draws', async () => {
@@ -1810,7 +1923,7 @@ describe('Abang Grab', () => {
     const g = await chasing()
     const grab = await give(g.gameId, g.aina.playerId, 'grab')
     await use(g, g.aina.token, grab.id)
-    const r = await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    const r = await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
     expect(r).toMatchObject({ ok: false, reason: 'hand-full', busyKind: 'grab' })
   })
 
@@ -1828,7 +1941,7 @@ describe('Abang Grab', () => {
     expect(v.hand.map((u) => u.id)).toEqual([kept.id])
     expect(v.activePowerUp).toBeNull() // held, not switched on
     expect(v.feed[0].text).toBe('Aina picked up a power-up')
-    const claim = await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    const claim = await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
     expect(claim).toMatchObject({ ok: false, reason: 'hand-full', busyKind: offer[1], busyRunning: false })
     expect((await game(g)).runner_draws).toBe(3) // the other two aren't put back, and the full slot drew nothing
   })
@@ -1860,13 +1973,12 @@ describe('Abang Grab', () => {
     expect((await store.powerUps(g.gameId)).filter((u) => u.sealed)).toHaveLength(1)
   })
 
-  it('a station claim right after a Grab draws the card after the offered three', async () => {
+  it('a station claim right after a Grab counts one more draw', async () => {
     const g = await chasing()
     const grab = await give(g.gameId, g.aina.playerId, 'grab')
     await use(g, g.aina.token, grab.id)
-    const r = await run('claim', { code: g.code, token: g.hafiz.token, qr: stationQr(1), ...atS1 })
+    const r = await claimPick({ code: g.code, token: g.hafiz.token, qr: stationQr(1), ...atS1 })
     expect(r.ok).toBe(true)
-    expect(r.kind).toBe((await expectedOffer(g, 'runner', 3))[0])
     expect((await game(g)).runner_draws).toBe(4)
   })
 
@@ -1904,7 +2016,7 @@ describe('Nasi Lemak KFC', () => {
   const S3 = { lat: CENTER.lat, lng: CENTER.lng + 100 / (111_195 * Math.cos((CENTER.lat * Math.PI) / 180)) }
   const atS2 = { lat: S2.lat, lng: S2.lng, accuracy_m: 8 }
   const atS3 = { lat: S3.lat, lng: S3.lng, accuracy_m: 8 }
-  const EXCLUDED: PowerUpKind[] = ['grab', 'combo', 'dato']
+  const EXCLUDED: PowerUpKind[] = ['grab', 'combo', 'dato', 'sike']
   /** Ben, Kim and Lee chase; Aina, Hafiz and Wei run. Full mode, the chase has begun. */
   async function chasing(stations: { lat: number; lng: number }[] = [S1]) {
     const g = await readyGame({ mode: 'full' }, { stations })
@@ -1953,7 +2065,8 @@ describe('Nasi Lemak KFC', () => {
     let i = from
     while (!want(cardAt(`${row.deck_seed}:${side}`, deck, i))) i++
     await store.updateGame(row.id, side === 'runner' ? { runner_draws: i } : { chaser_draws: i })
-    return cardAt(`${row.deck_seed}:${side}`, deck, i)
+    nextPick = cardAt(`${row.deck_seed}:${side}`, deck, i)
+    return nextPick
   }
   const scan = async (g: { code: string }, chaser: { token: string }, tagId: number, runner: { token: string }) => {
     await run('location', { code: g.code, token: chaser.token, ...at(0) })
@@ -1973,7 +2086,7 @@ describe('Nasi Lemak KFC', () => {
     expect(v.activePowerUp).toBeNull()
     expect(v.feed.map((f) => f.text).join('|')).not.toMatch(/Nasi|combo/i)
     const kind = await forceDraw(g, 'runner', (k) => !EXCLUDED.includes(k))
-    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toEqual({ ok: true, kind, double: true })
+    expect(await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toEqual({ ok: true, kind, double: true })
     const mine = (await store.powerUps(g.gameId)).filter((u) => u.player_id === g.aina.playerId && u.kind === kind)
     expect(mine).toHaveLength(2)
     const original = mine.find((u) => u.twin_of === null)!
@@ -1988,7 +2101,7 @@ describe('Nasi Lemak KFC', () => {
     const g = await chasing()
     await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })
     expect(await forceDraw(g, 'runner', (k) => k === 'combo')).toBe('combo')
-    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toEqual({ ok: true, kind: 'combo' })
+    expect(await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toEqual({ ok: true, kind: 'combo' })
     const v = await view(g, g.aina.token)
     expect(v.comboReady).toBe(true)
     expect(v.hand.map((u) => u.kind)).toEqual(['combo'])
@@ -2014,7 +2127,7 @@ describe('Nasi Lemak KFC', () => {
     const g = await chasing([S1, S2])
     await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })
     await forceDraw(g, 'runner', (k) => k === 'combo')
-    await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
     const second = (await view(g, g.aina.token)).hand[0]
     expect(await use(g, g.aina.token, second.id)).toEqual({ ok: true, kind: 'combo', wasted: true })
     const rows = (await store.powerUps(g.gameId)).filter((u) => u.kind === 'combo')
@@ -2025,25 +2138,25 @@ describe('Nasi Lemak KFC', () => {
     expect(v.comboReady).toBe(true)
     // The slot is free again: a later station claim succeeds, and arrives doubled by the one mark.
     const kind = await forceDraw(g, 'runner', (k) => !EXCLUDED.includes(k))
-    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(2), ...atS2 })).toEqual({ ok: true, kind, double: true })
+    expect(await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(2), ...atS2 })).toEqual({ ok: true, kind, double: true })
   })
 
   it('only the next one delivered card is doubled after a wasted second combo', async () => {
     const g = await chasing([S1, S2, S3])
     await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })
     await forceDraw(g, 'runner', (k) => k === 'combo')
-    await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
     const second = (await view(g, g.aina.token)).hand[0]
     expect(await use(g, g.aina.token, second.id)).toMatchObject({ wasted: true })
     const kind = await forceDraw(g, 'runner', (k) => !EXCLUDED.includes(k))
-    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(2), ...atS2 })).toEqual({ ok: true, kind, double: true })
+    expect(await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(2), ...atS2 })).toEqual({ ok: true, kind, double: true })
     for (const u of (await view(g, g.aina.token)).hand) {
       // Clear the slot whatever the (random) card is: a used cloak, decoy or flare stays "running" until a reveal,
       // so mark the pair taken, which frees the slot for any kind.
       await store.updatePowerUp(u.id, { taken_at: new Date(now).toISOString() })
     }
     const next = await forceDraw(g, 'runner', (k) => !EXCLUDED.includes(k))
-    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(3), ...atS3 })).toEqual({ ok: true, kind: next })
+    expect(await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(3), ...atS3 })).toEqual({ ok: true, kind: next })
     const v = await view(g, g.aina.token)
     expect(v.hand.map((u) => u.kind)).toEqual([next])
     expect(v.comboReady).toBe(false)
@@ -2068,7 +2181,7 @@ describe('Nasi Lemak KFC', () => {
     const g = await chasing()
     await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })
     expect(await forceDraw(g, 'runner', (k) => k === 'grab')).toBe('grab')
-    const r = await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    const r = await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
     expect(r).toEqual({ ok: true, kind: 'grab' })
     expect((await store.powerUps(g.gameId)).filter((u) => u.kind === 'grab')).toHaveLength(1)
     expect((await view(g, g.aina.token)).comboReady).toBe(true)
@@ -2126,7 +2239,7 @@ describe('Nasi Lemak KFC', () => {
   it('the unused twin keeps the slot busy until the second use', async () => {
     const g = await chasing()
     const { first, twin } = await doubled(g.gameId, g.aina.playerId, 'decoy')
-    const claim = () => run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+    const claim = () => claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
     expect(await claim()).toMatchObject({ ok: false, reason: 'hand-full', busyKind: 'decoy', busyRunning: false })
     expect(await use(g, g.aina.token, first.id)).toEqual({ ok: true, kind: 'decoy' })
     now = T0 + 9.5 * MIN
@@ -2166,7 +2279,7 @@ describe('Nasi Lemak KFC', () => {
     expect((await view(g, g.aina.token)).shieldActive).toBe(true)
     expect(await scan(g, g.kim, 7, g.aina)).toEqual({ ok: false, reason: 'shielded', name: 'Aina' })
     expect((await view(g, g.aina.token)).activePowerUp).toBeNull()
-    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toMatchObject({ ok: true })
+    expect(await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toMatchObject({ ok: true })
   })
 
   it.each(['original', 'twin'] as const)('one stolen half (%s taken): the other arms at once and frees the slot', async (taken) => {
@@ -2178,7 +2291,7 @@ describe('Nasi Lemak KFC', () => {
     expect((await view(g, g.aina.token)).shieldActive).toBe(true)
     expect(await scan(g, g.kim, 7, g.aina)).toEqual({ ok: false, reason: 'shielded', name: 'Aina' })
     expect((await view(g, g.aina.token)).activePowerUp).toBeNull()
-    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toMatchObject({ ok: true })
+    expect(await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })).toMatchObject({ ok: true })
   })
 })
 
@@ -2592,7 +2705,7 @@ describe('pause and resume', () => {
     const paused = { ok: false, reason: 'paused' }
     expect(await run('catch', { code: g.code, token: g.ben.token, tagQr: tagQr(7) })).toEqual(paused)
     expect(await run('jailbreak', { code: g.code, token: g.hafiz.token, qr: JAIL_QR })).toEqual(paused)
-    expect(await run('claim', { code: g.code, token: g.hafiz.token, qr: stationQr(1) })).toEqual(paused)
+    expect(await claimPick({ code: g.code, token: g.hafiz.token, qr: stationQr(1) })).toEqual(paused)
     expect(await run('usePowerup', { code: g.code, token: g.hafiz.token, powerupId: 'u1' })).toEqual(paused)
   })
 
@@ -3126,7 +3239,7 @@ describe('Banjir Kilat: the flood (design 2026-11-16)', () => {
     await store.updateGame(game.id, { arena: { ...game.arena, stations: [{ lat: wet.lat, lng: wet.lng }] } })
     now = FULL
     await run('location', { code: g.code, token: g.aina.token, ...wet })
-    const r = await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...wet })
+    const r = await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...wet })
     expect(r).toEqual(expect.objectContaining({ ok: false, reason: 'flooded' }))
   })
 })
@@ -3551,8 +3664,8 @@ describe('Luar Garisan', () => {
     await disqualify(g.aina.playerId)
     await disqualify(g.ben.playerId)
     const refused = { ok: false, reason: 'disqualified' }
-    expect(await run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...at(0) })).toEqual(refused)
-    expect(await run('claim', { code: g.code, token: g.ben.token, qr: stationQr(1), ...at(0) })).toEqual(refused)
+    expect(await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...at(0) })).toEqual(refused)
+    expect(await claimPick({ code: g.code, token: g.ben.token, qr: stationQr(1), ...at(0) })).toEqual(refused)
     expect(await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: decoy.id })).toEqual(refused)
     expect(await run('grabPick', { code: g.code, token: g.aina.token, powerupId: decoy.id, choice: 0 })).toEqual(refused)
     expect(await run('jailbreak', { code: g.code, token: g.aina.token, qr: JAIL_QR, ...at(0) })).toEqual(refused)
@@ -6973,10 +7086,11 @@ describe('PKP closes Penjara and doubles stations (Plan E3 task 6)', () => {
     let i = row.runner_draws ?? 0
     while (!want(cardAt(`${row.deck_seed}:runner`, deck, i))) i++
     await store.updateGame(row.id, { runner_draws: i })
-    return cardAt(`${row.deck_seed}:runner`, deck, i)
+    nextPick = cardAt(`${row.deck_seed}:runner`, deck, i)
+    return nextPick
   }
-  const doublable = (k: PowerUpKind) => !['grab', 'combo', 'dato'].includes(k)
-  const claimS1 = (g: G) => run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...S1 })
+  const doublable = (k: PowerUpKind) => !['grab', 'combo', 'dato', 'sike'].includes(k)
+  const claimS1 = (g: G) => claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...S1 })
   const ownCards = async (g: G, kind: PowerUpKind) =>
     (await store.powerUps(g.gameId)).filter((u) => u.player_id === g.aina.playerId && u.kind === kind)
   const comboReady = async (g: G) => (await run<View>('state', { code: g.code, token: g.aina.token })).comboReady

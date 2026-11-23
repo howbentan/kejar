@@ -410,6 +410,8 @@ export type EventType =
   | 'wanted'
 
 export type PowerUpKind =
+  /** The empty card: a scan that dealt it gets nothing (it never sits in a hand). */
+  | 'sike'
   | 'decoy'
   | 'shield'
   | 'cloak'
@@ -438,6 +440,12 @@ export interface PowerUp {
   sealed: boolean
   /** Set when Toyol or Ah Long took this card; a taken card is gone from every hand. */
   taken_at: string | null
+  /**
+   * An open pick (playtest batch §2.1): the five cards a station scan dealt, each one's back colour, and the index the
+   * server settles on if nobody picks in time. Set while the player chooses (the card is sealed and out of the hand);
+   * null once picked.
+   */
+  deal?: { cards: PowerUpKind[]; backs: ('common' | 'rare' | 'epic')[]; auto: number } | null
   /** Abang Grab's open offer (power-ups §6.3): the top 3 cards of the holder's deck, until one is picked. */
   offer: PowerUpKind[] | null
   /** Nasi Lemak KFC: the id of the card this one doubles; null for an ordinary card. */

@@ -184,6 +184,11 @@ export interface GameStore {
    * less than `lockMs` ago. Otherwise stores the power-up (claimed_at = store clock).
    */
   claimStation(p: NewPowerUp, lockMs: number): Promise<StationClaim>
+  /**
+   * Settles an open pick, once: sets the card's kind, clears the deal and unseals it (a Sike is used and spent at once).
+   * Null when the deal is already settled.
+   */
+  resolveDeal(id: string, kind: PowerUpKind, at: string): Promise<PowerUp | null>
   /** Marks a power-up used only if it wasn't already; true for the first caller. */
   markUsed(id: string): Promise<boolean>
   /**
@@ -721,9 +726,15 @@ export class MemoryStore implements GameStore {
     const last = Math.max(...here.map((u) => Date.parse(u.claimed_at)), -Infinity)
     const lockedForMs = last + lockMs - this.clock()
     if (lockedForMs > 0) return { ok: false, reason: 'locked', lockedForMs }
-    const row: PowerUp = { twin_of: null, spot: null, ...p, id: this.id('u'), claimed_at: this.nowIso(), used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null }
+    const row: PowerUp = { twin_of: null, spot: null, ...p, id: this.id('u'), claimed_at: this.nowIso(), used_at: null, consumed_at: null, sealed: !!p.deal, taken_at: null, offer: null }
     this.powerUpRows.push(row)
     return { ok: true, powerUp: { ...row } }
+  }
+  async resolveDeal(id: string, kind: PowerUpKind, at: string) {
+    const u = this.powerUpRows.find((x) => x.id === id)
+    if (!u || !u.deal) return null
+    Object.assign(u, { kind, deal: null, sealed: false }, kind === 'sike' ? { used_at: at, consumed_at: at } : {})
+    return { ...u }
   }
   async markUsed(id: string) {
     const u = this.powerUpRows.find((x) => x.id === id)

@@ -3,6 +3,7 @@ import type { PowerUpKind } from '../../shared/types.js'
 
 /** Each power-up's Malaysian name and plain-English copy (power-ups design §5). */
 export const INFO: Record<PowerUpKind, { name: string; effect: string; used: string }> = {
+  sike: { name: 'Sike', effect: 'You got an empty power up', used: 'Sike!' },
   decoy: { name: 'Gostan', effect: 'Your next ping shows you somewhere else', used: 'Gostan set for your next ping' },
   shield: { name: 'Durian', effect: 'Blocks the next catch, up to 10 min', used: 'Durian on for up to 10 min' },
   cloak: { name: 'Ponteng', effect: 'You skip the next ping', used: "Ponteng: you'll skip the next ping" },
@@ -25,6 +26,7 @@ export const INFO: Record<PowerUpKind, { name: string; effect: string; used: str
 
 /** The short line under a power-up's pop-up card: only what the card face doesn't say (when, how long, how far). */
 export const HOW: Record<PowerUpKind, string> = {
+  sike: 'An empty card. Nothing goes in your slot.',
   decoy: 'Works on your next ping.',
   shield: 'Lasts up to 10 min.',
   cloak: 'Works on your next ping.',

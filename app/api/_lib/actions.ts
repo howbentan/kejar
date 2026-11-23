@@ -15,7 +15,7 @@ import {
   type SosReason,
 } from '../../shared/alerts.js'
 import { autoJailDue, checkinsSince, countedCheckIn, countRestartAt, fairlyWarned } from '../../shared/checkins.js'
-import { cardAt, deckFor, setsFor } from '../../shared/deck.js'
+import { backOf, cardAt, dealFrom, deckFor, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
 import { hebatLive, maskEndgame, pickWanted, pkpClosed, revealDue, rollEndgame, wantedOut } from '../../shared/endgame.js'
@@ -423,6 +423,7 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
   const { store, now } = ctx
   const phase = phaseAt(game, now).phase
   if (phase === 'lobby') return
+  await settleOpenDeals(ctx, game)
   if (game.rescue) await settleRescue(ctx, game, phase)
 
   if ((phase === 'chasing' || phase === 'ended') && (await store.claimPing(game.id, 0, 'revealed'))) {
@@ -1764,10 +1765,14 @@ const redeemPhoneMove: Action = async (ctx, body) => {
 const sideOf = (p: Player): 'runner' | 'chaser' => (p.role === 'chaser' ? 'chaser' : 'runner')
 
 /** The card at a given draw number of a side's shared deck. Games started before decks existed have no sets. */
-async function deckOf(ctx: Ctx, game: Game, side: 'runner' | 'chaser'): Promise<(index: number) => PowerUpKind> {
+async function deckListOf(ctx: Ctx, game: Game, side: 'runner' | 'chaser'): Promise<PowerUpKind[]> {
   const stored = side === 'runner' ? game.runner_sets : game.chaser_sets
   const sets = stored ?? setsFor(side, (await ctx.store.players(game.id)).filter((p) => p.role === side).length)
-  const deck = deckFor(game.settings.mode ?? 'core', side, sets)
+  return deckFor(game.settings.mode ?? 'core', side, sets)
+}
+
+async function deckOf(ctx: Ctx, game: Game, side: 'runner' | 'chaser'): Promise<(index: number) => PowerUpKind> {
+  const deck = await deckListOf(ctx, game, side)
   // Seeded with a secret (not the game id players can see), so nobody can work out the next card.
   return (index) => cardAt(`${game.deck_seed ?? game.id}:${side}`, deck, index)
 }
@@ -1801,24 +1806,70 @@ const claim: Action = async (ctx, body) => {
   // Banjir Kilat: a station under water is closed (a hidden legendary card under water can still be scanned).
   const spot = station === null ? undefined : game.arena.stations?.[station - 1]
   if (spot && inWater(spot, fresh as Game, ctx.now)) return { ok: false, reason: 'flooded' as const }
-  // The top card of this side's shared deck (power-ups §5b). The draw number is taken atomically, so two
-  // claims at the same moment never get the same card.
+  // The deal (playtest batch §2.1): five face-down cards from what this round of the side's deck has left. The
+  // draw number is still taken atomically and counts one card per scan; the picked card is the one taken.
   const side = sideOf(me)
-  const kindAt = await deckOf(ctx, fresh, side)
-  const kind = kindAt(await ctx.store.drawCard(game.id, side))
+  const deck = await deckListOf(ctx, fresh, side)
+  const drawn = await ctx.store.drawCard(game.id, side)
+  const sideIds = new Set((await ctx.store.players(game.id)).filter((p) => p.role === side).map((p) => p.id))
+  const sideCards = (await ctx.store.powerUps(game.id)).filter((u) => u.station !== null && sideIds.has(u.player_id))
+  const inRound = drawn % deck.length
+  const taken = inRound === 0 ? [] : sideCards.slice(-inRound).map((u) => u.kind)
+  const cards = dealFrom(deck, taken, ctx.rng)
+  const auto = Math.min(cards.length - 1, Math.floor(ctx.rng() * cards.length))
+  const backs = cards.map((c) => backOf(c, ctx.rng))
+  // The row holds a real card until the pick (a Sike resolves to 'sike' then); sealed and out of the hand meanwhile.
+  const provisional = cards.find((k) => k !== 'sike') ?? deck.find((k) => k !== 'sike')!
   // Re-checked atomically by the store, so double-taps and simultaneous scans can't both win.
   const claimed = await ctx.store.claimStation(
-    { game_id: game.id, player_id: me.id, kind, station: station! },
+    { game_id: game.id, player_id: me.id, kind: provisional, station: station!, deal: { cards, backs, auto } },
     STATION_LOCK_MS,
   )
   if (!claimed.ok) return claimed
-  await ctx.store.addEvent({ game_id: game.id, type: 'powerup', actor_id: me.id, target_id: null, data: {} })
+  return { ok: true, deal: { id: claimed.powerUp.id, backs } }
+}
+
+/** How long a deal waits for its pick before the server settles it at its own index. */
+const DEAL_OPEN_MS = 60_000
+
+/**
+ * Settles a deal at `index`: the card goes into the hand (or nothing, for a Sike), the feed says a power-up was
+ * picked up, and PKP's twin or a waiting Nasi Lemak KFC apply now, as they used to at the scan. A deal settled
+ * already answers with the card it settled on.
+ */
+async function settleDeal(ctx: Ctx, game: Game, row: PowerUp, index: number): Promise<{ ok: true; kind: PowerUpKind; double?: true }> {
+  const cards = row.deal!.cards
+  const kind = cards[Math.max(0, Math.min(cards.length - 1, Math.floor(index)))]
+  const settled = await ctx.store.resolveDeal(row.id, kind, iso(ctx.now))
+  if (!settled) {
+    const current = (await ctx.store.powerUps(game.id)).find((u) => u.id === row.id)!
+    return { ok: true, kind: current.kind }
+  }
+  if (kind === 'sike') return { ok: true, kind }
+  await ctx.store.addEvent({ game_id: game.id, type: 'powerup', actor_id: row.player_id, target_id: null, data: {} })
+  const me = (await ctx.store.players(game.id)).find((p) => p.id === row.player_id)
   // PKP doubles every station card with a twin. It doesn't use up a combo, so a combo-ready player gets two goes
   // and stays combo ready. A card that can't be doubled takes the normal combo path.
-  if (pkpClosed(fresh) && !COMBO_EXCLUDED.includes(claimed.powerUp.kind)) {
-    return { ok: true, kind, ...((await ctx.store.addTwin(claimed.powerUp.id)) ? { double: true } : {}) }
+  if (pkpClosed(game) && !COMBO_EXCLUDED.includes(kind)) {
+    return { ok: true, kind, ...((await ctx.store.addTwin(settled.id)) ? { double: true as const } : {}) }
   }
-  return { ok: true, kind, ...(await doubleIfCombo(ctx, me, claimed.powerUp)) }
+  return { ok: true, kind, ...(me ? await doubleIfCombo(ctx, me, settled) : {}) }
+}
+
+/** The player picks one of their deal's five cards. */
+const pickCard: Action = async (ctx, body) => {
+  const game = await loadGame(ctx, body)
+  const me = await requirePlayer(ctx, game, body)
+  const row = (await ctx.store.powerUps(game.id)).find((u) => u.id === str(body.dealId) && u.player_id === me.id && u.station !== null)
+  if (!row) return { ok: false, reason: 'no-deal' }
+  if (!row.deal) return { ok: true, kind: row.kind }
+  return settleDeal(ctx, game, row, Number(body.index) || 0)
+}
+
+/** Deals nobody picked within a minute settle at their own index (on whichever request comes next). */
+async function settleOpenDeals(ctx: Ctx, game: Game) {
+  const open = (await ctx.store.powerUps(game.id)).filter((u) => u.deal && Date.parse(u.claimed_at) + DEAL_OPEN_MS <= ctx.now)
+  for (const row of open) await settleDeal(ctx, game, row, row.deal!.auto)
 }
 
 /**
@@ -2056,7 +2107,12 @@ const usePowerup: Action = async (ctx, body) => {
     let offer = opened.offer
     if (!offer) {
       const kindAt = await deckOf(ctx, fresh, side)
-      offer = Array.from({ length: GRAB_OFFER }, (_, k) => kindAt(opened.first + k))
+      // Sikes are skipped: Abang Grab only ever brings real cards.
+      offer = []
+      for (let k = 0; offer.length < GRAB_OFFER && k < GRAB_OFFER + 40; k++) {
+        const card = kindAt(opened.first + k)
+        if (card !== 'sike') offer.push(card)
+      }
       // Same draws, same cards: a racing second open writes the identical offer.
       await ctx.store.updatePowerUp(u.id, { offer })
     }
@@ -2770,6 +2826,7 @@ export const actions = {
   undoKejar,
   removePlayer,
   restorePlayer,
+  pickCard,
   searchParks,
   nearbyParks,
   parkFeatures,

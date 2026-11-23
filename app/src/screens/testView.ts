@@ -58,6 +58,7 @@ export function testView(over: Partial<View> = {}): View {
     ratings: [],
     stations: [],
     hand: [],
+    deal: null,
     deckLeft: null,
     activePowerUp: null,
     shieldActive: false,

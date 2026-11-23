@@ -262,19 +262,25 @@ export class SupabaseStore implements GameStore {
   async claimStation(p: NewPowerUp, lockMs: number): Promise<StationClaim> {
     // The database function locks the station, re-checks, and inserts in one transaction.
     const r = check(
-      await this.db.rpc('claim_station', {
+      await this.db.rpc(p.deal ? 'claim_station_deal' : 'claim_station', {
         p_game: p.game_id,
         p_player: p.player_id,
         p_station: p.station,
         p_kind: p.kind,
         p_at: this.nowIso(),
         p_lock_ms: lockMs,
+        ...(p.deal ? { p_deal: p.deal } : {}),
       }),
     ) as { result: string; locked_for_ms: number | null; powerup: PowerUp | null }[]
     const row = r[0]
     if (row?.result === 'ok' && row.powerup) return { ok: true, powerUp: row.powerup }
     if (row?.result === 'locked') return { ok: false, reason: 'locked', lockedForMs: row.locked_for_ms ?? 0 }
     return { ok: false, reason: 'already-claimed' }
+  }
+  async resolveDeal(id: string, kind: PowerUpKind, at: string) {
+    const patch = { kind, deal: null, sealed: false, ...(kind === 'sike' ? { used_at: at, consumed_at: at } : {}) }
+    const rows = check(await this.db.from('powerups').update(patch).eq('id', id).not('deal', 'is', null).select('*')) as PowerUp[] | null
+    return rows?.[0] ?? null
   }
   async markUsed(id: string) {
     const rows = check(

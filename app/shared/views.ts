@@ -200,6 +200,8 @@ export interface View {
   stations: { n: number; lat: number; lng: number; lockedUntil: string | null }[]
   /** My unused power-ups. */
   hand: PowerUp[]
+  /** This player's open pick: the five backs only, never the cards, and when the server settles it. */
+  deal: { id: string; backs: ('common' | 'rare' | 'epic')[]; endsAt: string } | null
   shieldActive: boolean
   /** Cards left in my side's shared deck (power-ups §5b); null for marshals and the organiser. */
   deckLeft: number | null
@@ -739,6 +741,11 @@ function freezeTargetsFor(i: ViewInput): View['freezeTargets'] {
 }
 
 /** The reel for the jailed runner: spent this stay or not. */
+function dealFor(i: ViewInput): View['deal'] {
+  const u = i.powerUps.find((x) => x.player_id === i.me.id && x.deal)
+  return u?.deal ? { id: u.id, backs: u.deal.backs, endsAt: new Date(Date.parse(u.claimed_at) + 60_000).toISOString() } : null
+}
+
 function reelFor(i: ViewInput): View['reel'] {
   if (i.me.role !== 'runner' || !i.me.jailed) return null
   const pulled = reelPulledThisStay(i.me)
@@ -1086,7 +1093,7 @@ export function viewFor(i: ViewInput): View {
   // anything either, and no results.
   const cancelled = !!i.game.cancelled_at
   if (i.me.removed_at || cancelled) {
-    return { ...v, ...(cancelled ? { cancelled: true as const, results: null } : {}), dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], chaserNearby: false, sideQuest: false, caughtBy: null, jailReason: null, arrest: null, endgame: null, hijau: null, penjaraLockedUntil: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, bomohStash: undefined, ringStash: undefined, hijauStash: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
+    return { ...v, ...(cancelled ? { cancelled: true as const, results: null } : {}), dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], deal: null, chaserNearby: false, sideQuest: false, caughtBy: null, jailReason: null, arrest: null, endgame: null, hijau: null, penjaraLockedUntil: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, bomohStash: undefined, ringStash: undefined, hijauStash: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
   }
   return v
 }
@@ -1273,7 +1280,8 @@ function fullView(input: ViewInput): View {
       return { n: k + 1, lat: s.lat, lng: s.lng, lockedUntil: until === null ? null : new Date(until).toISOString() }
     }),
     // `!taken_at`, not `=== null`: a row read before migration 0011 has no taken_at at all (undefined).
-    hand: i.powerUps.filter((u) => u.player_id === i.me.id && u.used_at === null && !u.taken_at),
+    hand: i.powerUps.filter((u) => u.player_id === i.me.id && u.used_at === null && !u.taken_at && !u.deal),
+    deal: dealFor(i),
     shieldActive: activeShield(i.powerUps, i.me.id, i.now) !== null,
     deckLeft: deckLeftFor(i),
     activePowerUp: (() => {
