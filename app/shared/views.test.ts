@@ -627,6 +627,14 @@ describe('power-up effects', () => {
       expect(v.stations[1].lockedUntil).toBeNull()
     })
 
+    it('a card that was used or taken still keeps its station locked', () => {
+      const used = { ...claim('a', 'r2', 2, t), used_at: new Date(t + 5_000).toISOString() }
+      const taken = { ...claim('b', 'r3', 1, t), taken_at: new Date(t + 5_000).toISOString() }
+      const v = view(aina, { game: two(), now: t + 20_000, powerUps: [used, taken] })
+      const until = new Date(t + STATION_LOCK_MS).toISOString()
+      expect(v.stations.map((x) => x.lockedUntil)).toEqual([until, until])
+    })
+
     it("never puts other players' claims in the hand", () => {
       const v = view(aina, { game: two(), now: t + 20_000, powerUps: [claim('a', 'r1', 1, t), claim('b', 'r2', 2, t)] })
       expect(v.hand.map((u) => u.id)).toEqual(['a'])

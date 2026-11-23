@@ -194,8 +194,7 @@ export interface View {
   reports: PostGameReport[]
   /** "How fun was it?" ratings; marshals and the organiser only, for the After game tab. */
   ratings: PostGameRating[]
-  /** Power-up stations, numbered from 1. */
-  /** `lockedUntil`: ISO time the station's lock after a claim ends, or null when free. */
+  /** Power-up stations, numbered from 1; `lockedUntil` is the ISO time a claim's lock ends, or null when free. */
   stations: { n: number; lat: number; lng: number; lockedUntil: string | null }[]
   /** My unused power-ups. */
   hand: PowerUp[]
