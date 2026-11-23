@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const created = vi.hoisted(() => ({
   count: 0,
@@ -14,6 +14,7 @@ const created = vi.hoisted(() => ({
   options: [] as Record<string, unknown>[],
   vis: [] as string[],
   eases: [] as Record<string, unknown>[],
+  paints: [] as { id: string; prop: string; v: unknown }[],
 }))
 const reduce = vi.hoisted(() => ({ on: false }))
 vi.mock('motion/react', async (orig) => ({ ...(await orig<typeof import('motion/react')>()), useReducedMotion: () => reduce.on }))
@@ -72,7 +73,10 @@ vi.mock('maplibre-gl', () => ({
         return created.data[id] === undefined ? undefined : { setData: (d: unknown) => (created.data[id] = d) }
       }
       getLayer(id: string) {
-        return id.startsWith('buildings') ? { id } : undefined
+        return id.startsWith('buildings') || created.layers.some((l) => l.id === id) ? { id } : undefined
+      }
+      setPaintProperty(id: string, prop: string, v: unknown) {
+        created.paints.push({ id, prop, v })
       }
       setLayoutProperty(id: string, prop: string, v: string) {
         created.vis.push(`${id}:${prop}:${v}`)
@@ -92,6 +96,7 @@ vi.mock('maplibre-gl', () => ({
 }))
 
 import GameMap, { stationFeatures } from './Map'
+import { MAP_FONT } from './mapStyle'
 
 afterEach(cleanup)
 
@@ -593,6 +598,91 @@ describe('GameMap', () => {
       render(<GameMap arena={arena} dots={[]} />)
       act(() => created.load!())
       expect(created.data.house).toMatchObject({ features: [] })
+    })
+  })
+  describe('floating markers in 3D', () => {
+    const layer = (id: string) =>
+      created.layers.find((l) => l.id === id) as unknown as { source: string; filter?: unknown; layout: Record<string, unknown>; paint?: Record<string, unknown> }
+    const locked = (ms: number) => [{ n: 1, lat: 3.01, lng: 101.01, lockedUntil: new Date(Date.now() + ms).toISOString() }]
+    const open = [{ n: 1, lat: 3.01, lng: 101.01, lockedUntil: null }]
+    let frames: FrameRequestCallback[] = []
+    let scheduled = 0
+    const runFrame = (t: number) => {
+      const pending = frames
+      frames = []
+      for (const cb of pending) cb(t)
+    }
+    const translates = (id: string) => created.paints.filter((p) => p.id === id && p.prop === 'icon-translate')
+
+    beforeEach(() => {
+      created.layers = []
+      created.data = {}
+      created.vis = []
+      created.eases = []
+      created.paints = []
+      frames = []
+      scheduled = 0
+      vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+        frames.push(cb)
+        return ++scheduled
+      })
+      vi.stubGlobal('cancelAnimationFrame', () => {
+        frames = []
+      })
+      localStorage.setItem('kejar.map3d', '1')
+    })
+    afterEach(() => {
+      vi.unstubAllGlobals()
+      localStorage.clear()
+      reduce.on = false
+    })
+
+    it('the stored 3D view is applied after the markers exist: float layers shown, flat ones hidden, eased once', () => {
+      render(<GameMap arena={arena} dots={[]} stations={open} />)
+      act(() => created.load!())
+      for (const id of ['float-j', 'float-j-ghost', 'float-gem', 'float-tupper', 'landed-gem', 'landed-timer']) expect(created.vis).toContain(`${id}:visibility:visible`)
+      for (const id of ['points-j', 'fuzzy-j', 'stations', 'pins-tupper', 'stash']) expect(created.vis).toContain(`${id}:visibility:none`)
+      expect(created.eases).toEqual([{ pitch: 58, duration: 0 }])
+    })
+
+    it('a claimed gem lands red with its time left in the map font; open gems float over the stations', () => {
+      render(<GameMap arena={arena} dots={[]} stations={open} />)
+      act(() => created.load!())
+      expect(layer('landed-timer').layout['text-field']).toEqual(['get', 'left'])
+      expect(layer('landed-timer').layout['text-font']).toEqual(MAP_FONT)
+      expect(layer('landed-timer').source).toBe('stations')
+      expect(layer('landed-gem').layout).toMatchObject({ 'icon-image': 'gem-red', 'icon-size': 1.2, 'icon-anchor': 'bottom', 'icon-offset': [0, 6] })
+      expect(layer('float-gem').layout).toMatchObject({ 'icon-image': 'gem-volt-float', 'icon-size': 1.2, 'icon-anchor': 'bottom' })
+      expect(layer('float-j').layout['icon-image']).toEqual(['concat', ['match', ['get', 'kind'], 'chaser', 'j-chaser', 'j-runner'], '-float'])
+      expect(layer('float-tupper').layout['icon-image']).toEqual(['case', ['==', ['get', 'side'], 'kejar'], 'gem-purple-float', 'gem-gold-float'])
+    })
+
+    it('with reduced motion no frame is scheduled and nothing is translated', () => {
+      reduce.on = true
+      render(<GameMap arena={arena} dots={[]} stations={locked(30_000)} />)
+      act(() => created.load!())
+      expect(scheduled).toBe(0)
+      expect(created.paints.filter((p) => p.prop === 'icon-translate')).toEqual([])
+    })
+
+    it('bobs in 3D, and stops when the view goes flat', () => {
+      render(<GameMap arena={arena} dots={[]} stations={open} />)
+      act(() => created.load!())
+      expect(frames.length).toBe(1)
+      runFrame(performance.now())
+      expect(translates('float-j').length).toBe(1)
+      fireEvent.click(screen.getByRole('button', { name: 'Show buildings flat' }))
+      expect(frames).toEqual([])
+    })
+
+    it('a station turning locked drops its gem from hover height', () => {
+      const { rerender } = render(<GameMap arena={arena} dots={[]} stations={open} />)
+      act(() => created.load!())
+      runFrame(performance.now())
+      expect((translates('landed-gem').at(-1)!.v as number[])[1]).toBe(0)
+      rerender(<GameMap arena={arena} dots={[]} stations={locked(30_000)} />)
+      runFrame(performance.now() + 40)
+      expect((translates('landed-gem').at(-1)!.v as number[])[1]).toBeLessThan(-30)
     })
   })
 })

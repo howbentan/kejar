@@ -1,6 +1,7 @@
 import MapCredit from './MapCredit'
 import MapViewButton from './MapViewButton'
 import { applyMapView, useMapView } from './mapView'
+import { restFloat, startFloatMotion, type FloatEvents } from './floatMotion'
 import type { Feature as GeoFeature, FeatureCollection, Geometry } from 'geojson'
 import maplibregl, { type GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -24,8 +25,19 @@ const MAP_LOADER_MS = 8000
 const VOLT = '#C6FF3D'
 const WHITE = '#F5F5F3'
 const BLACK = '#0A0A0B'
-/** The diamond images (Task 4) by Tupperware side. */
+/** The diamond images (Task 4) by Tupperware side, and the 3D view's floating gems. */
 const DIAMOND: Record<TupperSide, string> = { dikejar: 'dia-gold', kejar: 'dia-purple' }
+const FLOAT_GEM: Record<TupperSide, string> = { dikejar: 'gem-gold-float', kejar: 'gem-purple-float' }
+/** The 3D view's soft ground shadow under a floating marker (radius 8 for a j, 13 for a gem). */
+const shadowPaint = (radius: number) => ({
+  'circle-radius': radius,
+  'circle-color': '#000',
+  'circle-opacity': 0.55,
+  'circle-blur': 0.7,
+  'circle-pitch-alignment': 'map' as const,
+})
+const FLOAT_ICON = { 'icon-anchor': 'bottom' as const, 'icon-allow-overlap': true, 'icon-ignore-placement': true }
+const LOCKED_RED = '#E5484D'
 
 type MapCircle = { lat: number; lng: number; radiusM: number }
 
@@ -70,16 +82,20 @@ function ring(points: { lat: number; lng: number }[]): number[][] {
 
 function dotFeatures(dots: MapDot[], origin: LatLng | null = null) {
   const fuzzy: Feature[] = []
+  // Each ping circle's centre: where the 3D view floats its faded j (a circle layer can't use the polygon itself).
+  const ghosts: Feature[] = []
   const points: Feature[] = []
   // Hang Hebat's poster pin sits on the wanted runner's circle or dot, whichever it is.
   const wanted: Feature[] = []
   for (const d of dots) {
     if (d.wanted) wanted.push({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [d.lng, d.lat] } })
     if (d.fuzzy) {
+      const dist = origin ? distanceM(d, origin) : 0
+      ghosts.push({ type: 'Feature', properties: { missed: !!d.missed, dist }, geometry: { type: 'Point', coordinates: [d.lng, d.lat] } })
       fuzzy.push({
         type: 'Feature',
         // `dist` lets the ping ripple reveal each circle as its wave passes (motion design §8.1).
-        properties: { missed: !!d.missed, label: d.label ?? '', dist: origin ? distanceM(d, origin) : 0, wanted: !!d.wanted },
+        properties: { missed: !!d.missed, label: d.label ?? '', dist, wanted: !!d.wanted },
         geometry: { type: 'Polygon', coordinates: [ring(circlePolygon(d, FUZZ_RADIUS_M))] },
       })
     } else {
@@ -90,7 +106,7 @@ function dotFeatures(dots: MapDot[], origin: LatLng | null = null) {
       })
     }
   }
-  return { fuzzy: collection(fuzzy), points: collection(points), wanted: collection(wanted) }
+  return { fuzzy: collection(fuzzy), ghosts: collection(ghosts), points: collection(points), wanted: collection(wanted) }
 }
 
 /**
@@ -290,6 +306,11 @@ export default function GameMap({
   const [threeD, toggleThreeD] = useMapView()
   const latestThreeD = useRef(threeD)
   latestThreeD.current = threeD
+  // The view last applied to the map: the load applies the stored one, a toggle after load eases to the new one.
+  const appliedThreeD = useRef(threeD)
+  // When a station's gem last landed (locked) or took off (opened), for the 3D view's drop and rise.
+  const floatEvents = useRef<FloatEvents>({ dropAt: -1e9, riseAt: -1e9 })
+  const stationLocked = useRef(new Map<string, boolean>())
   const [loaded, setLoaded] = useState(false)
   // The tiles' small j gives up on a map error or after MAP_LOADER_MS, so a map that never loads isn't covered for good.
   const [gaveUp, setGaveUp] = useState(false)
@@ -348,7 +369,6 @@ export default function GameMap({
     })
     m.on('load', () => {
       window.clearTimeout(giveUp)
-      applyMapView(m, latestThreeD.current, { animate: false })
       m.addSource('arena', {
         type: 'geojson',
         data: collection([{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: ring(arena.boundary) } }]),
@@ -456,15 +476,18 @@ export default function GameMap({
         source: 'stash',
         layout: { 'icon-image': DIAMOND[latestStashSide.current], 'icon-size': 1.3, 'icon-allow-overlap': true, 'icon-ignore-placement': true },
       })
-      m.addSource('stations', { type: 'geojson', data: stationFeatures(latestStations.current, Date.now()) })
+      const firstStations = stationFeatures(latestStations.current, Date.now())
+      stationLocked.current = new Map(firstStations.features.map((f) => [String(f.properties?.n), !!f.properties?.locked]))
+      m.addSource('stations', { type: 'geojson', data: firstStations })
       m.addLayer({
         id: 'stations',
         type: 'symbol',
         source: 'stations',
         layout: { 'icon-image': ['case', ['get', 'locked'], 'dia-red', 'dia-volt'], 'icon-size': 1.3, 'icon-allow-overlap': true, 'icon-ignore-placement': true },
       })
-      const { fuzzy, points, wanted } = dotFeatures(latest.current)
+      const { fuzzy, ghosts, points, wanted } = dotFeatures(latest.current)
       m.addSource('fuzzy', { type: 'geojson', data: fuzzy })
+      m.addSource('ghosts', { type: 'geojson', data: ghosts })
       m.addSource('points', { type: 'geojson', data: points })
       m.addSource('wanted', { type: 'geojson', data: wanted })
       const eg = endgameColours()
@@ -673,6 +696,85 @@ export default function GameMap({
         layout: { 'text-field': ['get', 'label'], 'text-font': MAP_FONT, 'text-size': 10, 'text-allow-overlap': true },
         paint: { 'text-color': ['case', ['!=', ['get', 'side'], ''], BLACK, ['==', ['get', 'state'], 'todo'], WHITE, BLACK] },
       })
+      // The 3D view's markers (hidden in flat): each floats on a dotted stem over a soft shadow on its spot. Added
+      // after the style's buildings-3d, so they always draw over the buildings.
+      const isJ: maplibregl.FilterSpecification = ['match', ['get', 'kind'], ['runner', 'chaser'], true, false]
+      const openStation: maplibregl.FilterSpecification = ['!', ['get', 'locked']]
+      const lockedStation: maplibregl.FilterSpecification = ['get', 'locked']
+      const isTupper: maplibregl.FilterSpecification = ['!=', ['get', 'side'], '']
+      m.addLayer({ id: 'float-shadow-j', type: 'circle', source: 'points', filter: isJ, paint: shadowPaint(8) })
+      m.addLayer({ id: 'float-shadow-ghost', type: 'circle', source: 'ghosts', paint: shadowPaint(8) })
+      m.addLayer({ id: 'float-shadow-gem', type: 'circle', source: 'stations', filter: openStation, paint: shadowPaint(13) })
+      m.addLayer({ id: 'float-shadow-tupper', type: 'circle', source: 'pins', filter: isTupper, paint: shadowPaint(13) })
+      m.addLayer({ id: 'float-shadow-stash', type: 'circle', source: 'stash', paint: shadowPaint(13) })
+      m.addLayer({
+        id: 'float-gem',
+        type: 'symbol',
+        source: 'stations',
+        filter: openStation,
+        layout: { 'icon-image': 'gem-volt-float', 'icon-size': 1.2, ...FLOAT_ICON },
+      })
+      m.addLayer({
+        id: 'float-tupper',
+        type: 'symbol',
+        source: 'pins',
+        filter: isTupper,
+        layout: { 'icon-image': ['case', ['==', ['get', 'side'], 'kejar'], 'gem-purple-float', 'gem-gold-float'], 'icon-size': 1.2, ...FLOAT_ICON },
+      })
+      m.addLayer({
+        id: 'float-tupper-stash',
+        type: 'symbol',
+        source: 'stash',
+        layout: { 'icon-image': FLOAT_GEM[latestStashSide.current], 'icon-size': 1.2, ...FLOAT_ICON },
+      })
+      // A claimed station: its gem has dropped to the ground, red, with the time left until it lifts off again.
+      m.addLayer({
+        id: 'landed-glow',
+        type: 'circle',
+        source: 'stations',
+        filter: lockedStation,
+        paint: { 'circle-radius': 16, 'circle-color': LOCKED_RED, 'circle-opacity': 0.22, 'circle-blur': 0.8, 'circle-pitch-alignment': 'map' },
+      })
+      m.addLayer({
+        id: 'landed-gem',
+        type: 'symbol',
+        source: 'stations',
+        filter: lockedStation,
+        layout: { 'icon-image': 'gem-red', 'icon-size': 1.2, 'icon-offset': [0, 6], ...FLOAT_ICON },
+      })
+      m.addLayer({
+        id: 'landed-timer',
+        type: 'symbol',
+        source: 'stations',
+        filter: lockedStation,
+        layout: {
+          'text-field': ['get', 'left'],
+          'text-font': MAP_FONT,
+          'text-size': 11,
+          'text-anchor': 'top',
+          'text-offset': [0, 0.6],
+          'text-allow-overlap': true,
+          'text-ignore-placement': true,
+        },
+        paint: { 'text-color': LOCKED_RED, 'text-halo-color': BLACK, 'text-halo-width': 2 },
+      })
+      m.addLayer({
+        id: 'float-j',
+        type: 'symbol',
+        source: 'points',
+        filter: isJ,
+        layout: { 'icon-image': ['concat', ['match', ['get', 'kind'], 'chaser', 'j-chaser', 'j-runner'], '-float'], 'icon-size': 0.85, ...FLOAT_ICON },
+      })
+      m.addLayer({
+        id: 'float-j-ghost',
+        type: 'symbol',
+        source: 'ghosts',
+        layout: { 'icon-image': 'j-ghost-float', 'icon-size': 0.85, ...FLOAT_ICON },
+        paint: { 'icon-opacity': ['case', ['get', 'missed'], 0.45, 1] },
+      })
+      // Only now that every marker layer exists: show the stored view's set (no animation on load).
+      applyMapView(m, latestThreeD.current, { animate: false })
+      appliedThreeD.current = latestThreeD.current
       fitTo(m, latestFit.current)
       ready.current = true
       setLoaded(true)
@@ -693,7 +795,17 @@ export default function GameMap({
     if (!ready.current || !map.current) return
     const draw = () => {
       const now = Date.now()
-      ;(map.current?.getSource('stations') as GeoJSONSource | undefined)?.setData(stationFeatures(latestStations.current, now))
+      const features = stationFeatures(latestStations.current, now)
+      // A gem lands as its station locks and takes off as it opens (a station seen for the first time just appears).
+      for (const f of features.features) {
+        const n = String(f.properties?.n)
+        const was = stationLocked.current.get(n)
+        const locked = !!f.properties?.locked
+        if (was === false && locked) floatEvents.current.dropAt = performance.now()
+        if (was === true && !locked) floatEvents.current.riseAt = performance.now()
+        stationLocked.current.set(n, locked)
+      }
+      ;(map.current?.getSource('stations') as GeoJSONSource | undefined)?.setData(features)
       return latestStations.current.some((s) => s.lockedUntil && Date.parse(s.lockedUntil) > now)
     }
     if (!draw()) return
@@ -774,13 +886,31 @@ export default function GameMap({
   }, [loaded, hasNext, reduce])
 
   // A toggle after load (the load itself applied the stored view without animation).
-  const appliedThreeD = useRef(threeD)
   useEffect(() => {
     const mp = map.current
     if (!loaded || !mp || appliedThreeD.current === threeD) return
     appliedThreeD.current = threeD
     applyMapView(mp, threeD, { animate: !reduce })
   }, [loaded, threeD, reduce])
+
+  // In 3D the floating markers bob and claimed gems drop: never for reduced motion (they sit still at hover height or
+  // on the ground) and not while the page is hidden.
+  const [pageHidden, setPageHidden] = useState(() => typeof document !== 'undefined' && document.hidden)
+  useEffect(() => {
+    const onVisibility = () => setPageHidden(document.hidden)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [])
+  useEffect(() => {
+    const mp = map.current
+    if (!loaded || !mp || !threeD || reduce || pageHidden) return
+    const stop = startFloatMotion(mp, () => floatEvents.current)
+    return () => {
+      stop()
+      // A removed map has no style to reset.
+      if (map.current === mp && ready.current) restFloat(mp)
+    }
+  }, [loaded, threeD, reduce, pageHidden])
 
   useEffect(() => {
     if (!ready.current || !map.current) return
@@ -791,8 +921,9 @@ export default function GameMap({
       const { dots: display, active } = slideTracker.current!.apply(dots, arena.jail, Date.now())
       latest.current = display
       // Keep each circle's distance from the last ripple, so a poll mid-wave doesn't reveal them all at once.
-      const { fuzzy, points, wanted } = dotFeatures(display, ripple?.origin ?? null)
+      const { fuzzy, ghosts, points, wanted } = dotFeatures(display, ripple?.origin ?? null)
       ;(mp.getSource('fuzzy') as GeoJSONSource | undefined)?.setData(fuzzy)
+      ;(mp.getSource('ghosts') as GeoJSONSource | undefined)?.setData(ghosts)
       ;(mp.getSource('points') as GeoJSONSource | undefined)?.setData(points)
       ;(mp.getSource('wanted') as GeoJSONSource | undefined)?.setData(wanted)
       // A just-jailed runner's dot is mid-slide: keep redrawing every frame until it either finishes or is
@@ -827,13 +958,17 @@ export default function GameMap({
     const maxPx = Math.max(...corners.map(([x, y]) => Math.hypot(x - o.x, y - o.y)))
     const maxM = Math.max(...corners.map(([x, y]) => distanceM(ripple.origin, mp.unproject([x, y]))))
     setRings({ x: o.x, y: o.y, r: maxPx, key: ripple.at })
-    ;(mp.getSource('fuzzy') as GeoJSONSource | undefined)?.setData(dotFeatures(latest.current, ripple.origin).fuzzy)
+    const waved = dotFeatures(latest.current, ripple.origin)
+    ;(mp.getSource('fuzzy') as GeoJSONSource | undefined)?.setData(waved.fuzzy)
+    ;(mp.getSource('ghosts') as GeoJSONSource | undefined)?.setData(waved.ghosts)
     const base: Record<string, unknown> = {
       'fuzzy-fill': null,
       'fuzzy-line': ['!', ['get', 'missed']],
       'fuzzy-missed': ['get', 'missed'],
       'wanted-fuzzy-ring': ['get', 'wanted'],
       'fuzzy-j': null,
+      'float-shadow-ghost': null,
+      'float-j-ghost': null,
       labels: null,
     }
     const start = performance.now()

@@ -2,7 +2,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type maplibregl from 'maplibre-gl'
-import { applyMapView, useMapView } from './mapView'
+import { FLAT_MARKER_LAYERS, FLOAT_MARKER_LAYERS, applyMapView, useMapView } from './mapView'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -67,6 +67,19 @@ describe('applyMapView', () => {
     expect(eases).toEqual([{ pitch: 0, duration: 900 }])
     applyMapView(m, true, { animate: false })
     expect(eases[1]).toEqual({ pitch: 58, duration: 0 })
+  })
+
+  it('3D shows the floating markers and hides the flat ones; flat does the reverse', () => {
+    expect(FLAT_MARKER_LAYERS).toEqual(['points-j', 'fuzzy-j', 'stations', 'pins-tupper', 'stash'])
+    for (const id of ['float-j', 'float-gem', 'float-tupper', 'landed-glow', 'landed-gem', 'landed-timer']) expect(FLOAT_MARKER_LAYERS).toContain(id)
+    expect(FLOAT_MARKER_LAYERS.some((id) => id.startsWith('float-shadow'))).toBe(true)
+    const { m, vis } = fakeMap()
+    applyMapView(m, true, { animate: false })
+    for (const id of FLOAT_MARKER_LAYERS) expect(vis[id]).toBe('visible')
+    for (const id of FLAT_MARKER_LAYERS) expect(vis[id]).toBe('none')
+    applyMapView(m, false, { animate: false })
+    for (const id of FLOAT_MARKER_LAYERS) expect(vis[id]).toBe('none')
+    for (const id of FLAT_MARKER_LAYERS) expect(vis[id]).toBe('visible')
   })
 
   it('skips layers the map does not have', () => {
