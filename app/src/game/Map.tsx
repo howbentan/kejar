@@ -1,3 +1,4 @@
+import MapCredit from './MapCredit'
 import type { Feature as GeoFeature, FeatureCollection, Geometry } from 'geojson'
 import maplibregl, { type ExpressionSpecification, type GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -315,9 +316,8 @@ export default function GameMap({
       style: kejarMapStyle,
       center: [arena.start.lng, arena.start.lat],
       zoom: 16,
-      // The map credit is required by OpenStreetMap, OpenMapTiles and OpenFreeMap; shown as one slim dark line
-      // (tokens.css) instead of MapLibre's white pop-out box.
-      attributionControl: { compact: false },
+      // The required credit is our own slim <MapCredit />, not MapLibre's pop-out box.
+      attributionControl: false,
     })
     map.current = m
     const giveUp = window.setTimeout(() => setGaveUp(true), MAP_LOADER_MS)
@@ -834,6 +834,7 @@ export default function GameMap({
   return (
     <div style={{ position: 'relative', height: typeof height === 'string' ? height : undefined }}>
       <div ref={el} style={{ height, borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hair)' }} />
+      <MapCredit />
       {/* Until the map's first load, a small j runs in the middle (loaders design). Taps go straight through. */}
       {!loaded && !gaveUp && (
         <div className="map-loading" data-testid="map-loading" aria-hidden="true">

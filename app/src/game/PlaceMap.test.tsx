@@ -3,10 +3,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 type Click = { point: { x: number; y: number }; lngLat: { lat: number; lng: number } }
 type Pin = { options: { draggable?: boolean; element?: HTMLElement }; at: number[]; handlers: Record<string, () => void>; removed: boolean }
-const map = vi.hoisted(() => ({ handlers: {} as Record<string, (e: Click) => void>, fits: [] as unknown[], pins: [] as Pin[] }))
+const map = vi.hoisted(() => ({ handlers: {} as Record<string, (e: Click) => void>, fits: [] as unknown[], pins: [] as Pin[], options: [] as Record<string, unknown>[] }))
 vi.mock('maplibre-gl', () => ({
   default: {
     Map: class {
+      constructor(o: Record<string, unknown>) {
+        map.options.push(o)
+      }
       on(event: string, cb: (e: Click) => void) {
         map.handlers[event] = cb
       }
@@ -66,6 +69,13 @@ const base = {
 }
 
 describe('PlaceMap', () => {
+  it('uses the slim credit instead of MapLibre attribution box', () => {
+    map.options = []
+    const { container } = render(<PlaceMap {...base} mode="stations" onTap={vi.fn()} onStationRemove={vi.fn()} />)
+    expect(map.options.at(-1)!.attributionControl).toBe(false)
+    expect(container.querySelector('.map-credit')).not.toBeNull()
+  })
+
   it('taps go to onTap; a tap near a station in stations mode removes it', () => {
     const onTap = vi.fn()
     const onStationRemove = vi.fn()

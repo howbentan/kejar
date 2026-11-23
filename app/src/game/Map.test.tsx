@@ -11,6 +11,7 @@ const created = vi.hoisted(() => ({
   layers: [] as { id: string; source: string }[],
   data: {} as Record<string, unknown>,
   markers: [] as { el: HTMLElement; lngLat?: number[]; removed: boolean }[],
+  options: [] as Record<string, unknown>[],
 }))
 const reduce = vi.hoisted(() => ({ on: false }))
 vi.mock('motion/react', async (orig) => ({ ...(await orig<typeof import('motion/react')>()), useReducedMotion: () => reduce.on }))
@@ -34,7 +35,8 @@ vi.mock('maplibre-gl', () => ({
       }
     },
     Map: class {
-      constructor() {
+      constructor(o: Record<string, unknown>) {
+        created.options.push(o)
         created.count++
       }
       on(event: string, cb: () => void) {
@@ -91,6 +93,13 @@ const arena = {
 }
 
 describe('GameMap', () => {
+  it('drops MapLibre own attribution box for the slim credit', () => {
+    created.options = []
+    render(<GameMap arena={arena} dots={[]} />)
+    expect(created.options.at(-1)!.attributionControl).toBe(false)
+    expect(screen.getByText(/OpenMapTiles/).closest('.map-credit')).toBeInTheDocument()
+  })
+
   it('runs a small j over the map until its first load, then takes it away', () => {
     render(<GameMap arena={arena} dots={[]} />)
     const loading = screen.getByTestId('map-loading')

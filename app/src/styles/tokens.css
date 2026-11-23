@@ -63,7 +63,7 @@
    spacing: the old label tracking pulls drawn letters apart. Geist keeps only the smallest bits, below. */
 html body, html body * { text-transform: lowercase !important; letter-spacing: normal !important; font-synthesis: none; }
 html body p, html body li, html body td, html body label { line-height: 1.5; }
-.eyebrow, th, .feed-list, .feed-list *, .slot-deck, .chase-who, .chase-count, .maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib *,
+.eyebrow, th, .feed-list, .feed-list *, .slot-deck, .chase-who, .chase-count, .map-credit, .map-credit *,
 html body small, html body input, html body textarea { font-family: 'Geist', system-ui, sans-serif !important; }
 .eyebrow, th, .slot-deck, .chase-who { text-transform: uppercase !important; letter-spacing: 0.14em !important; }
 html body input, html body textarea { text-transform: none !important; }
@@ -162,14 +162,13 @@ select.input {
 select.input option { background: #141614; color: var(--white); }
 
 /* "Centre on me" map button */
-/* The map credit: required, but kept to one small dim line on a dark strip in the corner. */
-.maplibregl-ctrl-bottom-right .maplibregl-ctrl-attrib {
-  margin: 0 !important; padding: 1px 6px !important; border-radius: 6px 0 0 0;
-  background: rgba(10, 10, 11, 0.55) !important; color: rgba(245, 245, 243, 0.45);
-  font: 400 8.5px/1.4 var(--font); letter-spacing: 0.01em;
+/* The map credit: required, kept to one small dim line in the corner. Geist Mono (the owner's rule: credits stay Geist). */
+.map-credit {
+  position: absolute; left: 14px; bottom: 10px; z-index: 2; background: none; pointer-events: auto;
+  font: 400 8px/1.4 'Geist Mono', ui-monospace, monospace !important; letter-spacing: 0.04em !important;
+  color: rgba(245, 245, 243, 0.32);
 }
-.maplibregl-ctrl-attrib a { color: rgba(245, 245, 243, 0.55) !important; text-decoration: none; }
-.maplibregl-ctrl-attrib-button { display: none !important; }
+.map-credit a { color: inherit; text-decoration: none; }
 .map-me {
   position: absolute; left: 10px; bottom: 10px; z-index: 2; appearance: none; cursor: pointer;
   display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px;

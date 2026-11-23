@@ -1,3 +1,4 @@
+import MapCredit from './MapCredit'
 import type { Feature as GeoFeature, FeatureCollection, Geometry } from 'geojson'
 import maplibregl, { type GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
@@ -75,7 +76,7 @@ export default function PlaceMap(props: Props) {
       style: kejarMapStyle,
       center: [KL_FALLBACK.lng, KL_FALLBACK.lat],
       zoom: 15.5,
-      attributionControl: { compact: true },
+      attributionControl: false,
     })
     map.current = m
     m.on('load', () => {
@@ -239,5 +240,10 @@ export default function PlaceMap(props: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [frameKey])
 
-  return <div ref={el} style={{ height: 320, borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hair)' }} />
+  return (
+    <div style={{ position: 'relative' }}>
+      <div ref={el} style={{ height: 320, borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hair)' }} />
+      <MapCredit />
+    </div>
+  )
 }
