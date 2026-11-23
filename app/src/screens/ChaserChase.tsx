@@ -71,11 +71,11 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
   const deckLeft = view.deckLeft
   const momentFor = useCallback(
     (s: { action: string }, text: string, r: unknown, done: () => void) => {
-      if (s.action === 'claim') return dipFor(text, r, deckLeft, done)
+      if (s.action === 'claim') return dipFor(text, r, deckLeft, done, code)
       const c = r as CatchJudgement
       return c.ok ? <CatchMoment label={c.label ?? ''} onDone={done} /> : null
     },
-    [deckLeft],
+    [deckLeft, code],
   )
 
   return (

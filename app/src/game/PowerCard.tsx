@@ -1,4 +1,5 @@
 import { useId } from 'react'
+import { RARITY, type Rarity } from '../../shared/deck.js'
 import type { PowerUpKind } from '../../shared/types.js'
 import { INFO } from './powerInfo'
 import Sticker from './Sticker'
@@ -76,10 +77,10 @@ export const LEGENDARY_OWN = { dato: '#FFD60A', ring: '#FFA94D', bomoh: '#F5F0E6
  * `big` (150×234) is the revealed card in the lucky dip: laid out bigger, never scaled, so the marker finds its edges.
  * A big back is the card rising out of the Tupperware before it flips.
  */
-export default function PowerCard({ kind, faceDown = false, wiggle = false, big = false }: { kind?: PowerUpKind | 'hijau' | 'bomoh'; faceDown?: boolean; wiggle?: boolean; big?: boolean }) {
+export default function PowerCard({ kind, faceDown = false, wiggle = false, big = false, rarity }: { kind?: PowerUpKind | 'hijau' | 'bomoh'; faceDown?: boolean; wiggle?: boolean; big?: boolean; rarity?: Rarity }) {
   if (faceDown || !kind) {
     return (
-      <div className={`power-card back${big ? ' big' : ''}`} aria-label="Face-down card" role="img">
+      <div className={`power-card back${big ? ' big' : ''}${rarity ? ` r-${rarity}` : ''}`} aria-label={rarity ? `Face-down ${rarity} card` : 'Face-down card'} role="img">
         <span className="pc-corner tl" />
         <span className="pc-corner tr" />
         <span className="pc-corner bl" />
@@ -88,11 +89,21 @@ export default function PowerCard({ kind, faceDown = false, wiggle = false, big 
       </div>
     )
   }
+  // Sike, the empty card: grey and dashed, nothing on it but the joke.
+  if (kind === 'sike') {
+    return (
+      <div className={`power-card front sike${big ? ' big' : ''}`}>
+        <span className="pc-eyebrow">EMPTY</span>
+        <b className="sike-word">sike!</b>
+        <span className="pc-effect">you got an empty power up</span>
+      </div>
+    )
+  }
   const legendary = kind === 'dato' || kind === 'ring' || kind === 'hijau' || kind === 'bomoh'
   const info = kind === 'hijau' ? HIJAU_INFO : kind === 'bomoh' ? BOMOH_INFO : INFO[kind]
   const tone = kind === 'ring' || kind === 'hijau' || kind === 'bomoh' ? ` ${kind}` : ''
   return (
-    <div className={`power-card front${big ? ' big' : ''}${legendary ? ' legendary' : ''}${tone}`}>
+    <div className={`power-card front${big ? ' big' : ''}${legendary ? ' legendary' : ` r-${RARITY[kind as keyof typeof RARITY] ?? 'common'}`}${tone}`}>
       {legendary && <Scribbles big={big} />}
       <span className="pc-eyebrow">{legendary ? '★ LEGENDARY · ONE PER GAME' : 'POWER-UP'}</span>
       <span className="pc-art">

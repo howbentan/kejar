@@ -1,4 +1,5 @@
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { resumeDip } from './LuckyDip'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
 import { currentCoords } from './here'
@@ -67,6 +68,13 @@ export default function ChaseLayout(props: {
   const questHidden = questClosed || questAside
   const [result, setResult] = useState('')
   const [moment, setMoment] = useState<ReactNode | null>(null)
+  // An open pick left from before a reload comes back on screen.
+  const openDeal = view.deal
+  useEffect(() => {
+    if (!openDeal || moment) return
+    const m = resumeDip(code, openDeal, view.deckLeft, () => setMoment(null))
+    if (m) setMoment(m)
+  }, [openDeal, moment, code, view.deckLeft])
   // A scan still on its way: no second scan until it answers (a slow claim mustn't let another through).
   const [busy, setBusy] = useState(false)
 

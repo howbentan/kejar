@@ -136,8 +136,8 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
   }, [])
   const deckLeft = view.deckLeft
   const momentFor = useCallback(
-    (s: { action: string }, text: string, r: unknown, done: () => void) => (s.action === 'claim' ? dipFor(text, r, deckLeft, done) : null),
-    [deckLeft],
+    (s: { action: string }, text: string, r: unknown, done: () => void) => (s.action === 'claim' ? dipFor(text, r, deckLeft, done, code) : null),
+    [deckLeft, code],
   )
 
   // Mak Kau Hijau: one tap of the green pill, sent with my token and where I am (the Kejar see the spot). The tap

@@ -19,7 +19,7 @@ import { BusyLabel } from './Runner'
  * claim and never sits in a hand), so every place that names a claimed kind has to handle him on purpose.
  */
 export type ClaimedKind = PowerUpKind | 'bomoh' | 'hijau'
-export type ClaimResult = ({ ok: true; kind: ClaimedKind; double?: boolean } | Exclude<ClaimJudgement, { ok: true }>)
+export type ClaimResult = ({ ok: true; kind: ClaimedKind; double?: boolean } | { ok: true; deal: { id: string; backs: ('common' | 'rare' | 'epic')[] }; kind?: undefined; double?: undefined } | Exclude<ClaimJudgement, { ok: true }>)
 type UseResult =
   | { ok: true; kind: PowerUpKind; offer?: PowerUpKind[]; name?: string; wasted?: true }
   | { ok: false; reason: string; readyInMs?: number; frozenForMs?: number }
@@ -75,7 +75,7 @@ const frozenLine = (ms: number | undefined) => `Brain freeze! Wait ${clock(ms ??
  * scan is refused as cannot-claim is holding the chasers' purple card (a runner on the chase screen is never jailed).
  */
 export function stashMessage(r: ClaimResult | { ok: false; reason: 'no-stash' | 'paused' }, side?: 'runner' | 'chaser'): string {
-  if (r.ok) return claimedLine(r.kind)
+  if (r.ok) return 'deal' in r ? 'Pick a card' : claimedLine(r.kind!)
   const reason: string = r.reason
   if (reason === 'cannot-claim' && side === 'runner') return 'Not for your side.'
   if (reason === 'too-far') return 'Get closer.'
@@ -102,7 +102,9 @@ export function slipMessage(r: SlipClaimResult): string {
 
 /** Plain words for a claim; refusals name the station when the scan said which one (motion design §7). */
 export function claimMessage(r: ClaimResult, station?: number | null): string {
-  if (r.ok) return claimedLine(r.kind, r.double)
+  // A station scan deals five cards: the pick screen says the rest.
+  if (r.ok && 'deal' in r) return 'Pick a card'
+  if (r.ok) return claimedLine(r.kind!, r.double)
   if (r.reason === 'frozen') return frozenLine(r.frozenForMs)
   if (station) {
     if (r.reason === 'too-far') return `Get closer. You need to be within 30 m of Station ${station}.`

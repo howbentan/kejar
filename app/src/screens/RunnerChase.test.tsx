@@ -149,7 +149,7 @@ describe('RunnerChase', () => {
   })
 
   it('scanning a station claims it, opens the lucky dip, and no other scan can start meanwhile', async () => {
-    call.mockResolvedValue({ ok: true, kind: 'shield' })
+    call.mockResolvedValue({ ok: true, deal: { id: 'u1', backs: ['common', 'rare', 'epic', 'common', 'rare'] } })
     render(<RunnerChase code="ABC234" view={testView()} />)
     await scan('KEJAR:STATION:2')
     expect(call).toHaveBeenCalledWith('claim', { code: 'ABC234', token: 't1', qr: 'KEJAR:STATION:2' })

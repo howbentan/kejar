@@ -259,7 +259,7 @@ select.input option { background: #141614; color: var(--white); }
 .dip-card.picked { position: absolute; left: calc(50% - 75px); bottom: 6px; margin: 0; z-index: 2; cursor: default; transform-origin: 50% 100%; }
 .shock { position: absolute; inset: -4px; border: 3px solid var(--volt); pointer-events: none; }
 .spark { position: absolute; pointer-events: none; display: block; }
-.dip-spotlight { position: absolute; top: -10px; bottom: -10px; left: calc(50% - 50px); width: 100px; border-radius: 50%; background: radial-gradient(closest-side, rgba(198, 255, 61, 0.35), transparent); pointer-events: none; z-index: 1; }
+.dip-sub { margin: 4px 0 0; text-align: center; font: 400 15px var(--font); opacity: 0.75; }
 .dip-pick { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 160px; }
 .dip-pick p { margin: 0; font: 700 16px var(--font); }
 .dip-timer { display: block; height: 3px; width: 100%; background: var(--volt); transform-origin: left; }
@@ -514,6 +514,27 @@ select.input option { background: #141614; color: var(--white); }
 .pc-corner.tr { top: 8px; right: 8px; border-top-width: 2px; border-right-width: 2px; }
 .pc-corner.bl { bottom: 8px; left: 8px; border-bottom-width: 2px; border-left-width: 2px; }
 .pc-corner.br { bottom: 8px; right: 8px; border-bottom-width: 2px; border-right-width: 2px; }
+/* Rarity (playtest batch §2.2): the back's frame, corners and seal, and the face's frame, in the card's rarity colour. */
+:root { --rare: #3D9BFF; --epic: #B47CFF; --sike: #8A8A8E; }
+.power-card.back.r-common { --r: var(--volt); }
+.power-card.back.r-rare { --r: var(--rare); }
+.power-card.back.r-epic { --r: var(--epic); }
+.power-card.back[class*='r-'] { border-color: var(--r);
+  background-image: repeating-linear-gradient(45deg, color-mix(in srgb, var(--r) 9%, transparent) 0 1px, transparent 1px 10px),
+    repeating-linear-gradient(-45deg, color-mix(in srgb, var(--r) 9%, transparent) 0 1px, transparent 1px 10px); }
+.power-card.back[class*='r-'] .pc-corner { border-color: var(--r); }
+.power-card.back[class*='r-'] .pc-seal { border-color: var(--r); color: var(--r); }
+.power-card.front.r-rare { border-color: var(--rare); }
+.power-card.front.r-rare .pc-eyebrow { color: var(--rare); }
+.power-card.front.r-rare .pc-art { background: rgba(61, 155, 255, 0.1); }
+.power-card.front.r-epic { border-color: var(--epic); }
+.power-card.front.r-epic .pc-eyebrow { color: var(--epic); }
+.power-card.front.r-epic .pc-art { background: rgba(180, 124, 255, 0.12); }
+.power-card.front.sike { background: #1A1A1C; border: 2px dashed var(--sike); align-items: center; justify-content: center; gap: 6px; }
+.power-card.front.sike .pc-eyebrow { color: var(--sike); position: absolute; top: 12px; }
+.power-card.front.sike .sike-word { font: 400 30px var(--font); color: #C9C9CC; transform: rotate(-6deg); }
+.power-card.big.front.sike .sike-word { font-size: 46px; }
+.power-card.front.sike .pc-effect { color: #9A9A9E; }
 .pc-seal {
   width: 52px; height: 52px; border-radius: 50%; border: 2px solid var(--volt); display: grid; place-items: center;
   font: 800 12px var(--font); letter-spacing: -0.06em; color: var(--volt); background: var(--black); position: relative;
