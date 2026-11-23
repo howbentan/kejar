@@ -55,13 +55,20 @@ export function judgeClaim(i: {
 
   const here = i.powerUps.filter((u) => u.station === i.station)
   if (here.some((u) => u.player_id === i.me.id)) return { ok: false, reason: 'already-claimed' }
-  const lastClaim = Math.max(...here.map((u) => Date.parse(u.claimed_at)), -Infinity)
-  const lockedForMs = lastClaim + STATION_LOCK_MS - i.now
+  const until = stationLockedUntil(i.powerUps, i.station, i.now)
+  const lockedForMs = until === null ? 0 : until - i.now
   if (lockedForMs > 0) return { ok: false, reason: 'locked', lockedForMs }
 
   const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now, i.me)
   if (busy) return { ok: false, reason: 'hand-full', busyKind: busy.kind, busyRunning: busy.running }
   return { ok: true }
+}
+
+/** When a station's lock ends (ms): its latest claim plus `STATION_LOCK_MS`, or null if it is free at `now`. */
+export function stationLockedUntil(powerUps: PowerUp[], station: number | null, now: number): number | null {
+  const claims = powerUps.filter((u) => u.station === station).map((u) => Date.parse(u.claimed_at))
+  const until = Math.max(...claims, -Infinity) + STATION_LOCK_MS
+  return until > now ? until : null
 }
 
 /** A fresh enough fix within `CLAIM_RADIUS_M` of the spot, forgiving GPS error up to 20 m (spec §4.8.1). */

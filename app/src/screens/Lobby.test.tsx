@@ -18,8 +18,8 @@ import Lobby from './Lobby'
 afterEach(cleanup)
 
 const stations = [
-  { n: 1, lat: 3.1, lng: 101.1 },
-  { n: 2, lat: 3.2, lng: 101.2 },
+  { n: 1, lat: 3.1, lng: 101.1, lockedUntil: null },
+  { n: 2, lat: 3.2, lng: 101.2, lockedUntil: null },
 ]
 
 describe('Lobby setup map', () => {

@@ -13,7 +13,7 @@ import { ARREST_OPEN_MS, arrestEndsAt } from './arrest.js'
 import { hijauCounts, hijauTargets, penjaraLockLeft } from './hijau.js'
 import { boxFor, legendaryOn, mirroredSpots, sideOf, TUPPER_SIDES } from './tupperware.js'
 import { POWER_NAME } from './powerNames.js'
-import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, shieldArmedAt, slotBusy, TOLL_RADIUS_M } from './powerups.js'
+import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, shieldArmedAt, slotBusy, stationLockedUntil, TOLL_RADIUS_M } from './powerups.js'
 import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type LegendaryKind, type EndgameKind, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings, type TupperSide } from './types.js'
 
 /** Spec §4.5–4.6 constants. */
@@ -195,7 +195,8 @@ export interface View {
   /** "How fun was it?" ratings; marshals and the organiser only, for the After game tab. */
   ratings: PostGameRating[]
   /** Power-up stations, numbered from 1. */
-  stations: { n: number; lat: number; lng: number }[]
+  /** `lockedUntil`: ISO time the station's lock after a claim ends, or null when free. */
+  stations: { n: number; lat: number; lng: number; lockedUntil: string | null }[]
   /** My unused power-ups. */
   hand: PowerUp[]
   shieldActive: boolean
@@ -1252,7 +1253,10 @@ function fullView(input: ViewInput): View {
       : [],
     reports: postGameReportsFor(i),
     ratings: ratingsFor(i),
-    stations: (i.game.arena.stations ?? []).map((s, k) => ({ n: k + 1, lat: s.lat, lng: s.lng })),
+    stations: (i.game.arena.stations ?? []).map((s, k) => {
+      const until = stationLockedUntil(i.powerUps, k + 1, i.now)
+      return { n: k + 1, lat: s.lat, lng: s.lng, lockedUntil: until === null ? null : new Date(until).toISOString() }
+    }),
     // `!taken_at`, not `=== null`: a row read before migration 0011 has no taken_at at all (undefined).
     hand: i.powerUps.filter((u) => u.player_id === i.me.id && u.used_at === null && !u.taken_at),
     shieldActive: activeShield(i.powerUps, i.me.id, i.now) !== null,

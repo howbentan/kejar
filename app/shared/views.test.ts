@@ -4,6 +4,7 @@ import { distanceM } from './geo.js'
 import { DEFAULT_SETTINGS, type Game, type GameEvent, type Player, type Position, type PowerUp } from './types.js'
 import { BONUS_SEQ_BASE, pingTimes, SCHEDULED_ALERT_LEAD_MS } from './clock.js'
 import { CHASER_SNAPSHOT_FUZZ_M, viewFor } from './views.js'
+import { STATION_LOCK_MS } from './powerups.js'
 
 const g = game()
 const NOW = T0 + 16 * MIN // chase started at +5; pings revealed at +10 and +15
@@ -601,7 +602,35 @@ describe('power-up effects', () => {
   it('lists the stations with their numbers', () => {
     const S = { lat: 3.004, lng: 101.004 }
     const v = view(aina, { game: game({ arena: { ...g.arena, stations: [S] } }) })
-    expect(v.stations).toEqual([{ n: 1, lat: S.lat, lng: S.lng }])
+    expect(v.stations).toEqual([{ n: 1, lat: S.lat, lng: S.lng, lockedUntil: null }])
+  })
+
+  describe('station locks', () => {
+    const S1 = { lat: 3.003, lng: 101.003 }
+    const S2 = { lat: 3.004, lng: 101.004 }
+    const claim = (id: string, playerId: string, station: number, at: number): PowerUp => ({
+      id, game_id: 'g1', player_id: playerId, kind: 'decoy', station,
+      claimed_at: new Date(at).toISOString(), used_at: null, consumed_at: null, sealed: false,
+      taken_at: null, offer: null, twin_of: null, spot: null,
+    })
+    const t = T0 + 6 * MIN
+    const two = () => game({ arena: { ...g.arena, stations: [S1, S2] } })
+
+    it('marks a station locked until STATION_LOCK_MS after its latest claim', () => {
+      const v = view(aina, { game: two(), now: t + 20_000, powerUps: [claim('a', 'r1', 2, t), claim('b', 'r2', 2, t + 10_000)] })
+      expect(v.stations[1].lockedUntil).toBe(new Date(t + 10_000 + STATION_LOCK_MS).toISOString())
+      expect(v.stations[0].lockedUntil).toBeNull()
+    })
+
+    it('drops the lock once it has run out', () => {
+      const v = view(aina, { game: two(), now: t + STATION_LOCK_MS, powerUps: [claim('a', 'r2', 2, t)] })
+      expect(v.stations[1].lockedUntil).toBeNull()
+    })
+
+    it("never puts other players' claims in the hand", () => {
+      const v = view(aina, { game: two(), now: t + 20_000, powerUps: [claim('a', 'r1', 1, t), claim('b', 'r2', 2, t)] })
+      expect(v.hand.map((u) => u.id)).toEqual(['a'])
+    })
   })
 
   it('feed announces pickups and chaser power-ups but not runner ones', () => {
