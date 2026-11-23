@@ -1300,6 +1300,21 @@ describe('power-up stations', () => {
       expect((await rowOf(g, r.deal.id)).kind).toBe(row.deal!.cards[row.deal!.auto])
     })
 
+    it('a card still waiting for its pick cannot be used (the phone knows its id)', async () => {
+      const g = await chasingWithStation()
+      const r = await scan(g)
+      expect(await run('usePowerup', { code: g.code, token: g.aina.token, powerupId: r.deal.id })).toEqual({ ok: false, reason: 'not-yours' })
+      expect((await rowOf(g, r.deal.id)).used_at).toBeNull()
+    })
+
+    it("the waiting card's placeholder is the same whatever was dealt, so nothing reads a dealt card from it", async () => {
+      const g = await chasingWithStation()
+      const r = await scan(g)
+      const row = await rowOf(g, r.deal.id)
+      expect(row.kind).toBe('shield') // a Core runner deck's first real card, for every deal
+      expect((await run<View>('state', { code: g.code, token: g.aina.token })).freezeTargets).toBeNull()
+    })
+
     it("someone else's deal can't be picked", async () => {
       const g = await chasingWithStation()
       const r = await scan(g)

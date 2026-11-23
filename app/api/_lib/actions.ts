@@ -1819,7 +1819,8 @@ const claim: Action = async (ctx, body) => {
   const auto = Math.min(cards.length - 1, Math.floor(ctx.rng() * cards.length))
   const backs = cards.map((c) => backOf(c, ctx.rng))
   // The row holds a real card until the pick (a Sike resolves to 'sike' then); sealed and out of the hand meanwhile.
-  const provisional = cards.find((k) => k !== 'sike') ?? deck.find((k) => k !== 'sike')!
+  // Always the deck's first real card, so nothing that reads the row can learn what was dealt.
+  const provisional = deck.find((k) => k !== 'sike')!
   // Re-checked atomically by the store, so double-taps and simultaneous scans can't both win.
   const claimed = await ctx.store.claimStation(
     { game_id: game.id, player_id: me.id, kind: provisional, station: station!, deal: { cards, backs, auto } },
@@ -2070,7 +2071,8 @@ const usePowerup: Action = async (ctx, body) => {
   const { phase, endsAt } = phaseAt(fresh, ctx.now)
   const all = await ctx.store.powerUps(game.id)
   const u = all.find((x) => x.id === str(body.powerupId))
-  if (!u || u.player_id !== me.id) return { ok: false, reason: 'not-yours' }
+  // A card still waiting for its pick isn't in the hand yet.
+  if (!u || u.player_id !== me.id || u.deal) return { ok: false, reason: 'not-yours' }
   // Taken by Toyol or Ah Long (e.g. a Grab with its offer open): the owner is told it was taken.
   if (u.taken_at) return { ok: false, reason: 'taken' }
   if (u.used_at) return { ok: false, reason: 'already-used' }

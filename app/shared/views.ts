@@ -721,7 +721,7 @@ function snapshotLines(i: ViewInput, phase: Phase, endsAt: number | null): { at:
 /** The Settle picker's choices, the same eligibility `judgeSettle` applies. */
 function settleFor(i: ViewInput, phase: Phase): View['settle'] {
   if (phase !== 'chasing' || i.game.paused_at || i.me.role !== 'runner' || !i.me.jailed) return null
-  const holds = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'dato' && u.used_at === null && !u.taken_at)
+  const holds = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'dato' && u.used_at === null && !u.taken_at && !u.deal)
   if (!holds) return null
   const options = i.players
     .filter((p) => p.role === 'runner' && p.jailed && p.id !== i.me.id && !p.removed_at)
@@ -732,7 +732,7 @@ function settleFor(i: ViewInput, phase: Phase): View['settle'] {
 /** Who a runner's unused Cheese Ais can freeze: chasers still in the round and not already frozen, ordered by name. */
 function freezeTargetsFor(i: ViewInput): View['freezeTargets'] {
   if (i.me.role !== 'runner') return null
-  const holds = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'cheese' && u.used_at === null && !u.taken_at)
+  const holds = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'cheese' && u.used_at === null && !u.taken_at && !u.deal)
   if (!holds) return null
   return i.players
     .filter((p) => p.role === 'chaser' && !p.removed_at && !p.disqualified_at && frozenForMs(p, i.now) === 0)
@@ -1240,7 +1240,7 @@ function fullView(input: ViewInput): View {
       return armed === null ? null : armed + SHIELD_MS
     })(),
     flareReadyAt: (() => {
-      const holding = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'flare' && u.used_at === null && !u.taken_at)
+      const holding = i.powerUps.some((u) => u.player_id === i.me.id && u.kind === 'flare' && u.used_at === null && !u.taken_at && !u.deal)
       const blocked = holding ? flareBlocked(i.pings, i.now) : null
       return blocked ? i.now + blocked.readyInMs : null
     })(),
