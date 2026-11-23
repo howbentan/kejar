@@ -104,7 +104,24 @@ function dotFeatures(dots: MapDot[], origin: LatLng | null = null) {
  * The map's drawn markers: the logo's own j (cut from the logo: volt for Dikejar and pings, white for Kejar), the
  * Penjara gate and the start flag. Each is a 2x image in /map; a layer that uses one draws as soon as it has loaded.
  */
-const MAP_ICONS = ['j-runner', 'j-chaser', 'j-ghost', 'penjara', 'start'] as const
+export const MAP_ICONS = [
+  'j-runner',
+  'j-chaser',
+  'j-ghost',
+  'penjara',
+  'start',
+  'dia-volt',
+  'dia-red',
+  'dia-gold',
+  'dia-purple',
+  'gem-volt-float',
+  'gem-gold-float',
+  'gem-purple-float',
+  'gem-red',
+  'j-runner-float',
+  'j-chaser-float',
+  'j-ghost-float',
+] as const
 function addMapIcons(m: maplibregl.Map) {
   if (typeof m.addImage !== 'function' || typeof Image === 'undefined') return
   for (const name of MAP_ICONS) {
