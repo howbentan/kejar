@@ -150,7 +150,7 @@ export default function WalkPark({
     lng: p.lng,
     label: p.id === 'penjara' ? 'PENJARA' : p.tone ? '?' : String(i + 1),
     state: (done(p.id) ? 'placed' : p.id === next?.id ? 'next' : 'todo') as 'placed' | 'next' | 'todo',
-    ...(p.tone ? { tone: p.tone } : {}),
+    ...(p.tone ? { side: sideOfBox(p.id) } : {}),
   }))
 
   const eyebrow = secret ? 'WALK THE PARK · ONLY YOU SEE THIS' : 'WALK THE PARK'

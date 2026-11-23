@@ -1,6 +1,6 @@
 import MapCredit from './MapCredit'
 import type { Feature as GeoFeature, FeatureCollection, Geometry } from 'geojson'
-import maplibregl, { type ExpressionSpecification, type GeoJSONSource } from 'maplibre-gl'
+import maplibregl, { type GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { useEffect, useRef, useState } from 'react'
 import * as m from 'motion/react-m'
@@ -8,7 +8,7 @@ import { useReducedMotion } from 'motion/react'
 import { circlePolygon, distanceM } from '../../shared/geo.js'
 import type { FloodNow } from '../../shared/flood.js'
 import { BANJIR, floodFeatures } from './floodMap'
-import type { SecretTone } from '../../shared/kit.js'
+import type { TupperSide } from '../../shared/types.js'
 import type { Arena, LatLng } from '../../shared/types.js'
 import { CHASER_SNAPSHOT_FUZZ_M, FUZZ_RADIUS_M, type ChaserSnapshot, type MapDot } from '../../shared/views.js'
 import { MAP_FONT, kejarMapStyle } from './mapStyle'
@@ -22,6 +22,8 @@ const MAP_LOADER_MS = 8000
 const VOLT = '#C6FF3D'
 const WHITE = '#F5F5F3'
 const BLACK = '#0A0A0B'
+/** The diamond images (Task 4) by Tupperware side. */
+const DIAMOND: Record<TupperSide, string> = { dikejar: 'dia-gold', kejar: 'dia-purple' }
 
 type MapCircle = { lat: number; lng: number; radiusM: number }
 
@@ -45,17 +47,6 @@ function legendaryGreen() {
   const token = (name: string, fallback: string) => css?.getPropertyValue(name).trim() || fallback
   return { fill: token('--hijau-1', '#CDEFD8'), main: token('--hijau-2', '#3FA86B'), deep: token('--hijau-3', '#1B6B3F'), ink: token('--hijau-ink', '#06240F') }
 }
-
-export type { SecretTone }
-/** The Tupperware's red, read from tokens.css --tupper-1/2/3 and --tupper-ink; the fallbacks (#FFD3D6, #E63946, #A4161A, #3A0508) must change with them. */
-function tupperRed() {
-  const css = typeof document === 'undefined' ? null : getComputedStyle(document.documentElement)
-  const token = (name: string, fallback: string) => css?.getPropertyValue(name).trim() || fallback
-  return { fill: token('--tupper-1', '#FFD3D6'), main: token('--tupper-2', '#E63946'), deep: token('--tupper-3', '#A4161A'), ink: token('--tupper-ink', '#3A0508') }
-}
-
-/** A secret pin's colours by its tone. The Tupperware's red is the only one since the colour cards were retired. */
-const toneColours = (_tone: SecretTone) => tupperRed()
 
 /**
  * The endgames' map colours (endgame design §6.4, §7.4, §8.3): Bomba's red for the last call, Hang Hebat's poster cream
@@ -135,23 +126,31 @@ function addMapIcons(m: maplibregl.Map) {
 }
 
 /** The game map: arena boundary, jail, and role dots (spec §9 colour + shape rules). */
-type StationMark = { n: number; lat: number; lng: number }
+type StationMark = { n: number; lat: number; lng: number; lockedUntil?: string | null }
 
-function stationFeatures(stations: StationMark[]): FeatureCollection {
+/** `m:ss` for a lock with `ms` left. */
+const lockLeft = (ms: number) => `${Math.floor(ms / 60_000)}:${String(Math.floor((ms % 60_000) / 1000)).padStart(2, '0')}`
+
+/** A station is locked while its `lockedUntil` is ahead of `now`; `left` is the time still to go (empty when open). Worked out on the phone, so a lock ends on its own. */
+export function stationFeatures(stations: StationMark[], now: number): FeatureCollection {
   return collection(
-    stations.map((s) => ({
-      type: 'Feature',
-      properties: { n: String(s.n) },
-      geometry: { type: 'Point', coordinates: [s.lng, s.lat] },
-    })),
+    stations.map((s) => {
+      const ms = s.lockedUntil ? Date.parse(s.lockedUntil) - now : 0
+      const locked = ms > 0
+      return {
+        type: 'Feature',
+        properties: { n: String(s.n), locked, left: locked ? lockLeft(ms) : '' },
+        geometry: { type: 'Point', coordinates: [s.lng, s.lat] },
+      }
+    }),
   )
 }
 
 /**
  * A pin. The walk-the-park guide sets a `label` (drawn on the pin), a `state` (todo is outlined, next pulses, placed is
- * filled) and, for a Tupperware's step, its colour as `tone`. Plain pins (safety alerts) leave them out and draw as filled lime.
+ * filled) and, for a Tupperware's step, its `side` (a gold Dikejar or purple Kejar diamond). Plain pins (safety alerts) leave them out and draw as filled lime.
  */
-type Pin = { id: string; lat: number; lng: number; label?: string; state?: 'todo' | 'next' | 'placed'; tone?: SecretTone }
+type Pin = { id: string; lat: number; lng: number; label?: string; state?: 'todo' | 'next' | 'placed'; side?: TupperSide }
 
 function pinFeatures(pins: Pin[]): FeatureCollection {
   return collection(
@@ -161,7 +160,7 @@ function pinFeatures(pins: Pin[]): FeatureCollection {
         id: p.id,
         label: p.label ?? '',
         state: p.state ?? 'placed',
-        red: p.tone === 'red',
+        side: p.side ?? '',
       },
       geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
     })),
@@ -247,7 +246,7 @@ export default function GameMap({
   flood = null,
   snapshot = null,
   stash = null,
-  stashTone = 'red',
+  stashSide = 'dikejar',
   tollGates = [],
 }: {
   arena: Arena
@@ -280,8 +279,8 @@ export default function GameMap({
   snapshot?: ChaserSnapshot | null
   /** The organiser's own map: the exact spot a box was dropped, as a pin. */
   stash?: LatLng | null
-  /** The stash pin's colour: the Tupperware's red. Read once, when the map loads. */
-  stashTone?: SecretTone
+  /** Whose Tupperware the stash diamond is: gold for Dikejar, purple for Kejar. Read once, when the map loads. */
+  stashSide?: TupperSide
   /** Chasers: where Tee And Gee's hidden toll gates stand. */
   tollGates?: LatLng[]
 }) {
@@ -297,8 +296,8 @@ export default function GameMap({
   latestSnapshot.current = snapshot
   const latestStash = useRef(stash)
   latestStash.current = stash
-  const latestStashTone = useRef(stashTone)
-  latestStashTone.current = stashTone
+  const latestStashSide = useRef(stashSide)
+  latestStashSide.current = stashSide
   const latestTollGates = useRef(tollGates)
   latestTollGates.current = tollGates
   const el = useRef<HTMLDivElement>(null)
@@ -394,9 +393,6 @@ export default function GameMap({
       m.addSource('house', { type: 'geojson', data: circleFeatures(latestCircle.current) })
       m.addLayer({ id: 'house-fill', type: 'fill', source: 'house', paint: { 'fill-color': or.main, 'fill-opacity': 0.14 } })
       m.addLayer({ id: 'house-line', type: 'line', source: 'house', paint: { 'line-color': or.main, 'line-width': 2.5 } })
-      // A walk pin's colour by its tone, as a `case` pair: the Tupperware's red.
-      const red = tupperRed()
-      const toned = (shade: 'main' | 'deep' | 'ink'): [ExpressionSpecification, string] => [['get', 'red'], red[shade]]
       m.addSource('toilets', {
         type: 'geojson',
         data: collection(
@@ -448,26 +444,18 @@ export default function GameMap({
         paint: { 'text-color': VOLT, 'text-halo-color': BLACK, 'text-halo-width': 1.5 },
       })
       m.addSource('stash', { type: 'geojson', data: stashFeatures(latestStash.current) })
-      const pin = toneColours(latestStashTone.current)
       m.addLayer({
         id: 'stash',
-        type: 'circle',
+        type: 'symbol',
         source: 'stash',
-        paint: { 'circle-radius': 9, 'circle-color': pin.main, 'circle-stroke-color': pin.deep, 'circle-stroke-width': 2 },
+        layout: { 'icon-image': DIAMOND[latestStashSide.current], 'icon-size': 1.3, 'icon-allow-overlap': true, 'icon-ignore-placement': true },
       })
-      m.addSource('stations', { type: 'geojson', data: stationFeatures(latestStations.current) })
+      m.addSource('stations', { type: 'geojson', data: stationFeatures(latestStations.current, Date.now()) })
       m.addLayer({
         id: 'stations',
-        type: 'circle',
-        source: 'stations',
-        paint: { 'circle-radius': 9, 'circle-color': BLACK, 'circle-stroke-color': VOLT, 'circle-stroke-width': 2 },
-      })
-      m.addLayer({
-        id: 'station-numbers',
         type: 'symbol',
         source: 'stations',
-        layout: { 'text-field': ['get', 'n'], 'text-font': MAP_FONT, 'text-size': 10, 'text-allow-overlap': true },
-        paint: { 'text-color': VOLT },
+        layout: { 'icon-image': ['case', ['get', 'locked'], 'dia-red', 'dia-volt'], 'icon-size': 1.3, 'icon-allow-overlap': true, 'icon-ignore-placement': true },
       })
       const { fuzzy, points, wanted } = dotFeatures(latest.current)
       m.addSource('fuzzy', { type: 'geojson', data: fuzzy })
@@ -645,17 +633,31 @@ export default function GameMap({
         type: 'circle',
         source: 'pins',
         filter: ['==', ['get', 'state'], 'next'],
-        paint: { 'circle-radius': 14, 'circle-color': ['case', ...toned('main'), VOLT], 'circle-opacity': 0.3 },
+        paint: { 'circle-radius': 14, 'circle-color': ['case', ['==', ['get', 'side'], 'kejar'], '#C9A4FF', ['==', ['get', 'side'], 'dikejar'], '#FFD60A', VOLT], 'circle-opacity': 0.3 },
       })
       m.addLayer({
         id: 'pins',
         type: 'circle',
         source: 'pins',
+        filter: ['==', ['get', 'side'], ''],
         paint: {
           'circle-radius': ['case', ['!=', ['get', 'label'], ''], 11, 10],
-          'circle-color': ['case', ...toned('main'), ['==', ['get', 'state'], 'todo'], BLACK, VOLT],
-          'circle-stroke-color': ['case', ...toned('deep'), WHITE],
+          'circle-color': ['case', ['==', ['get', 'state'], 'todo'], BLACK, VOLT],
+          'circle-stroke-color': WHITE,
           'circle-stroke-width': ['case', ['==', ['get', 'state'], 'todo'], 2, 3],
+        },
+      })
+      // A Tupperware's step is a diamond of its side's colour (todo and next alike; the next one pulses behind it).
+      m.addLayer({
+        id: 'pins-tupper',
+        type: 'symbol',
+        source: 'pins',
+        filter: ['!=', ['get', 'side'], ''],
+        layout: {
+          'icon-image': ['case', ['==', ['get', 'side'], 'kejar'], 'dia-purple', 'dia-gold'],
+          'icon-size': 1.3,
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
         },
       })
       m.addLayer({
@@ -663,7 +665,7 @@ export default function GameMap({
         type: 'symbol',
         source: 'pins',
         layout: { 'text-field': ['get', 'label'], 'text-font': MAP_FONT, 'text-size': 10, 'text-allow-overlap': true },
-        paint: { 'text-color': ['case', ...toned('ink'), ['==', ['get', 'state'], 'todo'], WHITE, BLACK] },
+        paint: { 'text-color': ['case', ['!=', ['get', 'side'], ''], BLACK, ['==', ['get', 'state'], 'todo'], WHITE, BLACK] },
       })
       fitTo(m, latestFit.current)
       ready.current = true
@@ -680,10 +682,20 @@ export default function GameMap({
   }, [arenaKey])
 
   const stationKey = JSON.stringify(stations)
+  // Draw now; then, only while some station is locked, redraw every second so a lock turns back by itself (and its time ticks).
   useEffect(() => {
     if (!ready.current || !map.current) return
-    ;(map.current.getSource('stations') as GeoJSONSource | undefined)?.setData(stationFeatures(latestStations.current))
-  }, [stationKey])
+    const draw = () => {
+      const now = Date.now()
+      ;(map.current?.getSource('stations') as GeoJSONSource | undefined)?.setData(stationFeatures(latestStations.current, now))
+      return latestStations.current.some((s) => s.lockedUntil && Date.parse(s.lockedUntil) > now)
+    }
+    if (!draw()) return
+    const timer = window.setInterval(() => {
+      if (!draw()) window.clearInterval(timer)
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [stationKey, loaded])
 
   const snapshotKey = JSON.stringify(snapshot)
   useEffect(() => {

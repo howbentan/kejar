@@ -80,7 +80,7 @@ vi.mock('maplibre-gl', () => ({
   },
 }))
 
-import GameMap from './Map'
+import GameMap, { stationFeatures } from './Map'
 
 afterEach(cleanup)
 
@@ -356,7 +356,7 @@ describe('GameMap', () => {
   })
 
   describe("the chasers' snapshot on a runner's map", () => {
-    const layer = (id: string) => created.layers.find((l) => l.id === id) as unknown as { paint: Record<string, unknown>; filter?: unknown }
+    const layer = (id: string) => created.layers.find((l) => l.id === id) as unknown as { paint: Record<string, unknown>; layout: Record<string, unknown>; filter?: unknown }
     const snap = {
       positions: [
         { name: 'Ben', lat: 3.01, lng: 101.01, stale: false },
@@ -389,29 +389,41 @@ describe('GameMap', () => {
       expect(created.data.snapshot).toMatchObject({ features: [] })
     })
 
-    it("the organiser's stash pin is the Tupperware's red at the exact spot", () => {
+    it("the organiser's stash pin is a diamond of its side at the exact spot", () => {
       created.layers = []
       created.data = {}
-      const { rerender } = render(<GameMap arena={arena} dots={[]} stash={{ lat: 3.03, lng: 101.03 }} />)
+      const { rerender } = render(<GameMap arena={arena} dots={[]} stash={{ lat: 3.03, lng: 101.03 }} stashSide="kejar" />)
       act(() => created.load!())
       expect(created.data.stash).toMatchObject({ features: [{ geometry: { type: 'Point', coordinates: [101.03, 3.03] } }] })
-      expect(layer('stash').paint['circle-color']).toBe('#E63946')
-      expect(layer('stash').paint['circle-stroke-color']).toBe('#A4161A')
-      rerender(<GameMap arena={arena} dots={[]} stash={null} />)
+      expect(layer('stash').layout['icon-image']).toBe('dia-purple')
+      rerender(<GameMap arena={arena} dots={[]} stash={null} stashSide="kejar" />)
       expect(created.data.stash).toMatchObject({ features: [] })
     })
 
-    it('walk pins carry their tone, and a Tupperware pin is red', () => {
+    it('the stash diamond is gold for Dikejar', () => {
+      created.layers = []
+      created.data = {}
+      render(<GameMap arena={arena} dots={[]} stash={{ lat: 3.03, lng: 101.03 }} stashSide="dikejar" />)
+      act(() => created.load!())
+      expect(layer('stash').layout['icon-image']).toBe('dia-gold')
+    })
+
+    it('a Tupperware pin is a gold or purple diamond by side; plain pins stay circles', () => {
       created.layers = []
       created.data = {}
       const pins = [
-        { id: 'tupper-dikejar', lat: 3.1, lng: 101.1, label: '?', tone: 'red' as const },
+        { id: 'tupper-dikejar', lat: 3.1, lng: 101.1, label: '?', side: 'dikejar' as const },
+        { id: 'tupper-kejar', lat: 3.15, lng: 101.15, label: '?', side: 'kejar' as const },
         { id: 'penjara', lat: 3.2, lng: 101.2, label: 'PENJARA' },
       ]
       render(<GameMap arena={arena} dots={[]} pins={pins} />)
       act(() => created.load!())
-      expect(created.data.pins).toMatchObject({ features: [{ properties: { red: true } }, { properties: { red: false } }] })
-      expect(JSON.stringify(layer('pins').paint['circle-color'])).toContain('#E63946')
+      expect(created.data.pins).toMatchObject({
+        features: [{ properties: { side: 'dikejar' } }, { properties: { side: 'kejar' } }, { properties: { side: '' } }],
+      })
+      expect(layer('pins-tupper').layout['icon-image']).toEqual(['case', ['==', ['get', 'side'], 'kejar'], 'dia-purple', 'dia-gold'])
+      expect(layer('pins-tupper').filter).toEqual(['!=', ['get', 'side'], ''])
+      expect(layer('pins').filter).toEqual(['==', ['get', 'side'], ''])
     })
 
     it('draws no hint zone layers: the ? zones are gone since the Tupperware', () => {
@@ -423,6 +435,51 @@ describe('GameMap', () => {
       const ids = created.layers.map((l) => l.id)
       for (const id of ['legendary-line', 'bomoh-legendary-line', 'ring-legendary-line', 'hijau-legendary-line']) expect(ids).not.toContain(id)
       expect(created.markers).toEqual([])
+    })
+  })
+
+  describe('station diamonds', () => {
+    const layer = (id: string) => created.layers.find((l) => l.id === id) as unknown as { layout: Record<string, unknown>; type: string }
+    const stations = (lockedUntil: string | null) => [{ n: 1, lat: 3.01, lng: 101.01, lockedUntil }]
+
+    it('draws one symbol layer of volt/red diamonds and no number layer', () => {
+      created.layers = []
+      created.data = {}
+      render(<GameMap arena={arena} dots={[]} stations={stations(null)} />)
+      act(() => created.load!())
+      expect(layer('stations').type).toBe('symbol')
+      expect(layer('stations').layout['icon-image']).toEqual(['case', ['get', 'locked'], 'dia-red', 'dia-volt'])
+      expect(layer('stations').layout['icon-size']).toBe(1.3)
+      expect(created.layers.map((l) => l.id)).not.toContain('station-numbers')
+    })
+
+    it('stationFeatures says locked and the m:ss left, or open', () => {
+      const now = 1_000_000
+      const f = (until: number) => stationFeatures([{ n: 1, lat: 3, lng: 101, lockedUntil: new Date(until).toISOString() }], now).features[0].properties
+      expect(f(now + 42_000)).toMatchObject({ locked: true, left: '0:42' })
+      expect(f(now - 1)).toMatchObject({ locked: false, left: '' })
+      expect(stationFeatures([{ n: 1, lat: 3, lng: 101 }], now).features[0].properties).toMatchObject({ locked: false, left: '' })
+    })
+
+    it('turns a locked station back by itself when the lock ends, with no new props', () => {
+      vi.useFakeTimers()
+      try {
+        created.layers = []
+        created.data = {}
+        const { unmount } = render(<GameMap arena={arena} dots={[]} stations={stations(new Date(Date.now() + 1500).toISOString())} />)
+        act(() => created.load!())
+        const props = () => (created.data.stations as { features: { properties: Record<string, unknown> }[] }).features[0].properties
+        expect(props().locked).toBe(true)
+        act(() => vi.advanceTimersByTime(2000))
+        expect(props()).toMatchObject({ locked: false, left: '' })
+        const before = created.data.stations
+        act(() => vi.advanceTimersByTime(3000))
+        expect(created.data.stations).toBe(before)
+        unmount()
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        vi.useRealTimers()
+      }
     })
   })
 

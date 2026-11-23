@@ -30,7 +30,7 @@ function BringHome({ view }: { view: View }) {
         <div key={side} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <p style={{ color: 'var(--tupper-2)', fontWeight: 700, margin: 0 }}>{sideName(side)}'s Tupperware wasn't opened. Bawa balik!</p>
           <div style={{ borderRadius: 14, overflow: 'hidden' }}>
-            <GameMap arena={view.arena} dots={[]} stash={at} fit={[at, view.arena.start]} height={180} />
+            <GameMap arena={view.arena} dots={[]} stash={at} stashSide={side} fit={[at, view.arena.start]} height={180} />
           </div>
         </div>
       ))}

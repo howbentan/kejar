@@ -122,8 +122,8 @@ describe('WalkPark', () => {
   it('the organiser walk hides the Dikejar Tupperware, then the Kejar one, each with the hide panel and its own drop', async () => {
     open(view([S1, TD, TK], { 'station-1': true }))
     expect(mapCalls.at(-1)!.pins!.slice(-2)).toMatchObject([
-      { id: 'tupper-dikejar', tone: 'red' },
-      { id: 'tupper-kejar', tone: 'red' },
+      { id: 'tupper-dikejar', side: 'dikejar' },
+      { id: 'tupper-kejar', side: 'kejar' },
     ])
     expect(screen.queryByRole('button', { name: 'Drop it here' })).not.toBeInTheDocument()
     act(() => onFix!(at(TD, 0, 100)))
