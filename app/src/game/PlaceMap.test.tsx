@@ -1,9 +1,19 @@
-import { cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 type Click = { point: { x: number; y: number }; lngLat: { lat: number; lng: number } }
 type Pin = { options: { draggable?: boolean; element?: HTMLElement }; at: number[]; handlers: Record<string, () => void>; removed: boolean }
-const map = vi.hoisted(() => ({ handlers: {} as Record<string, (e: Click) => void>, fits: [] as unknown[], pins: [] as Pin[], options: [] as Record<string, unknown>[] }))
+type Layer = { id: string; type: string; source?: string; layout?: Record<string, unknown> }
+const map = vi.hoisted(() => ({
+  handlers: {} as Record<string, (e: Click) => void>,
+  fits: [] as unknown[],
+  pins: [] as Pin[],
+  options: [] as Record<string, unknown>[],
+  layers: [] as Layer[],
+  vis: {} as Record<string, string>,
+  eases: [] as Record<string, unknown>[],
+}))
+vi.mock('motion/react', async (orig) => ({ ...(await orig<typeof import('motion/react')>()), useReducedMotion: () => false }))
 vi.mock('maplibre-gl', () => ({
   default: {
     Map: class {
@@ -16,6 +26,20 @@ vi.mock('maplibre-gl', () => ({
       remove() {}
       getSource() {
         return undefined
+      }
+      addSource() {}
+      addLayer(l: Layer) {
+        map.layers.push(l)
+      }
+      getLayer(id: string) {
+        return id === 'buildings-3d' || map.layers.some((l) => l.id === id) ? { id } : undefined
+      }
+      setLayoutProperty(id: string, prop: string, v: string) {
+        if (prop === 'visibility') map.vis[id] = v
+      }
+      setPaintProperty() {}
+      easeTo(o: Record<string, unknown>) {
+        map.eases.push(o)
       }
       // 1 degree = 1000 px, so a station at lng 101.0 sits at x = 101000.
       project([lng, lat]: [number, number]) {
@@ -55,7 +79,10 @@ vi.mock('maplibre-gl', () => ({
 
 import PlaceMap from './PlaceMap'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  localStorage.clear()
+})
 
 const base = {
   boundary: null,
@@ -69,6 +96,50 @@ const base = {
 }
 
 describe('PlaceMap', () => {
+  describe('the Ink map', () => {
+    const load = () => {
+      map.layers = []
+      map.vis = {}
+      map.eases = []
+      localStorage.clear()
+      render(<PlaceMap {...base} mode="stations" onTap={vi.fn()} onStationRemove={vi.fn()} />)
+      act(() => map.handlers.load({} as Click))
+    }
+
+    it('draws placed stations as the volt diamond, with no numbers', () => {
+      load()
+      const st = map.layers.find((l) => l.id === 'stations')!
+      expect(st.type).toBe('symbol')
+      expect(st.layout!['icon-image']).toBe('dia-volt')
+      expect(map.layers.some((l) => l.id === 'station-numbers')).toBe(false)
+    })
+
+    it('floats the gem over a shadow in 3D', () => {
+      load()
+      expect(map.layers.find((l) => l.id === 'float-gem')!.layout!['icon-image']).toBe('gem-volt-float')
+      expect(map.layers.some((l) => l.id.startsWith('float-shadow-'))).toBe(true)
+    })
+
+    it('has the view button, which toggles buildings-3d and the stations', () => {
+      load()
+      expect(map.vis['buildings-3d']).toBe('none')
+      fireEvent.click(screen.getByRole('button', { name: 'Show buildings in 3D' }))
+      expect(map.vis['buildings-3d']).toBe('visible')
+      expect(map.vis.stations).toBe('none')
+      expect(map.vis['float-gem']).toBe('visible')
+      expect(map.eases.at(-1)).toMatchObject({ pitch: 58 })
+    })
+
+    it('a tap near a station removes it with the map pitched', () => {
+      const onStationRemove = vi.fn()
+      render(<PlaceMap {...base} mode="stations" onTap={vi.fn()} onStationRemove={onStationRemove} />)
+      act(() => map.handlers.load({} as Click))
+      fireEvent.click(screen.getByRole('button', { name: 'Show buildings in 3D' }))
+      map.handlers.click({ point: { x: 101_010, y: 3_010 }, lngLat: { lat: 3, lng: 101 } })
+      expect(onStationRemove).toHaveBeenCalledWith(0)
+    })
+  })
+
   it('uses the slim credit instead of MapLibre attribution box', () => {
     map.options = []
     const { container } = render(<PlaceMap {...base} mode="stations" onTap={vi.fn()} onStationRemove={vi.fn()} />)

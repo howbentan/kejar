@@ -29,14 +29,14 @@ const BLACK = '#0A0A0B'
 const DIAMOND: Record<TupperSide, string> = { dikejar: 'dia-gold', kejar: 'dia-purple' }
 const FLOAT_GEM: Record<TupperSide, string> = { dikejar: 'gem-gold-float', kejar: 'gem-purple-float' }
 /** The 3D view's soft ground shadow under a floating marker (radius 8 for a j, 13 for a gem). */
-const shadowPaint = (radius: number) => ({
+export const shadowPaint = (radius: number) => ({
   'circle-radius': radius,
   'circle-color': '#000',
   'circle-opacity': 0.55,
   'circle-blur': 0.7,
   'circle-pitch-alignment': 'map' as const,
 })
-const FLOAT_ICON = { 'icon-anchor': 'bottom' as const, 'icon-allow-overlap': true, 'icon-ignore-placement': true }
+export const FLOAT_ICON = { 'icon-anchor': 'bottom' as const, 'icon-allow-overlap': true, 'icon-ignore-placement': true }
 const LOCKED_RED = '#E5484D'
 
 type MapCircle = { lat: number; lng: number; radiusM: number }
@@ -131,7 +131,7 @@ export const MAP_ICONS = [
   'j-chaser-float',
   'j-ghost-float',
 ] as const
-function addMapIcons(m: maplibregl.Map) {
+export function addMapIcons(m: maplibregl.Map) {
   if (typeof m.addImage !== 'function' || typeof Image === 'undefined') return
   for (const name of MAP_ICONS) {
     if (m.hasImage?.(name)) continue

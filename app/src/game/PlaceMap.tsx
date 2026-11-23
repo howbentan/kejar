@@ -2,10 +2,15 @@ import MapCredit from './MapCredit'
 import type { Feature as GeoFeature, FeatureCollection, Geometry } from 'geojson'
 import maplibregl, { type GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
-import { useEffect, useRef } from 'react'
+import { useReducedMotion } from 'motion/react'
+import { useEffect, useRef, useState } from 'react'
 import { KL_FALLBACK } from '../../shared/arenaDraft.js'
 import { circlePolygon } from '../../shared/geo.js'
 import type { LatLng } from '../../shared/types.js'
+import { FLOAT_ICON, addMapIcons, shadowPaint } from './Map'
+import MapViewButton from './MapViewButton'
+import { restFloat, startFloatMotion } from './floatMotion'
+import { applyMapView, useMapView } from './mapView'
 import { MAP_FONT, kejarMapStyle } from './mapStyle'
 
 const VOLT = '#C6FF3D'
@@ -68,6 +73,12 @@ export default function PlaceMap(props: Props) {
   const latest = useRef(props)
   latest.current = props
   const handle = useRef<maplibregl.Marker | null>(null)
+  const reduce = useReducedMotion()
+  const [threeD, toggleThreeD] = useMapView()
+  const latestThreeD = useRef(threeD)
+  latestThreeD.current = threeD
+  const appliedThreeD = useRef(threeD)
+  const [loaded, setLoaded] = useState(false)
 
   useEffect(() => {
     if (!el.current) return
@@ -111,20 +122,25 @@ export default function PlaceMap(props: Props) {
         layout: { 'text-field': ['get', 't'], 'text-font': MAP_FONT, 'text-size': 11, 'text-allow-overlap': true },
         paint: { 'text-color': WHITE },
       })
+      addMapIcons(m)
+      // The diamond lies flat on the ground; in 3D the gem floats over a soft shadow instead (as in the game).
       m.addLayer({
         id: 'stations',
-        type: 'circle',
-        source: 'stations',
-        paint: { 'circle-radius': 10, 'circle-color': BLACK, 'circle-stroke-color': VOLT, 'circle-stroke-width': 2 },
-      })
-      m.addLayer({
-        id: 'station-numbers',
         type: 'symbol',
         source: 'stations',
-        layout: { 'text-field': ['get', 'n'], 'text-font': MAP_FONT, 'text-size': 11, 'text-allow-overlap': true },
-        paint: { 'text-color': VOLT },
+        layout: { 'icon-image': 'dia-volt', 'icon-size': 1.3, 'icon-allow-overlap': true, 'icon-ignore-placement': true },
       })
+      m.addLayer({ id: 'float-shadow-stations', type: 'circle', source: 'stations', paint: shadowPaint(13) })
+      m.addLayer({
+        id: 'float-gem',
+        type: 'symbol',
+        source: 'stations',
+        layout: { 'icon-image': 'gem-volt-float', 'icon-size': 1.2, ...FLOAT_ICON },
+      })
+      applyMapView(m, latestThreeD.current, { animate: false })
+      appliedThreeD.current = latestThreeD.current
       ready.current = true
+      setLoaded(true)
     })
     m.on('click', (e) => {
       const p = latest.current
@@ -147,6 +163,7 @@ export default function PlaceMap(props: Props) {
     }
     return () => {
       ready.current = false
+      setLoaded(false)
       m.remove()
       map.current = null
     }
@@ -158,6 +175,32 @@ export default function PlaceMap(props: Props) {
     if (!m || !ready.current) return
     for (const [id, d] of Object.entries(layersData(props))) (m.getSource(id) as GeoJSONSource | undefined)?.setData(d)
   })
+
+  // A toggle after load (the load itself applied the stored view without animation).
+  useEffect(() => {
+    const m = map.current
+    if (!loaded || !m || appliedThreeD.current === threeD) return
+    appliedThreeD.current = threeD
+    applyMapView(m, threeD, { animate: !reduce })
+  }, [loaded, threeD, reduce])
+
+  // In 3D the gems bob: never for reduced motion, and not while the page is hidden.
+  const [pageHidden, setPageHidden] = useState(() => typeof document !== 'undefined' && document.hidden)
+  useEffect(() => {
+    const onVisibility = () => setPageHidden(document.hidden)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [])
+  useEffect(() => {
+    const m = map.current
+    if (!loaded || !m || !threeD || reduce || pageHidden) return
+    // No claims in setup: events far in the past resolve to the resting offsets.
+    const stop = startFloatMotion(m, () => ({ dropAt: -1e9, riseAt: -1e9 }), () => map.current === m)
+    return () => {
+      stop()
+      if (map.current === m && ready.current) restFloat(m)
+    }
+  }, [loaded, threeD, reduce, pageHidden])
 
   // A handle at the circle's centre: drag it to move the circle. MapLibre marks the pointer event as handled
   // when it lands on a draggable marker, so the map doesn't pan underneath; a tap on it must not also tap the map.
@@ -244,6 +287,7 @@ export default function PlaceMap(props: Props) {
     <div style={{ position: 'relative' }}>
       <div ref={el} style={{ height: 320, borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hair)' }} />
       <MapCredit />
+      <MapViewButton threeD={threeD} onToggle={toggleThreeD} />
     </div>
   )
 }
