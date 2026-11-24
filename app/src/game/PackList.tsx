@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNextSlips } from './nextSlips'
+import { sideName } from '../../shared/tupperware.js'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
 import Marker from './Marker'
@@ -79,7 +81,14 @@ function Ready() {
 export default function PackList({ code, view, refresh, compact = false }: { code: string; view: View; refresh: () => void; compact?: boolean }) {
   const [local, setLocal] = useState<Record<string, boolean>>({})
   const [error, setError] = useState('')
-  const items = view.kit?.items ?? []
+  // The Tupperware line names this game's slip for each side that has a box (see the walk card); no box, no lookup.
+  const boxSides = (view.kit?.places ?? []).flatMap((p) => (p.id === 'tupper-dikejar' ? ['dikejar' as const] : p.id === 'tupper-kejar' ? ['kejar' as const] : []))
+  const slipNo = useNextSlips(boxSides.length ? (loadOrganiserSession(localStorage)?.organiserToken ?? null) : null)
+  const slipNote =
+    slipNo && boxSides.length
+      ? boxSides.map((side) => (slipNo[side] === null ? `No ${sideName(side)} slip left, print more` : `${sideName(side)} slip ${slipNo[side]}`)).join(' · ')
+      : null
+  const items = (view.kit?.items ?? []).map((i) => (i.id === 'tupperware' && slipNote ? { ...i, note: slipNote } : i))
   // A tap shows at once; the override goes once the refreshed view agrees, so later server changes (the walk's
   // own tick) show through.
   useEffect(() => {

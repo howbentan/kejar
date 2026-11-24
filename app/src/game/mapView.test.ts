@@ -70,7 +70,8 @@ describe('applyMapView', () => {
   })
 
   it('3D shows the floating markers and hides the flat ones; flat does the reverse', () => {
-    expect(FLAT_MARKER_LAYERS).toEqual(['points-j', 'fuzzy-j', 'stations', 'pins-tupper', 'pins-tupper-labels', 'stash'])
+    expect(FLAT_MARKER_LAYERS).toEqual(['points-j', 'fuzzy-j', 'stations', 'pins-tupper', 'pins-tupper-labels', 'stash', 'jail', 'start'])
+    for (const id of ['float-jail', 'float-start']) expect(FLOAT_MARKER_LAYERS).toContain(id)
     for (const id of ['float-j', 'float-gem', 'float-tupper', 'landed-glow', 'landed-gem', 'landed-timer']) expect(FLOAT_MARKER_LAYERS).toContain(id)
     expect(FLOAT_MARKER_LAYERS.some((id) => id.startsWith('float-shadow'))).toBe(true)
     const { m, vis } = fakeMap()

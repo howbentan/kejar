@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Role } from '../../shared/types.js'
 import { call } from '../game/api'
-import BeforeYouStart from '../game/BeforeYouStart'
+import BeforeYouStart, { readyToStart } from '../game/BeforeYouStart'
 import CrewStep from '../game/CrewStep'
 import { AlertsOnPhone } from '../game/MarshalTools'
 import PackList from '../game/PackList'
@@ -335,7 +335,8 @@ export default function HostLobby({ code }: { code: string }) {
       </table>
 
       <ErrorText>{error || loadError}</ErrorText>
-      <button className="btn" disabled={busy} aria-busy={busyOn === 'start' || undefined} onClick={() => act('start', {}, 'start')}>
+      {/* Every check green: Start pulses gently, to say it's time. */}
+      <button className={view && readyToStart(view) && !busy ? 'btn btn-pulse' : 'btn'} disabled={busy} aria-busy={busyOn === 'start' || undefined} onClick={() => act('start', {}, 'start')}>
         <Busy busy={busyOn === 'start'} label="Starting game">Start</Busy>
       </button>
       <CancelGame code={code} onCancelled={refresh} />

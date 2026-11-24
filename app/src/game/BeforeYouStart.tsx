@@ -39,6 +39,20 @@ const list = (names: string[]) => (names.length > 1 ? `${names.slice(0, -1).join
  * Brief the players is a button: it opens how to play on every phone (`startBriefing`, which sets `briefed_at`, the
  * source of the kit item `brief-players` being done) and then shows who is ready.
  */
+/**
+ * Every check on the lobby's list is green: the shared kit placed, a helper in, everyone's SOS alerts on, the players
+ * briefed and every Tupperware dropped. The Start button pulses then (it never blocks Start).
+ */
+export function readyToStart(view: View): boolean {
+  const marshals = view.roster.filter((p) => p.role === 'marshal')
+  const shared = (view.kit?.places ?? []).filter((p) => !SECRET_PLACE_IDS.includes(p.id))
+  const kitDone = shared.length > 0 && shared.every((p) => view.kit?.placed[p.id] === true)
+  const sosDone = !!view.me.push && marshals.every((m) => m.pushOn)
+  const briefDone = !!(view.briefing && 'started' in view.briefing && view.briefing.started)
+  const dropped = TUPPER_SIDES.every((side) => !view.tupperware?.[side] || view.tupperware[side]!.dropped !== null)
+  return kitDone && marshals.length > 0 && sosDone && briefDone && dropped
+}
+
 export default function BeforeYouStart({ code, view, refresh }: { code: string; view: View; refresh: () => void }) {
   const [showKit, setShowKit] = useState(false)
   const [error, setError] = useState('')

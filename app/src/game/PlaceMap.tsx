@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react'
 import { KL_FALLBACK } from '../../shared/arenaDraft.js'
 import { circlePolygon } from '../../shared/geo.js'
 import type { LatLng } from '../../shared/types.js'
-import { FLOAT_ICON, GEM_SIZE, INSTANT_TRANSLATE, addMapIcons, shadowPaint } from './mapMarkers'
+import { FLOAT_ICON, GEM_SIZE, INSTANT_TRANSLATE, addFloatingMark, addMapIcons, shadowPaint } from './mapMarkers'
 import MapViewButton from './MapViewButton'
 import { HOVER, restFloat, startFloatMotion } from './floatMotion'
 import { applyMapView, useMapView } from './mapView'
@@ -69,8 +69,8 @@ function layersData(p: Props): Record<string, FeatureCollection> {
 }
 
 /** The station number badges are setup-only, so the setup map flips them itself (the shared view lists are the game's). */
-const FLAT_BADGES = ['station-badge-bg', 'station-badge']
-const FLOAT_BADGES = ['float-station-badge-bg', 'float-station-badge']
+const FLAT_BADGES = ['station-badge-bg', 'station-badge', 'marks']
+const FLOAT_BADGES = ['float-station-badge-bg', 'float-station-badge', 'float-shadow-marks', 'float-marks']
 function showBadges(m: maplibregl.Map, threeD: boolean) {
   for (const id of FLAT_BADGES) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', threeD ? 'none' : 'visible')
   for (const id of FLOAT_BADGES) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', threeD ? 'visible' : 'none')
@@ -128,6 +128,8 @@ export default function PlaceMap(props: Props) {
         source: 'marks',
         layout: { 'icon-image': ['match', ['get', 't'], 'J', 'penjara', 'start'], 'icon-size': 1, 'icon-anchor': 'bottom', 'icon-allow-overlap': true, 'icon-ignore-placement': true },
       })
+      // In 3D they float on a stem like the gems.
+      addFloatingMark(m, 'marks', ['match', ['get', 't'], 'J', 'penjara-float', 'start-float'])
       // The diamond lies flat on the ground; in 3D the gem floats over a soft shadow instead (as in the game).
       m.addLayer({
         id: 'stations',

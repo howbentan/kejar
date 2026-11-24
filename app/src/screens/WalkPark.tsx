@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNextSlips } from '../game/nextSlips'
 import Tupper from '../game/doodles/Tupper'
 import { distanceM } from '../../shared/geo.js'
 import type { SecretTone } from '../../shared/kit.js'
@@ -78,34 +79,6 @@ const SECRET: Record<SecretTone, { token: string; button: string; drop: string; 
 const sideOfBox = (id: string): 'dikejar' | 'kejar' => (id === 'tupper-kejar' ? 'kejar' : 'dikejar')
 const boxSide = (id: string) => sideName(sideOfBox(id))
 
-type NextSlips = Record<'dikejar' | 'kejar', number | null>
-
-/**
- * This game's slip for each side: the lowest-numbered one not yet used or bound to a game. It's guidance (any unused
- * slip still works), so the organiser knows which printed number goes in which box. Organiser only.
- */
-function useNextSlips(credentials: WalkCredentials): NextSlips | null {
-  const organiserToken = 'organiserToken' in credentials ? credentials.organiserToken : null
-  const [next, setNext] = useState<NextSlips | null>(null)
-  useEffect(() => {
-    if (!organiserToken) return
-    let live = true
-    call<{ side: 'dikejar' | 'kejar'; number: number; state: string }[]>('listSlips', { organiserToken }).then(
-      (slips) => {
-        if (!live || !Array.isArray(slips)) return
-        const lowest = (side: 'dikejar' | 'kejar') =>
-          slips.filter((s) => s.side === side && s.state === 'unused').reduce<number | null>((m, s) => (m === null || s.number < m ? s.number : m), null)
-        setNext({ dikejar: lowest('dikejar'), kejar: lowest('kejar') })
-      },
-      () => undefined,
-    )
-    return () => {
-      live = false
-    }
-  }, [organiserToken])
-  return next
-}
-
 /** Which slip goes in this box: named once the slips are in, or a prompt to print more when none is left. */
 function SlipLine({ side, number }: { side: 'dikejar' | 'kejar'; number: number | null | undefined }) {
   const name = sideName(side)
@@ -150,7 +123,7 @@ export default function WalkPark({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const { here, lost } = useHere()
-  const slipNo = useNextSlips(credentials)
+  const slipNo = useNextSlips('organiserToken' in credentials ? credentials.organiserToken : null)
 
   const done = (id: string) => local[id] === true || view.kit?.placed[id] === true
   const nextIndex = places.findIndex((p) => !done(p.id))

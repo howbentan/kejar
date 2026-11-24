@@ -103,6 +103,7 @@ def rgba(h, a):
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     runner, chaser, ghost = (Image.open(OUT / f"j-{n}.png").convert("RGBA") for n in ("runner", "chaser", "ghost"))
+    penjara, start = (Image.open(OUT / f"{n}.png").convert("RGBA") for n in ("penjara", "start"))
     images = {
         "dia-volt": flat_diamond("#C6FF3D"),
         "dia-red": flat_diamond("#E5484D"),
@@ -115,6 +116,9 @@ def main():
         "j-runner-float": floating(runner, rgba("#C6FF3D", 0.5)),
         "j-chaser-float": floating(chaser, rgba("#F5F5F3", 0.5)),
         "j-ghost-float": floating(ghost, rgba("#C6FF3D", 0.25)),
+        # Penjara and the start float in 3D like the gems (owner, 2026-11-24).
+        "penjara-float": floating(penjara, rgba("#F5F5F3", 0.5)),
+        "start-float": floating(start, rgba("#F5F5F3", 0.5)),
     }
     for name, im in images.items():
         im.save(OUT / f"{name}.png", optimize=True)

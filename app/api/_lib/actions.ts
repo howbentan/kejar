@@ -1022,6 +1022,13 @@ const join: Action = async (ctx, body) => {
     brief_ready_at: null,
     token_hash: hashToken(token),
   })
+  // Two joining at the same moment can both pass the count above. Re-count with the newcomer in: whoever lands past
+  // the cap, in the store's own join order, steps back out.
+  const everyone = await ctx.store.players(game.id)
+  if (everyone.findIndex((x) => x.id === p.id) >= MAX_PLAYERS_PER_GAME) {
+    await ctx.store.removePlayer(p.id)
+    throw new ActionError(409, 'This game is full')
+  }
   await ctx.store.addEvent({ game_id: game.id, type: 'joined', actor_id: p.id, target_id: null, data: {} })
   return { token, playerId: p.id }
 }

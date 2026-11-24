@@ -599,3 +599,35 @@ describe('RunnerChase: alerts after New phone', () => {
     })
   })
 })
+
+describe('RunnerChase: Scan wiggles near a station', () => {
+  const S = { n: 1, lat: 3.1, lng: 101.1, lockedUntil: null }
+  afterEach(() => {
+    here.last = null
+    vi.useRealTimers()
+  })
+  it('wiggles once when you come within 30 m of a station with a free slot, and not again while you stay', () => {
+    vi.useFakeTimers()
+    here.last = { lat: 3.1, lng: 101.1, accuracy_m: 5 }
+    render(<RunnerChase code="ABC234" view={testView({ stations: [S] })} />)
+    act(() => {
+      vi.advanceTimersByTime(2_000)
+    })
+    expect(screen.getByRole('button', { name: 'Scan' })).toHaveClass('scan-wiggle')
+    const before = screen.getByRole('button', { name: 'Scan' })
+    act(() => {
+      vi.advanceTimersByTime(4_000)
+    })
+    expect(screen.getByRole('button', { name: 'Scan' })).toBe(before) // no second wiggle (the button wasn't redrawn)
+  })
+  it('stays still with a full slot', () => {
+    vi.useFakeTimers()
+    here.last = { lat: 3.1, lng: 101.1, accuracy_m: 5 }
+    const held = { id: 'u1', game_id: 'g', player_id: 'r1', kind: 'cloak' as const, station: 2, claimed_at: '', used_at: null, consumed_at: null, sealed: false, taken_at: null, offer: null, twin_of: null, spot: null }
+    render(<RunnerChase code="ABC234" view={testView({ stations: [S], hand: [held] })} />)
+    act(() => {
+      vi.advanceTimersByTime(2_000)
+    })
+    expect(screen.getByRole('button', { name: 'Scan' })).not.toHaveClass('scan-wiggle')
+  })
+})

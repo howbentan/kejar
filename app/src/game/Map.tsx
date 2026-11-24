@@ -1,6 +1,6 @@
 import MapCredit from './MapCredit'
 import MapViewButton from './MapViewButton'
-import { FLOAT_ICON, GEM_SIZE, INSTANT_TRANSLATE, LANDED_OFFSET, addMapIcons, shadowPaint } from './mapMarkers'
+import { FLOAT_ICON, GEM_SIZE, INSTANT_TRANSLATE, LANDED_OFFSET, addFloatingMark, addMapIcons, shadowPaint } from './mapMarkers'
 import { applyMapView, useMapView } from './mapView'
 import { floatTranslates, markStationMotion, restFloat, setFloat, startFloatMotion, type FloatEvents, type StationTurn } from './floatMotion'
 import { useClockSkew } from './time'
@@ -701,6 +701,9 @@ export default function GameMap({
       // The 3D view's markers (hidden in flat): each floats on a dotted stem over a soft shadow on its spot. Added
       // after the style's buildings-3d, so they always draw over the buildings; under the alert pins, so an SOS is never covered.
       const addFloat = (l: maplibregl.LayerSpecification) => m.addLayer(l, 'pins-pulse')
+      // Penjara and the start float in 3D too, under the alert pins like every float layer.
+      if (m.getSource('jail')) addFloatingMark(m, 'jail', 'penjara-float', 'pins-pulse')
+      if (m.getSource('start')) addFloatingMark(m, 'start', 'start-float', 'pins-pulse')
       const isJ: maplibregl.FilterSpecification = ['match', ['get', 'kind'], ['runner', 'chaser'], true, false]
       const openStation: maplibregl.FilterSpecification = ['!', ['get', 'locked']]
       const lockedStation: maplibregl.FilterSpecification = ['get', 'locked']

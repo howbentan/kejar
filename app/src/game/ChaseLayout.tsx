@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { resumeDip } from './LuckyDip'
 import type { View } from '../../shared/views.js'
 import { call } from './api'
-import { currentCoords } from './here'
+import { currentCoords, lastCoords } from './here'
+import { distanceM } from '../../shared/geo.js'
+import { CLAIM_RADIUS_M, slotCapacity } from '../../shared/powerups.js'
 import GameMap from './Map'
 import FloodBanner from './FloodBanner'
 import HowToPlayLink from './HowToPlayLink'
@@ -22,6 +24,40 @@ export function GameClock({ view }: { view: View }) {
   const now = view.paused ? view.now : ticking
   // '5 minutes left' (rules §2.7): lime for the rest of the game, on the chase top bar and the marshal's clock alike.
   return <span className={view.fiveLeft ? 'mono clock-lime' : 'mono'}>{clock((view.endsAt ?? now) - now)}</span>
+}
+
+/**
+ * Counts up each time the phone comes within claim reach of a station that's open while there's a free slot, so the
+ * Scan button wiggles once (and buzzes). A station only does it again after walking away (40 m) and back.
+ */
+function useNearStationWiggle(view: View): number {
+  const [count, setCount] = useState(0)
+  const near = useRef(new Set<number>())
+  const latest = useRef(view)
+  latest.current = view
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const here = lastCoords(15_000)
+      if (!here) return
+      const v = latest.current
+      const capacity = slotCapacity(v.settings.mode)
+      const used = v.hand.filter((u) => !u.twin_of).reduce((n, u) => n + (u.kind === 'dato' ? capacity : 1), 0) + v.activePowerUps.length
+      for (const s of v.stations) {
+        const d = distanceM(here, s)
+        if (d > 40) near.current.delete(s.n)
+        else if (d <= CLAIM_RADIUS_M && !near.current.has(s.n)) {
+          near.current.add(s.n)
+          const open = !s.lockedUntil || Date.parse(s.lockedUntil) <= Date.now()
+          if (open && used < capacity) {
+            setCount((c) => c + 1)
+            navigator.vibrate?.(40)
+          }
+        }
+      }
+    }, 2_000)
+    return () => window.clearInterval(id)
+  }, [])
+  return count
 }
 
 /** Remembered per game so a closed side quest stays closed after a reload. Storage may be blocked: then it just reopens. */
@@ -68,6 +104,7 @@ export default function ChaseLayout(props: {
   const questHidden = questClosed || questAside
   const [result, setResult] = useState('')
   const [moment, setMoment] = useState<ReactNode | null>(null)
+  const wiggle = useNearStationWiggle(view)
   // An open pick left from before a reload comes back on screen.
   const openDeal = view.deal
   useEffect(() => {
@@ -155,7 +192,7 @@ export default function ChaseLayout(props: {
         )}
         <div className="dock-row">
           {props.slot}
-          <button type="button" className={`scan ${props.scanClass}`} disabled={!!moment || busy} aria-busy={busy || undefined} onClick={() => openScanner()}>
+          <button key={`scan-${wiggle}`} type="button" className={`scan ${props.scanClass}${wiggle ? ' scan-wiggle' : ''}`} disabled={!!moment || busy} aria-busy={busy || undefined} onClick={() => openScanner()}>
             <Busy busy={busy} label="Checking" height={18} stack>{props.scanLabel}</Busy>
           </button>
         </div>

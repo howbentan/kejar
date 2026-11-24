@@ -118,6 +118,21 @@ describe('PackList', () => {
     expect(screen.queryByText(/Reprint/)).toBeNull()
   })
 
+  it("the Tupperware line names this game's slip for each side, or says none is left", async () => {
+    call.mockImplementation(async (action: string) =>
+      action === 'listSlips'
+        ? [
+            { side: 'dikejar', number: 1, state: 'used' },
+            { side: 'dikejar', number: 2, state: 'unused' },
+            { side: 'kejar', number: 1, state: 'used' },
+          ]
+        : { ok: true },
+    )
+    const v = { kit: { items: items(), places: [{ id: 'tupper-dikejar' }, { id: 'tupper-kejar' }], placed: {} } } as unknown as View
+    render(<PackList code="ABC234" view={v} refresh={refresh} />)
+    expect(await screen.findByText('Dikejar slip 2 · No Kejar slip left, print more')).toBeInTheDocument()
+  })
+
   it('draws a lime tick on the Tupperware line', () => {
     render(<PackList code="ABC234" view={view(['tupperware'])} refresh={refresh} />)
     expect(document.querySelector('.marker path')?.getAttribute('stroke')).toBe('#C6FF3D')
@@ -126,7 +141,7 @@ describe('PackList', () => {
   it('Walk the park cannot be tapped; it ticks itself', () => {
     render(<PackList code="ABC234" view={view()} refresh={refresh} />)
     fireEvent.click(screen.getByText('Walk the park'))
-    expect(call).not.toHaveBeenCalled()
+    expect(call).not.toHaveBeenCalledWith('setKit', expect.anything())
   })
 
   it('a tap does not hide a later change from the server', async () => {

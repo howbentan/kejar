@@ -21,6 +21,8 @@ export const MAP_ICONS = [
   'j-runner-float',
   'j-chaser-float',
   'j-ghost-float',
+  'penjara-float',
+  'start-float',
 ] as const
 export function addMapIcons(m: maplibregl.Map) {
   if (typeof m.addImage !== 'function' || typeof Image === 'undefined') return
@@ -53,4 +55,13 @@ export const LANDED_OFFSET: [number, number] = [0, 6]
  * Paint for every layer the float motion moves: MapLibre eases each icon-translate change over 300 ms by default, which
  * would turn a per-frame bob or drop into a lagging slide.
  */
+/**
+ * A mark's floating twin for 3D (Penjara, the start): its doodle on a dotted stem with a soft shadow on its spot,
+ * hidden until the 3D view shows it. Layer ids are `float-<source>` and `float-shadow-<source>`.
+ */
+export function addFloatingMark(m: maplibregl.Map, source: string, image: string | maplibregl.ExpressionSpecification, before?: string) {
+  m.addLayer({ id: `float-shadow-${source}`, type: 'circle', source, paint: shadowPaint(12), layout: { visibility: 'none' } }, before)
+  m.addLayer({ id: `float-${source}`, type: 'symbol', source, layout: { 'icon-image': image, 'icon-size': 0.9, ...FLOAT_ICON, visibility: 'none' } }, before)
+}
+
 export const INSTANT_TRANSLATE = { 'icon-translate-transition': { duration: 0, delay: 0 } }

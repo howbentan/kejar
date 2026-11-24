@@ -45,8 +45,8 @@ describe('Content Security Policy', () => {
     expect(p.get('img-src')).toEqual(expect.arrayContaining(["'self'", 'data:', 'blob:']))
   })
 
-  it('allows Google Fonts (the stylesheet and the font files)', () => {
-    expect(p.get('style-src')).toContain('https://fonts.googleapis.com')
-    expect(p.get('font-src')).toContain('https://fonts.gstatic.com')
+  it('serves every font from the app itself: no Google Fonts', () => {
+    expect(p.get('font-src')).toEqual(["'self'"])
+    expect(p.get('style-src')).not.toContain('https://fonts.googleapis.com')
   })
 })

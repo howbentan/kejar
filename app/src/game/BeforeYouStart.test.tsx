@@ -5,7 +5,7 @@ import type { View } from '../../shared/views.js'
 const call = vi.hoisted(() => vi.fn())
 vi.mock('./api', () => ({ call }))
 
-import BeforeYouStart from './BeforeYouStart'
+import BeforeYouStart, { readyToStart } from './BeforeYouStart'
 
 const places = [
   { id: 'station-1', label: 'Station 1', lat: 0, lng: 0 },
@@ -132,5 +132,16 @@ describe('BeforeYouStart: Tupperware reminder', () => {
     cleanup()
     render(<BeforeYouStart code="ABC234" view={make()} refresh={refresh} />)
     expect(screen.queryByText(/not dropped yet/)).toBeNull()
+  })
+})
+
+describe('readyToStart', () => {
+  it('is true only when every check is green', () => {
+    const green = { placed: ['station-1', 'penjara'], marshals: [{ name: 'Siti', pushOn: true }], briefing: { started: true, ready: 3, total: 3 } }
+    expect(readyToStart(make(green))).toBe(true)
+    expect(readyToStart(make({ ...green, placed: ['station-1'] }))).toBe(false)
+    expect(readyToStart(make({ ...green, marshals: [] }))).toBe(false)
+    expect(readyToStart(make({ ...green, marshals: [{ name: 'Siti', pushOn: false }] }))).toBe(false)
+    expect(readyToStart(make({ ...green, briefing: { started: false, ready: 0, total: 3 } }))).toBe(false)
   })
 })

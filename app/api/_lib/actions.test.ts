@@ -238,6 +238,20 @@ describe('lobby cap, location gap and accuracy', () => {
     await rejects(run('join', { code, name: 'Forty-one', accepted: true }), 409, 'This game is full')
   })
 
+  it("two joining at once at 39 can't make 41: one gets in, the other gets This game is full", async () => {
+    const organiserToken = await createOrganiser()
+    const { code } = await run('create', { arenaId: 'around-me', center: CENTER, organiserToken })
+    const gameId = (await store.gameByCode(code))!.id
+    await fill(gameId, MAX_PLAYERS_PER_GAME - 1)
+    const results = await Promise.allSettled([
+      run('join', { code, name: 'Late A', accepted: true }),
+      run('join', { code, name: 'Late B', accepted: true }),
+    ])
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1)
+    expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1)
+    expect((await store.players(gameId)).length).toBe(MAX_PLAYERS_PER_GAME)
+  })
+
   it('refuses to join a full lobby', async () => {
     const organiserToken = await createOrganiser()
     const { code } = await run('create', { arenaId: 'around-me', center: CENTER, organiserToken })
@@ -1602,7 +1616,7 @@ describe('Toyol and Ah Long', () => {
   let station = 0
   // The unique index is one claim per player per station, so cards given to one player use different stations.
   const give = async (gameId: string, playerId: string, kind: PowerUpKind, patch: object = {}) => {
-    const row = await store.addPowerUp({ game_id: gameId, player_id: playerId, kind, station: (station++ % 8) + 1 })
+    const row = await store.addPowerUp({ game_id: gameId, player_id: playerId, kind, station: (station++ % 7) + 2 })
     if (Object.keys(patch).length) await store.updatePowerUp(row.id, patch)
     return row
   }
@@ -1735,7 +1749,7 @@ describe('Cheese Ais', () => {
   }
   let station = 0
   const give = async (gameId: string, playerId: string, kind: PowerUpKind, patch: object = {}) => {
-    const row = await store.addPowerUp({ game_id: gameId, player_id: playerId, kind, station: (station++ % 8) + 1 })
+    const row = await store.addPowerUp({ game_id: gameId, player_id: playerId, kind, station: (station++ % 7) + 2 })
     if (Object.keys(patch).length) await store.updatePowerUp(row.id, patch)
     return row
   }
@@ -1877,7 +1891,7 @@ describe('Abang Grab', () => {
   }
   let station = 0
   const give = async (gameId: string, playerId: string, kind: PowerUpKind, patch: object = {}) => {
-    const row = await store.addPowerUp({ game_id: gameId, player_id: playerId, kind, station: (station++ % 8) + 1 })
+    const row = await store.addPowerUp({ game_id: gameId, player_id: playerId, kind, station: (station++ % 7) + 2 })
     if (Object.keys(patch).length) await store.updatePowerUp(row.id, patch)
     return row
   }

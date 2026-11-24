@@ -61,7 +61,7 @@ beforeEach(() => {
     return { code: 'ABC234', ok: true }
   })
   localStorage.setItem('kejar.organiser', JSON.stringify({ organiserToken: 'ot1', name: 'Owner' }))
-  Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign: vi.fn() } })
+  Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign: vi.fn(), replace: vi.fn() } })
   setUa('Mozilla/5.0 (Linux; Android 14)')
 })
 afterEach(async () => {

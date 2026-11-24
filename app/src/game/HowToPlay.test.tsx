@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import HowToPlay, { cardMs, renderLine } from './HowToPlay'
 import { cardsFor } from '../../shared/howToPlay.js'
@@ -53,6 +53,16 @@ describe('HowToPlay', () => {
     fireEvent.click(screen.getByRole('button', { name: "I'm ready" }))
     expect(p.onReady).toHaveBeenCalledTimes(1)
     expect(p.onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it("the last card has a Power-up FAQ button that lists the questions for this side's cards", () => {
+    setup()
+    for (let i = 0; i < 6; i++) fireEvent.click(screen.getByRole('button', { name: 'Next card' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Power-up FAQ' }))
+    const faq = screen.getByRole('dialog', { name: 'Power-up FAQ' })
+    expect(within(faq).getByText('What does it block?')).toBeInTheDocument() // Durian, a Dikejar card in Core
+    fireEvent.click(within(faq).getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog', { name: 'Power-up FAQ' })).toBeNull()
   })
 
   it('the endgame card shows the four logos, small, behind a question mark, and names none of them', () => {

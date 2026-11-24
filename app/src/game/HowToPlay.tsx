@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import FaqSheet from './FaqSheet'
 import { createPortal } from 'react-dom'
 import { motion, useReducedMotion } from 'motion/react'
 import { cardsFor, stickersFor } from '../../shared/howToPlay.js'
@@ -37,6 +38,7 @@ export interface HowToPlayProps {
 export default function HowToPlay({ side, mode, snapshot, endgame = false, onClose, onReady, onOpened }: HowToPlayProps) {
   const cards = useMemo(() => cardsFor(side, mode, snapshot, endgame), [side, mode, snapshot, endgame])
   const stickers = useMemo(() => stickersFor(side, mode), [side, mode])
+  const [faq, setFaq] = useState(false)
   const [i, setI] = useState(0)
   const reduce = useReducedMotion()
   const opened = useRef(false)
@@ -133,6 +135,12 @@ export default function HowToPlay({ side, mode, snapshot, endgame = false, onClo
             I'm ready
           </button>
         )}
+        {last && (
+          <button type="button" className="btn btn-ghost" style={{ marginTop: 8 }} onClick={() => setFaq(true)}>
+            Power-up FAQ
+          </button>
+        )}
+        {faq && <FaqSheet kinds={stickers} onClose={() => setFaq(false)} />}
       </div>
     </div>,
     document.body,
