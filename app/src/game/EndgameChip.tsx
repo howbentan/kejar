@@ -3,10 +3,16 @@ import { createPortal } from 'react-dom'
 import type { View } from '../../shared/views.js'
 import EndgameLogo, { ENDGAME_COPY, endgameText, isWanted, wantedLabel } from './EndgameLogo'
 import WantedPoster from './WantedPoster'
+import ComicPanel from './ComicPanel'
+import { clock, useServerNow } from './time'
 
 /** The chip's second line: what to remember about this endgame. */
-function chipText(view: View): string {
+function chipText(view: View, now: number): string {
   const e = view.endgame!
+  if (e.kind === 'banjir') {
+    const next = e.flood?.next
+    return next ? `Water rises in ${clock(Math.max(0, next.at - now))}` : 'Dry land: last bit'
+  }
   if (e.kind === 'bomba') return 'Last call at 1:00'
   if (e.kind === 'pkp') return 'Penjara closed · stations give ×2'
   if (e.kind === 'hebat' && e.wanted) return `Wanted: ${isWanted(view) ? 'You' : wantedLabel(e.wanted)}`
@@ -14,19 +20,26 @@ function chipText(view: View): string {
 }
 
 /**
- * The status-row chip that stays from the reveal to the end (endgame design §6.4): the endgame's logo and name in
- * its colour on black, and one line. Tapping it opens the rule card, or Hang Hebat's wanted poster.
+ * The endgame's comic panel, from the reveal to the end (design 2026-11-24 §3, the sequel to the takeover): its
+ * colour, logo and name, the time left and one live line. Tapping it opens the rule card, or Hang Hebat's poster.
  */
 export default function EndgameChip({ view, onOpen }: { view: View; onOpen: () => void }) {
+  const ticking = useServerNow(view.now)
   const e = view.endgame
   if (!e) return null
+  const now = view.paused ? view.now : ticking
   const copy = ENDGAME_COPY[e.kind]
   return (
-    <button type="button" className="chip endgame-chip" style={{ borderColor: copy.colour }} onClick={onOpen}>
-      <EndgameLogo kind={e.kind} size={22} tilt={0} />
-      <b style={{ color: copy.colour }}>{copy.name}</b>
-      <span>{chipText(view)}</span>
-    </button>
+    <ComicPanel
+      big
+      colour={copy.colour}
+      ink={copy.ink}
+      caption={view.endsAt ? `${clock(Math.max(0, view.endsAt - now))} left` : 'endgame'}
+      icon={<EndgameLogo kind={e.kind} size={48} tilt={0} />}
+      title={copy.name}
+      line={chipText(view, now)}
+      onClick={onOpen}
+    />
   )
 }
 

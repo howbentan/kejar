@@ -308,6 +308,12 @@ export interface FeedItem {
   means: string | null
   act: boolean
   label: string | null
+  /** The event behind the line (for the one-off moments: caught, jailbreak), absent on notes. */
+  kind?: string
+  /** The Dikejar it was about, as `#07 Aina`, when there is one. */
+  who?: string | null
+  /** I did it or it happened to me (my own catch already has its moment). */
+  mine?: boolean
 }
 
 export interface Checkin {
@@ -1187,7 +1193,9 @@ function fullView(input: ViewInput): View {
   const feed = [
     ...i.events.flatMap((e) => {
       const line = feedLine(e, byId, feedContext)
-      return (Array.isArray(line) ? line : line ? [line] : []).map((l) => ({ at: e.at, ...l }))
+      const target = e.target_id ? byId.get(e.target_id) : undefined
+      const extra = { kind: e.type, who: target ? `${tagLabel(target)} ${target.name}` : null, mine: e.actor_id === i.me.id || e.target_id === i.me.id }
+      return (Array.isArray(line) ? line : line ? [line] : []).map((l) => ({ at: e.at, ...l, ...extra }))
     }),
     ...[...notes, ...snapshotLines(i, phase, endsAt), ...floodNotes(i)].map((n) => ({ ...n, means: null, act: false, label: null })),
   ]

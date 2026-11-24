@@ -7,7 +7,8 @@ import GameMap from '../game/Map'
 import MarshalTools from '../game/MarshalTools'
 import CancelGame from '../game/CancelGame'
 import PingRipple from '../game/PingRipple'
-import RescueBanner from '../game/RescueBanner'
+import { PanelStack } from '../game/ComicPanel'
+import { rescuePanel } from '../game/statePanels'
 import SosTakeover from '../game/SosTakeover'
 import { useServerNow } from '../game/time'
 import { useWakeLock } from '../game/useWakeLock'
@@ -57,12 +58,10 @@ export default function MarshalLive({ code, view, refresh }: { code: string; vie
           {view.counts.chasers} Kejar
         </span>
       </div>
-      {view.endgame && (
-        <div style={{ display: 'flex' }}>
-          <EndgameStatus view={view} />
-        </div>
-      )}
-      <RescueBanner view={view} />
+      <PanelStack>
+        {view.endgame && <EndgameStatus key="endgame" view={view} />}
+        {rescuePanel(view, view.paused ? view.now : now)}
+      </PanelStack>
       <PingRipple role="marshal" lastRevealAt={view.lastRevealAt} now={now} />
       <GameMap arena={view.arena} dots={view.dots} stations={view.stations} serverNow={view.now} pins={pins} height={340} flood={view.endgame?.flood ?? null} />
       <MarshalTools

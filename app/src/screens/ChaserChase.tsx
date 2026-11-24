@@ -1,7 +1,7 @@
+import { frozenPanel, outPanel, pingPanel, snapshotPanel } from '../game/statePanels'
 import { useCallback, useEffect } from 'react'
 import type { CatchJudgement } from '../../shared/catch.js'
 import { isSlipQr, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
-import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
 import CatchMoment from '../game/CatchMoment'
 import ChaseLayout from '../game/ChaseLayout'
@@ -85,21 +85,19 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
       side="chaser"
       title={`KEJAR · ${view.me.name.toUpperCase()}`}
       chips={
-        <>
-          <EndgameStatus view={view} />
-          {chip && <span className="chip mono">{chip}</span>}
-          {/* From a scheduled alert until that ping reveals (checkins design §5.4); it says what, never how long. */}
-          {view.snapshotted && <span className="chip snap">SNAPSHOT TAKEN</span>}
-        </>
+        [
+          view.endgame && <EndgameStatus key="endgame" view={view} />,
+          pingPanel(chip),
+          // From a scheduled alert until that ping reveals (checkins design §5.4); it says what, never how long.
+          snapshotPanel(view.snapshotted),
+          frozenPanel(view, now),
+          outPanel(!view.me.disqualified_at && view.outWarned),
+        ]
       }
       overlay={
         view.me.disqualified_at ? (
           <div role="alert" className="chase-warning">
             <p style={{ fontWeight: 700 }}>Luar Garisan: your catches don't count this round, boss.</p>
-          </div>
-        ) : view.outWarned ? (
-          <div role="alert" className="chase-warning">
-            <p style={{ fontWeight: 700 }}>{LUAR_GARISAN_WARN}</p>
           </div>
         ) : undefined
       }

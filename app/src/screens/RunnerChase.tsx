@@ -1,7 +1,7 @@
+import { checkinPanel, nearPanel, outPanel } from '../game/statePanels'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BreakJudgement } from '../../shared/catch.js'
 import { RESCUE_RESET_MS } from '../../shared/penjara.js'
-import { LUAR_GARISAN_WARN } from '../../shared/alerts.js'
 import type { View } from '../../shared/views.js'
 import { penjaraLockedLine } from '../../shared/hijau.js'
 import { isSlipQr, stationFromQr } from '../../shared/ids.js'
@@ -16,7 +16,7 @@ import { dipFor } from '../game/LuckyDip'
 import RescueHold from '../game/rescue/RescueHold'
 import PowerUpHand, { claimMessage, slipMessage, type SlipClaimResult, type ClaimResult } from '../game/PowerUpHand'
 import { loadSession } from '../game/session'
-import { clock, useServerNow } from '../game/time'
+import { useServerNow } from '../game/time'
 
 /** A green tap waits at most this long for a fix that's ready, so a last-second tap still lands in time. */
 const TAP_FIX_WAIT_MS = 300
@@ -162,27 +162,14 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
         view={view}
         side="runner"
         title={`DIKEJAR ${tagOf(view)}`}
-        chips={
-          <>
-            <EndgameStatus view={view} />
-            {checkin && !banner && (
-              <span className="chip">{`Check in in ${clock(Math.max(0, checkin.alertAt - now))}`}</span>
-            )}
-            {view.chaserNearby && (
-              <span className="chip warn">
-                <i />
-                Kejar within 100 m
-              </span>
-            )}
-          </>
-        }
+        chips={[
+          view.endgame && <EndgameStatus key="endgame" view={view} />,
+          checkinPanel(checkin && !banner ? checkin.alertAt : null, now),
+          nearPanel(view.chaserNearby),
+          outPanel(view.outWarned),
+        ]}
         overlay={
           <>
-            {view.outWarned && (
-              <div role="alert" className="chase-warning">
-                <p style={{ fontWeight: 700 }}>{LUAR_GARISAN_WARN}</p>
-              </div>
-            )}
             {/* Either card closes with its ×, for the rest of this visit. */}
             {locationOff && !hide.location && (
               <div role="alert" className="chase-warning closable">

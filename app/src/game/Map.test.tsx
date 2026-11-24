@@ -317,6 +317,23 @@ describe('GameMap', () => {
     expect(ring.paint['circle-radius']).not.toBe(focus.paint['circle-radius'])
   })
 
+  it("draws the game board: outside dimmed and hatched, a chalk edge, out ticks and stamps, all under the game pieces", () => {
+    created.layers = []
+    created.data = {}
+    render(<GameMap arena={arena} dots={[]} />)
+    created.load!()
+    const ids = created.layers.map((l) => l.id)
+    const get = (id: string) => created.layers.find((l) => l.id === id) as unknown as { paint: Record<string, unknown>; layout?: Record<string, unknown> }
+    for (const id of ['board-dim', 'board-hatch', 'arena', 'board-ticks', 'board-out', 'flood-fill', 'board-stamps'])
+      expect(ids.indexOf(id)).toBeLessThan(ids.indexOf('points'))
+    expect(ids.indexOf('board-dim')).toBeLessThan(ids.indexOf('arena'))
+    expect(get('board-dim').paint['fill-opacity']).toBe(0.68)
+    expect(get('arena').paint['line-pattern']).toBe('board-chalk')
+    expect(get('board-out').layout!['text-field']).toBe('out')
+    expect(ids.indexOf('board-stamps')).toBeLessThan(ids.indexOf('jail'))
+    expect(created.data['board-stamps']).toMatchObject({ features: [{ properties: { image: 'stamp-penjara' } }, { properties: { image: 'stamp-start' } }] })
+  })
+
   it('showJailAndStart={false} skips the jail/start circles and labels entirely (e.g. a scoped-down stub arena)', () => {
     created.layers = []
     created.data = {}

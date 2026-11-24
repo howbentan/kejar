@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import EndgameTakeover from '../game/EndgameTakeover'
+import Moments from '../game/MomentPop'
 import { loadOrganiserSession } from '../game/organiserSession'
 import { shouldPlay } from '../game/moments'
 import { loadSession } from '../game/session'
@@ -105,14 +106,20 @@ export default function GameScreen({ code }: { code: string }) {
       <>
         <MarshalLive code={code} view={current} refresh={refresh} />
         {takeover}
+        <Moments view={current} />
       </>
     )
-  if (current.phase === 'ended') return <Results code={code} view={current} isHost={current.me.id === 'host'} />
+  if (current.phase === 'ended')
+    return (
+      <>
+        <Results code={code} view={current} isHost={current.me.id === 'host'} />
+        <Moments view={current} />
+      </>
+    )
 
   // Runners and chasers: their screen, with the Help and SOS icon in the same corner on every one.
   let screen: ReactNode
-  if (current.paused) screen = <Paused view={current} />
-  else if (current.me.role === 'runner' && current.me.disqualified_at) screen = <LuarGarisan view={current} />
+  if (current.me.role === 'runner' && current.me.disqualified_at) screen = <LuarGarisan view={current} />
   else if (current.phase === 'hiding') screen = <Hide code={code} view={current} />
   else if (current.me.role === 'runner' && (current.me.jailed || showingFreed || reelHold)) screen = <Jail code={code} view={current} />
   else if (current.me.role === 'chaser') screen = <ChaserChase code={code} view={current} refresh={refresh} />
@@ -121,6 +128,13 @@ export default function GameScreen({ code }: { code: string }) {
   return (
     <>
       {screen}
+      {/* Paused: today's pause screen over the game, shaded instead of plain black (design 2026-11-24 §4). */}
+      {current.paused && (
+        <div className="paused-over">
+          <Paused view={current} />
+        </div>
+      )}
+      {!current.paused && <Moments view={current} />}
       {rescueEnd.ending && <RescueEnd key={rescueEnd.ending.at} ending={rescueEnd.ending} onDone={rescueEnd.done} />}
       {takeover}
       <SosIcon code={code} view={current} />

@@ -6,7 +6,8 @@ import { currentCoords, lastCoords } from './here'
 import { distanceM } from '../../shared/geo.js'
 import { CLAIM_RADIUS_M, slotCapacity } from '../../shared/powerups.js'
 import GameMap from './Map'
-import FloodBanner from './FloodBanner'
+import { PanelStack } from './ComicPanel'
+import { floodPanel, powerPanels } from './statePanels'
 import HowToPlayLink from './HowToPlayLink'
 import { stationQr, tagQr } from '../../shared/ids.js'
 import { rippleOrigin } from './ripple'
@@ -105,6 +106,8 @@ export default function ChaseLayout(props: {
   const [result, setResult] = useState('')
   const [moment, setMoment] = useState<ReactNode | null>(null)
   const wiggle = useNearStationWiggle(view)
+  const ticking = useServerNow(view.now)
+  const panelNow = view.paused ? view.now : ticking
   // An open pick left from before a reload comes back on screen.
   const openDeal = view.deal
   useEffect(() => {
@@ -169,9 +172,13 @@ export default function ChaseLayout(props: {
           ripple={view.lastRevealAt ? { at: view.lastRevealAt, origin: rippleOrigin(view.dots, view.arena) } : null}
         />
         <div className="chase-over">
-          <FloodBanner view={view} />
           <div className="chase-chips">
-            {props.chips}
+            {/* The comic panels (design 2026-11-24 §3): the screen's own, then the flood and my running power-ups. */}
+            <PanelStack>
+              {props.chips}
+              {floodPanel(view, panelNow)}
+              {powerPanels(view.activePowerUps)}
+            </PanelStack>
             {view.sideQuest && questHidden && (
               <button type="button" className="chip chip-quest" onClick={() => { setQuestClosed(false); setQuestAside(false) }}>
                 Tupperware

@@ -101,7 +101,7 @@ describe('RunnerChase', () => {
     render(<RunnerChase code="ABC234" view={view} />)
     expect(screen.getByText('DIKEJAR #07')).toBeInTheDocument()
     expect(screen.getByText('9 free')).toBeInTheDocument()
-    expect(screen.getByText('Check in in 2:14')).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'Check in soon' })).toHaveTextContent('in 2:14')
     expect(screen.getByTestId('map')).toBeInTheDocument()
     expect(screen.getByText('No power-up. Find a station and scan it.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Scan' })).toBeInTheDocument()
@@ -111,7 +111,7 @@ describe('RunnerChase', () => {
 
   it('shows the Luar Garisan warning banner while warned, and not otherwise', () => {
     render(<RunnerChase code="ABC234" view={testView({ outWarned: true })} />)
-    expect(screen.getByRole('alert')).toHaveTextContent("Eh, you're outside the play area! Balik within 30 seconds or you're out.")
+    expect(screen.getByRole('alert', { name: 'Outside the play area' })).toHaveTextContent("Balik!Back inside within 30 s or you're out")
     cleanup()
     render(<RunnerChase code="ABC234" view={testView()} />)
     expect(screen.queryByRole('alert')).toBeNull()
@@ -219,12 +219,12 @@ describe('RunnerChase', () => {
 
   it('shows the chaser warning when chaserNearby', () => {
     render(<RunnerChase code="ABC234" view={testView({ chaserNearby: true })} />)
-    expect(screen.getByText('Kejar within 100 m')).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'Kejar within 100 m' })).toHaveTextContent('Kejar dekat!')
   })
 
   it('does not warn when no chaser is near', () => {
     render(<RunnerChase code="ABC234" view={testView()} />)
-    expect(screen.queryByText('Kejar within 100 m')).toBeNull()
+    expect(screen.queryByRole('status', { name: 'Kejar within 100 m' })).toBeNull()
   })
 
   it('the game clock stands still while paused', () => {
@@ -252,7 +252,7 @@ describe('RunnerChase', () => {
     const { rerender } = render(<RunnerChase code="ABC234" view={early(130_000)} />)
     rerender(<RunnerChase code="ABC234" view={early(130_000 + 300_000)} />)
     expect(screen.queryByText(/^Check-in opens in/)).toBeNull()
-    expect(screen.getByText('Check in in 5:30')).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'Check in soon' })).toHaveTextContent('in 5:30')
   })
 })
 

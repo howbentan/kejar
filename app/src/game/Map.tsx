@@ -1,5 +1,6 @@
 import MapCredit from './MapCredit'
 import MapViewButton from './MapViewButton'
+import MapCompass from './MapCompass'
 import { FLOAT_ICON, GEM_SIZE, INSTANT_TRANSLATE, LANDED_OFFSET, addFloatingMark, addMapIcons, shadowPaint } from './mapMarkers'
 import { applyMapView, useMapView } from './mapView'
 import { floatTranslates, markStationMotion, restFloat, setFloat, startFloatMotion, type FloatEvents, type StationTurn } from './floatMotion'
@@ -12,7 +13,9 @@ import * as m from 'motion/react-m'
 import { useReducedMotion } from 'motion/react'
 import { circlePolygon, distanceM } from '../../shared/geo.js'
 import type { FloodNow } from '../../shared/flood.js'
-import { BANJIR, floodFeatures } from './floodMap'
+import { floodFeatures } from './floodMap'
+import { addBoardDoodles, WAVE_FRAMES } from './boardDoodles'
+import { boardFeatures } from './boardMap'
 import type { TupperSide } from '../../shared/types.js'
 import type { Arena, LatLng } from '../../shared/types.js'
 import { CHASER_SNAPSHOT_FUZZ_M, FUZZ_RADIUS_M, type ChaserSnapshot, type MapDot } from '../../shared/views.js'
@@ -353,19 +356,52 @@ export default function GameMap({
         type: 'geojson',
         data: collection([{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: ring(arena.boundary) } }]),
       })
-      m.addLayer({ id: 'arena', type: 'line', source: 'arena', paint: { 'line-color': WHITE, 'line-width': 1.5, 'line-opacity': 0.6 } })
-      // Banjir Kilat's water sits under every zone and dot; the next waterline is dashed on top of it.
+      // Game board (design 2026-11-24 §1): outside the arena dimmed and hatched, a chalk edge with "out" ticks.
+      addBoardDoodles(m)
+      const board = boardFeatures(arena)
+      m.addSource('board-outside', { type: 'geojson', data: board.outside })
+      m.addLayer({ id: 'board-dim', type: 'fill', source: 'board-outside', paint: { 'fill-color': '#000', 'fill-opacity': 0.68 } })
+      m.addLayer({ id: 'board-hatch', type: 'fill', source: 'board-outside', paint: { 'fill-pattern': 'board-hatch', 'fill-opacity': 0.35 } })
+      m.addLayer({ id: 'arena', type: 'line', source: 'arena', paint: { 'line-pattern': 'board-chalk', 'line-width': 5 } })
+      m.addSource('board-ticks', { type: 'geojson', data: board.ticks })
+      m.addLayer({ id: 'board-ticks', type: 'line', source: 'board-ticks', paint: { 'line-color': WHITE, 'line-width': 1.4, 'line-opacity': 0.55 } })
+      m.addSource('board-out', { type: 'geojson', data: board.labels })
+      m.addLayer({
+        id: 'board-out',
+        type: 'symbol',
+        source: 'board-out',
+        layout: { 'text-field': 'out', 'text-font': MAP_FONT, 'text-size': 14, 'text-transform': 'lowercase', 'text-rotate': -8, 'text-allow-overlap': true },
+        paint: { 'text-color': 'rgba(245,245,243,.5)' },
+      })
+      // Banjir Kilat's water (§5): moving waves under every zone and dot, foam on the waterline, the next one dashed.
       const fl = floodFeatures(arena, latestFlood.current)
       m.addSource('flood', { type: 'geojson', data: fl.water })
-      m.addLayer({ id: 'flood-fill', type: 'fill', source: 'flood', paint: { 'fill-color': BANJIR, 'fill-opacity': 0.32 } })
+      m.addLayer({ id: 'flood-fill', type: 'fill', source: 'flood', paint: { 'fill-pattern': 'waves-0' } })
+      m.addSource('flood-shore', { type: 'geojson', data: fl.shore })
+      m.addLayer({ id: 'flood-shore', type: 'line', source: 'flood-shore', paint: { 'line-color': WHITE, 'line-width': 2.5, 'line-opacity': 0.9, 'line-dasharray': [1.5, 1] } })
       m.addSource('flood-next', { type: 'geojson', data: fl.next })
-      m.addLayer({ id: 'flood-next', type: 'line', source: 'flood-next', paint: { 'line-color': BANJIR, 'line-width': 2.5, 'line-dasharray': [2, 1.5] } })
+      m.addLayer({ id: 'flood-next', type: 'line', source: 'flood-next', paint: { 'line-color': '#3D8BFD', 'line-width': 2.5, 'line-dasharray': [2, 1.5] } })
       if (showJailAndStartRef.current) {
         m.addSource('jail', {
           type: 'geojson',
           data: collection([{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [arena.jail.lng, arena.jail.lat] } }]),
         })
         addMapIcons(m)
+        // The worn "penjara" and "start" stamps lie on the ground just below their marks.
+        m.addSource('board-stamps', { type: 'geojson', data: board.stamps })
+        m.addLayer({
+          id: 'board-stamps',
+          type: 'symbol',
+          source: 'board-stamps',
+          layout: {
+            'icon-image': ['get', 'image'],
+            'icon-rotate': ['get', 'rotate'],
+            'icon-offset': [0, 30],
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+          },
+          paint: { 'icon-opacity': 0.8 },
+        })
         m.addLayer({
           id: 'jail',
           type: 'symbol',
@@ -852,12 +888,32 @@ export default function GameMap({
 
   // The water follows the flood: a rise, or the next waterline showing. Rounded so a poll's tiny changes don't redraw.
   const floodKey = flood ? `${flood.step}:${flood.warning}:${Math.round(flood.radiusM)}` : ''
+  // A rise creeps in over about 1.5 s instead of jumping (none for reduced motion).
+  const shownRadius = useRef<number | null>(null)
   useEffect(() => {
     const mp = map.current
     if (!ready.current || !mp) return
-    const fl = floodFeatures(arena, latestFlood.current)
-    ;(mp.getSource('flood') as GeoJSONSource | undefined)?.setData(fl.water)
-    ;(mp.getSource('flood-next') as GeoJSONSource | undefined)?.setData(fl.next)
+    const target = latestFlood.current
+    const paint = (f: FloodNow | null) => {
+      const fl = floodFeatures(arena, f)
+      ;(mp.getSource('flood') as GeoJSONSource | undefined)?.setData(fl.water)
+      ;(mp.getSource('flood-shore') as GeoJSONSource | undefined)?.setData(fl.shore)
+      ;(mp.getSource('flood-next') as GeoJSONSource | undefined)?.setData(fl.next)
+    }
+    const from = shownRadius.current
+    shownRadius.current = target && target.step > 0 ? target.radiusM : null
+    if (!target || from === null || reduce || Math.abs(from - target.radiusM) < 1) return paint(target)
+    const t0 = performance.now()
+    let raf = 0
+    const step = (t: number) => {
+      if (map.current !== mp) return
+      const k = Math.min(1, (t - t0) / 1500)
+      const e = 1 - Math.pow(1 - k, 3)
+      paint({ ...target, radiusM: from + (target.radiusM - from) * e })
+      if (k < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [floodKey, loaded])
 
@@ -909,6 +965,20 @@ export default function GameMap({
     document.addEventListener('visibilitychange', onVisibility)
     return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [])
+  // The flood's waves move: cycle the wave frames while there's water on screen.
+  const wet = !!flood && flood.step > 0
+  useEffect(() => {
+    const mp = map.current
+    if (!loaded || !mp || !wet || reduce || pageHidden) return
+    let f = 0
+    const id = window.setInterval(() => {
+      if (map.current !== mp || !mp.getLayer('flood-fill')) return
+      f = (f + 1) % WAVE_FRAMES
+      mp.setPaintProperty('flood-fill', 'fill-pattern', `waves-${f}`)
+    }, 220)
+    return () => window.clearInterval(id)
+  }, [loaded, wet, reduce, pageHidden])
+
   useEffect(() => {
     const mp = map.current
     if (!loaded || !mp || !threeD || reduce || pageHidden) return
@@ -1029,6 +1099,7 @@ export default function GameMap({
       <div ref={el} style={{ height, borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hair)' }} />
       <MapCredit tiles={tiles} />
       <MapViewButton threeD={threeD} onToggle={toggleThreeD} />
+      <MapCompass map={map.current} ready={loaded} />
       {/* Until the map's first load, a small j runs in the middle (loaders design). Taps go straight through. */}
       {!loaded && !gaveUp && (
         <div className="map-loading" data-testid="map-loading" aria-hidden="true">

@@ -77,7 +77,8 @@ describe('ChaserChase', () => {
   it('is one screen: who, the ping chip, the map, Scan tag and the ticker', () => {
     render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
     expect(screen.getByText('KEJAR · BEN')).toBeInTheDocument()
-    expect(screen.getByText('Next ping 1:42 · last 3:18 ago')).toBeInTheDocument()
+    expect(screen.getByText('Next ping 1:42')).toBeInTheDocument()
+    expect(screen.getByText('last 3:18 ago')).toBeInTheDocument()
     expect(screen.getByTestId('map')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /feed/i })).toBeInTheDocument()
   })
@@ -126,11 +127,11 @@ describe('ChaserChase', () => {
 
   it('shows SNAPSHOT TAKEN while snapshotted, promising nothing about how long', () => {
     const { rerender } = render(<ChaserChase code="ABC234" view={{ ...chaser(), snapshotted: true }} refresh={() => {}} />)
-    const pill = screen.getByText('SNAPSHOT TAKEN')
-    expect(pill).toHaveClass('chip', 'snap')
+    const pill = screen.getByText('Snapshot taken')
+    expect(pill).toHaveClass('comic-title')
     expect(document.body.textContent).not.toMatch(/until|next alert/i)
     rerender(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
-    expect(screen.queryByText('SNAPSHOT TAKEN')).toBeNull()
+    expect(screen.queryByText('Snapshot taken')).toBeNull()
   })
 
   it('the chaser map draws no ? zone (the Tupperware side quest replaced it)', () => {
@@ -188,7 +189,7 @@ describe('ChaserChase Luar Garisan', () => {
 
   it('a warned chaser sees the warning banner', () => {
     render(<ChaserChase code="ABC234" view={{ ...chaser(), outWarned: true }} refresh={() => {}} />)
-    expect(screen.getByRole('alert')).toHaveTextContent("Eh, you're outside the play area! Balik within 30 seconds or you're out.")
+    expect(screen.getByRole('alert', { name: 'Outside the play area' })).toHaveTextContent("Balik!Back inside within 30 s or you're out")
   })
 
   it('a free chaser sees no banner', () => {

@@ -87,14 +87,14 @@ function inkStyle(s: Schema): StyleSpecification {
       { id: 'landcover', type: 'fill', source: 'omt', 'source-layer': s.landcover.layer, ...f(s.landcover.filter), paint: { 'fill-color': '#121213' } },
       { id: 'park', type: 'fill', source: 'omt', 'source-layer': s.park.layer, ...f(s.park.filter), paint: { 'fill-color': '#161618' } },
       { id: 'water', type: 'fill', source: 'omt', 'source-layer': 'water', paint: { 'fill-color': '#232428' } },
-      { id: 'buildings', type: 'fill', source: 'omt', 'source-layer': s.building, minzoom: 14, paint: { 'fill-color': '#1B1B1D' } },
+      { id: 'buildings', type: 'fill', source: 'omt', 'source-layer': s.building, minzoom: 14, paint: { 'fill-color': '#202023' } },
       {
         id: 'buildings-line',
         type: 'line',
         source: 'omt',
         'source-layer': s.building,
         minzoom: 14,
-        paint: { 'line-color': '#26262A', 'line-width': 0.6 },
+        paint: { 'line-color': 'rgba(245,245,243,.42)', 'line-width': 1.1 },
       },
       {
         id: 'roads',
