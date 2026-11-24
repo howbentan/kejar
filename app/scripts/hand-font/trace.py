@@ -130,9 +130,12 @@ grow = int(round((hand_ratio * logo_xh * 0.85 - stroke(whole)) / 2))  # a touch 
 print('logo x-height', logo_xh, 'thicken by', grow, 'px')
 SL = 520 / logo_xh
 asc_units = float(np.median([glyphs[c]['baseline'] - glyphs[c]['top'] for c in 'bdhl'])) * S
+# The k is scaled up to the tall letters' height, which leaves its stroke thinner than its neighbours: it gets more.
+EXTRA = {'k': 4}
 for l, m in logo_masks.items():
-    if grow > 0:
-        m = cv2.dilate(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * grow + 1, 2 * grow + 1)))
+    g = grow + EXTRA.get(l, 0)
+    if g > 0:
+        m = cv2.dilate(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * g + 1, 2 * g + 1)))
     m = cv2.GaussianBlur(m, (0, 0), 1.5)
     _, m = cv2.threshold(m, 127, 255, cv2.THRESH_BINARY)
     ys, xs = np.nonzero(m)
