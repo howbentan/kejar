@@ -14,12 +14,17 @@ vi.mock('../game/Map', () => ({
 }))
 vi.mock('../game/here', () => ({ currentCoords: async () => ({}) }))
 vi.mock('../game/Scanner', () => ({
-  default: ({ onResult, numberFallback }: { onResult: (t: string) => void; numberFallback?: { label: string; onNumber: (n: number) => void } }) => (
+  default: ({ onResult, numberFallback }: { onResult: (t: string) => void; numberFallback?: { label: string; onNumber: (n: number) => void; buttons?: { label: string; onNumber: (n: number) => void }[] } }) => (
     <>
       <button type="button" onClick={() => onResult(scanned.text)}>
         fake camera
       </button>
-      {numberFallback && (
+      {numberFallback?.buttons?.map((b) => (
+        <button key={b.label} type="button" onClick={() => b.onNumber(7)}>
+          {`${numberFallback.label} · ${b.label}`}
+        </button>
+      ))}
+      {numberFallback && !numberFallback.buttons && (
         <button type="button" onClick={() => numberFallback.onNumber(7)}>
           {numberFallback.label}
         </button>
@@ -51,7 +56,7 @@ afterEach(() => {
 
 async function scan(text: string) {
   scanned.text = text
-  fireEvent.click(screen.getByRole('button', { name: 'Scan tag' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Scan' }))
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'fake camera' })))
 }
 
@@ -90,9 +95,17 @@ describe('ChaserChase', () => {
   it('with no camera, typing the tag number catches the same as a scan', async () => {
     call.mockResolvedValue({ ok: true, flagged: false, runnerId: 'r1', label: '#07 Aina' })
     render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Scan tag' }))
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Or type the tag number' })))
+    fireEvent.click(screen.getByRole('button', { name: 'Scan' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Or type the number · Tag' })))
     expect(call).toHaveBeenCalledWith('catch', { code: 'ABC234', token: 't1', tagQr: 'KEJAR:TAG:07' })
+  })
+
+  it('with no camera, a typed number can be a station instead: the Kejar says which', async () => {
+    call.mockResolvedValue({ ok: false, reason: 'too-far' })
+    render(<ChaserChase code="ABC234" view={chaser()} refresh={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Scan' }))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Or type the number · Station' })))
+    expect(call).toHaveBeenCalledWith('claim', expect.objectContaining({ qr: 'KEJAR:STATION:7' }))
   })
 
   it('a refused catch is a plain message, with no stamp', async () => {

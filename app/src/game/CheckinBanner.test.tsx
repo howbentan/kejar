@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Checkin } from '../../shared/views.js'
 import CheckinBanner from './CheckinBanner'
@@ -19,15 +19,15 @@ describe('CheckinBanner', () => {
     expect(vibrate).toHaveBeenCalledWith(80)
   })
 
-  it('only Checked in gets the marker tick', () => {
+  it('only Checked in gets the doodled tick', () => {
     const { container, rerender } = render(<CheckinBanner checkin={c('in')} now={NOW} openedByPush={false} />)
-    expect(container.querySelector('.marker')).not.toBeNull()
+    expect(container.querySelector('.doodle-tick')).not.toBeNull()
     for (const state of ['open', 'missed'] as const) {
       rerender(<CheckinBanner checkin={c(state, 1)} now={NOW} openedByPush={false} />)
-      expect(container.querySelector('.marker')).toBeNull()
+      expect(container.querySelector('.doodle-tick')).toBeNull()
     }
     rerender(<CheckinBanner checkin={c('early')} now={NOW} openedByPush />)
-    expect(container.querySelector('.marker')).toBeNull()
+    expect(container.querySelector('.doodle-tick')).toBeNull()
   })
 
   it('open: check in now', () => {
@@ -56,5 +56,29 @@ describe('CheckinBanner', () => {
   it('nothing for a runner with no check-in', () => {
     const { container } = render(<CheckinBanner checkin={null} now={NOW} openedByPush={false} />)
     expect(container).toBeEmptyDOMElement()
+  })
+})
+
+describe('CheckinBanner: out of the way', () => {
+  it('a tap hides it', () => {
+    render(<CheckinBanner checkin={c('open')} now={NOW} openedByPush={false} />)
+    fireEvent.click(screen.getByRole('status'))
+    expect(screen.queryByText('Check in now')).toBeNull()
+  })
+  it('Checked in fades by itself after 5 s', () => {
+    vi.useFakeTimers()
+    render(<CheckinBanner checkin={c('in')} now={NOW} openedByPush={false} />)
+    expect(screen.getByText('Checked in')).toBeInTheDocument()
+    act(() => {
+      vi.advanceTimersByTime(5_000)
+    })
+    expect(screen.queryByText('Checked in')).toBeNull()
+    vi.useRealTimers()
+  })
+  it('a hidden banner comes back for the next check-in', () => {
+    const { rerender } = render(<CheckinBanner checkin={c('open')} now={NOW} openedByPush={false} />)
+    fireEvent.click(screen.getByRole('status'))
+    rerender(<CheckinBanner checkin={{ ...c('open'), revealAt: NOW + 200_000 }} now={NOW} openedByPush={false} />)
+    expect(screen.getByText('Check in now')).toBeInTheDocument()
   })
 })

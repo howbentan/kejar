@@ -9,7 +9,7 @@ import { ErrorText } from './ui'
  * The "Turn on check-in alerts" prompt. Shown in the lobby, and in the game for a runner whose subscription is gone
  * (a New phone clears it, so the old phone stops buzzing).
  */
-export default function AlertsCard({ code, view, onDone }: { code: string; view: View; onDone?: () => void }) {
+export default function AlertsCard({ code, view, onDone, onClose }: { code: string; view: View; onDone?: () => void; onClose?: () => void }) {
   const [message, setMessage] = useState('')
   const [done, setDone] = useState(false)
   // Runners need alerts for push check-ins; marshals need them for SOS and reports in any mode.
@@ -30,7 +30,12 @@ export default function AlertsCard({ code, view, onDone }: { code: string; view:
     }
   }
   return (
-    <div className="card">
+    <div className={onClose ? 'card closable' : 'card'}>
+      {onClose && (
+        <button type="button" className="card-x" aria-label="Hide the alerts card" onClick={onClose}>
+          ×
+        </button>
+      )}
       <p style={{ fontWeight: 600 }}>Turn on check-in alerts</p>
       {support === 'needs-install' && (
         <>

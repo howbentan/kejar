@@ -104,7 +104,7 @@ export default function ChaserChase({ code, view, refresh }: { code: string; vie
         ) : undefined
       }
       slot={<PowerUpHand code={code} view={view} />}
-      scanLabel="Scan tag"
+      scanLabel="Scan"
       scanClass="scan-chaser"
       describe={describe}
       momentFor={momentFor}

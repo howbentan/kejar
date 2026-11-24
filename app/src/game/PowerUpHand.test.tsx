@@ -181,6 +181,9 @@ describe('PowerUpHand', () => {
       render(<PowerUpHand code="ABC234" view={v} />)
       expect(screen.getByText('FROZEN · 2:14')).toBeInTheDocument()
       expect(screen.getByRole('button', { name: /gostan/i })).toBeDisabled()
+      // Frozen over: an icy slot with frost doodles on it.
+      expect(screen.getByRole('button', { name: /gostan/i })).toHaveClass('frozen')
+      expect(screen.getByRole('button', { name: /gostan/i }).querySelector('.frost')).not.toBeNull()
     })
 
     it('FROZEN shows in an empty slot', () => {

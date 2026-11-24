@@ -206,6 +206,12 @@ describe('RunnerChase', () => {
     expect(screen.getByText('Turn it on in your browser settings.')).toBeInTheDocument()
   })
 
+  it('the location warning and the alerts card can be closed', () => {
+    render(<RunnerChase code="ABC234" view={testView()} locationOff />)
+    fireEvent.click(screen.getByRole('button', { name: 'Hide the location warning' }))
+    expect(screen.queryByText(/Location is off/)).toBeNull()
+  })
+
   it('shows no location warning when location is working', () => {
     render(<RunnerChase code="ABC234" view={testView()} />)
     expect(screen.queryByText(/Location is off/)).toBeNull()

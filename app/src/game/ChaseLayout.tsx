@@ -156,7 +156,7 @@ export default function ChaseLayout(props: {
         <div className="dock-row">
           {props.slot}
           <button type="button" className={`scan ${props.scanClass}`} disabled={!!moment || busy} aria-busy={busy || undefined} onClick={() => openScanner()}>
-            <Busy busy={busy} label="Checking" height={props.scanClass === 'scan-runner' ? 18 : 24} stack={props.scanClass === 'scan-runner'}>{props.scanLabel}</Busy>
+            <Busy busy={busy} label="Checking" height={18} stack>{props.scanLabel}</Busy>
           </button>
         </div>
       </footer>
@@ -185,7 +185,15 @@ export default function ChaseLayout(props: {
                 ? undefined
                 : side === 'runner'
                   ? { label: 'Or type the station number', onNumber: (n) => onScan(stationQr(n)) }
-                  : { label: 'Or type the tag number', onNumber: (n) => onScan(tagQr(n)) }
+                  : {
+                      // A Kejar's card may be a tag or a station, so the number needs saying which.
+                      label: 'Or type the number',
+                      onNumber: (n) => onScan(tagQr(n)),
+                      buttons: [
+                        { label: 'Tag', onNumber: (n) => onScan(tagQr(n)) },
+                        { label: 'Station', onNumber: (n) => onScan(stationQr(n)) },
+                      ],
+                    }
             }
           />
         </div>

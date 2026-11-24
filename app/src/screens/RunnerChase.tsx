@@ -96,6 +96,7 @@ function useOpenedByPush(): boolean {
 }
 
 export default function RunnerChase({ code, view, locationOff = false }: { code: string; view: View; locationOff?: boolean }) {
+  const [hide, setHide] = useState({ location: false, alerts: false })
   const now = useServerNow(view.now)
   const opened = useOpenedByPush()
   const checkin = view.checkin
@@ -182,13 +183,17 @@ export default function RunnerChase({ code, view, locationOff = false }: { code:
                 <p style={{ fontWeight: 700 }}>{LUAR_GARISAN_WARN}</p>
               </div>
             )}
-            {locationOff && (
-              <div role="alert" className="chase-warning">
+            {/* Either card closes with its ×, for the rest of this visit. */}
+            {locationOff && !hide.location && (
+              <div role="alert" className="chase-warning closable">
+                <button type="button" className="card-x" aria-label="Hide the location warning" onClick={() => setHide((h) => ({ ...h, location: true }))}>
+                  ×
+                </button>
                 <p style={{ fontWeight: 700 }}>Location is off. You'll miss check-ins.</p>
                 <p className="muted">Turn it on in your browser settings.</p>
               </div>
             )}
-            {view.me.role === 'runner' && <AlertsCard code={code} view={view} />}
+            {view.me.role === 'runner' && !hide.alerts && <AlertsCard code={code} view={view} onClose={() => setHide((h) => ({ ...h, alerts: true }))} />}
             {banner && <CheckinBanner checkin={checkin} now={now} openedByPush={openedByPush} />}
           </>
         }

@@ -253,7 +253,7 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
             <m.button
               key={u.id}
               type="button"
-              className="slot"
+              className={frozen ? 'slot frozen' : 'slot'}
               disabled={cooling || frozen || !!using}
               initial={{ y: -16, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
@@ -267,6 +267,7 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
                   {frozen ? `FROZEN · ${clock(frozenFor)}` : cooling ? `COOLDOWN · ${clock(view.flareReadyAt! - now)}` : INFO[u.kind].effect}
                 </span>
               </span>
+              {frozen && <Frost />}
               {doubled && <small className="slot-x2">×2</small>}
               {/* While cooling down or frozen, the name and countdown need the room more than the deck count. */}
               {!cooling && !frozen && <small className="slot-deck">{view.comboReady ? 'COMBO READY' : 'READY'}</small>}
@@ -317,7 +318,8 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
         ))
         const free = Math.max(0, capacity - used - liveEls.length)
         const emptyEls = Array.from({ length: free }, (_, n) => (
-          <div key={`empty-${n}`} className="slot empty">
+          <div key={`empty-${n}`} className={frozen ? 'slot empty frozen' : 'slot empty'}>
+            {frozen && <Frost />}
             <span>{frozen ? `FROZEN · ${clock(frozenFor)}` : capacity === 2 ? 'Free slot. Scan a station.' : 'No power-up. Find a station and scan it.'}</span>
             {(capacity === 1 || n === free - 1) && deck}
           </div>
@@ -329,6 +331,20 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
       {freeze && <FreezePicker targets={view.freezeTargets ?? []} onPick={(id) => use(freeze, id)} onCancel={() => setFreeze(null)} />}
       {grab && <GrabChooser code={code} powerupId={grab.powerupId} offer={grab.offer} onClose={() => setGrab(null)} />}
     </div>
+  )
+}
+
+/** Cheese Ais: frost over a frozen Kejar's slot (icicles along the top, a few doodled snowflakes). */
+function Frost() {
+  return (
+    <svg className="frost" viewBox="0 0 160 60" preserveAspectRatio="none" aria-hidden="true">
+      <path className="frost-ice" d="M0 0 H160 V5 L152 13 L146 6 L139 16 L131 6 L122 12 L114 5 L104 15 L95 6 L86 11 L77 5 L67 14 L58 6 L49 12 L40 5 L31 15 L22 6 L13 12 L6 5 L0 9 Z" />
+      <g className="frost-flake">
+        <path d="M151 46 v9 M146.5 50.5 h9 M148 47.5 l6 6 M154 47.5 l-6 6" />
+        <path d="M8 49 v7 M4.5 52.5 h7" />
+        <path d="M138 54 v4 M136 56 h4" />
+      </g>
+    </svg>
   )
 }
 

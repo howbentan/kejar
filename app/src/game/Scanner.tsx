@@ -12,7 +12,8 @@ export default function Scanner({
   onCancel: () => void
   /** Shown over a lime viewfinder with a sweeping scan line (motion design §7). */
   hint?: string
-  numberFallback?: { label: string; onNumber: (n: number) => void }
+  /** `buttons`: one button per meaning of the number (a Kejar's number may be a tag or a station); otherwise "Use". */
+  numberFallback?: { label: string; onNumber: (n: number) => void; buttons?: { label: string; onNumber: (n: number) => void }[] }
 }) {
   const video = useRef<HTMLVideoElement>(null)
   const done = useRef(false)
@@ -48,7 +49,8 @@ export default function Scanner({
       {hint && <p className="vf-hint">{hint}</p>}
       {problem && <p className="muted">{problem}</p>}
       {numberFallback && (
-        <div style={{ display: 'flex', gap: 8 }}>
+        // Two meanings (Tag or Station): the box gets its own row and the two buttons share the row below.
+        <div style={numberFallback.buttons && numberFallback.buttons.length > 1 ? { display: 'flex', flexDirection: 'column', gap: 8 } : { display: 'flex', gap: 8 }}>
           <input
             className="input"
             inputMode="numeric"
@@ -56,9 +58,13 @@ export default function Scanner({
             value={typed}
             onChange={(e) => setTyped(e.target.value.replace(/\D/g, '').slice(0, 2))}
           />
-          <button className="btn" disabled={!typed} onClick={() => numberFallback.onNumber(Number(typed))}>
-            Use
-          </button>
+          <div className="btn-pair" style={{ width: 'auto' }}>
+            {(numberFallback.buttons ?? [{ label: 'Use', onNumber: numberFallback.onNumber }]).map((b) => (
+              <button key={b.label} className="btn scan-num" disabled={!typed} onClick={() => b.onNumber(Number(typed))}>
+                {b.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
       <button className="btn btn-ghost" onClick={onCancel}>
