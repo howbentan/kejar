@@ -16,7 +16,8 @@ import { BANJIR, floodFeatures } from './floodMap'
 import type { TupperSide } from '../../shared/types.js'
 import type { Arena, LatLng } from '../../shared/types.js'
 import { CHASER_SNAPSHOT_FUZZ_M, FUZZ_RADIUS_M, type ChaserSnapshot, type MapDot } from '../../shared/views.js'
-import { MAP_FONT, kejarMapStyle } from './mapStyle'
+import { MAP_FONT } from './mapStyle'
+import { isOwnTilesError, mapTiles, ownTilesFailed, styleFor } from './mapTiles'
 import { RIPPLE_MS } from './ripple'
 import { SlideTracker } from './slideOff'
 import { MiniRunner } from './Runner'
@@ -290,6 +291,7 @@ export default function GameMap({
   const [loaded, setLoaded] = useState(false)
   // The tiles' small j gives up on a map error or after MAP_LOADER_MS, so a map that never loads isn't covered for good.
   const [gaveUp, setGaveUp] = useState(false)
+  const [tiles] = useState(mapTiles)
   const latestCircle = useRef(circle)
   latestCircle.current = circle
   const latestFlood = useRef(flood)
@@ -331,7 +333,7 @@ export default function GameMap({
     const arena = arenaRef.current
     const m = new maplibregl.Map({
       container: el.current,
-      style: kejarMapStyle,
+      style: styleFor(tiles),
       center: [arena.start.lng, arena.start.lat],
       zoom: 16,
       // The required credit is our own slim <MapCredit />, not MapLibre's pop-out box.
@@ -339,7 +341,9 @@ export default function GameMap({
     })
     map.current = m
     const giveUp = window.setTimeout(() => setGaveUp(true), MAP_LOADER_MS)
-    m.on('error', () => {
+    m.on('error', (e) => {
+      // Our own file failing: the next map opened falls back to OpenFreeMap.
+      if (isOwnTilesError(tiles, e)) ownTilesFailed()
       window.clearTimeout(giveUp)
       setGaveUp(true)
     })
@@ -1023,7 +1027,7 @@ export default function GameMap({
   return (
     <div style={{ position: 'relative', height: typeof height === 'string' ? height : undefined }}>
       <div ref={el} style={{ height, borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hair)' }} />
-      <MapCredit />
+      <MapCredit tiles={tiles} />
       <MapViewButton threeD={threeD} onToggle={toggleThreeD} />
       {/* Until the map's first load, a small j runs in the middle (loaders design). Taps go straight through. */}
       {!loaded && !gaveUp && (

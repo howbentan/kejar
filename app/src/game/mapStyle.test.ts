@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BUILDINGS_3D, FLAT_BUILDING_LAYERS, MAP_FONT, kejarMapStyle } from './mapStyle'
+import { BUILDINGS_3D, FLAT_BUILDING_LAYERS, MAP_FONT, kejarMapStyle, ownMapStyle } from './mapStyle'
 
 type AnyLayer = { id: string; type: string; filter?: unknown; paint?: Record<string, unknown>; layout?: Record<string, unknown> }
 const all = kejarMapStyle.layers as AnyLayer[]
@@ -56,5 +56,32 @@ describe('kejarMapStyle', () => {
     const ids = all.map((l) => l.id)
     expect(ids[ids.length - 1]).not.toBe('arena')
     expect(ids.indexOf('street-names')).toBeGreaterThan(ids.indexOf('roads'))
+  })
+})
+
+describe('ownMapStyle (our Protomaps file)', () => {
+  const own = ownMapStyle('https://maps.example/my-sg.pmtiles')
+  const layers = own.layers as AnyLayer[]
+  const get = (id: string) => layers.find((l) => l.id === id)! as AnyLayer & { 'source-layer'?: string }
+
+  it('reads our file through the pmtiles protocol', () => {
+    expect(own.sources.omt).toEqual({ type: 'vector', url: 'pmtiles://https://maps.example/my-sg.pmtiles' })
+    expect(JSON.stringify(own)).not.toContain('openfreemap')
+  })
+
+  it('keeps every layer id and Ink colour of the OpenFreeMap style', () => {
+    expect(layers.map((l) => l.id)).toEqual(all.map((l) => l.id))
+    for (const l of all) if (l.id !== BUILDINGS_3D) expect(get(l.id).paint).toEqual(l.paint)
+  })
+
+  it('maps each layer to the Protomaps names', () => {
+    expect(get('buildings')['source-layer']).toBe('buildings')
+    expect(get('roads')['source-layer']).toBe('roads')
+    expect(get('paths').filter).toEqual(['==', ['get', 'kind'], 'path'])
+    expect(get('roads').filter).toEqual(['!', ['==', ['get', 'kind'], 'path']])
+    expect(get('park')['source-layer']).toBe('landuse')
+    expect(get('place-names')['source-layer']).toBe('places')
+    expect(get(BUILDINGS_3D).paint!['fill-extrusion-height']).toEqual(['coalesce', ['get', 'height'], 8])
+    expect(get(BUILDINGS_3D).paint!['fill-extrusion-base']).toEqual(['coalesce', ['get', 'min_height'], 0])
   })
 })

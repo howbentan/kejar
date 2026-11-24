@@ -11,7 +11,8 @@ import { FLOAT_ICON, GEM_SIZE, INSTANT_TRANSLATE, addFloatingMark, addMapIcons, 
 import MapViewButton from './MapViewButton'
 import { HOVER, restFloat, startFloatMotion } from './floatMotion'
 import { applyMapView, useMapView } from './mapView'
-import { MAP_FONT, MAP_NUMBER_FONT, kejarMapStyle } from './mapStyle'
+import { MAP_FONT, MAP_NUMBER_FONT } from './mapStyle'
+import { isOwnTilesError, mapTiles, ownTilesFailed, styleFor } from './mapTiles'
 
 const VOLT = '#C6FF3D'
 const WHITE = '#F5F5F3'
@@ -90,17 +91,21 @@ export default function PlaceMap(props: Props) {
   latestThreeD.current = threeD
   const appliedThreeD = useRef(threeD)
   const [loaded, setLoaded] = useState(false)
+  const [tiles] = useState(mapTiles)
 
   useEffect(() => {
     if (!el.current) return
     const m = new maplibregl.Map({
       container: el.current,
-      style: kejarMapStyle,
+      style: styleFor(tiles),
       center: [KL_FALLBACK.lng, KL_FALLBACK.lat],
       zoom: 15.5,
       attributionControl: false,
     })
     map.current = m
+    m.on('error', (e) => {
+      if (isOwnTilesError(tiles, e)) ownTilesFailed()
+    })
     m.on('load', () => {
       const data = layersData(latest.current)
       for (const [id, d] of Object.entries(data)) m.addSource(id, { type: 'geojson', data: d })
@@ -316,7 +321,7 @@ export default function PlaceMap(props: Props) {
   return (
     <div style={{ position: 'relative' }}>
       <div ref={el} style={{ height: 320, borderRadius: 20, overflow: 'hidden', border: '1px solid var(--hair)' }} />
-      <MapCredit />
+      <MapCredit tiles={tiles} />
       <MapViewButton threeD={threeD} onToggle={toggleThreeD} />
     </div>
   )

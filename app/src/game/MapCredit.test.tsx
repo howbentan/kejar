@@ -24,4 +24,10 @@ describe('MapCredit', () => {
       expect(a).toHaveAttribute('rel', 'noreferrer')
     }
   })
+
+  it('on our own map file, credits only OpenStreetMap', () => {
+    const { container } = render(<MapCredit tiles="own" />)
+    expect(container.querySelector('.map-credit')!.textContent).toBe('© OpenStreetMap')
+    expect(screen.getByRole('link', { name: 'OpenStreetMap' })).toHaveAttribute('href', 'https://www.openstreetmap.org/copyright')
+  })
 })
