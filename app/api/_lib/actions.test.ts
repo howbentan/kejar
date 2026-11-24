@@ -1752,7 +1752,7 @@ describe('Cheese Ais', () => {
     expect(ev).toMatchObject({ actor_id: g.aina.playerId, target_id: g.ben.playerId, data: { until: stamp(now + 3 * MIN) } })
     const vBen = await run<View>('state', { code: g.code, token: g.ben.token })
     expect(vBen.frozenUntil).toBe(now + 3 * MIN)
-    expect(vBen.feed[0]).toMatchObject({ text: 'Brain freeze! A runner froze your power-up for 3 minutes.', act: true })
+    expect(vBen.feed[0]).toMatchObject({ text: 'Brain freeze! Your power-up is frozen for 3 min.', act: true })
     const vKim = await run<View>('state', { code: g.code, token: g.kim.token })
     expect(vKim.frozenUntil).toBeNull()
     expect(vKim.feed[0]).toMatchObject({ text: 'Brain freeze on a Kejar.', act: false })
@@ -2419,7 +2419,7 @@ describe('Tee And Gee', () => {
     expect(vBen.feed[0]).toMatchObject({
       text: GATE_TEXT,
       label: 'Tee And Gee',
-      means: 'Dikejar checking in near it show exactly at the next ping.',
+      means: 'Dikejar who check in near it will show.',
     })
     // The whole chasing team sees it.
     expect((await view(g, g.kim.token)).tollGates).toHaveLength(1)
@@ -6237,7 +6237,7 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
     expect((await row(g, g.hafiz.playerId)).jailed).toBe(false)
     expect((await row(g, g.aina.playerId)).jailed).toBe(false)
     expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: true, jailed: 0 }])
-    expect(texts(await poll(g, start + 21 * S, g.ben.token))).toContain('Mak kau hijau fizzled. The alert went out too late.')
+    expect(texts(await poll(g, start + 21 * S, g.ben.token))).toContain("Mak kau hijau didn't count.")
     // Not even the runner who tapped is told "Safe!": the run never counted.
     expect(texts(await poll(g, start + 21 * S, g.aina.token)).join(' ')).not.toMatch(/fizzled|to Penjara|Safe/)
   })

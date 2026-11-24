@@ -202,14 +202,14 @@ describe('ChaserChase Luar Garisan', () => {
 })
 
 describe('ChaserChase: a rescue at Penjara (rules §9a)', () => {
-  const rescueLine = { at: new Date(99_000).toISOString(), text: 'Rescue starting at Penjara!', means: 'Catch them before 20 s of holding and nobody gets out.', act: true, label: 'RESCUE' }
+  const rescueLine = { at: new Date(99_000).toISOString(), text: 'Rescue starting at Penjara!', means: 'Go! Catch them before 20 s.', act: true, label: 'RESCUE' }
   afterEach(() => vi.restoreAllMocks())
   it('shows both chaser lines in the feed under the bell', () => {
     render(<ChaserChase code="ABC234" view={{ ...chaser(), feed: [rescueLine], rescue: { by: 'r3', byName: 'Wei', heldMs: 13_000, holdSince: 100_000, resetAt: null } }} refresh={() => {}} />)
     fireEvent.click(screen.getByRole('button', { name: /^Feed:/ }))
     const sheet = screen.getByRole('dialog', { name: 'Feed' })
     expect(sheet).toHaveTextContent('Rescue starting at Penjara!')
-    expect(sheet).toHaveTextContent('Catch them before 20 s of holding and nobody gets out.')
+    expect(sheet).toHaveTextContent('Go! Catch them before 20 s.')
   })
   it('buzzes once when a rescue starts, and not again for the same one', () => {
     const vibrate = vi.fn()

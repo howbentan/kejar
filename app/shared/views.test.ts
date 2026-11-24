@@ -216,44 +216,44 @@ describe('two-part feed', () => {
 
   it('ping', () => {
     const { runner, chaser: c } = both('ping', { data: { seen: 5, missed: 1 } })
-    expect(runner).toMatchObject({ text: 'Ping: 5 Dikejar seen, 1 missed check-in.', means: 'Kejar now know roughly where you were.', act: false, label: 'PING' })
-    expect(c).toMatchObject({ means: 'Fresh circles are on your map.', act: false })
+    expect(runner).toMatchObject({ text: 'Ping: 5 Dikejar seen, 1 missed check-in.', means: 'Kejar know about where you are.', act: false, label: 'PING' })
+    expect(c).toMatchObject({ means: 'New circles on your map.', act: false })
     expect(line(aina, { data: { seen: 5, missed: 0 } }, 'ping').text).toBe('Ping: 5 Dikejar seen.')
     expect(line(aina, { data: { seen: 3, missed: 2 } }, 'ping').text).toBe('Ping: 3 Dikejar seen, 2 missed check-ins.')
   })
   it('Mat Rempit', () => {
     const { runner, chaser: c } = both('used', { actor_id: 'c1', data: { kind: 'flare' } })
-    expect(runner).toMatchObject({ text: 'A Kejar used Mat Rempit.', means: 'Check in now. An extra ping lands in 30 s.', act: true, label: 'Mat Rempit' })
-    expect(c).toMatchObject({ means: 'Extra ping in 30 s. Get close to the circles.', act: false })
+    expect(runner).toMatchObject({ text: 'A Kejar used Mat Rempit.', means: 'Check in now. Extra ping in 30 s.', act: true, label: 'Mat Rempit' })
+    expect(c).toMatchObject({ means: 'Extra ping in 30 s. Get close.', act: false })
   })
   it('Pak Guard', () => {
     const { runner, chaser: c } = both('used', { actor_id: 'c1', data: { kind: 'focus' } })
     expect(runner).toMatchObject({
       text: 'A Kejar used Pak Guard.',
-      means: 'At the next ping, anyone within 75 m of that Kejar shows exactly. Move away.',
+      means: 'Stay 75 m away from that Kejar.',
       act: true,
       label: 'Pak Guard',
     })
-    expect(c).toMatchObject({ means: 'Next ping shows Dikejar near them exactly.', act: false })
+    expect(c).toMatchObject({ means: 'Next ping shows Dikejar near them.', act: false })
   })
   it('catch', () => {
     const { runner, chaser: c } = both('caught', { actor_id: 'c1', target_id: 'r1' })
-    expect(runner).toMatchObject({ text: 'Ben caught #07.', means: '#07 is walking to Penjara. 3 Dikejar still free.', label: 'CATCH' })
-    expect(c).toMatchObject({ means: 'Nice. 3 Dikejar left to find.' })
+    expect(runner).toMatchObject({ text: 'Ben caught #07.', means: '#07 is out. 3 still free.', label: 'CATCH' })
+    expect(c).toMatchObject({ means: 'Nice. 3 left to find.' })
   })
   it('Durian', () => {
     const { runner, chaser: c } = both('shielded', { target_id: 'r1' })
-    expect(runner).toMatchObject({ text: '#07 blocked a catch with Durian.', means: '#07 is still free. Their Durian is used up.', label: 'Durian' })
-    expect(c).toMatchObject({ means: "That catch didn't count. #07 has no Durian now." })
+    expect(runner).toMatchObject({ text: '#07 blocked a catch with Durian.', means: '#07 is safe. Durian used up.', label: 'Durian' })
+    expect(c).toMatchObject({ means: 'No catch. Their Durian is used up.' })
   })
   it('jailbreak', () => {
     const { runner, chaser: c } = both('jailbreak', { actor_id: 'r3', data: { freed: 2 } })
     expect(runner).toMatchObject({ text: 'Jailbreak! 2 Dikejar free.', means: 'Penjara is empty again.', label: 'FREE' })
-    expect(c).toMatchObject({ means: '2 more Dikejar are loose near Penjara.' })
+    expect(c).toMatchObject({ means: '2 Dikejar got out near Penjara.' })
   })
   it('a rescue starting: the chasers get both lines and are told to act', () => {
     const { runner, chaser: c } = both('rescue-started', { actor_id: 'r3', data: { who: 'Wei #14' } })
-    expect(c).toMatchObject({ text: 'Rescue starting at Penjara!', means: 'Catch them before 20 s of holding and nobody gets out.', act: true, label: 'RESCUE' })
+    expect(c).toMatchObject({ text: 'Rescue starting at Penjara!', means: 'Go! Catch them before 20 s.', act: true, label: 'RESCUE' })
     expect(runner).toMatchObject({ text: 'Rescue starting at Penjara!', act: false, label: 'RESCUE' })
     expect(line(siti, { actor_id: 'r3' }, 'rescue-started')).toMatchObject({ text: 'Rescue starting at Penjara!', means: null, act: false })
   })
@@ -279,10 +279,10 @@ describe('two-part feed', () => {
     const { runner, chaser: c } = both('auto-jailed', { target_id: 'r2' })
     expect(runner).toMatchObject({
       text: '#03 missed 2 check-ins in a row.',
-      means: "#03 went to Penjara. Check in when your phone buzzes, or you're next.",
+      means: "Check in when your phone buzzes.",
       label: '2×',
     })
-    expect(c).toMatchObject({ means: 'One less to find. #03 is in Penjara.' })
+    expect(c).toMatchObject({ means: 'One less to find.' })
   })
   it('marshals get the line without a meaning', () => {
     expect(line(siti, { actor_id: 'c1', data: { kind: 'flare' } }, 'used')).toMatchObject({ text: 'A Kejar used Mat Rempit.', means: null, act: false })
@@ -1115,7 +1115,7 @@ describe('Luar Garisan on the chasers and the feed', () => {
     for (const me of [chaser, hafiz, siti]) {
       const lines = view(me, { players: ps, events }).feed
       const line = lines.find((f) => f.text.includes('Luar Garisan'))
-      expect(line).toMatchObject({ text: '#07 is Luar Garisan, out of this round.', means: null, act: false })
+      expect(line).toMatchObject({ text: '#07 is Luar Garisan. Out.', means: null, act: false })
       expect(lines.filter((f) => /outside|warn/i.test(f.text))).toEqual([])
     }
   })

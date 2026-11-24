@@ -883,25 +883,25 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
       const seen = Number(e.data.seen ?? 0)
       const missed = Number(e.data.missed ?? 0)
       const tail = missed > 0 ? `, ${missed} missed check-in${missed === 1 ? '' : 's'}` : ''
-      if (e.data.lastCall === true) return two('Last call!', 'LAST CALL', 'Kejar see exactly where you were.', 'Every free Dikejar shows exactly on your map.')
-      return two(`Ping: ${seen} Dikejar seen${tail}.`, 'PING', 'Kejar now know roughly where you were.', 'Fresh circles are on your map.')
+      if (e.data.lastCall === true) return two('Last call!', 'LAST CALL', 'Kejar can see where you were.', 'Every Dikejar shows on your map.')
+      return two(`Ping: ${seen} Dikejar seen${tail}.`, 'PING', 'Kejar know about where you are.', 'New circles on your map.')
     }
     case 'used':
       if (e.data.kind === 'flare')
-        return two('A Kejar used Mat Rempit.', 'Mat Rempit', 'Check in now. An extra ping lands in 30 s.', 'Extra ping in 30 s. Get close to the circles.', 'runner')
+        return two('A Kejar used Mat Rempit.', 'Mat Rempit', 'Check in now. Extra ping in 30 s.', 'Extra ping in 30 s. Get close.', 'runner')
       if (e.data.kind === 'focus')
         return two(
           'A Kejar used Pak Guard.',
           'Pak Guard',
-          'At the next ping, anyone within 75 m of that Kejar shows exactly. Move away.',
-          'Next ping shows Dikejar near them exactly.',
+          'Stay 75 m away from that Kejar.',
+          'Next ping shows Dikejar near them.',
           'runner',
         )
       // Tee And Gee: only the chasers learn a gate was set; runners get nothing, so they can't tell where to avoid.
       if (e.data.kind === 'toll') {
         if (ctx.side === 'runner') return null
         if (ctx.side === null) return plain('A Kejar used Tee And Gee')
-        return two('A Kejar set a toll gate.', 'Tee And Gee', '', 'Dikejar checking in near it show exactly at the next ping.')
+        return two('A Kejar set a toll gate.', 'Tee And Gee', '', 'Dikejar who check in near it will show.')
       }
       return null
     case 'stolen': {
@@ -916,7 +916,7 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
     }
     case 'frozen':
       // The frozen chaser is told it is theirs (it buzzes); nobody learns who froze whom.
-      if (e.target_id && e.target_id === ctx.meId) return { ...plain('Brain freeze! A runner froze your power-up for 3 minutes.'), act: true }
+      if (e.target_id && e.target_id === ctx.meId) return { ...plain('Brain freeze! Your power-up is frozen for 3 min.'), act: true }
       // Marshals and the organiser may see names (no side).
       if (ctx.side === null && target) return plain(`A Dikejar froze ${target.name}'s power-up`)
       return plain('Brain freeze on a Kejar.')
@@ -930,21 +930,21 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
         `Something legendary freed ${n} Dikejar!`,
         'FREE',
         ctx.jailedNow === 0 ? 'Penjara is empty again.' : `${ctx.jailedNow} still inside.`,
-        `${n} more Dikejar ${n === 1 ? 'is' : 'are'} loose near Penjara.`,
+        `${n} Dikejar got out near Penjara.`,
       )
     }
     case 'caught':
       if (!actor || !target) return plain('A Dikejar was caught.')
-      return two(`${actor.name} caught ${tag}.`, 'CATCH', `${tag} is walking to Penjara. ${ctx.freeNow} Dikejar still free.`, `Nice. ${ctx.freeNow} Dikejar left to find.`)
+      return two(`${actor.name} caught ${tag}.`, 'CATCH', `${tag} is out. ${ctx.freeNow} still free.`, `Nice. ${ctx.freeNow} left to find.`)
     case 'shielded':
-      return two(`${tag} blocked a catch with Durian.`, 'Durian', `${tag} is still free. Their Durian is used up.`, `That catch didn't count. ${tag} has no Durian now.`)
+      return two(`${tag} blocked a catch with Durian.`, 'Durian', `${tag} is safe. Durian used up.`, `No catch. Their Durian is used up.`)
     case 'rescue-started':
       // Chasers need to move now (rules §9a): their line is outlined and buzzes.
       return two(
         'Rescue starting at Penjara!',
         'RESCUE',
-        ctx.jailedNow === 0 ? 'Hold Penjara for 20 s.' : `Hold for 20 s and ${ctx.jailedNow} could get out.`,
-        'Catch them before 20 s of holding and nobody gets out.',
+        ctx.jailedNow === 0 ? 'Hold for 20 s.' : `Hold 20 s to free ${ctx.jailedNow}.`,
+        'Go! Catch them before 20 s.',
         'chaser',
       )
     case 'reel-free':
@@ -957,7 +957,7 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
         reason === 'left' && ctx.side === 'chaser'
           ? 'The rescue failed: the rescuer walked away.'
           : rescueFailedText(reason, actor?.name ?? 'The rescuer')
-      return two(text, 'RESCUE', 'The rescuer can try again if they are still free.', 'Penjara holds. Nice.')
+      return two(text, 'RESCUE', 'They can try again.', 'Penjara holds. Nice.')
     }
     case 'jailbreak': {
       const n = Number(e.data.freed ?? 0)
@@ -965,7 +965,7 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
         jailbreakText(n),
         'FREE',
         ctx.jailedNow === 0 ? 'Penjara is empty again.' : `${ctx.jailedNow} still inside.`,
-        `${n} more Dikejar ${n === 1 ? 'is' : 'are'} loose near Penjara.`,
+        `${n} Dikejar got out near Penjara.`,
       )
     }
     case 'arrested':
@@ -973,7 +973,7 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
       return plain('Something legendary saved a Dikejar.')
     case 'auto-jailed': {
       // Out of Super Ring's house arrest: never says why, so the card stays a secret.
-      const revoked = two(`${tag} went to Penjara.`, 'PENJARA', `${ctx.freeNow} Dikejar still free.`, `One less to find. ${tag} is in Penjara.`)
+      const revoked = two(`${tag} went to Penjara.`, 'PENJARA', `${ctx.freeNow} Dikejar still free.`, 'One less to find.')
       if (e.data.cause === 'revoked') return revoked
       // Mak Kau Hijau: players get its one count line (`hijau-done`); marshals see who, for the undo. A Super Ring
       // holder it sent to house arrest who never opened Kejar comes later, outside that count: players get the plain
@@ -984,8 +984,8 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
       return two(
         `${tag} missed 2 check-ins in a row.`,
         '2×',
-        `${tag} went to Penjara. Check in when your phone buzzes, or you're next.`,
-        `One less to find. ${tag} is in Penjara.`,
+        `Check in when your phone buzzes.`,
+        'One less to find.',
       )
     }
     case 'hijau':
@@ -996,13 +996,13 @@ function feedLine(e: GameEvent, byId: Map<string, Player>, ctx: FeedContext): Li
       // Too close to the end to run: nothing happened, so nothing to explain beyond the found card.
       if (e.data.ended === true) return null
       // Void: it never counted, so nobody is told "Safe!" either.
-      if (e.data.void === true) return ctx.side === 'runner' ? null : plain('Mak kau hijau fizzled. The alert went out too late.')
+      if (e.data.void === true) return ctx.side === 'runner' ? null : plain('Mak kau hijau didn\'t count.')
       const safe = ctx.side === 'runner' && ctx.tappedGreen ? [plain('Safe! You touched green.')] : []
       return [plain(`Mak kau hijau: ${Number(e.data.jailed ?? 0)} Dikejar to Penjara.`), ...safe]
     }
     case 'luar-garisan':
       // For everyone. The warning (`out-warned`) stays private to the player, so it has no line.
-      return actor ? plain(`${tagLabel(actor)} is Luar Garisan, out of this round.`) : null
+      return actor ? plain(`${tagLabel(actor)} is Luar Garisan. Out.`) : null
     case 'endgame': {
       if (e.data.kind === 'bomba') return plain('Endgame: Bomba.')
       if (e.data.kind === 'pkp') return plain('Endgame: PKP.')
