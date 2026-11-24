@@ -2,6 +2,8 @@ import * as m from 'motion/react-m'
 import { type ReactNode, useEffect, useState } from 'react'
 import type { Checkin } from '../../shared/views.js'
 import { clock } from './time'
+import ComicPanel from './ComicPanel'
+import { StrikesIcon } from './panelIcons'
 
 /** How long Checked in stays before it fades. */
 export const CHECKED_IN_SHOW_MS = 5_000
@@ -48,15 +50,18 @@ export default function CheckinBanner({ checkin, now, openedByPush }: { checkin:
         />
       )
     case 'missed':
+      // A comic panel (design 2026-11-24 §3): one strike of two; the next miss sends them to Penjara. Tap to hide.
       return (
-        <Banner tone="miss" mark="!" title="Missed this check-in" sub='Kejar saw your last spot, marked "missed"' onHide={hide}>
-          <div className="banner-strikes">
-            <span>MISSED IN A ROW</span>
-            <i className="on" />
-            <i />
-          </div>
-          <p className="banner-foot">Miss the next one too and you're sent to Penjara.</p>
-        </Banner>
+        <ComicPanel
+          colour="#E5484D"
+          ink="#0A0A0B"
+          caption="missed 1 of 2"
+          icon={<StrikesIcon />}
+          title="Missed this check-in"
+          line="Miss the next one too and you're sent to Penjara."
+          label="Missed this check-in. Tap to hide."
+          onClick={hide}
+        />
       )
   }
 }

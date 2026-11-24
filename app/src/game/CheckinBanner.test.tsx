@@ -47,10 +47,11 @@ describe('CheckinBanner', () => {
 
   it('missed: says so, and that one more means Penjara', () => {
     render(<CheckinBanner checkin={c('missed', 1)} now={NOW} openedByPush={false} />)
-    expect(screen.getByText('Missed this check-in')).toBeInTheDocument()
-    expect(screen.getByText('Kejar saw your last spot, marked "missed"')).toBeInTheDocument()
-    expect(screen.getByText('MISSED IN A ROW')).toBeInTheDocument()
-    expect(screen.getByText("Miss the next one too and you're sent to Penjara.")).toBeInTheDocument()
+    const panel = screen.getByRole('button', { name: /Missed this check-in/ })
+    expect(panel).toHaveTextContent('missed 1 of 2')
+    expect(panel).toHaveTextContent("Miss the next one too and you're sent to Penjara.")
+    fireEvent.click(panel)
+    expect(screen.queryByRole('button', { name: /Missed this check-in/ })).toBeNull()
   })
 
   it('nothing for a runner with no check-in', () => {

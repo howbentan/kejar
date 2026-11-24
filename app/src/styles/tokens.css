@@ -1219,3 +1219,6 @@ button.comic { cursor: pointer; }
 /* Pause over the game (design 2026-11-24 §4): the game screen heavily shaded behind today's pause screen. */
 .paused-over { position: fixed; inset: 0; z-index: 65; overflow-y: auto; background: rgba(10, 10, 11, 0.8); -webkit-backdrop-filter: blur(2.5px) saturate(0.6); backdrop-filter: blur(2.5px) saturate(0.6); }
 .paused-over > * { background: transparent !important; }
+
+.jail-comic { width: 100%; max-width: 300px; margin: 6px 0 4px 4px; }
+.comic-title:is(h1) { margin: 0; }

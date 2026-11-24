@@ -1,3 +1,5 @@
+import ComicPanel from '../game/ComicPanel'
+import { StrikesIcon } from '../game/panelIcons'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { View } from '../../shared/views.js'
 import AlertsCard from '../game/AlertsCard'
@@ -114,25 +116,28 @@ function AutoJailed({ code, view, reason = 'missed-checkins' }: { code: string; 
   const tellMarshal = () => window.dispatchEvent(new CustomEvent('kejar:sos', { detail: { reason: 'other' } }))
   return (
     <Screen eyebrow="PENJARA · AUTO">
-      <h1 className="jail-title">
-        {outForGood ? (
-          "That's the game for you."
-        ) : reason === 'missed-checkins' ? (
-          <>
-            Missed two <span style={{ whiteSpace: 'nowrap' }}>
-              check-ins<span style={{ color: 'var(--volt)' }}>.</span>
-            </span>
-          </>
-        ) : (
-          <>
-            {copy.title}
-            <span style={{ color: 'var(--volt)' }}>.</span>
-          </>
-        )}
-      </h1>
-      <p className="muted">
-        {outForGood ? 'You were already freed once, so you stay in Penjara until the end. Watch the chase from here.' : lineFor(view.me.id, copy.lines)}
-      </p>
+      {!outForGood && reason === 'missed-checkins' ? (
+        // Missed two check-ins: a comic panel (design 2026-11-24 §3), both strikes crossed out.
+        <div className="jail-comic">
+          <ComicPanel big heading colour="#E5484D" ink="#0A0A0B" caption="2 of 2 missed" icon={<StrikesIcon both />} title="Missed two check-ins." line={lineFor(view.me.id, copy.lines)} />
+        </div>
+      ) : (
+        <>
+          <h1 className="jail-title">
+            {outForGood ? (
+              "That's the game for you."
+            ) : (
+              <>
+                {copy.title}
+                <span style={{ color: 'var(--volt)' }}>.</span>
+              </>
+            )}
+          </h1>
+          <p className="muted">
+            {outForGood ? 'You were already freed once, so you stay in Penjara until the end. Watch the chase from here.' : lineFor(view.me.id, copy.lines)}
+          </p>
+        </>
+      )}
       {reason === 'missed-checkins' && view.jailCheckins && view.jailCheckins.length > 0 && <CheckinRow checkins={view.jailCheckins} />}
       {view.me.jailed && <PenjaraClosed view={view} />}
       {view.me.jailed && <PenjaraLock view={view} />}

@@ -17,14 +17,16 @@ export default function ComicPanel(props: {
   label?: string
   /** Read out at once (role alert), for a warning that needs acting on. */
   alert?: boolean
+  /** The title as the screen's heading (a panel that leads a screen, like Penjara's). */
+  heading?: boolean
   onClick?: () => void
 }) {
-  const { colour, ink, caption, icon, title, line, fx, big, label, alert, onClick } = props
+  const { colour, ink, caption, icon, title, line, fx, big, label, alert, heading, onClick } = props
   const body = (
     <span className={`comic-frame${fx ? ` comic-${fx}` : ''}`} style={{ ['--c' as string]: colour, ['--ink' as string]: ink }}>
       <span className="comic-cap">{caption}</span>
       <span className="comic-icon">{icon}</span>
-      <span className="comic-title">{title}</span>
+      {heading ? <h1 className="comic-title">{title}</h1> : <span className="comic-title">{title}</span>}
       {line && <span className="comic-line">{line}</span>}
     </span>
   )

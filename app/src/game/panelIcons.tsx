@@ -46,6 +46,18 @@ export const CameraIcon = () => (
   </svg>
 )
 
+/** Two doodled boxes, the first crossed: missed check-ins in a row (a second miss means Penjara). */
+export const StrikesIcon = ({ both = false }: { both?: boolean }) => (
+  <svg viewBox="0 0 40 40" aria-hidden="true">
+    <g fill="none" stroke={ink} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 12 L17 11.5 L17.5 27 L4.5 27.5 Z" fill="#F5F5F3" />
+      <path d="M7 14 L15 25 M15 14 L7 25" strokeWidth="3.4" />
+      <path d="M22 12.5 L35.5 12 L35 27.5 L22.5 27 Z" fill="#F5F5F3" strokeDasharray={both ? undefined : '3 2.5'} />
+      {both && <path d="M25 15 L33 25.5 M33 15 L25 25.5" strokeWidth="3.4" />}
+    </g>
+  </svg>
+)
+
 export const KeyIcon = () => (
   <svg viewBox="0 0 40 40" aria-hidden="true">
     <g fill="none" stroke={ink} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
