@@ -26,7 +26,7 @@ import { atJail, judgeCatch, judgeJailbreak, judgeSettle } from '../../shared/ca
 import { ALERT_LEAD_MS, BONUS_SEQ_BASE, chaseStartOf, dueWork, FINAL_WHISTLE_MS, phaseAt, pingTimes } from '../../shared/clock.js'
 import { HIJAU_FIX_FRESH_MS, HIJAU_MS, hijauCounts, hijauLockEnd, hijauStartsAt, hijauTargets, penjaraLockLeft } from '../../shared/hijau.js'
 import { isSlipQr, slipTokenFromQr, JAIL_QR, MAX_PLAYERS_PER_GAME, newGameCode, stationFromQr, tagIdFromQr } from '../../shared/ids.js'
-import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, judgeHijauClaim, judgeRingClaim, frozenForMs, FREEZE_MS, runningEffect, STATION_LOCK_MS, TOLL_FRESH_MS } from '../../shared/powerups.js'
+import { activeShield, COMBO_EXCLUDED, comboReady, flareBlocked, judgeBomohClaim, judgeClaim, judgeDatoClaim, judgeHijauClaim, judgeRingClaim, frozenForMs, FREEZE_MS, runningEffects, slotCapacity, STATION_LOCK_MS, TOLL_FRESH_MS } from '../../shared/powerups.js'
 import { confirmedHeldMs, fiveLeftDue, HEAD_START_MS, legacyRescue, pickReel, REEL_OPEN_AFTER_MS, reelPulledThisStay, RESCUE_HOLD_MS, RESCUE_RESET_MS, rescueProgress, rescueSuccessAt, rescueVerdict, sentDuringPause } from '../../shared/penjara.js'
 import { computeResults } from '../../shared/results.js'
 import { packItems, placeIdFor, placeItems, SECRET_PACK_IDS, SECRET_PLACE_IDS } from '../../shared/kit.js'
@@ -1830,6 +1830,7 @@ const claim: Action = async (ctx, body) => {
     powerUps: await ctx.store.powerUps(game.id),
     pings: await ctx.store.pings(game.id),
     now: ctx.now,
+    slots: slotCapacity(fresh.settings.mode),
   })
   if (!verdict.ok) return verdict
   // Banjir Kilat: a station under water is closed (a hidden legendary card under water can still be scanned).
@@ -1984,7 +1985,7 @@ async function claimSlip(ctx: Ctx, game: GameRow, me: Player, token: string | nu
   const stash = game[SLIP_STASH[legendary]]
   const positions = await ctx.store.latestPositions(game.id, [iso(ctx.now)])
   const base = { phase: phaseAt(game, ctx.now).phase, me, stash, myPos: latest(positions[me.id]), now: ctx.now }
-  const hand = async () => ({ powerUps: await ctx.store.powerUps(game.id), pings: await ctx.store.pings(game.id) })
+  const hand = async () => ({ powerUps: await ctx.store.powerUps(game.id), pings: await ctx.store.pings(game.id), slots: slotCapacity(game.settings.mode) })
   const verdict =
     legendary === 'dato'
       ? judgeDatoClaim({ ...base, ...(await hand()) })
@@ -2113,10 +2114,11 @@ const usePowerup: Action = async (ctx, body) => {
   // A frozen chaser's power-up slot is shut (Cheese Ais): nothing is spent.
   const frozenFor = frozenForMs(me, ctx.now)
   if (frozenFor > 0) return { ok: false, reason: 'frozen', frozenForMs: frozenFor }
-  // A doubled card's second use waits until the first one's effect has finished (new power-ups §5.2), so both
-  // uses can't land on one ping. A doubled Durian's twin never gets here: it is switched on with its partner.
+  // The same card can't run twice at once (two slots, playtest 2026-11-24): a second Durian, or a doubled card's
+  // second use, waits until the first one's effect has finished, so both can't land on one ping. A different card
+  // may run beside it. A doubled Durian's twin never gets here: it is switched on with its partner.
   const pings = await ctx.store.pings(game.id)
-  if (runningEffect(all, me.id, pings, ctx.now) !== null) return { ok: false, reason: 'effect-running' }
+  if (runningEffects(all, me.id, pings, ctx.now, me).includes(u.kind)) return { ok: false, reason: 'effect-running' }
   // Dato Seri is only ever used through Settle, at Penjara (jail design §4b).
   if (u.kind === 'dato') return { ok: false, reason: 'settle-at-penjara' }
   // Super Ring is never used from the slot: it steps in by itself when its holder would go to Penjara.

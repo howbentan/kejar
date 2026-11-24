@@ -3,7 +3,7 @@ import { arenaAroundPoint } from './arenas.js'
 import { iso, MIN, ping, player, pos, T0 } from './fixtures.js'
 import { circlePolygon, distanceM, offset, pointInPolygon } from './geo.js'
 import { buildPlayArea, inPlayArea } from './playArea.js'
-import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, judgeBomohClaim, judgeClaim, judgeHijauClaim, judgeRingClaim, runningEffect, shieldArmedAt, slotBusy } from './powerups.js'
+import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, judgeBomohClaim, judgeClaim, judgeHijauClaim, judgeRingClaim, runningEffect, runningEffects, shieldArmedAt, slotBusy, slotCapacity, slotsUsed } from './powerups.js'
 import { BONUS_SEQ_BASE } from './clock.js'
 import { COMBO_EXCLUDED } from './powerups.js'
 import type { Ping, PowerUp } from './types.js'
@@ -321,5 +321,35 @@ describe('Super Ring in the slot', () => {
   })
   it('Nasi Lemak KFC cannot double it', () => {
     expect(COMBO_EXCLUDED).toContain('ring')
+  })
+})
+
+describe('two slots in Full mode', () => {
+  const held = (kind: PowerUp['kind'], over: Partial<PowerUp> = {}) => pu({ kind, station: 9, ...over })
+  it('Full has two slots and Core one', () => {
+    expect(slotCapacity('full')).toBe(2)
+    expect(slotCapacity('core')).toBe(1)
+  })
+  it('counts what fills the slots: a held card is one, Dato Seri is two, Super Ring is one, a twin pair is one', () => {
+    expect(slotsUsed([held('cloak')], 'r1', [], NOW)).toBe(1)
+    expect(slotsUsed([held('dato')], 'r1', [], NOW)).toBe(2)
+    expect(slotsUsed([held('ring')], 'r1', [], NOW)).toBe(1)
+    const first = held('decoy', { id: 'u1' })
+    expect(slotsUsed([first, held('decoy', { id: 'u2', twin_of: 'u1' })], 'r1', [], NOW)).toBe(1)
+    expect(slotsUsed([held('cloak', { taken_at: iso(NOW - 1_000) })], 'r1', [], NOW)).toBe(0)
+  })
+  it('a Full runner holding one card can still claim a station; with two it is full', () => {
+    expect(judgeClaim({ ...base, slots: 2, powerUps: [held('cloak')] })).toEqual({ ok: true })
+    expect(judgeClaim({ ...base, slots: 2, powerUps: [held('cloak', { id: 'a' }), held('shield', { id: 'b' })] })).toMatchObject({ ok: false, reason: 'hand-full' })
+    // Core is unchanged: one card fills it.
+    expect(judgeClaim({ ...base, powerUps: [held('cloak')] })).toMatchObject({ ok: false, reason: 'hand-full' })
+  })
+  it('Dato Seri fills both Full slots; Super Ring leaves one free', () => {
+    expect(judgeClaim({ ...base, slots: 2, powerUps: [held('dato')] })).toMatchObject({ ok: false, reason: 'hand-full' })
+    expect(judgeClaim({ ...base, slots: 2, powerUps: [held('ring')] })).toEqual({ ok: true })
+  })
+  it('lists every running effect, a twin pair once', () => {
+    const used = iso(NOW - 1_000)
+    expect(runningEffects([held('cloak', { used_at: used }), held('shield', { id: 'b', used_at: used })], 'r1', [], NOW).sort()).toEqual(['cloak', 'shield'])
   })
 })

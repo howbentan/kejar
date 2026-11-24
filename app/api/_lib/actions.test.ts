@@ -1929,9 +1929,10 @@ describe('Abang Grab', () => {
     expect((await game(g)).runner_draws).toBe(1)
   })
 
-  it('while the offer is open the Grab still fills the slot', async () => {
+  it('while the offer is open the Grab still fills a slot (with another card held, both Full slots are full)', async () => {
     const g = await chasing()
     const grab = await give(g.gameId, g.aina.playerId, 'grab')
+    await give(g.gameId, g.aina.playerId, 'cloak')
     await use(g, g.aina.token, grab.id)
     const r = await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
     expect(r).toMatchObject({ ok: false, reason: 'hand-full', busyKind: 'grab' })
@@ -1951,9 +1952,10 @@ describe('Abang Grab', () => {
     expect(v.hand.map((u) => u.id)).toEqual([kept.id])
     expect(v.activePowerUp).toBeNull() // held, not switched on
     expect(v.feed[0].text).toBe('Aina picked up a power-up')
+    // The kept card fills one of Full's two slots, so a station still deals.
     const claim = await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
-    expect(claim).toMatchObject({ ok: false, reason: 'hand-full', busyKind: offer[1], busyRunning: false })
-    expect((await game(g)).runner_draws).toBe(1) // the kept card is the one draw, and the full slot drew nothing
+    expect(claim).toMatchObject({ ok: true })
+    expect((await game(g)).runner_draws).toBe(2) // the kept card, then the scan
   })
 
   it('refuses a bad pick cleanly and changes nothing', async () => {
@@ -2241,9 +2243,10 @@ describe('Nasi Lemak KFC', () => {
     expect(await scan(g, g.kim, 7, g.aina)).toEqual({ ok: false, reason: 'durian-locked', name: 'Aina' })
   })
 
-  it('the unused twin keeps the slot busy until the second use', async () => {
+  it('the unused twin keeps its slot busy until the second use (a doubled card is one slot; a second card fills Full)', async () => {
     const g = await chasing()
     const { first, twin } = await doubled(g.gameId, g.aina.playerId, 'decoy')
+    await give(g.gameId, g.aina.playerId, 'shield')
     const claim = () => claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
     expect(await claim()).toMatchObject({ ok: false, reason: 'hand-full', busyKind: 'decoy', busyRunning: false })
     expect(await use(g, g.aina.token, first.id)).toEqual({ ok: true, kind: 'decoy' })
@@ -7415,9 +7418,12 @@ describe("slip claims: scanning the slip in your side's Tupperware (Tupperware t
 
   it('the legendary checks still apply: a full hand, a jailed runner, a frozen chaser; none uses the try or the slip', async () => {
     const g = await chasing()
+    // Two held cards fill both Full slots.
     const cloak = await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'cloak', station: 1 })
+    const shield = await store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind: 'shield', station: 2 })
     expect(await scan(g, g.aina.token, g.dikejar[0])).toEqual({ ok: false, reason: 'hand-full' })
     await store.updatePowerUp(cloak.id, { taken_at: stamp(now) })
+    await store.updatePowerUp(shield.id, { taken_at: stamp(now) })
     await store.updatePlayers([
       { id: g.chong.playerId, patch: { jailed: true } },
       { id: g.ben.playerId, patch: { frozen_until: stamp(now + 60_000) } },
@@ -7697,5 +7703,54 @@ describe('push subscriptions', () => {
     expect(await run('subscribe', { code: g.code, token: g.aina.token, subscription: sub })).toEqual({ ok: true })
     const aina = (await store.players((await store.gameByCode(g.code))!.id)).find((p) => p.id === g.aina.playerId)!
     expect(aina.push).toEqual({ endpoint: 'https://web.push.apple.com/abc', keys: { p256dh: 'k1', auth: 'k2' } })
+  })
+})
+
+describe('two power-up slots in Full mode', () => {
+  const S1 = { lat: CENTER.lat + 100 / 111_195, lng: CENTER.lng }
+  const atS1 = { lat: S1.lat, lng: S1.lng, accuracy_m: 8 }
+  async function chasing(mode: 'full' | 'core' = 'full') {
+    const g = await readyGame({ mode }, { stations: [S1] })
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    now = T0 + 7 * MIN
+    await run('state', { code: g.code, organiserToken: g.organiserToken })
+    return { ...g, gameId: (await store.gameByCode(g.code))!.id }
+  }
+  const hold = (g: { gameId: string; aina: { playerId: string } }, kind: PowerUpKind, station = 9) =>
+    store.addPowerUp({ game_id: g.gameId, player_id: g.aina.playerId, kind, station })
+  const use = (g: { code: string; aina: { token: string } }, powerupId: string) => run('usePowerup', { code: g.code, token: g.aina.token, powerupId })
+  const scan = (g: { code: string; aina: { token: string } }) => run('claim', { code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
+
+  it('a Full runner holding one card can still scan a station', async () => {
+    const full = await chasing('full')
+    await hold(full, 'cloak')
+    expect(await scan(full)).toMatchObject({ ok: true, deal: expect.any(Object) })
+  })
+
+  it('a Core runner holding one card cannot (Core keeps one slot)', async () => {
+    const core = await chasing('core')
+    await hold(core, 'cloak')
+    expect(await scan(core)).toMatchObject({ ok: false, reason: 'hand-full' })
+  })
+
+  it('two different cards run at once; a second of the same card waits for the first', async () => {
+    const g = await chasing()
+    const durian = await hold(g, 'shield', 8)
+    const ponteng = await hold(g, 'cloak', 9)
+    expect(await use(g, durian.id)).toMatchObject({ ok: true })
+    expect(await use(g, ponteng.id)).toMatchObject({ ok: true })
+    const v = await run<View>('state', { code: g.code, token: g.aina.token })
+    expect([...v.activePowerUps].sort()).toEqual(['cloak', 'shield'])
+    const second = await hold(g, 'shield', 7)
+    expect(await use(g, second.id)).toEqual({ ok: false, reason: 'effect-running' })
+  })
+
+  it('Dato Seri fills both slots; Super Ring leaves one free', async () => {
+    const g = await chasing()
+    const dato = await hold(g, 'dato')
+    expect(await scan(g)).toMatchObject({ ok: false, reason: 'hand-full' })
+    await store.updatePowerUp(dato.id, { taken_at: new Date(now).toISOString() })
+    await hold(g, 'ring')
+    expect(await scan(g)).toMatchObject({ ok: true })
   })
 })

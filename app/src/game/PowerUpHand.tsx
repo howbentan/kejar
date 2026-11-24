@@ -1,4 +1,5 @@
 import * as m from 'motion/react-m'
+import { slotCapacity } from '../../shared/powerups.js'
 import { FAQ, type FaqKind } from './faq'
 import { useEffect, useRef, useState } from 'react'
 import type { ClaimJudgement } from '../../shared/powerups.js'
@@ -202,30 +203,8 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
   )
   const frozenFor = view.frozenUntil !== null ? view.frozenUntil - now : 0
   const frozen = frozenFor > 0
-  // A doubled card (Nasi Lemak KFC) is two unused rows, one with `twin_of` pointing at the other: show it once.
-  const shown = view.hand.filter((u) => !(u.twin_of && view.hand.some((x) => x.id === u.twin_of)))
-
-  return (
-    <div className="slot-wrap">
-      {(using || message || error) && (
-        <div className="dock-pop">
-          {using ? (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <span style={{ flex: 1 }}>{`Use ${INFO[using.kind].name}?`}</span>
-              <button type="button" className="btn" style={{ padding: '10px 16px' }} disabled aria-busy="true">
-                <BusyLabel label={`Using ${INFO[using.kind].name}`} height={20} />
-              </button>
-            </div>
-          ) : (
-            <button type="button" className="dock-pop-text" onClick={() => (setMessage(''), setError(''))}>
-              {message && <span role="status">{message}</span>}
-              <ErrorText>{error}</ErrorText>
-            </button>
-          )}
-        </div>
-      )}
-      {shown.length > 0 ? (
-        shown.map((u) => {
+  const capacity = slotCapacity(view.settings.mode)
+  const renderHeld = (u: PowerUp) => {
           const cooling = u.kind === 'flare' && view.flareReadyAt !== null
           const doubled = view.hand.some((x) => x.twin_of === u.id)
           // Dato Seri is only ever used through Settle, at Penjara: no Use here (jail design §4b).
@@ -234,7 +213,7 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
               <m.button
                 key={u.id}
                 type="button"
-                className="slot legendary"
+                className={capacity === 2 ? 'slot legendary span2' : 'slot legendary'}
                 initial={{ y: -16, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 500, damping: 18 }}
@@ -284,7 +263,7 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
               <Sticker kind={u.kind} size={40} tilt={-4} />
               <span>
                 <b>{INFO[u.kind].name}</b>
-                <span>
+                <span className={frozen || cooling ? 'slot-status' : 'slot-effect'}>
                   {frozen ? `FROZEN · ${clock(frozenFor)}` : cooling ? `COOLDOWN · ${clock(view.flareReadyAt! - now)}` : INFO[u.kind].effect}
                 </span>
               </span>
@@ -293,22 +272,59 @@ export default function PowerUpHand({ code, view }: { code: string; view: View }
               {!cooling && !frozen && <small className="slot-deck">{view.comboReady ? 'COMBO READY' : 'READY'}</small>}
             </m.button>
           )
-        })
-      ) : view.activePowerUp ? (
-        <div className="slot live">
-          <Sticker kind={view.activePowerUp} size={40} tilt={-4} />
-          <span>
-            <b>{INFO[view.activePowerUp].name}</b>
-            <span>{view.activeEndsAt !== null ? `ACTIVE · ${clock(view.activeEndsAt - now)} LEFT` : 'ACTIVE · UNTIL THE NEXT PING'}</span>
-          </span>
-          {deck}
-        </div>
-      ) : (
-        <div className="slot empty">
-          <span>{frozen ? `FROZEN · ${clock(frozenFor)}` : 'No power-up. Find a station and scan it.'}</span>
-          {deck}
+  }
+  // A doubled card (Nasi Lemak KFC) is two unused rows, one with `twin_of` pointing at the other: show it once.
+  const shown = view.hand.filter((u) => !(u.twin_of && view.hand.some((x) => x.id === u.twin_of)))
+
+  return (
+    <div className="slot-wrap">
+      {(using || message || error) && (
+        <div className="dock-pop">
+          {using ? (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ flex: 1 }}>{`Use ${INFO[using.kind].name}?`}</span>
+              <button type="button" className="btn" style={{ padding: '10px 16px' }} disabled aria-busy="true">
+                <BusyLabel label={`Using ${INFO[using.kind].name}`} height={20} />
+              </button>
+            </div>
+          ) : (
+            <button type="button" className="dock-pop-text" onClick={() => (setMessage(''), setError(''))}>
+              {message && <span role="status">{message}</span>}
+              <ErrorText>{error}</ErrorText>
+            </button>
+          )}
         </div>
       )}
+      {(() => {
+        // Full has two slots (room for combos), Core one. Held cards first, then effects still running, then what's
+        // free. Dato Seri takes both; Super Ring and a doubled card take one.
+        const heldEls = shown.map((u) => renderHeld(u))
+        const used = shown.reduce((n, u) => n + (u.kind === 'dato' ? capacity : 1), 0)
+        const runningKinds = capacity === 2 ? view.activePowerUps.filter((k) => k !== 'ring') : view.activePowerUp && !shown.length ? [view.activePowerUp] : []
+        const liveEls = runningKinds.slice(0, Math.max(0, capacity - used)).map((k, n) => (
+          <div key={`live-${k}-${n}`} className="slot live">
+            <Sticker kind={k} size={40} tilt={-4} />
+            <span>
+              <b>{INFO[k].name}</b>
+              <span>
+                {k === 'shield' && view.activeEndsAt !== null
+                  ? capacity === 2 ? `${clock(view.activeEndsAt - now)} LEFT` : `ACTIVE · ${clock(view.activeEndsAt - now)} LEFT`
+                  : capacity === 2 ? 'ACTIVE' : 'ACTIVE · UNTIL THE NEXT PING'}
+              </span>
+            </span>
+            {capacity === 1 && deck}
+          </div>
+        ))
+        const free = Math.max(0, capacity - used - liveEls.length)
+        const emptyEls = Array.from({ length: free }, (_, n) => (
+          <div key={`empty-${n}`} className="slot empty">
+            <span>{frozen ? `FROZEN · ${clock(frozenFor)}` : capacity === 2 ? 'Free slot. Scan a station.' : 'No power-up. Find a station and scan it.'}</span>
+            {(capacity === 1 || n === free - 1) && deck}
+          </div>
+        ))
+        const all = [...heldEls, ...liveEls, ...emptyEls]
+        return capacity === 2 ? <div className="slot-row two">{all}</div> : all
+      })()}
       {confirm && <CardPop u={confirm} onUse={() => (confirm.kind === 'cheese' ? pickFreeze(confirm) : use(confirm))} onClose={() => setConfirm(null)} />}
       {freeze && <FreezePicker targets={view.freezeTargets ?? []} onPick={(id) => use(freeze, id)} onCancel={() => setFreeze(null)} />}
       {grab && <GrabChooser code={code} powerupId={grab.powerupId} offer={grab.offer} onClose={() => setGrab(null)} />}

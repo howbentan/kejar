@@ -388,3 +388,32 @@ describe('slipMessage', () => {
     expect(slipMessage({ ok: true, kind: 'dato', slip: true })).toBe(stashMessage({ ok: true, kind: 'dato' }))
   })
 })
+
+describe('PowerUpHand: two slots in Full mode', () => {
+  const full = (over: Parameters<typeof testView>[0] = {}) => {
+    const v = testView(over)
+    return { ...v, settings: { ...v.settings, mode: 'full' as const } }
+  }
+  it('Full shows two slots: a held card and a free one', () => {
+    const { container } = render(<PowerUpHand code="ABC234" view={full({ hand: [decoy] })} />)
+    expect(container.querySelector('.slot-row.two')).not.toBeNull()
+    expect(screen.getByRole('button', { name: /gostan/i })).toBeInTheDocument()
+    expect(container.querySelectorAll('.slot.empty')).toHaveLength(1)
+  })
+  it('a running card shows as ACTIVE beside a held one', () => {
+    const { container } = render(<PowerUpHand code="ABC234" view={full({ hand: [decoy], activePowerUps: ['shield'] })} />)
+    expect(container.querySelector('.slot.live')).toHaveTextContent('Durian')
+    expect(container.querySelectorAll('.slot.empty')).toHaveLength(0)
+  })
+  it('Dato Seri is one wide slot across both', () => {
+    const dato = { ...decoy, id: 'd1', kind: 'dato' as const }
+    const { container } = render(<PowerUpHand code="ABC234" view={full({ hand: [dato] })} />)
+    expect(container.querySelector('.slot.legendary.span2')).not.toBeNull()
+    expect(container.querySelectorAll('.slot.empty')).toHaveLength(0)
+  })
+  it('Core keeps one slot', () => {
+    const { container } = render(<PowerUpHand code="ABC234" view={testView({ hand: [decoy] })} />)
+    expect(container.querySelector('.slot-row.two')).toBeNull()
+    expect(container.querySelectorAll('.slot.empty')).toHaveLength(0)
+  })
+})

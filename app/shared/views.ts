@@ -13,7 +13,7 @@ import { ARREST_OPEN_MS, arrestEndsAt } from './arrest.js'
 import { hijauCounts, hijauTargets, penjaraLockLeft } from './hijau.js'
 import { boxFor, legendaryOn, mirroredSpots, sideOf, TUPPER_SIDES } from './tupperware.js'
 import { POWER_NAME } from './powerNames.js'
-import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, SHIELD_MS, shieldArmedAt, slotBusy, stationLockedUntil, TOLL_RADIUS_M } from './powerups.js'
+import { activeShield, comboReady, decoySpot, flareBlocked, frozenForMs, runningEffects, SHIELD_MS, shieldArmedAt, slotBusy, stationLockedUntil, TOLL_RADIUS_M } from './powerups.js'
 import { placedStash, type Arena, type Game, type GameEvent, type LatLng, type LegendaryKind, type EndgameKind, type Phase, type PlacedStash, type Ping, type Player, type Position, type PowerUp, type PowerUpKind, type Results, type Role, type Settings, type TupperSide } from './types.js'
 
 /** Spec §4.5–4.6 constants. */
@@ -207,6 +207,8 @@ export interface View {
   deckLeft: number | null
   /** My power-up whose effect is still running, which keeps my one slot busy (§5a). */
   activePowerUp: PowerUpKind | null
+  /** Every effect this player has running (two can run at once in Full). */
+  activePowerUps: PowerUpKind[]
   /**
    * What Settle could do, for a jailed runner holding an unused Dato Seri (jail design §4b, §4d); null for
    * everyone else. `options` are the other runners in Penjara; those who already used their one escape are
@@ -1093,7 +1095,7 @@ export function viewFor(i: ViewInput): View {
   // anything either, and no results.
   const cancelled = !!i.game.cancelled_at
   if (i.me.removed_at || cancelled) {
-    return { ...v, ...(cancelled ? { cancelled: true as const, results: null } : {}), dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], deal: null, chaserNearby: false, sideQuest: false, caughtBy: null, jailReason: null, arrest: null, endgame: null, hijau: null, penjaraLockedUntil: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, bomohStash: undefined, ringStash: undefined, hijauStash: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
+    return { ...v, ...(cancelled ? { cancelled: true as const, results: null } : {}), dots: [], feed: [], alerts: [], sosPositions: {}, roster: [], reportable: [], stations: [], hand: [], deal: null, chaserNearby: false, sideQuest: false, caughtBy: null, jailReason: null, arrest: null, endgame: null, hijau: null, penjaraLockedUntil: null, activeEndsAt: null, flareReadyAt: null, jailCheckins: null, checkin: null, chaserSnapshot: null, snapshotted: false, deckLeft: null, activePowerUp: null, activePowerUps: [], settle: null, rescue: null, reel: null, freezeTargets: null, frozenUntil: null, comboReady: false, tollGates: [], datoStash: undefined, bomohStash: undefined, ringStash: undefined, hijauStash: undefined, kit: undefined, briefing: null, reports: [], ratings: [] }
   }
   return v
 }
@@ -1284,6 +1286,7 @@ function fullView(input: ViewInput): View {
     deal: dealFor(i),
     shieldActive: activeShield(i.powerUps, i.me.id, i.now) !== null,
     deckLeft: deckLeftFor(i),
+    activePowerUps: runningEffects(i.powerUps, i.me.id, i.pings, i.now, i.me),
     activePowerUp: (() => {
       const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now, i.me)
       return busy?.running ? busy.kind : null

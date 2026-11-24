@@ -43,6 +43,8 @@ export function judgeClaim(i: {
   powerUps: PowerUp[]
   pings: Ping[]
   now: number
+  /** Slots this game gives (slotCapacity): 2 in Full, 1 in Core. */
+  slots?: number
 }): ClaimJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (i.me.role === null || i.me.role === 'marshal' || i.me.jailed) return { ok: false, reason: 'cannot-claim' }
@@ -59,7 +61,7 @@ export function judgeClaim(i: {
   const lockedForMs = until === null ? 0 : until - i.now
   if (lockedForMs > 0) return { ok: false, reason: 'locked', lockedForMs }
 
-  const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now, i.me)
+  const busy = slotBusy(i.powerUps, i.me.id, i.pings, i.now, i.me, i.slots)
   if (busy) return { ok: false, reason: 'hand-full', busyKind: busy.kind, busyRunning: busy.running }
   return { ok: true }
 }
@@ -94,13 +96,17 @@ export function judgeDatoClaim(i: {
   powerUps: PowerUp[]
   pings: Ping[]
   now: number
+  slots?: number
+  /** Slots the legendary takes: Dato Seri both, Super Ring one. */
+  need?: number
 }): DatoClaimJudgement {
   if (i.phase !== 'chasing') return { ok: false, reason: 'not-chasing' }
   if (i.me.role !== 'runner' || i.me.jailed) return { ok: false, reason: 'cannot-claim' }
   const stash = placedStash(i.stash) // made with the game, but not dropped yet: nothing to find
   if (!stash || stash.claimedBy !== null) return { ok: false, reason: 'no-stash' }
   if (!withinClaimReach(i.myPos, stash, i.now)) return { ok: false, reason: 'too-far' }
-  if (slotBusy(i.powerUps, i.me.id, i.pings, i.now, i.me)) return { ok: false, reason: 'hand-full' }
+  const slots = i.slots ?? 1
+  if (slotBusy(i.powerUps, i.me.id, i.pings, i.now, i.me, slots, Math.min(i.need ?? 2, slots))) return { ok: false, reason: 'hand-full' }
   return { ok: true }
 }
 
@@ -116,8 +122,10 @@ export function judgeRingClaim(i: {
   powerUps: PowerUp[]
   pings: Ping[]
   now: number
+  slots?: number
 }): DatoClaimJudgement {
-  return judgeDatoClaim(i)
+  // Super Ring runs in the background in one slot, so it needs only one free.
+  return judgeDatoClaim({ ...i, need: 1 })
 }
 
 export type BomohClaimJudgement =
@@ -199,6 +207,35 @@ function usedRunning(u: PowerUp, powerUps: PowerUp[], pings: Ping[], now: number
   return u.kind === 'flare' ? !revealedAfter(true) : !revealedAfter(false)
 }
 
+/** Slots a game gives: two in Full (room for combos), one in Core. */
+export function slotCapacity(mode: 'core' | 'full' | undefined): 1 | 2 {
+  return mode === 'full' ? 2 : 1
+}
+
+/**
+ * What a player's cards fill: a held card or a used one still running is one slot; Dato Seri held is two (it takes
+ * both); a doubled card's twin pair is one; a card Toyol or Ah Long took is none.
+ */
+export function slotsUsed(powerUps: PowerUp[], playerId: string, pings: Ping[], now: number, me?: Pick<Player, 'arrest'>): number {
+  const mine = powerUps.filter((x) => x.player_id === playerId && !x.taken_at)
+  const fills = (u: PowerUp) => u.used_at === null || usedRunning(u, powerUps, pings, now, me)
+  let used = 0
+  for (const u of mine) {
+    if (!fills(u)) continue
+    const partner = u.twin_of ? mine.find((x) => x.id === u.twin_of) : undefined
+    if (partner && fills(partner)) continue
+    used += u.kind === 'dato' && u.used_at === null ? 2 : 1
+  }
+  return used
+}
+
+/** Every effect a player has running (a twin pair once), for the hand to show. */
+export function runningEffects(powerUps: PowerUp[], playerId: string, pings: Ping[], now: number, me?: Pick<Player, 'arrest'>): PowerUpKind[] {
+  const mine = powerUps.filter((x) => x.player_id === playerId && !x.taken_at && x.used_at !== null && x.kind !== 'ring')
+  const running = mine.filter((u) => usedRunning(u, powerUps, pings, now, me))
+  return running.filter((u) => !(u.twin_of && running.some((x) => x.id === u.twin_of))).map((u) => u.kind)
+}
+
 /** Like `slotBusy`, but only a used card whose effect is still running (an unused card in hand doesn't count). */
 export function runningEffect(powerUps: PowerUp[], playerId: string, pings: Ping[], now: number): PowerUpKind | null {
   for (const u of powerUps.filter((x) => x.player_id === playerId)) {
@@ -214,7 +251,17 @@ export function runningEffect(powerUps: PowerUp[], playerId: string, pings: Ping
  * Gostan, Ponteng, Pak Guard and Tee And Gee until the next reveal after use; Mat Rempit until its own
  * surprise ping is revealed. Nasi Lemak KFC and Cheese Ais are done the moment they're used.
  */
-export function slotBusy(powerUps: PowerUp[], playerId: string, pings: Ping[], now: number, me?: Pick<Player, 'arrest'>): { kind: PowerUpKind; running: boolean } | null {
+export function slotBusy(
+  powerUps: PowerUp[],
+  playerId: string,
+  pings: Ping[],
+  now: number,
+  me?: Pick<Player, 'arrest'>,
+  capacity = 1,
+  need = 1,
+): { kind: PowerUpKind; running: boolean } | null {
+  // Room left for what's being claimed: then nothing is busy.
+  if (slotsUsed(powerUps, playerId, pings, now, me) + need <= capacity) return null
   for (const u of powerUps.filter((x) => x.player_id === playerId)) {
     // Toyol or Ah Long took it: gone from the hand. Truthy, not `!== null`: before migration 0011 it's undefined.
     if (u.taken_at) continue
