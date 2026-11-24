@@ -1,6 +1,6 @@
 """Builds kejar's handwriting font (public/fonts/kejar-hand.ttf) from the owner's drawn alphabet.
 
-a-z, 1-9 and the slashed 0 come from alphabet.webp; k, e, j and a come from the logo itself (public/home and
+a-z, 1-9 and the slashed 0 come from alphabet.webp; e, j and a come from the logo itself (public/home and
 public/logo-ink.png), so "kejar" always matches it. Run from app/:
     python scripts/hand-font/trace.py scripts/hand-font/alphabet.webp public/fonts/kejar-hand.ttf preview.png public
 """
@@ -105,7 +105,8 @@ def area(pts):
 
 traced = {ch: contours_of(ch) for ch in glyphs}
 
-# k, e, j, a and r come from the logo itself, so words like "kejar" match it. The logo's letters are separate
+# e, j and a come from the logo itself, so words like "kejar" match it (the k and r stay hand-drawn: owner's call).
+# The logo's k and R are still loaded, only to cut the j out of the logo. The logo's letters are separate
 # images (the j is the logo with the other four taken out), drawn with a thinner stroke for their size than the
 # marker, so they are thickened to the marker's weight.
 from PIL import Image as _Image
@@ -123,6 +124,7 @@ others = cv2.dilate(np.maximum.reduce(list(logo_masks.values())), np.ones((7, 7)
 jm = cv2.morphologyEx(np.where(others > 0, 0, whole).astype(np.uint8), cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
 logo_masks['j'] = jm
 del logo_masks['r']
+del logo_masks['k']
 ys, _ = np.nonzero(logo_masks['e'])
 logo_xh, logo_base = float(ys.max() - ys.min()), float(ys.max())
 hand_ratio = stroke(ink) / xh_px
@@ -130,12 +132,9 @@ grow = int(round((hand_ratio * logo_xh * 0.85 - stroke(whole)) / 2))  # a touch 
 print('logo x-height', logo_xh, 'thicken by', grow, 'px')
 SL = 520 / logo_xh
 asc_units = float(np.median([glyphs[c]['baseline'] - glyphs[c]['top'] for c in 'bdhl'])) * S
-# The k is scaled up to the tall letters' height, which leaves its stroke thinner than its neighbours: it gets more.
-EXTRA = {'k': 4}
 for l, m in logo_masks.items():
-    g = grow + EXTRA.get(l, 0)
-    if g > 0:
-        m = cv2.dilate(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * g + 1, 2 * g + 1)))
+    if grow > 0:
+        m = cv2.dilate(m, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * grow + 1, 2 * grow + 1)))
     m = cv2.GaussianBlur(m, (0, 0), 1.5)
     _, m = cv2.threshold(m, 127, 255, cv2.THRESH_BINARY)
     ys, xs = np.nonzero(m)
