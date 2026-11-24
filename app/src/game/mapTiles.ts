@@ -4,8 +4,11 @@ import { kejarMapStyle, ownMapStyle } from './mapStyle'
 
 export type MapTiles = 'own' | 'openfreemap'
 
-/** Our Malaysia + Singapore map file on Cloudflare R2. Unset (tests, old deploys): OpenFreeMap only. */
-export const MAP_FILE: string = import.meta.env.VITE_MAP_FILE ?? ''
+/** Our Malaysia + Singapore map file on Cloudflare R2, served by the Worker in map/ (refresh steps: map/README.md). */
+export const LIVE_MAP_FILE = 'https://kejar-map.kejar.workers.dev/my-sg-20261123.pmtiles'
+
+/** Production builds use our file; dev and tests use OpenFreeMap unless VITE_MAP_FILE says otherwise. */
+export const MAP_FILE: string = import.meta.env.VITE_MAP_FILE ?? (import.meta.env.PROD ? LIVE_MAP_FILE : '')
 
 let tiles: MapTiles = MAP_FILE ? 'own' : 'openfreemap'
 

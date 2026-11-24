@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { LIVE_MAP_FILE } from './game/mapTiles'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -38,8 +39,9 @@ describe('Content Security Policy', () => {
     expect(p.get('frame-ancestors')).toEqual(["'none'"])
   })
 
-  it('allows the map: OpenFreeMap tiles and fonts, and its blob workers and images', () => {
+  it('allows the map: our own file, OpenFreeMap tiles and fonts, and its blob workers and images', () => {
     expect(p.get('connect-src')).toContain('https://tiles.openfreemap.org')
+    expect(p.get('connect-src')).toContain(new URL(LIVE_MAP_FILE).origin)
     expect(p.get('worker-src')).toEqual(expect.arrayContaining(["'self'", 'blob:']))
     expect(p.get('child-src')).toContain('blob:')
     expect(p.get('img-src')).toEqual(expect.arrayContaining(["'self'", 'data:', 'blob:']))
