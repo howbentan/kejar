@@ -360,3 +360,114 @@ describe('SupabaseStore legendaries: Super Ring and Mak Kau Hijau', () => {
     expect(columns.split(', ')).toContain('arrest')
   })
 })
+
+/**
+ * A fake client that records every chained query (table, then each call and its arguments) and answers each one
+ * with `answer`, so the live-database paths can be checked without a database.
+ */
+function chainDb(answer: (calls: [string, unknown[]][]) => unknown) {
+  const queries: [string, unknown[]][][] = []
+  const rpcs: { fn: string; args: Record<string, unknown> }[] = []
+  const chain = (calls: [string, unknown[]][]): unknown =>
+    new Proxy(
+      {},
+      {
+        get: (_t, key) => {
+          if (key === 'then') {
+            queries.push(calls)
+            return (ok: (v: unknown) => void) => ok({ data: answer(calls), error: null })
+          }
+          return (...args: unknown[]) => chain([...calls, [String(key), args]])
+        },
+      },
+    )
+  const db = {
+    from: (table: string) => chain([['from', [table]]]),
+    rpc: async (fn: string, args: Record<string, unknown>) => {
+      rpcs.push({ fn, args })
+      return { data: [{ result: 'ok', locked_for_ms: null, powerup: { id: 'u1' } }], error: null }
+    },
+  } as unknown as SupabaseClient
+  return { db, queries, rpcs }
+}
+
+describe('SupabaseStore: the card pick and Add back (playtest batch)', () => {
+  const deal = { cards: ['shield', 'sike', 'cloak', 'shield', 'cloak'] as const, backs: ['common', 'rare', 'common', 'epic', 'common'] as const, auto: 2 }
+
+  it('a station scan with a deal goes through claim_station_deal with every argument the migration expects', async () => {
+    const { db, rpcs } = chainDb(() => null)
+    const store = new SupabaseStore(db, () => Date.parse('2026-11-24T10:00:00Z'))
+    const r = await store.claimStation({ game_id: 'g1', player_id: 'p1', kind: 'shield', station: 3, deal: { ...deal, cards: [...deal.cards], backs: [...deal.backs] } }, 60_000)
+    expect(r).toEqual({ ok: true, powerUp: { id: 'u1' } })
+    expect(rpcs).toEqual([
+      {
+        fn: 'claim_station_deal',
+        args: { p_game: 'g1', p_player: 'p1', p_station: 3, p_kind: 'shield', p_at: '2026-11-24T10:00:00.000Z', p_lock_ms: 60_000, p_deal: { ...deal, cards: [...deal.cards], backs: [...deal.backs] } },
+      },
+    ])
+  })
+
+  it('a scan without a deal still uses claim_station', async () => {
+    const { db, rpcs } = chainDb(() => null)
+    await new SupabaseStore(db, () => 0).claimStation({ game_id: 'g1', player_id: 'p1', kind: 'grab', station: 1 }, 60_000)
+    expect(rpcs[0].fn).toBe('claim_station')
+    expect(rpcs[0].args).not.toHaveProperty('p_deal')
+  })
+
+  it('settling a pick updates only a row whose deal is still open, unseals it, and spends a Sike', async () => {
+    const { db, queries } = chainDb(() => [{ id: 'u1', kind: 'sike' }])
+    const store = new SupabaseStore(db, () => 0)
+    expect(await store.resolveDeal('u1', 'sike', '2026-11-24T10:00:30.000Z')).toEqual({ id: 'u1', kind: 'sike' })
+    expect(queries[0]).toEqual([
+      ['from', ['powerups']],
+      ['update', [{ kind: 'sike', deal: null, sealed: false, used_at: '2026-11-24T10:00:30.000Z', consumed_at: '2026-11-24T10:00:30.000Z' }]],
+      ['eq', ['id', 'u1']],
+      ['not', ['deal', 'is', null]],
+      ['select', ['*']],
+    ])
+  })
+
+  it('a pick already settled answers null', async () => {
+    const { db } = chainDb(() => [])
+    expect(await new SupabaseStore(db, () => 0).resolveDeal('u1', 'shield', 'x')).toBeNull()
+  })
+
+  it('Add back clears removed_at only on a removed player, and lists only removed players', async () => {
+    const { db, queries } = chainDb((calls) => (calls[1]?.[0] === 'update' ? [{ id: 'p1' }] : [{ id: 'p2' }]))
+    const store = new SupabaseStore(db, () => 0)
+    expect(await store.restorePlayer('p1')).toBe(true)
+    expect(queries[0]).toEqual([
+      ['from', ['players']],
+      ['update', [{ removed_at: null }]],
+      ['eq', ['id', 'p1']],
+      ['not', ['removed_at', 'is', null]],
+      ['select', ['id']],
+    ])
+    await store.removedPlayers('g1')
+    expect(queries[1].slice(0, 1)).toEqual([['from', ['players']]])
+    expect(queries[1]).toContainEqual(['eq', ['game_id', 'g1']])
+    expect(queries[1]).toContainEqual(['not', ['removed_at', 'is', null]])
+  })
+})
+
+describe('SupabaseStore.updatePlayers', () => {
+  it('sends every player update at once, not one after another', async () => {
+    let started = 0
+    const release: (() => void)[] = []
+    const db = {
+      from: () => ({
+        update: () => ({
+          eq: () => {
+            started++
+            return new Promise((ok) => release.push(() => ok({ data: null, error: null })))
+          },
+        }),
+      }),
+    } as unknown as SupabaseClient
+    const done = new SupabaseStore(db, () => 0).updatePlayers([1, 2, 3].map((n) => ({ id: `p${n}`, patch: { role: 'runner' as const } })))
+    await Promise.resolve()
+    expect(started).toBe(3)
+    release.forEach((r) => r())
+    await done
+  })
+})

@@ -58,6 +58,15 @@ export function dealFrom(deck: PowerUpKind[], takenThisRound: PowerUpKind[], rng
   return out
 }
 
+/**
+ * Abang Grab's offer: `n` real cards (never a Sike) from what this round of the deck has left, the same rule as a
+ * scan's deal. Seeded per Grab, so opening the same Grab twice shows the same cards.
+ */
+export function grabOffer(deck: PowerUpKind[], takenThisRound: PowerUpKind[], seed: string, n = 3): PowerUpKind[] {
+  const real = (k: PowerUpKind) => k !== 'sike'
+  return dealFrom(deck.filter(real), takenThisRound.filter(real), prng(hash(seed)), n)
+}
+
 /** The colour on a card's back: a real card shows its rarity, a Sike borrows any of the three. */
 export function backOf(card: PowerUpKind, rng: () => number): Rarity {
   if (card === 'sike') return (['common', 'rare', 'epic'] as const)[Math.min(2, Math.floor(rng() * 3))]
@@ -74,21 +83,6 @@ function prng(seed: number): () => number {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
-}
-
-/**
- * The card at draw number `index`. Each round of `deck.length` draws is its own shuffle of the whole mix,
- * so running out reshuffles (power-ups §5b; cards still held aren't held back, a simplification).
- */
-export function cardAt(seed: string, deck: PowerUpKind[], index: number): PowerUpKind {
-  const round = Math.floor(index / deck.length)
-  const rnd = prng(hash(`${seed}:${round}`))
-  const cards = [...deck]
-  for (let i = cards.length - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1))
-    ;[cards[i], cards[j]] = [cards[j], cards[i]]
-  }
-  return cards[index % deck.length]
 }
 
 /** Cards left in the current round; a finished round shows the full deck, since the next draw reshuffles. */

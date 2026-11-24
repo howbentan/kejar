@@ -86,7 +86,9 @@ export class SupabaseStore implements GameStore {
     ) as Player[]
   }
   async updatePlayers(patches: { id: string; patch: Partial<Player> }[]) {
-    for (const { id, patch } of patches) check(await this.db.from('players').update(patch).eq('id', id))
+    // All at once: a draw for 40 players is one round trip's wait, not 40.
+    const results = await Promise.all(patches.map(({ id, patch }) => this.db.from('players').update(patch).eq('id', id)))
+    for (const r of results) check(r)
   }
   async drawCard(gameId: string, side: 'runner' | 'chaser') {
     return check(await this.db.rpc('draw_card', { p_game: gameId, p_side: side })) as number

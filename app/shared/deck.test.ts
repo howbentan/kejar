@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { backOf, cardAt, cardsLeft, dealFrom, deckFor, RARITY, setsFor, SET, SIKE_PER_SET } from './deck.js'
+import { backOf, cardsLeft, dealFrom, deckFor, grabOffer, RARITY, setsFor, SET, SIKE_PER_SET } from './deck.js'
 import type { PowerUpKind } from './types.js'
 
 const count = (cards: PowerUpKind[]) => cards.reduce<Record<string, number>>((m, k) => ({ ...m, [k]: (m[k] ?? 0) + 1 }), {})
@@ -45,22 +45,16 @@ describe('new cards', () => {
   })
 })
 
-describe('cardAt', () => {
-  const deck = deckFor('core', 'runner', 1)
-  const round = (seed: string, r: number) => Array.from({ length: deck.length }, (_, i) => cardAt(seed, deck, r * deck.length + i))
-
-  it('one round deals exactly the deck', () => {
-    expect(count(round('g1:runner', 0))).toEqual(count(deck))
-  })
-  it('the next round is a fresh shuffle of the same mix', () => {
-    expect(count(round('g1:runner', 1))).toEqual(count(deck))
-  })
-  it('is the same for the same seed and index', () => {
-    expect(round('g1:runner', 0)).toEqual(round('g1:runner', 0))
-  })
-  it('different games get different orders', () => {
-    const orders = new Set(Array.from({ length: 20 }, (_, i) => round(`g${i}:runner`, 0).join(',')))
-    expect(orders.size).toBeGreaterThan(1)
+describe('grabOffer', () => {
+  it('offers 3 real cards from what the round has left, the same for the same Grab', () => {
+    const deck = deckFor('full', 'runner', 1)
+    const taken: PowerUpKind[] = ['toyol', 'combo']
+    const a = grabOffer(deck, taken, 'seed:grab:u1')
+    expect(a).toHaveLength(3)
+    expect(a).not.toContain('sike')
+    expect(a).not.toContain('toyol')
+    expect(a).not.toContain('combo')
+    expect(grabOffer(deck, taken, 'seed:grab:u1')).toEqual(a)
   })
 })
 

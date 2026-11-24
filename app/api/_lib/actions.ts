@@ -15,7 +15,7 @@ import {
   type SosReason,
 } from '../../shared/alerts.js'
 import { autoJailDue, checkinsSince, countedCheckIn, countRestartAt, fairlyWarned } from '../../shared/checkins.js'
-import { backOf, cardAt, dealFrom, deckFor, setsFor } from '../../shared/deck.js'
+import { backOf, dealFrom, deckFor, grabOffer, setsFor } from '../../shared/deck.js'
 import { arenaFromDraft, pointProblems, type ArenaDraft } from '../../shared/arenaDraft.js'
 import { arenaAroundPoint } from '../../shared/arenas.js'
 import { hebatLive, maskEndgame, pickWanted, pkpClosed, revealDue, rollEndgame, wantedOut } from '../../shared/endgame.js'
@@ -240,7 +240,7 @@ const briefOpened: Action = (ctx, body) => markBriefing(ctx, body, 'brief_opened
 const briefReady: Action = (ctx, body) => markBriefing(ctx, body, 'brief_ready_at')
 
 function requireLobby(game: Game, now: number) {
-  if (phaseAt(game, now).phase !== 'lobby') throw new ActionError(409, 'The game has started. Ask the organiser for a rejoin link.')
+  if (phaseAt(game, now).phase !== 'lobby') throw new ActionError(409, 'Game already started')
 }
 
 const LEGENDARY_ERROR = 'Legendary cards must be off or on'
@@ -423,7 +423,6 @@ async function advance(ctx: Ctx, game: Game): Promise<void> {
   const { store, now } = ctx
   const phase = phaseAt(game, now).phase
   if (phase === 'lobby') return
-  await settleOpenDeals(ctx, game)
   if (game.rescue) await settleRescue(ctx, game, phase)
 
   if ((phase === 'chasing' || phase === 'ended') && (await store.claimPing(game.id, 0, 'revealed'))) {
@@ -996,7 +995,8 @@ const join: Action = async (ctx, body) => {
     const existing = await ctx.store.playerByToken(game.id, hashToken(str(body.token)))
     if (existing) return { token: str(body.token), playerId: existing.id }
   }
-  requireLobby(game, ctx.now)
+  // A newcomer after the start can only come in through a rejoin link from a marshal.
+  if (phaseAt(game, ctx.now).phase !== 'lobby') throw new ActionError(409, 'The game has started. Ask the organiser for a rejoin link.')
   if (body.accepted !== true) throw new ActionError(400, 'Accept the code of conduct and waiver to join')
   if ((await ctx.store.players(game.id)).length >= MAX_PLAYERS_PER_GAME) throw new ActionError(409, 'This game is full')
   const name = str(body.name).trim()
@@ -1170,7 +1170,7 @@ const state: Action = async (ctx, body) => {
     events,
     now: ctx.now,
     results: ended ? computeResults(game, players, events) : null,
-    powerUps: await ctx.store.powerUps(game.id),
+    powerUps: await ownDealsSettled(ctx, game, me.id),
   })
 }
 
@@ -1585,18 +1585,41 @@ const settle: Action = async (ctx, body) => {
   return verdict
 }
 
+/** The browsers' push services: the server only ever sends alerts to these. */
+const PUSH_HOSTS = ['fcm.googleapis.com', 'push.services.mozilla.com', 'push.apple.com', 'notify.windows.com']
+
+/**
+ * A push subscription from a phone, cut down to what web push needs (the address and its keys). Null unless the
+ * address is https on a known push service, so the server never sends requests to an address a player made up.
+ */
+function cleanSubscription(raw: unknown): PushSubscriptionJSON | null {
+  const s = raw as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } } | undefined
+  if (!s || typeof s.endpoint !== 'string' || s.endpoint.length > 2048) return null
+  let url: URL
+  try {
+    url = new URL(s.endpoint)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'https:' || !PUSH_HOSTS.some((h) => url.hostname === h || url.hostname.endsWith(`.${h}`))) return null
+  const key = (v: unknown) => (typeof v === 'string' && v.length <= 256 ? v : undefined)
+  const p256dh = key(s.keys?.p256dh)
+  const auth = key(s.keys?.auth)
+  return { endpoint: s.endpoint, ...(p256dh && auth ? { keys: { p256dh, auth } } : {}) }
+}
+
 const subscribe: Action = async (ctx, body) => {
   const game = await loadGame(ctx, body)
-  const sub = body.subscription as PushSubscriptionJSON | undefined
+  const sub = cleanSubscription(body.subscription)
   if (!body.token) {
     // The organiser: their phone gets SOS and report alerts.
     await requireOrganiser(ctx, game, body)
-    if (!sub || typeof sub.endpoint !== 'string') throw new ActionError(400, 'Invalid push subscription')
+    if (!sub) throw new ActionError(400, 'Invalid push subscription')
     await ctx.store.updateGame(game.id, { host_push: sub })
     return { ok: true }
   }
   const me = await requirePlayer(ctx, game, body)
-  if (!sub || typeof sub.endpoint !== 'string') throw new ActionError(400, 'Invalid push subscription')
+  if (!sub) throw new ActionError(400, 'Invalid push subscription')
   await ctx.store.updatePlayers([{ id: me.id, patch: { push: sub } }])
   return { ok: true }
 }
@@ -1771,10 +1794,16 @@ async function deckListOf(ctx: Ctx, game: Game, side: 'runner' | 'chaser'): Prom
   return deckFor(game.settings.mode ?? 'core', side, sets)
 }
 
-async function deckOf(ctx: Ctx, game: Game, side: 'runner' | 'chaser'): Promise<(index: number) => PowerUpKind> {
-  const deck = await deckListOf(ctx, game, side)
-  // Seeded with a secret (not the game id players can see), so nobody can work out the next card.
-  return (index) => cardAt(`${game.deck_seed ?? game.id}:${side}`, deck, index)
+/**
+ * The cards this side has taken in the current round of its deck: its station cards, newest last, as many as the
+ * draws since the round began (`drawn` is the draw number just taken).
+ */
+async function takenThisRound(ctx: Ctx, gameId: string, side: 'runner' | 'chaser', drawn: number, deckLength: number): Promise<PowerUpKind[]> {
+  const inRound = drawn % deckLength
+  if (inRound === 0) return []
+  const sideIds = new Set((await ctx.store.players(gameId)).filter((p) => p.role === side).map((p) => p.id))
+  const sideCards = (await ctx.store.powerUps(gameId)).filter((u) => u.station !== null && sideIds.has(u.player_id))
+  return sideCards.slice(-inRound).map((u) => u.kind)
 }
 
 /** Abang Grab shows this many cards (power-ups §6.3). Each round of the deck is a full reshuffle, so 3 are always there. */
@@ -1811,11 +1840,7 @@ const claim: Action = async (ctx, body) => {
   const side = sideOf(me)
   const deck = await deckListOf(ctx, fresh, side)
   const drawn = await ctx.store.drawCard(game.id, side)
-  const sideIds = new Set((await ctx.store.players(game.id)).filter((p) => p.role === side).map((p) => p.id))
-  const sideCards = (await ctx.store.powerUps(game.id)).filter((u) => u.station !== null && sideIds.has(u.player_id))
-  const inRound = drawn % deck.length
-  const taken = inRound === 0 ? [] : sideCards.slice(-inRound).map((u) => u.kind)
-  const cards = dealFrom(deck, taken, ctx.rng)
+  const cards = dealFrom(deck, await takenThisRound(ctx, game.id, side, drawn, deck.length), ctx.rng)
   const auto = Math.min(cards.length - 1, Math.floor(ctx.rng() * cards.length))
   const backs = cards.map((c) => backOf(c, ctx.rng))
   // The row holds a real card until the pick (a Sike resolves to 'sike' then); sealed and out of the hand meanwhile.
@@ -1867,10 +1892,17 @@ const pickCard: Action = async (ctx, body) => {
   return settleDeal(ctx, game, row, Number(body.index) || 0)
 }
 
-/** Deals nobody picked within a minute settle at their own index (on whichever request comes next). */
-async function settleOpenDeals(ctx: Ctx, game: Game) {
-  const open = (await ctx.store.powerUps(game.id)).filter((u) => u.deal && Date.parse(u.claimed_at) + DEAL_OPEN_MS <= ctx.now)
-  for (const row of open) await settleDeal(ctx, game, row, row.deal!.auto)
+/**
+ * The game's power-ups for a view, after settling this player's own pick if nobody answered it within a minute (at
+ * its own index). Only the picker's own refresh settles it, so other requests don't pay a read for it; until then the
+ * card stays sealed and out of every hand.
+ */
+async function ownDealsSettled(ctx: Ctx, game: Game, playerId: string): Promise<PowerUp[]> {
+  const all = await ctx.store.powerUps(game.id)
+  const due = all.filter((u) => u.deal && u.player_id === playerId && Date.parse(u.claimed_at) + DEAL_OPEN_MS <= ctx.now)
+  if (!due.length) return all
+  for (const row of due) await settleDeal(ctx, game, row, row.deal!.auto)
+  return ctx.store.powerUps(game.id)
 }
 
 /**
@@ -2104,18 +2136,14 @@ const usePowerup: Action = async (ctx, body) => {
     // the slot with its offer until grabPick. The 3 draws are reserved in one atomic step, and a Grab that
     // already has them (re-opened screen, double-tap) gets the same 3 back without drawing again.
     const side = sideOf(me)
-    const opened = await ctx.store.openGrab(u.id, side, GRAB_OFFER)
+    // One card is taken from the deck (the one kept); the offer is drawn from what this round has left.
+    const opened = await ctx.store.openGrab(u.id, side, 1)
     if (!opened) return { ok: false, reason: 'already-used' }
-    let offer = opened.offer
+    let offer = u.offer ?? opened.offer
     if (!offer) {
-      const kindAt = await deckOf(ctx, fresh, side)
-      // Sikes are skipped: Abang Grab only ever brings real cards.
-      offer = []
-      for (let k = 0; offer.length < GRAB_OFFER && k < GRAB_OFFER + 40; k++) {
-        const card = kindAt(opened.first + k)
-        if (card !== 'sike') offer.push(card)
-      }
-      // Same draws, same cards: a racing second open writes the identical offer.
+      const deck = await deckListOf(ctx, fresh, side)
+      const taken = await takenThisRound(ctx, game.id, side, opened.first, deck.length)
+      offer = grabOffer(deck, taken, `${fresh.deck_seed ?? fresh.id}:grab:${u.id}`, GRAB_OFFER)
       await ctx.store.updatePowerUp(u.id, { offer })
     }
     return { ok: true, kind: 'grab', offer }

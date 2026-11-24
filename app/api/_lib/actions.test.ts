@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { MIN, T0 } from '../../shared/fixtures.js'
 import { BONUS_SEQ_BASE } from '../../shared/clock.js'
-import { cardAt, deckFor } from '../../shared/deck.js'
+import { deckFor, grabOffer } from '../../shared/deck.js'
 import { distanceM, distanceToEdgeM, offset } from '../../shared/geo.js'
 import { floodPlanOf } from '../../shared/flood.js'
 import { inPlayArea } from '../../shared/playArea.js'
@@ -138,7 +138,7 @@ async function readyGame(settings: object = {}, extra: object = {}) {
   const { code } = await run('create', { arenaId: 'around-me', center: CENTER, settings, organiserToken, ...extra })
   const join = async (name: string) => {
     const r = await run('join', { code, name, accepted: true })
-    await run('subscribe', { code, token: r.token, subscription: { endpoint: `https://push/${name}` } })
+    await run('subscribe', { code, token: r.token, subscription: { endpoint: `https://fcm.googleapis.com/fcm/send/${name}` } })
     return r
   }
   const ben = await join('Ben')
@@ -470,7 +470,7 @@ describe('pings and check-ins', () => {
     now = T0 + 10 * MIN - 30_000 // hide 5 + ping 5, minus 30 s
     await run('state', { code: g.code, token: g.ben.token })
     await run('state', { code: g.code, token: g.aina.token })
-    expect(pushes.map((p) => p.endpoint).sort()).toEqual(['https://push/Aina', 'https://push/Hafiz'])
+    expect(pushes.map((p) => p.endpoint).sort()).toEqual(['https://fcm.googleapis.com/fcm/send/Aina', 'https://fcm.googleapis.com/fcm/send/Hafiz'])
     expect(pushes[0].payload).toEqual({ type: 'checkin', code: g.code, seq: 1, revealAt: T0 + 10 * MIN })
   })
 
@@ -1885,24 +1885,19 @@ describe('Abang Grab', () => {
   const pick = (g: { code: string }, token: string, powerupId: string, choice: unknown) =>
     run('grabPick', { code: g.code, token, powerupId, choice })
   const game = async (g: { code: string }) => (await store.gameByCode(g.code))!
-  const expectedOffer = async (g: { code: string }, side: 'runner' | 'chaser', first: number) => {
+  const expectedOffer = async (g: { code: string }, side: 'runner' | 'chaser', grabId: string) => {
     const row = await game(g)
     const deck = deckFor('full', side, (side === 'runner' ? row.runner_sets : row.chaser_sets)!)
-    const offer: PowerUpKind[] = []
-    for (let k = 0; offer.length < 3; k++) {
-      const card = cardAt(`${row.deck_seed}:${side}`, deck, first + k)
-      if (card !== 'sike') offer.push(card)
-    }
-    return offer
+    return grabOffer(deck, [], `${row.deck_seed}:grab:${grabId}`)
   }
 
-  it('shows the top 3 cards of the holder\'s deck and reserves exactly those 3 draws', async () => {
+  it('shows 3 cards from what is left of the holder\'s deck and counts one draw', async () => {
     const g = await chasing()
     const grab = await give(g.gameId, g.aina.playerId, 'grab')
     const before = (await game(g)).runner_draws ?? 0
     const r = await use(g, g.aina.token, grab.id)
-    expect(r).toEqual({ ok: true, kind: 'grab', offer: await expectedOffer(g, 'runner', before) })
-    expect((await game(g)).runner_draws).toBe(before + 3)
+    expect(r).toEqual({ ok: true, kind: 'grab', offer: await expectedOffer(g, 'runner', grab.id) })
+    expect((await game(g)).runner_draws).toBe(before + 1)
     expect((await game(g)).chaser_draws ?? 0).toBe(0)
     const row = (await store.powerUps(g.gameId)).find((u) => u.id === grab.id)!
     expect(row.offer).toEqual(r.offer)
@@ -1913,8 +1908,8 @@ describe('Abang Grab', () => {
     const g = await chasing()
     const grab = await give(g.gameId, g.ben.playerId, 'grab')
     const r = await use(g, g.ben.token, grab.id)
-    expect(r.offer).toEqual(await expectedOffer(g, 'chaser', 0))
-    expect((await game(g)).chaser_draws).toBe(3)
+    expect(r.offer).toEqual(await expectedOffer(g, 'chaser', grab.id))
+    expect((await game(g)).chaser_draws).toBe(1)
   })
 
   it('opening the Grab twice shows the same offer and never draws again', async () => {
@@ -1923,7 +1918,7 @@ describe('Abang Grab', () => {
     const a = await use(g, g.aina.token, grab.id)
     const b = await use(g, g.aina.token, grab.id)
     expect(b).toEqual(a)
-    expect((await game(g)).runner_draws).toBe(3)
+    expect((await game(g)).runner_draws).toBe(1)
   })
 
   it('a double-tapped Grab draws once', async () => {
@@ -1931,7 +1926,7 @@ describe('Abang Grab', () => {
     const grab = await give(g.gameId, g.aina.playerId, 'grab')
     const [a, b] = await Promise.all([use(g, g.aina.token, grab.id), use(g, g.aina.token, grab.id)])
     expect(a).toEqual(b)
-    expect((await game(g)).runner_draws).toBe(3)
+    expect((await game(g)).runner_draws).toBe(1)
   })
 
   it('while the offer is open the Grab still fills the slot', async () => {
@@ -1958,7 +1953,7 @@ describe('Abang Grab', () => {
     expect(v.feed[0].text).toBe('Aina picked up a power-up')
     const claim = await claimPick({ code: g.code, token: g.aina.token, qr: stationQr(1), ...atS1 })
     expect(claim).toMatchObject({ ok: false, reason: 'hand-full', busyKind: offer[1], busyRunning: false })
-    expect((await game(g)).runner_draws).toBe(3) // the other two aren't put back, and the full slot drew nothing
+    expect((await game(g)).runner_draws).toBe(1) // the kept card is the one draw, and the full slot drew nothing
   })
 
   it('refuses a bad pick cleanly and changes nothing', async () => {
@@ -1994,7 +1989,7 @@ describe('Abang Grab', () => {
     await use(g, g.aina.token, grab.id)
     const r = await claimPick({ code: g.code, token: g.hafiz.token, qr: stationQr(1), ...atS1 })
     expect(r.ok).toBe(true)
-    expect((await game(g)).runner_draws).toBe(4)
+    expect((await game(g)).runner_draws).toBe(2)
   })
 
   it("Toyol can't take a card Abang Grab delivered", async () => {
@@ -2073,14 +2068,10 @@ describe('Nasi Lemak KFC', () => {
     return { first, twin }
   }
   /** Moves the side's deck to the next draw whose card passes `want`. */
+  /** The next station pick gets the first card of this side's deck that `want` accepts. */
   async function forceDraw(g: { code: string }, side: 'runner' | 'chaser', want: (k: PowerUpKind) => boolean) {
     const row = (await store.gameByCode(g.code))!
-    const deck = deckFor('full', side, (side === 'runner' ? row.runner_sets : row.chaser_sets)!)
-    const from = (side === 'runner' ? row.runner_draws : row.chaser_draws) ?? 0
-    let i = from
-    while (!want(cardAt(`${row.deck_seed}:${side}`, deck, i))) i++
-    await store.updateGame(row.id, side === 'runner' ? { runner_draws: i } : { chaser_draws: i })
-    nextPick = cardAt(`${row.deck_seed}:${side}`, deck, i)
+    nextPick = deckFor('full', side, (side === 'runner' ? row.runner_sets : row.chaser_sets)!).find(want)!
     return nextPick
   }
   const scan = async (g: { code: string }, chaser: { token: string }, tagId: number, runner: { token: string }) => {
@@ -2125,8 +2116,7 @@ describe('Nasi Lemak KFC', () => {
   it('a Nasi Lemak KFC picked from an Abang Grab offer while combo ready arrives normally and the mark stays', async () => {
     const g = await chasing()
     await give(g.gameId, g.aina.playerId, 'combo', { used_at: new Date(now).toISOString() })
-    await forceDraw(g, 'runner', (k) => k === 'combo')
-    const grab = await give(g.gameId, g.aina.playerId, 'grab')
+    const grab = await give(g.gameId, g.aina.playerId, 'grab', { offer: ['decoy', 'combo', 'shield'] })
     const { offer } = await use(g, g.aina.token, grab.id)
     const choice = (offer as PowerUpKind[]).indexOf('combo')
     expect(choice).toBeGreaterThanOrEqual(0)
@@ -2500,7 +2490,7 @@ async function safetyGame(settings: object = {}) {
   const g = await readyGame(settings)
   const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
   const siti = await run('redeemMarshalInvite', { code: g.code, inviteToken, name: 'Siti' })
-  await run('subscribe', { code: g.code, token: siti.token, subscription: { endpoint: 'https://push/Siti' } })
+  await run('subscribe', { code: g.code, token: siti.token, subscription: { endpoint: 'https://fcm.googleapis.com/fcm/send/Siti' } })
   await run('start', { code: g.code, organiserToken: g.organiserToken })
   now = T0 + 7 * MIN
   pushes = []
@@ -2752,7 +2742,7 @@ describe('SOS and reports', () => {
   it('SOS pushes every subscribed marshal and writes a safety record', async () => {
     const g = await safetyGame()
     expect(await run('sos', { code: g.code, token: g.aina.token, ...at(30) })).toMatchObject({ ok: true, notified: 1 })
-    expect(pushes).toEqual([{ endpoint: 'https://push/Siti', payload: { type: 'alert', code: g.code, text: 'SOS from Aina #07' } }])
+    expect(pushes).toEqual([{ endpoint: 'https://fcm.googleapis.com/fcm/send/Siti', payload: { type: 'alert', code: g.code, text: 'SOS from Aina #07' } }])
     expect(store.safetyRows).toEqual([
       expect.objectContaining({ type: 'sos', player_id: g.aina.playerId, lat: at(30).lat, lng: at(30).lng }),
     ])
@@ -3175,7 +3165,7 @@ describe('Banjir Kilat: the flood (design 2026-11-16)', () => {
     pushes = []
     await run('location', { code: g.code, token: g.aina.token, ...wet })
     expect((await player(g, g.aina.playerId)).flooded_at).toBeTruthy()
-    expect(pushes.map((p) => p.endpoint)).toContain('https://push/Aina')
+    expect(pushes.map((p) => p.endpoint)).toContain('https://fcm.googleapis.com/fcm/send/Aina')
     expect((await poll(g, FULL + 5_000, { token: g.aina.token })).wetUntil).toBe(FULL + 30_000)
     now = FULL + 20_000
     await run('location', { code: g.code, token: g.aina.token, ...wet })
@@ -3285,7 +3275,7 @@ describe('cancelling a game', () => {
     await rejects(run('location', { code: g.code, token: g.aina.token, ...at(0) }), 410)
     await rejects(run('rate', { code: g.code, token: g.aina.token, stars: 5 }), 410)
     const told = pushes.filter((p) => (p.payload as { text?: string }).text === `The organiser cancelled game ${g.code}.`).map((p) => p.endpoint)
-    expect(told).toEqual(expect.arrayContaining(['https://push/Ben', 'https://push/Aina', 'https://push/Hafiz', 'https://push/Siti']))
+    expect(told).toEqual(expect.arrayContaining(['https://fcm.googleapis.com/fcm/send/Ben', 'https://fcm.googleapis.com/fcm/send/Aina', 'https://fcm.googleapis.com/fcm/send/Hafiz', 'https://fcm.googleapis.com/fcm/send/Siti']))
   })
 
   it('only the organiser can cancel, a second cancel is harmless, and an ended game cannot be', async () => {
@@ -3379,7 +3369,7 @@ describe('Luar Garisan', () => {
   const RUNNER_OUT = 'Luar Garisan lah! You left the play area, so no winning this round. You can still play along.'
   const CHASER_OUT = "Luar Garisan lah! You left the play area, so no winning this round, and your catches don't count."
   const evs = async (gameId: string, type: string) => (await store.events(gameId)).filter((e) => e.type === type)
-  const notices = (name: string) => pushes.filter((p) => p.endpoint === `https://push/${name}` && (p.payload as any).type === 'notice')
+  const notices = (name: string) => pushes.filter((p) => p.endpoint === `https://fcm.googleapis.com/fcm/send/${name}` && (p.payload as any).type === 'notice')
   const player = async (gameId: string, id: string) => (await store.players(gameId)).find((p) => p.id === id)!
   const report = async (g: { code: string }, token: string, m: number, stepMs = 30_000) => {
     now += stepMs
@@ -3659,7 +3649,7 @@ describe('Luar Garisan', () => {
     pushes = []
     await run('state', { code: g.code, token: g.ben.token })
     const checkins = pushes.filter((p) => (p.payload as any).type === 'checkin').map((p) => p.endpoint)
-    expect(checkins).toEqual(['https://push/Hafiz'])
+    expect(checkins).toEqual(['https://fcm.googleapis.com/fcm/send/Hafiz'])
   })
 
   it('a disqualified runner is never auto-jailed', async () => {
@@ -4049,10 +4039,10 @@ describe('automatic alerts', () => {
     // 1000 m is over 80% of 1146 m but within it.
     const { g, r, v } = await catchHafizWithFixAge(180, 1000)
     expect(r).toMatchObject({ ok: true, flagged: true })
-    const toHafiz = pushes.filter((p) => p.endpoint === 'https://push/Hafiz')
+    const toHafiz = pushes.filter((p) => p.endpoint === 'https://fcm.googleapis.com/fcm/send/Hafiz')
     expect(toHafiz).toEqual([
       {
-        endpoint: 'https://push/Hafiz',
+        endpoint: 'https://fcm.googleapis.com/fcm/send/Hafiz',
         payload: { type: 'notice', code: g.code, title: 'Kena tangkap!', body: 'Ben caught you. Not you? Tap to tell a marshal.', url: `/g/${g.code}?dispute=1` },
       },
     ])
@@ -4128,11 +4118,11 @@ describe('review fixes: safety', () => {
 
   it('the organiser can turn on alerts and gets SOS pushes', async () => {
     const g = await safetyGame()
-    await run('subscribe', { code: g.code, organiserToken: g.organiserToken, subscription: { endpoint: 'https://push/organiser' } })
+    await run('subscribe', { code: g.code, organiserToken: g.organiserToken, subscription: { endpoint: 'https://fcm.googleapis.com/fcm/send/organiser' } })
     const r = await run('sos', { code: g.code, token: g.aina.token })
     expect(r).toMatchObject({ ok: true, notified: 2 })
-    expect(pushes.map((p) => p.endpoint).sort()).toEqual(['https://push/Siti', 'https://push/organiser'])
-    expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).me.push).toEqual({ endpoint: 'https://push/organiser' })
+    expect(pushes.map((p) => p.endpoint).sort()).toEqual(['https://fcm.googleapis.com/fcm/send/Siti', 'https://fcm.googleapis.com/fcm/send/organiser'])
+    expect((await run<View>('state', { code: g.code, organiserToken: g.organiserToken })).me.push).toEqual({ endpoint: 'https://fcm.googleapis.com/fcm/send/organiser' })
   })
 
   it('SOS says when no marshal could be reached', async () => {
@@ -5621,7 +5611,7 @@ describe('Super Ring: house arrest instead of Penjara (Plan E2 task 4)', () => {
   const row = async (g: G, id: string) => (await store.players(g.gameId)).find((p) => p.id === id)!
   const ringRow = async (g: G) => (await store.powerUps(g.gameId)).find((u) => u.kind === 'ring')!
   const evs = async (g: G, type: string) => (await store.events(g.gameId)).filter((e) => e.type === type)
-  const notices = (name: string) => pushes.filter((p) => p.endpoint === `https://push/${name}` && (p.payload as any).type === 'notice').map((p) => (p.payload as any).body)
+  const notices = (name: string) => pushes.filter((p) => p.endpoint === `https://fcm.googleapis.com/fcm/send/${name}` && (p.payload as any).type === 'notice').map((p) => (p.payload as any).body)
   const poll = (g: G, ms: number, token?: string) => {
     now = ms
     return run<View>('state', token ? { code: g.code, token } : { code: g.code, organiserToken: g.organiserToken })
@@ -6107,7 +6097,7 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
     const more: Record<string, { token: string; playerId: string }> = {}
     for (const [k, name] of moreRunners.entries()) {
       const r = await run('join', { code: g.code, name, accepted: true })
-      await run('subscribe', { code: g.code, token: r.token, subscription: { endpoint: `https://push/${name}` } })
+      await run('subscribe', { code: g.code, token: r.token, subscription: { endpoint: `https://fcm.googleapis.com/fcm/send/${name}` } })
       await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [r.playerId]: 'runner' } })
       await run('linkTag', { code: g.code, token: r.token, tagId: 11 + k })
       more[name] = r
@@ -6147,7 +6137,7 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
     const t = T0 + 7 * MIN
     expect(await claimAt(g, t)).toEqual({ ok: true, kind: 'hijau', slip: true })
     expect((await game(g)).hijau).toMatchObject({ startsAt: stamp(t), deadline: stamp(t + 20 * S), sentAt: stamp(t), settledAt: null })
-    expect(hijauPushes().map((p) => p.endpoint).sort()).toEqual(['https://push/Aina', 'https://push/Hafiz'])
+    expect(hijauPushes().map((p) => p.endpoint).sort()).toEqual(['https://fcm.googleapis.com/fcm/send/Aina', 'https://fcm.googleapis.com/fcm/send/Hafiz'])
     expect(hijauPushes()[0].payload).toMatchObject({ type: 'hijau', code: g.code, deadline: t + 20 * S, body: PUSH_BODY })
     expect(await evs(g, 'hijau')).toHaveLength(1)
     await poll(g, t + 5 * S)
@@ -6263,7 +6253,7 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
     await store.updatePlayers([{ id: g.hafiz.playerId, patch: { push: null } }])
     const t = T0 + 7 * MIN
     await claimAt(g, t)
-    expect(hijauPushes().map((p) => p.endpoint)).toEqual(['https://push/Aina'])
+    expect(hijauPushes().map((p) => p.endpoint)).toEqual(['https://fcm.googleapis.com/fcm/send/Aina'])
     await tap(g, g.aina.token, t + 5 * S)
     await poll(g, t + 20 * S)
     expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
@@ -6279,7 +6269,7 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
     const aina = await row(g, g.aina.playerId)
     expect(aina.jailed).toBe(false)
     expect(aina.arrest).toMatchObject({ route: 'hijau', by: null, center: null, startedAt: null })
-    expect(pushes.filter((p) => p.endpoint === 'https://push/Aina').map((p) => (p.payload as any).body)).toEqual(['Super Ring! Open Kejar within 60 s to start house arrest.'])
+    expect(pushes.filter((p) => p.endpoint === 'https://fcm.googleapis.com/fcm/send/Aina').map((p) => (p.payload as any).body)).toEqual(['Super Ring! Open Kejar within 60 s to start house arrest.'])
     expect((await row(g, g.hafiz.playerId)).jailed).toBe(true)
     expect((await evs(g, 'auto-jailed')).map((e) => e.target_id)).toEqual([g.hafiz.playerId])
     expect((await evs(g, 'hijau-done')).map((e) => e.data)).toEqual([{ void: false, jailed: 1 }])
@@ -6326,7 +6316,7 @@ describe('Mak Kau Hijau (Plan E2 task 5)', () => {
     ])
     const t = T0 + 7 * MIN
     await claimAt(g, t)
-    expect(hijauPushes().map((p) => p.endpoint)).toEqual(['https://push/Eve'])
+    expect(hijauPushes().map((p) => p.endpoint)).toEqual(['https://fcm.googleapis.com/fcm/send/Eve'])
     // Only a real target's feed line buzzes.
     const startLine = async (token: string) => (await poll(g, t + S, token)).feed.find((f) => f.text === 'Mak kau hijau! Tap the green.')
     expect(await startLine(eve.token)).toMatchObject({ act: true })
@@ -6806,7 +6796,7 @@ describe('Hang Hebat: the wanted runner decides the game (Plan E3 task 5)', () =
     const sides = legendary ? { legendarySides: { runner: 'on', chaser: 'on' } } : {}
     const g = await readyGame({ mode: 'full', endgames: { bomba: 'off', hebat: 'on', pkp: 'off' }, ...sides, ...settings })
     const ravi = await run('join', { code: g.code, name: 'Ravi', accepted: true })
-    await run('subscribe', { code: g.code, token: ravi.token, subscription: { endpoint: 'https://push/Ravi' } })
+    await run('subscribe', { code: g.code, token: ravi.token, subscription: { endpoint: 'https://fcm.googleapis.com/fcm/send/Ravi' } })
     await run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: { [ravi.playerId]: 'runner' } })
     await run('linkTag', { code: g.code, token: ravi.token, tagId: 12 })
     const { inviteToken } = await run('createMarshalInvite', { code: g.code, organiserToken: g.organiserToken })
@@ -7097,11 +7087,7 @@ describe('PKP closes Penjara and doubles stations (Plan E3 task 6)', () => {
   /** Moves the runners' deck to the next card that passes `want`, so a claim draws it. */
   async function forceDraw(g: G, want: (k: PowerUpKind) => boolean) {
     const row = (await store.gameByCode(g.code))!
-    const deck = deckFor('full', 'runner', row.runner_sets!)
-    let i = row.runner_draws ?? 0
-    while (!want(cardAt(`${row.deck_seed}:runner`, deck, i))) i++
-    await store.updateGame(row.id, { runner_draws: i })
-    nextPick = cardAt(`${row.deck_seed}:runner`, deck, i)
+    nextPick = deckFor('full', 'runner', row.runner_sets!).find(want)!
     return nextPick
   }
   const doublable = (k: PowerUpKind) => !['grab', 'combo', 'dato', 'sike'].includes(k)
@@ -7517,7 +7503,7 @@ describe("side quest: a ping near your side's Tupperware wakes it (Tupperware ta
     await fix(g, g.aina.token, nearBox(30))
     expect(await sideQuestAt(g, g.aina.playerId)).toBe(new Date(now).toISOString())
     expect(notices().map((n) => [n.endpoint, n.payload])).toEqual([
-      ['https://push/Aina', { type: 'notice', code: g.code, title: 'Side quest', body: "Something's nearby…" }],
+      ['https://fcm.googleapis.com/fcm/send/Aina', { type: 'notice', code: g.code, title: 'Side quest', body: "Something's nearby…" }],
     ])
     now += 5_000
     await fix(g, g.aina.token, nearBox(20))
@@ -7689,5 +7675,27 @@ describe('lifting a box when the mode changes, and the Tupperware on the kit (Tu
     const kit = (await gameOf(g.code)).kit!
     expect(Object.keys(kit.ticks).sort()).toEqual(['penjara', 'tape'])
     expect(kit.placed).toEqual({ penjara: true })
+  })
+})
+
+describe('after the start', () => {
+  it('a new player is told to ask for a rejoin link; the organiser is told the game started', async () => {
+    const g = await readyGame()
+    await run('start', { code: g.code, organiserToken: g.organiserToken })
+    await rejects(run('join', { code: g.code, name: 'Late', accepted: true }), 409, 'The game has started. Ask the organiser for a rejoin link.')
+    await rejects(run('setRoles', { code: g.code, organiserToken: g.organiserToken, roles: {} }), 409, 'Game already started')
+  })
+})
+
+describe('push subscriptions', () => {
+  it('only a real push service can be the address, and only the address and keys are kept', async () => {
+    const g = await readyGame()
+    for (const endpoint of ['http://fcm.googleapis.com/x', 'https://169.254.169.254/latest', 'https://evil.example/fcm.googleapis.com', 'https://fcm.googleapis.com.evil.example/x']) {
+      await rejects(run('subscribe', { code: g.code, token: g.aina.token, subscription: { endpoint } }), 400, 'Invalid push subscription')
+    }
+    const sub = { endpoint: 'https://web.push.apple.com/abc', keys: { p256dh: 'k1', auth: 'k2' }, extra: 'x'.repeat(5000) }
+    expect(await run('subscribe', { code: g.code, token: g.aina.token, subscription: sub })).toEqual({ ok: true })
+    const aina = (await store.players((await store.gameByCode(g.code))!.id)).find((p) => p.id === g.aina.playerId)!
+    expect(aina.push).toEqual({ endpoint: 'https://web.push.apple.com/abc', keys: { p256dh: 'k1', auth: 'k2' } })
   })
 })
