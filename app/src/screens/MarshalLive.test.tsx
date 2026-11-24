@@ -244,9 +244,10 @@ describe('MarshalLive after the game', () => {
     expect(screen.queryByRole('link', { name: 'Play again' })).toBeNull()
   })
 
-  it('gives the organiser Play again', () => {
+  it('gives the organiser Play again, and Home', () => {
     render(<MarshalLive code="ABC234" view={organiser({ phase: 'ended', results, roster })} refresh={refresh} />)
     expect(screen.getByRole('link', { name: 'Play again' })).toHaveAttribute('href', '/host/new')
+    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/')
   })
 
   it('shows no results while the game is still on', () => {

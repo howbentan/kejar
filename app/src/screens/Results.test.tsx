@@ -34,6 +34,9 @@ describe('Results', () => {
     expect(screen.getByText('Aina · 25:00')).toBeInTheDocument()
     expect(screen.getByText('Ben · 2')).toBeInTheDocument()
     expect(screen.getByText('Wei · 1 freed')).toBeInTheDocument()
+    // Every player can go home to join or start the next game.
+    expect(screen.getByRole('link', { name: 'Home' })).toHaveAttribute('href', '/')
+    expect(screen.queryByRole('link', { name: 'Play again' })).toBeNull()
   })
 
   it('hides awards that are null', () => {

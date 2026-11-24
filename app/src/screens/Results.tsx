@@ -77,6 +77,15 @@ export function ResultsSummary({ view }: { view: View }) {
   )
 }
 
+/** Back to the home page after the game, to join or start the next one. Everyone gets it. */
+export function HomeButton({ ghost = false }: { ghost?: boolean }) {
+  return (
+    <a className={ghost ? 'btn btn-ghost' : 'btn'} href="/" style={{ textAlign: 'center', textDecoration: 'none' }}>
+      Home
+    </a>
+  )
+}
+
 /** The organiser's way into the next game. */
 export function PlayAgain() {
   return (
@@ -93,6 +102,7 @@ export default function Results({ code, view, isHost }: { code: string; view: Vi
       <ResultsSummary view={view} />
       <PostGameFeedback code={code} view={view} />
       {isHost && <PlayAgain />}
+      <HomeButton ghost={isHost} />
     </Screen>
   )
 }

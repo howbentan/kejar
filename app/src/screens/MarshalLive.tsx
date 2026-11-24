@@ -14,7 +14,7 @@ import { useWakeLock } from '../game/useWakeLock'
 import { Screen } from '../game/ui'
 import { GameClock } from '../game/ChaseLayout'
 import { Feed } from './RunnerChase'
-import { PlayAgain, ResultsSummary } from './Results'
+import { HomeButton, PlayAgain, ResultsSummary } from './Results'
 
 /**
  * Everyone live, plus the safety tools: alerts, pause and removing players. Marshals and the organiser stay
@@ -43,6 +43,7 @@ export default function MarshalLive({ code, view, refresh }: { code: string; vie
         <>
           <ResultsSummary view={view} />
           {view.me.id === 'host' && <PlayAgain />}
+          <HomeButton ghost={view.me.id === 'host'} />
         </>
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
