@@ -82,11 +82,11 @@ const POWER_LOOK: Partial<Record<PowerUpKind, { colour: string; fx?: 'speed' }>>
 
 /** My running power-ups, each with its own sticker. */
 export function powerPanels(kinds: PowerUpKind[]): ReactNode[] {
-  return kinds.map((k) => {
+  return kinds.map((k, i) => {
     const look = POWER_LOOK[k] ?? { colour: WHITE }
     return (
       <ComicPanel
-        key={`power-${k}`}
+        key={`power-${k}-${i}`}
         colour={look.colour}
         ink={k === 'shield' ? '#3A2410' : BLACK}
         caption="power-up on"

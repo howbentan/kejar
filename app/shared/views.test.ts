@@ -241,6 +241,12 @@ describe('two-part feed', () => {
     expect(runner).toMatchObject({ text: 'Ben caught #07.', means: '#07 is out. 3 still free.', label: 'CATCH' })
     expect(c).toMatchObject({ means: 'Nice. 3 left to find.' })
   })
+  it('catch: says which event it was and who it was about, and whether it was mine (for the one-off pops)', () => {
+    const e = { actor_id: 'c1', target_id: 'r1' }
+    expect(line(hafiz, e, 'caught')).toMatchObject({ kind: 'caught', who: '#07 Aina', mine: false })
+    expect(line(aina, e, 'caught')).toMatchObject({ kind: 'caught', mine: true })
+    expect(line(chaser, e, 'caught')).toMatchObject({ kind: 'caught', mine: true })
+  })
   it('Durian', () => {
     const { runner, chaser: c } = both('shielded', { target_id: 'r1' })
     expect(runner).toMatchObject({ text: '#07 blocked a catch with Durian.', means: '#07 is safe. Durian used up.', label: 'Durian' })

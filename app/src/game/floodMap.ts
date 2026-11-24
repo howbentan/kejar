@@ -1,6 +1,6 @@
 import type { Feature, FeatureCollection, Geometry } from 'geojson'
 import { clipToCircle, type FloodNow } from '../../shared/flood.js'
-import { circlePolygon } from '../../shared/geo.js'
+import { circlePolygon, pointInPolygon } from '../../shared/geo.js'
 import type { Arena } from '../../shared/types.js'
 
 /** Banjir Kilat's colour, as the CSS token --banjir. */
@@ -24,7 +24,14 @@ export function floodFeatures(arena: Pick<Arena, 'boundary'>, f: Pick<FloodNow, 
   if (f && f.step > 0) {
     const dry = clipToCircle(arena.boundary, f.center, f.radiusM)
     water.push({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [ring(arena.boundary), ring([...dry].reverse())] } })
-    shore.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: ring(dry) } })
+    // The foam follows the waterline only: the dry circle's edge where it's inside the play area, never the boundary.
+    const runs: number[][][] = [[]]
+    for (const p of circlePolygon(f.center, f.radiusM, 96).concat(circlePolygon(f.center, f.radiusM, 96).slice(0, 1))) {
+      if (pointInPolygon(p, arena.boundary)) runs[runs.length - 1].push([p.lng, p.lat])
+      else if (runs[runs.length - 1].length) runs.push([])
+    }
+    const lines = runs.filter((r) => r.length >= 2)
+    if (lines.length) shore.push({ type: 'Feature', properties: {}, geometry: { type: 'MultiLineString', coordinates: lines } })
   }
   if (f?.warning && f.next) {
     next.push({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: ring(circlePolygon(f.center, f.next.radiusM, 64)) } })

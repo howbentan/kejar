@@ -1,4 +1,4 @@
-import type { LineString, Polygon } from 'geojson'
+import type { LineString, MultiLineString, Polygon } from 'geojson'
 import { describe, expect, it } from 'vitest'
 import { circlePolygon, distanceM } from '../../shared/geo.js'
 import { floodFeatures } from './floodMap'
@@ -19,6 +19,19 @@ describe('floodFeatures', () => {
     const [outer, hole] = (w[0].geometry as Polygon).coordinates
     expect(outer).toHaveLength(arena.boundary.length + 1)
     for (const [lng, lat] of hole) expect(distanceM(C, { lat, lng })).toBeLessThanOrEqual(201)
+  })
+
+  it('puts foam on the waterline only, never along the play area edge', () => {
+    // The dry circle (250 m) pokes out past a square arena about 400 m across: the foam stays inside it.
+    const d = 200 / 111_320
+    const square = { boundary: [ { lat: 3 - d, lng: 101 - d }, { lat: 3 - d, lng: 101 + d }, { lat: 3 + d, lng: 101 + d }, { lat: 3 + d, lng: 101 - d } ] }
+    const shore = floodFeatures(square, { center: C, radiusM: 250, step: 1, next: null, warning: false }).shore.features[0].geometry as MultiLineString
+    expect(shore.coordinates.length).toBeGreaterThan(1)
+    for (const run of shore.coordinates)
+      for (const [lng, lat] of run) {
+        expect(distanceM(C, { lat, lng })).toBeCloseTo(250, -1)
+        expect(Math.abs(lat - 3)).toBeLessThan(d)
+      }
   })
 
   it('shows the next waterline only in the minute before a rise', () => {

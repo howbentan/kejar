@@ -40,6 +40,17 @@ describe('boardFeatures', () => {
     ])
   })
 
+  it('dims a lake cut out of the arena too, since it is out of bounds', () => {
+    const lake = [
+      { lat: 3.0004, lng: 101.0004 },
+      { lat: 3.0004, lng: 101.0008 },
+      { lat: 3.0008, lng: 101.0008 },
+    ]
+    const withLake = boardFeatures({ ...arena, holes: [lake] })
+    expect(withLake.outside.features).toHaveLength(2)
+    expect((withLake.outside.features[1].geometry as GeoJSON.Polygon).coordinates[0]).toHaveLength(4)
+  })
+
   it('draws no outside for an arena that is not a shape yet', () => {
     expect(boardFeatures({ ...arena, boundary: arena.boundary.slice(0, 2) }).outside.features).toEqual([])
   })

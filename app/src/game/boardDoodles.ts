@@ -41,8 +41,6 @@ function line(c: Ctx, rnd: () => number, x1: number, y1: number, x2: number, y2:
 
 const ink = (a: number) => `rgba(245,245,243,${a})`
 
-/** Image ids the board layers use. */
-export const BOARD_IMAGES = ['board-hatch', 'board-chalk', 'stamp-penjara', 'stamp-start', 'waves-0', 'waves-1', 'waves-2', 'waves-3'] as const
 export const WAVE_FRAMES = 4
 
 export function addBoardDoodles(m: maplibregl.Map) {

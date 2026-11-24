@@ -13,10 +13,11 @@ const closed = (b: LatLng[]): Pt[] => [...b, b[0]].map((p) => [p.lng, p.lat])
 const WORLD: Pt[] = [[-179, -85], [179, -85], [179, 85], [-179, 85], [-179, -85]]
 
 /**
- * The board's shapes for an arena: everything outside the boundary (to dim and hatch), short ticks pointing out of
+ * The board's shapes for an arena: everything outside the boundary, and any lake cut out of it (to dim and hatch:
+ * both are out of bounds), short ticks pointing out of
  * the edge, the "out" labels just beyond some of them, and the spots for the Penjara and start stamps.
  */
-export function boardFeatures(arena: Pick<Arena, 'boundary' | 'jail' | 'start'>) {
+export function boardFeatures(arena: Pick<Arena, 'boundary' | 'jail' | 'start' | 'holes'>) {
   const b = arena.boundary
   const pts = closed(b)
   const cx = b.reduce((s, p) => s + p.lng, 0) / b.length
@@ -45,7 +46,16 @@ export function boardFeatures(arena: Pick<Arena, 'boundary' | 'jail' | 'start'>)
     geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
   })
   return {
-    outside: collection(b.length >= 3 ? [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [WORLD, pts] } }] : []),
+    outside: collection(
+      b.length >= 3
+        ? [
+            { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [WORLD, pts] } },
+            ...(arena.holes ?? [])
+              .filter((h) => h.length >= 3)
+              .map((h): Feature<Geometry> => ({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [closed(h)] } })),
+          ]
+        : [],
+    ),
     ticks: collection(ticks),
     labels: collection(labels),
     stamps: collection([point(arena.jail, 'stamp-penjara', -9), point(arena.start, 'stamp-start', 7)]),

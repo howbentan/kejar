@@ -227,8 +227,6 @@ select.input option { background: #141614; color: var(--white); }
   height: 28px; box-sizing: border-box; display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 0 10px;
   font: 600 11px var(--font); background: rgba(10, 10, 11, 0.88); border: 1px solid #333; white-space: nowrap; font-variant-numeric: tabular-nums;
 }
-.chip.warn { border-color: var(--volt); color: var(--volt); }
-.chip.warn i { width: 6px; height: 6px; border-radius: 50%; background: var(--volt); box-shadow: 0 0 6px var(--volt); }
 .chase-warning { border: 2px solid var(--white); border-radius: 16px; padding: 10px 12px; background: rgba(10, 10, 11, 0.92); }
 .chase-warning p { margin: 0; font-size: 13px; }
 
@@ -289,7 +287,6 @@ select.input option { background: #141614; color: var(--white); }
 .checkin-banner { position: relative; border-radius: 16px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
 .checkin-banner.ok { background: var(--volt); color: var(--black); }
 .checkin-banner.wait { background: rgba(10, 10, 11, 0.94); border: 1.5px solid var(--volt); color: var(--white); }
-.checkin-banner.miss { background: var(--white); color: var(--black); }
 .doodle-tick { position: absolute; right: 14px; top: 50%; width: 70px; height: 56px; margin-top: -30px; pointer-events: none; overflow: visible; }
 .doodle-tick path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .doodle-tick .dt-shadow { stroke: rgba(10, 10, 11, 0.22); stroke-width: 12; }
@@ -304,9 +301,6 @@ select.input option { background: #141614; color: var(--white); }
 .banner-mark { width: 28px; height: 28px; flex: none; border-radius: 50%; display: grid; place-items: center; font-weight: 800; background: var(--black); color: var(--volt); font-size: 14px !important; }
 .checkin-banner.wait .banner-mark { background: var(--volt); color: var(--black); }
 .banner-foot { margin: 0; font-size: 12px; font-weight: 600; }
-.banner-strikes { display: flex; align-items: center; gap: 6px; font: 600 9.5px var(--mono); letter-spacing: 0.1em; }
-.banner-strikes i { width: 22px; height: 6px; border-radius: 3px; border: 1.5px solid var(--black); }
-.banner-strikes i.on { background: var(--black); }
 
 /* The dock: the slot and one Scan button (the feed moved to the bell at the top right). */
 .dock {
@@ -484,10 +478,6 @@ select.input option { background: #141614; color: var(--white); }
 }
 .endgame-pill:active { transform: translateY(2px); }
 /* The chip on the status row: tappable, though the row itself lets taps through to the map. */
-.chip.endgame-chip { pointer-events: auto; cursor: pointer; color: var(--white); border-width: 1.5px; padding-left: 4px; gap: 6px; }
-.chip.endgame-chip svg { flex: none; }
-.chip.endgame-chip b { font: 700 11px var(--font); }
-.chip.endgame-chip span { color: var(--dim); }
 /* What the chip opens: the rule card or the wanted poster, over a dimmed screen. */
 .endgame-sheet {
   position: fixed; inset: 0; z-index: 56; background: rgba(10, 10, 11, 0.86); overflow-y: auto;
@@ -682,7 +672,6 @@ body:has(.notif-bell) .sos-icon { right: 56px; }
 .legendary-line { margin: 0; max-width: 300px; font: 500 14px var(--font); color: var(--legendary-1); }
 
 /* The chasers' frozen snapshot shows on runners' maps; a chaser just sees that it happened. */
-.chip.snap { border-color: var(--volt); color: var(--white); letter-spacing: 0.08em; }
 
 /* The Penjara toll/parking entry ticket (`docs/superpowers/specs/2026-11-03-kejar-penjara-toll-ticket-design.md`).
    A short, wide white card on the Black background -- deliberately not the usual dark card look, since a
@@ -986,7 +975,6 @@ html { -webkit-tap-highlight-color: transparent; }
 .home-link:focus-visible, .home-tip:focus-visible { outline: 2px solid var(--volt); outline-offset: 2px; border-radius: 6px; }
 
 /* Banjir Kilat: a runner in the water (design 2026-11-16) */
-.flood-banner { align-self: stretch; margin: 0 0 8px; padding: 10px 14px; border-radius: 14px; background: var(--banjir); color: var(--black); font-weight: 800; font-size: 15px; text-align: center; box-shadow: 0 6px 20px rgba(61, 139, 253, 0.35); }
 
 /* Side quest: the private Tupperware card (red badge, buzzing dot), over the chase screen. */
 .sq { position: fixed; inset: 0; z-index: 30; background: rgba(5, 5, 5, 0.55); display: flex; align-items: center; justify-content: center; padding: 18px; box-sizing: border-box; }
@@ -1219,7 +1207,8 @@ button.comic { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .mo, .mo *, .mo-gate { animation: none !important; } }
 
 /* Pause over the game (design 2026-11-24 §4): the game screen heavily shaded behind today's pause screen. */
-.paused-over { position: fixed; inset: 0; z-index: 65; overflow-y: auto; background: rgba(10, 10, 11, 0.8); -webkit-backdrop-filter: blur(2.5px) saturate(0.6); backdrop-filter: blur(2.5px) saturate(0.6); }
+/* Under the SOS button (60), so SOS stays reachable while paused. */
+.paused-over { position: fixed; inset: 0; z-index: 58; overflow-y: auto; background: rgba(10, 10, 11, 0.8); -webkit-backdrop-filter: blur(2.5px) saturate(0.6); backdrop-filter: blur(2.5px) saturate(0.6); }
 .paused-over > * { background: transparent !important; }
 
 .jail-comic { width: 100%; max-width: 300px; margin: 6px 0 4px 4px; }

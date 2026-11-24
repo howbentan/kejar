@@ -66,7 +66,7 @@ export default function CheckinBanner({ checkin, now, openedByPush }: { checkin:
   }
 }
 
-function Banner(props: { tone: 'ok' | 'wait' | 'miss'; mark: string; title: string; sub: string; tick?: boolean; children?: ReactNode; onHide: () => void }) {
+function Banner(props: { tone: 'ok' | 'wait'; mark: string; title: string; sub: string; tick?: boolean; children?: ReactNode; onHide: () => void }) {
   return (
     <m.div
       className={`checkin-banner ${props.tone}`}
